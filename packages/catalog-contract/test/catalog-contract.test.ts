@@ -113,6 +113,25 @@ describe("installed and job contracts", () => {
     ).toBe(false);
   });
 
+  it("rejects a deserialized completed job whose installed identity does not match", () => {
+    expect(
+      AppJobSchema.safeParse({
+        jobId: "job.install-har-gow",
+        appId: "har-gow",
+        operation: "install",
+        status: "completed",
+        targetVersion: "1.2.3",
+        artifactId: "har-gow.1-2-3.windows-x64",
+        createdAt: now,
+        updatedAt: now,
+        installedApp: {
+          ...installed,
+          appId: "char-siu-bao",
+        },
+      }).success,
+    ).toBe(false);
+  });
+
   it("accepts immutable update descriptors containing only opaque artifact identity", () => {
     const descriptor = UpdateDescriptorSchema.parse({
       appId: "har-gow",

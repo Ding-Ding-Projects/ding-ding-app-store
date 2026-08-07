@@ -150,6 +150,19 @@ export const InstallJobSchema = z.discriminatedUnion("status", [
       installedApp: InstalledAppStateSchema,
     })
     .strict()
+    .superRefine((value, context) => {
+      if (
+        value.installedApp.appId !== value.appId ||
+        value.installedApp.version !== value.targetVersion ||
+        value.installedApp.artifactId !== value.artifactId
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["installedApp"],
+          message: "Completed installed-app identity must match the install job target",
+        });
+      }
+    })
     .readonly(),
   failedState("install"),
   cancelledState("install"),
@@ -179,6 +192,19 @@ export const UpdateJobSchema = z.discriminatedUnion("status", [
       installedApp: InstalledAppStateSchema,
     })
     .strict()
+    .superRefine((value, context) => {
+      if (
+        value.installedApp.appId !== value.appId ||
+        value.installedApp.version !== value.targetVersion ||
+        value.installedApp.artifactId !== value.artifactId
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["installedApp"],
+          message: "Completed installed-app identity must match the update job target",
+        });
+      }
+    })
     .readonly(),
   failedState("update"),
   cancelledState("update"),
