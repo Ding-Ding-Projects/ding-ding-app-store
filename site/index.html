@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Ding Ding App Store — documentation</title>
+  <link rel="stylesheet" href="assets/app.css">
+</head>
+<body>
+  <a class="skip-link" href="#article">Skip to article</a>
+  <div class="app-shell">
+    <aside class="rail" aria-label="Documentation navigation">
+      <div class="brand"><span aria-hidden="true">🥟</span><span>Ding Ding App Store</span></div>
+      <button id="home-tab" class="rail-tab active" data-article="home" role="tab" aria-selected="true">Home</button>
+      <div id="article-tabs" class="tab-list" role="tablist" aria-label="Feature articles"></div>
+      <p class="rail-note">Local-only documentation foundation</p>
+    </aside>
+    <main>
+      <header class="topbar">
+        <div class="search-wrap">
+          <label class="sr-only" for="search">Search documentation</label>
+          <input id="search" type="search" maxlength="256" placeholder="Search features and documentation">
+          <button id="regex-toggle" class="icon-button" aria-expanded="false" aria-controls="regex-panel" title="Open regex builder">.*</button>
+          <div id="regex-panel" class="regex-panel" hidden>
+            <label>Pattern <input id="regex-pattern" maxlength="256" aria-label="Regex pattern"></label>
+            <label>Flags <input id="regex-flags" maxlength="12" value="iu" aria-label="Regex flags"></label>
+            <label>Sample text <textarea id="regex-sample" maxlength="2048" aria-label="Regex sample text"></textarea></label>
+            <p id="regex-result" role="status">Plain-text search is active.</p>
+            <div class="regex-actions"><button data-token="^">Anchor</button><button data-token="[A-Za-z]">Class</button><button data-token="()">Group</button><button data-token="|">Alternation</button><button data-token="+">Quantifier</button></div>
+          </div>
+        </div>
+        <button id="palette-button" class="text-button" aria-haspopup="dialog">Command palette <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>F</kbd></button>
+      </header>
+      <section class="settings-card" aria-label="Documentation settings">
+        <label>Language <select id="language"><option value="en">English</option><option value="yue">香港粵語</option><option value="both">Bilingual</option></select></label>
+        <label>English funny level <input id="funny-en" type="range" min="1" max="5" value="2"><output id="funny-en-value">2</output></label>
+        <label>Cantonese funny level <input id="funny-yue" type="range" min="1" max="5" value="3"><output id="funny-yue-value">3</output></label>
+      </section>
+      <section id="status" class="status-card" role="status">Ready. Browse a feature or search the documentation.</section>
+      <article id="article" tabindex="-1"></article>
+      <section id="results" aria-live="polite"></section>
+    </main>
+  </div>
+  <dialog id="palette" aria-labelledby="palette-title">
+    <div class="dialog-head"><h2 id="palette-title">Command palette</h2><button id="palette-close" class="icon-button" aria-label="Close command palette">×</button></div>
+    <label class="sr-only" for="palette-search">Find a command, article, or setting</label>
+    <input id="palette-search" type="search" placeholder="Find a command, article, or setting" maxlength="256">
+    <div id="palette-results" role="listbox" aria-label="Command palette results"></div>
+  </dialog>
+  <script src="assets/app.js"></script>
+</body>
+</html>
