@@ -21,12 +21,20 @@ Material Design 3 desktop software center for discovering, documenting, installi
 - Sandboxed renderer (`contextIsolation`, no Node integration) and a narrow typed preload bridge.
 - Reviewed, versioned public catalog; private repositories and infrastructure never enter the product catalog.
 - Stable-release comparison for every catalog entry and a separate unsigned Squirrel self-updater.
+- Allowlisted Squirrel/MSI/managed-portable discovery, protected removal descriptors, append-only operation history, local Git snapshots, and filtered multi-format export.
 - Installer execution owned by the main process; the renderer cannot provide commands, paths, URLs, or arguments.
 - Offline documentation articles with an in-app browser and full local search/regex builder.
 - Persistent browser-style tab rail with pinning, grouping, overflow, tab search, and complete keyboard control.
 - Per-surface search state, a full regex builder everywhere, and a command palette that reaches every page, command, setting, and appearance control.
 - Per-element appearance editor with live preview, reset, and export/import, applied through CSS custom properties only.
 - Main-process update schedule with a launch check that cannot be disabled, bounded repeat intervals, and quiet hours that hold notifications without delaying checks.
+
+</details>
+
+<details>
+<summary><strong>Packaged runtime evidence</strong></summary>
+
+The unsigned packaged application was driven on the sanctioned hidden Windows desktop. The real [Installed screen](docs/assets/screenshots/installed-runtime.png) discovered reviewed Squirrel and managed-portable records, and the [Activity screen](docs/assets/screenshots/activity-runtime.png) rendered an append-only settings event with filtered export controls.
 
 </details>
 

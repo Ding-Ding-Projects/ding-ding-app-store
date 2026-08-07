@@ -18,7 +18,7 @@ Paths are canonicalized and checked against the installation record before remov
 
 ## Verification
 
-The intended removal contract is documented. No uninstaller or destructive operation has been run in this documentation lane.
+The implementation now reconstructs only fixed Squirrel and MSI removal argument vectors, validates managed portable paths, and records results through append-only history. Registry parsing, MSI product-code validation, Squirrel traversal rejection, and installed-version selection have focused tests. No real destructive removal has been run yet.
 
 ## Suggested articles
 

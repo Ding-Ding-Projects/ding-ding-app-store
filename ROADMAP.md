@@ -8,7 +8,8 @@
 - [x] Per-app update comparison and App Store self-update state machine
 - [x] Initial Material Design 3 catalog/settings/docs surfaces
 - [ ] Disposable Windows source-build runner
-- [ ] Installed-app discovery and adapter validation across every supported package type
+- [x] Installed-app discovery for reviewed Squirrel, MSI, and managed-portable records with append-only history/export
+- [ ] Real install/uninstall adapter validation across every supported package type
 - [ ] Complete offline wiki/repository-doc import for every catalog application
 - [x] Local operation history: every install/build/uninstall outcome recorded, filterable by action/result/date, exported as JSON/CSV/Markdown
 - [x] Persistent tab rail with pinning, grouping, overflow, tab search, and full keyboard control

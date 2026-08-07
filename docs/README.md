@@ -6,6 +6,7 @@ These feature articles describe the proposed Ding Ding App Store desktop experie
 
 - [Catalog discovery](features/catalog-discovery.md)
 - [Verified installer operations](features/verified-installer-operations.md)
+- [Installed app discovery and history](features/installed-app-discovery.md)
 - [Source-build security](features/source-build-security.md)
 - [Uninstall](features/uninstall.md)
 - [Activity history and export](features/activity-history.md)
