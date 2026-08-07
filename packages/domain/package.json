@@ -1,0 +1,33 @@
+{
+  "name": "@ding-ding/domain",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "prepare:catalog-contract": "npm --prefix ../catalog-contract install --ignore-scripts --no-audit --no-fund && npm --prefix ../catalog-contract run build",
+    "prebuild": "npm run prepare:catalog-contract",
+    "build": "tsc -p tsconfig.json",
+    "pretypecheck": "npm run prepare:catalog-contract",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "pretest": "npm run prepare:catalog-contract",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ding-ding/catalog-contract": "file:../catalog-contract"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2",
+    "vitest": "4.1.10"
+  }
+}
