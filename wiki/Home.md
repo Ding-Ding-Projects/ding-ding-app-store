@@ -8,6 +8,7 @@ This wiki mirrors the categorized documentation in `docs/` and keeps the feature
 | Verified installer operations | [Verified installer operations](Verified-Installer-Operations) |
 | Source-build security | [Source-build security](Source-Build-Security) |
 | Uninstall | [Uninstall](Uninstall) |
+| Activity history and export | [Activity history and export](Activity-History) |
 | Per-app update checker | [Per-app update checker](Per-App-Update-Checker) |
 | App Store self-updater | [App Store self-updater](App-Store-Self-Updater) |
 | Offline documentation browser | [Offline documentation browser](Offline-Documentation-Browser) |

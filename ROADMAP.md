@@ -10,7 +10,8 @@
 - [ ] Disposable Windows source-build runner
 - [ ] Installed-app discovery and adapter validation across every supported package type
 - [ ] Complete offline wiki/repository-doc import for every catalog application
-- [ ] Complete tab pinning/grouping, four tab searches, per-element appearance editor, history/export, and schedule editor
+- [x] Local operation history: every install/build/uninstall outcome recorded, filterable by action/result/date, exported as JSON/CSV/Markdown
+- [ ] Complete tab pinning/grouping, four tab searches, per-element appearance editor, and schedule editor
 - [ ] Packaged-artifact hidden-desktop interaction and accessibility proof
 - [ ] Self-hosted CI, unsigned Squirrel release, documentation deployment, and update-feed proof
 

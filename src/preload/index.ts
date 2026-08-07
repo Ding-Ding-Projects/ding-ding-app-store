@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { AppStoreUpdateState, DingDingStoreApi, OperationRequest, UserSettings } from '../shared/contracts.js';
+import type { AppStoreUpdateState, DingDingStoreApi, HistoryExportFormat, OperationRequest, UserSettings } from '../shared/contracts.js';
 
 const api: DingDingStoreApi = {
   catalog: {
@@ -25,6 +25,10 @@ const api: DingDingStoreApi = {
   settings: {
     load: () => ipcRenderer.invoke('settings:load'),
     save: (settings: UserSettings) => ipcRenderer.invoke('settings:save', settings),
+  },
+  history: {
+    list: () => ipcRenderer.invoke('history:list'),
+    export: (format: HistoryExportFormat) => ipcRenderer.invoke('history:export', format),
   },
   window: {
     minimize: () => ipcRenderer.send('window:minimize'),
