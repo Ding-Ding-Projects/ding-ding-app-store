@@ -467,7 +467,7 @@ export function App() {
             <Icon>{toast.ok ? 'check_circle' : 'error'}</Icon>
             <span>{toast.message}</span>
             {toast.undo && <button className="text-button" onClick={() => { toast.undo?.run(); setToast(null); }}>{toast.undo.label}</button>}
-            <button className="icon-button" onClick={() => setToast(null)} aria-label="Dismiss notification"><Icon>close</Icon></button>
+            <button className="icon-button" {...el('icon-button')} onClick={() => setToast(null)} aria-label="Dismiss notification"><Icon>close</Icon></button>
           </div>
         )}
 

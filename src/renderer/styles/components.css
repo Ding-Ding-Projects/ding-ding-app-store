@@ -40,7 +40,10 @@
   .danger { color: var(--error); }
   .danger-fill { color: #fff; background: var(--error); }
   .icon-button {
-    display: inline-grid; place-items: center; width: 44px; height: 44px; min-width: 44px; padding: 0;
+    /* The circular hit area is the icon plus its ring of padding, so the padding token scales the whole control. */
+    --icon-button-box: calc(24px + 2 * calc(10px * var(--elx-icon-button-pad-scale, 1)));
+    display: inline-grid; place-items: center; padding: 0;
+    width: var(--icon-button-box); height: var(--icon-button-box); min-width: var(--icon-button-box);
     border-radius: var(--elx-icon-button-radius, 50%);
     color: var(--elx-icon-button-foreground, inherit);
     background: var(--elx-icon-button-background, transparent);
@@ -124,6 +127,7 @@
     color: var(--elx-notice-foreground, inherit);
     background: var(--elx-notice-background, var(--surface-container));
     border-radius: var(--elx-notice-radius, 18px);
+    border: var(--elx-notice-border-width, 0) solid var(--outline);
     padding: calc(14px * var(--elx-notice-pad-scale, 1)) calc(18px * var(--elx-notice-pad-scale, 1));
     font-size: calc(1rem * var(--elx-notice-font-scale, 1));
     box-shadow: var(--elx-notice-elevation, none);

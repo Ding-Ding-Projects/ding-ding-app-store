@@ -157,7 +157,7 @@ export function TabContextMenu({ target, workspace, settings, dispatch, onClose,
         <button role="menuitem" onClick={() => { dispatch({ type: 'group-collapse', groupId: group.id, collapsed: 'toggle' }); close(group.collapsed ? 'Group expanded' : 'Group collapsed'); }}>{group.collapsed ? label(settings, 'Expand group', '展開分組') : label(settings, 'Collapse group', '收埋分組')}</button>
         <div className="chip-row" role="group" aria-label={label(settings, 'Group colour', '分組顏色')}>
           {TAB_GROUP_COLORS.map((color) => (
-            <button key={color} aria-pressed={group.color === color} data-color={color} onClick={() => { dispatch({ type: 'group-color', groupId: group.id, color }); close(`Group colour ${color}`); }}>
+            <button key={color} {...el('chip')} aria-pressed={group.color === color} data-color={color} onClick={() => { dispatch({ type: 'group-color', groupId: group.id, color }); close(`Group colour ${color}`); }}>
               {label(settings, GROUP_COLOR_LABELS[color].en, GROUP_COLOR_LABELS[color].yue)}
             </button>
           ))}

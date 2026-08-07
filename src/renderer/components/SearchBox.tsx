@@ -49,8 +49,8 @@ export function SearchBox({ surface, placeholder, openBuilder, onBuilderHandled,
         onKeyDown={onInputKeyDown}
       />
       {state.regex && <span className="regex-chip">/{state.regex.flags}</span>}
-      {state.query && <button className="icon-button" aria-label={`Clear search in ${surface}`} onClick={() => { setQuery(''); setRegex(null); }}><Icon>close</Icon></button>}
-      <button className="icon-button" aria-label="Open full regex builder" aria-expanded={builderOpen} onClick={() => setBuilderOpen((open) => !open)}><Icon>regular_expression</Icon></button>
+      {state.query && <button className="icon-button" {...el('icon-button')} aria-label={`Clear search in ${surface}`} onClick={() => { setQuery(''); setRegex(null); }}><Icon>close</Icon></button>}
+      <button className="icon-button" {...el('icon-button')} aria-label="Open full regex builder" aria-expanded={builderOpen} onClick={() => setBuilderOpen((open) => !open)}><Icon>regular_expression</Icon></button>
       {builderOpen && <RegexBuilder query={state.query} onClose={() => setBuilderOpen(false)} onApply={(pattern, flags) => { setQuery(pattern); setRegex({ pattern, flags }); setBuilderOpen(false); }} />}
     </div>
   );

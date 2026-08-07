@@ -22,9 +22,9 @@ export function RegexBuilder({ query, onApply, onClose }: { query: string; onApp
     <section className="popover regex-builder" role="dialog" aria-label="Regex builder" {...el('regex-builder')}>
       <header><strong>Regex builder · Regex 建造器</strong><button className="icon-button" onClick={onClose} aria-label="Close regex builder"><Icon>close</Icon></button></header>
       <div className="chip-row" aria-label="Guided regex parts">
-        <button onClick={() => add('literal')}>Literal</button><button onClick={() => add('[A-Za-z]')}>Class</button>
-        <button onClick={() => add('^')}>Anchor</button><button onClick={() => add('(group)')}>Group</button>
-        <button onClick={() => add('|')}>Alternation</button><button onClick={() => add('{1,3}')}>Quantifier</button>
+        <button {...el('chip')} onClick={() => add('literal')}>Literal</button><button {...el('chip')} onClick={() => add('[A-Za-z]')}>Class</button>
+        <button {...el('chip')} onClick={() => add('^')}>Anchor</button><button {...el('chip')} onClick={() => add('(group)')}>Group</button>
+        <button {...el('chip')} onClick={() => add('|')}>Alternation</button><button {...el('chip')} onClick={() => add('{1,3}')}>Quantifier</button>
       </div>
       <label>Pattern<input value={pattern} maxLength={160} onChange={(event) => setPattern(event.target.value)} /></label>
       <fieldset><legend>Flags</legend>{['i', 'm', 's', 'u'].map((flag) => <label className="flag" key={flag}><input type="checkbox" checked={flags.includes(flag)} onChange={(event) => setFlags((current) => event.target.checked ? `${current}${flag}` : current.replace(flag, ''))} />{flag}</label>)}</fieldset>
