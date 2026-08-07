@@ -1,13 +1,15 @@
 import {
   UpdateDescriptorSchema,
+  type ArtifactId,
   type CatalogApp,
   type CatalogArtifact,
   type CatalogRelease,
   type InstalledAppState,
+  type SemVerString,
   type UpdateDescriptor,
 } from "@ding-ding/catalog-contract";
 
-import { ChannelMismatchError, compareSemVer } from "./semver.js";
+import { compareSemVer } from "./semver.js";
 
 export class UpdateDescriptorError extends Error {
   public constructor(message: string) {
@@ -18,17 +20,24 @@ export class UpdateDescriptorError extends Error {
 
 export function createUpdateDescriptor(
   installed: InstalledAppState,
-  release: CatalogRelease,
-  artifact: CatalogArtifact,
+  app: CatalogApp,
+  candidate: Readonly<{ version: SemVerString; artifactId: ArtifactId }>,
 ): UpdateDescriptor {
-  if (installed.channel !== release.channel) {
-    throw new ChannelMismatchError(installed.channel, release.channel);
+  if (installed.appId !== app.id) {
+    throw new UpdateDescriptorError("Catalog app does not match the installed application");
+  }
+  const release = app.releases.find(
+    (item) => item.channel === installed.channel && item.version === candidate.version,
+  );
+  if (release === undefined) {
+    throw new UpdateDescriptorError("Selected release does not belong to the installed app channel");
+  }
+  const artifact = release.artifacts.find((item) => item.id === candidate.artifactId);
+  if (artifact === undefined) {
+    throw new UpdateDescriptorError("Artifact does not belong to the selected release");
   }
   if (artifact.platform !== installed.platform || artifact.architecture !== installed.architecture) {
     throw new UpdateDescriptorError("Artifact target does not match the installed application");
-  }
-  if (!release.artifacts.some((candidate) => candidate.id === artifact.id)) {
-    throw new UpdateDescriptorError("Artifact does not belong to the selected release");
   }
   if (compareSemVer(release.version, installed.version) <= 0) {
     throw new UpdateDescriptorError("Selected release is not newer than the installed version");
@@ -75,6 +84,9 @@ export function selectUpdateDescriptor(
 
   const best = candidates[0];
   return best === undefined
-      ? undefined
-      : createUpdateDescriptor(installed, best.release, best.artifact);
+    ? undefined
+    : createUpdateDescriptor(installed, app, {
+        version: best.release.version,
+        artifactId: best.artifact.id,
+      });
 }

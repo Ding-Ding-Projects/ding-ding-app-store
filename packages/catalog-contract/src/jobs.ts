@@ -34,6 +34,11 @@ const baseShape = {
   updatedAt: IsoTimestampSchema,
 } as const;
 
+const transferBaseShape = {
+  ...baseShape,
+  targetVersion: SemVerStringSchema,
+} as const;
+
 const downloadShape = {
   artifactId: ArtifactIdSchema,
   bytesReceived: z.number().int().nonnegative().safe(),
@@ -43,7 +48,7 @@ const downloadShape = {
 const downloadState = <T extends "install" | "update">(operation: T) =>
   z
     .object({
-      ...baseShape,
+      ...transferBaseShape,
       operation: z.literal(operation),
       status: z.literal("downloading"),
       ...downloadShape,
@@ -90,25 +95,58 @@ const simpleState = <
     .strict()
     .readonly();
 
+const transferState = <
+  TOperation extends "install" | "update",
+  TStatus extends string,
+>(
+  operation: TOperation,
+  status: TStatus,
+) =>
+  z
+    .object({
+      ...transferBaseShape,
+      operation: z.literal(operation),
+      status: z.literal(status),
+    })
+    .strict()
+    .readonly();
+
+const artifactTransferState = <
+  TOperation extends "install" | "update",
+  TStatus extends string,
+>(
+  operation: TOperation,
+  status: TStatus,
+) =>
+  z
+    .object({
+      ...transferBaseShape,
+      operation: z.literal(operation),
+      status: z.literal(status),
+      artifactId: ArtifactIdSchema,
+    })
+    .strict()
+    .readonly();
+
 export const InstallJobSchema = z.discriminatedUnion("status", [
   z
     .object({
-      ...baseShape,
+      ...transferBaseShape,
       operation: z.literal("install"),
       status: z.literal("queued"),
-      targetVersion: SemVerStringSchema,
     })
     .strict()
     .readonly(),
-  simpleState("install", "resolving"),
+  transferState("install", "resolving"),
   downloadState("install"),
-  simpleState("install", "verifying"),
-  simpleState("install", "installing"),
+  artifactTransferState("install", "verifying"),
+  artifactTransferState("install", "installing"),
   z
     .object({
-      ...baseShape,
+      ...transferBaseShape,
       operation: z.literal("install"),
       status: z.literal("completed"),
+      artifactId: ArtifactIdSchema,
       installedApp: InstalledAppStateSchema,
     })
     .strict()
@@ -120,24 +158,24 @@ export const InstallJobSchema = z.discriminatedUnion("status", [
 export const UpdateJobSchema = z.discriminatedUnion("status", [
   z
     .object({
-      ...baseShape,
+      ...transferBaseShape,
       operation: z.literal("update"),
       status: z.literal("queued"),
-      targetVersion: SemVerStringSchema,
     })
     .strict()
     .readonly(),
-  simpleState("update", "resolving"),
+  transferState("update", "resolving"),
   downloadState("update"),
-  simpleState("update", "verifying"),
-  simpleState("update", "staging"),
-  simpleState("update", "awaiting-restart"),
-  simpleState("update", "applying"),
+  artifactTransferState("update", "verifying"),
+  artifactTransferState("update", "staging"),
+  artifactTransferState("update", "awaiting-restart"),
+  artifactTransferState("update", "applying"),
   z
     .object({
-      ...baseShape,
+      ...transferBaseShape,
       operation: z.literal("update"),
       status: z.literal("completed"),
+      artifactId: ArtifactIdSchema,
       installedApp: InstalledAppStateSchema,
     })
     .strict()

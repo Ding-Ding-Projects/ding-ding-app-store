@@ -15,8 +15,12 @@
     "dist"
   ],
   "scripts": {
+    "prepare:catalog-contract": "npm --prefix ../catalog-contract install --ignore-scripts --no-audit --no-fund && npm --prefix ../catalog-contract run build",
+    "prebuild": "npm run prepare:catalog-contract",
     "build": "tsc -p tsconfig.json",
+    "pretypecheck": "npm run prepare:catalog-contract",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "pretest": "npm run prepare:catalog-contract",
     "test": "vitest run"
   },
   "dependencies": {

@@ -15,9 +15,12 @@ import {
 import {
   ChannelMismatchError,
   InvalidJobTransitionError,
+  JobInvariantError,
+  UpdateDescriptorError,
   compareChannelVersion,
   compareSemVer,
   createInstallJob,
+  createUpdateDescriptor,
   createUninstallJob,
   createUpdateJob,
   selectUpdateDescriptor,
@@ -31,6 +34,7 @@ const later = IsoTimestampSchema.parse("2026-08-07T12:01:00.000Z");
 const appId = AppIdSchema.parse("har-gow");
 const jobId = JobIdSchema.parse("job.har-gow");
 const artifactId = ArtifactIdSchema.parse("har-gow.1-1-0.windows-x64");
+const installedArtifactId = ArtifactIdSchema.parse("har-gow.1-0-0.windows-x64");
 const version = SemVerStringSchema.parse("1.0.0");
 const sha = "b".repeat(64);
 
@@ -41,11 +45,19 @@ const installed = InstalledAppStateSchema.parse({
   channel: "stable",
   platform: "windows",
   architecture: "x64",
-  artifactId: "har-gow.1-0-0.windows-x64",
+  artifactId: installedArtifactId,
   artifactSha256: "a".repeat(64),
   installedAt: at,
   updatedAt: at,
   updatePolicy: "notify",
+});
+
+const updatedInstalled = InstalledAppStateSchema.parse({
+  ...installed,
+  version: "1.1.0",
+  artifactId,
+  artifactSha256: sha,
+  updatedAt: later,
 });
 
 describe("semantic version ordering", () => {
@@ -147,6 +159,14 @@ describe("immutable update selection", () => {
     expect(Object.isFrozen(descriptor)).toBe(true);
     expect(Object.keys(descriptor ?? {})).not.toContain("url");
     expect(Object.keys(descriptor ?? {})).not.toContain("command");
+
+    expect(() =>
+      createUpdateDescriptor(
+        installed,
+        CatalogAppSchema.parse({ ...app, id: "other-app" }),
+        { version: SemVerStringSchema.parse("1.1.0"), artifactId },
+      ),
+    ).toThrow(UpdateDescriptorError);
   });
 });
 
@@ -156,11 +176,11 @@ describe("job state machines", () => {
     job = transitionInstallJob(job, { type: "START_RESOLUTION", at: later });
     job = transitionInstallJob(job, {
       type: "DOWNLOAD_STARTED",
-      artifactId,
+      artifactId: installedArtifactId,
       bytesTotal: 8000,
       at: later,
     });
-    job = transitionInstallJob(job, { type: "DOWNLOAD_PROGRESS", bytesReceived: 4000, at: later });
+    job = transitionInstallJob(job, { type: "DOWNLOAD_PROGRESS", bytesReceived: 8000, at: later });
     job = transitionInstallJob(job, { type: "DOWNLOAD_FINISHED", at: later });
     job = transitionInstallJob(job, { type: "VERIFIED", at: later });
     job = transitionInstallJob(job, { type: "INSTALLED", installedApp: installed, at: later });
@@ -178,12 +198,13 @@ describe("job state machines", () => {
     });
     job = transitionUpdateJob(job, { type: "START_RESOLUTION", at: later });
     job = transitionUpdateJob(job, { type: "DOWNLOAD_STARTED", artifactId, bytesTotal: 8000, at: later });
+    job = transitionUpdateJob(job, { type: "DOWNLOAD_PROGRESS", bytesReceived: 8000, at: later });
     job = transitionUpdateJob(job, { type: "DOWNLOAD_FINISHED", at: later });
     job = transitionUpdateJob(job, { type: "VERIFIED", at: later });
     job = transitionUpdateJob(job, { type: "STAGED", at: later });
     expect(job.status).toBe("awaiting-restart");
     job = transitionUpdateJob(job, { type: "APPLY", at: later });
-    job = transitionUpdateJob(job, { type: "UPDATED", installedApp: installed, at: later });
+    job = transitionUpdateJob(job, { type: "UPDATED", installedApp: updatedInstalled, at: later });
     expect(job.status).toBe("completed");
   });
 
@@ -216,6 +237,80 @@ describe("job state machines", () => {
     });
 
     expect(job).toMatchObject({ status: "failed", code: "uninstaller-failed", retryable: false });
+  });
+
+  it("blocks download completion until every byte is received", () => {
+    let job = createInstallJob({ jobId, appId, targetVersion: version, at });
+    job = transitionInstallJob(job, { type: "START_RESOLUTION", at: later });
+    job = transitionInstallJob(job, {
+      type: "DOWNLOAD_STARTED",
+      artifactId: installedArtifactId,
+      bytesTotal: 8000,
+      at: later,
+    });
+    job = transitionInstallJob(job, {
+      type: "DOWNLOAD_PROGRESS",
+      bytesReceived: 7999,
+      at: later,
+    });
+
+    expect(() => transitionInstallJob(job, { type: "DOWNLOAD_FINISHED", at: later })).toThrow(
+      JobInvariantError,
+    );
+  });
+
+  it("blocks regressing progress and timestamps", () => {
+    let job = createInstallJob({ jobId, appId, targetVersion: version, at });
+    job = transitionInstallJob(job, { type: "START_RESOLUTION", at: later });
+    job = transitionInstallJob(job, {
+      type: "DOWNLOAD_STARTED",
+      artifactId: installedArtifactId,
+      bytesTotal: 8000,
+      at: later,
+    });
+    job = transitionInstallJob(job, {
+      type: "DOWNLOAD_PROGRESS",
+      bytesReceived: 4000,
+      at: later,
+    });
+
+    expect(() =>
+      transitionInstallJob(job, {
+        type: "DOWNLOAD_PROGRESS",
+        bytesReceived: 3999,
+        at: later,
+      }),
+    ).toThrow(JobInvariantError);
+    expect(() =>
+      transitionInstallJob(job, {
+        type: "DOWNLOAD_PROGRESS",
+        bytesReceived: 4001,
+        at,
+      }),
+    ).toThrow(JobInvariantError);
+  });
+
+  it("blocks completion with installed state from the wrong target", () => {
+    let job = createInstallJob({ jobId, appId, targetVersion: version, at });
+    job = transitionInstallJob(job, { type: "START_RESOLUTION", at: later });
+    job = transitionInstallJob(job, {
+      type: "DOWNLOAD_STARTED",
+      artifactId: installedArtifactId,
+      bytesTotal: 8000,
+      at: later,
+    });
+    job = transitionInstallJob(job, {
+      type: "DOWNLOAD_PROGRESS",
+      bytesReceived: 8000,
+      at: later,
+    });
+    job = transitionInstallJob(job, { type: "DOWNLOAD_FINISHED", at: later });
+    job = transitionInstallJob(job, { type: "VERIFIED", at: later });
+    const wrongApp = InstalledAppStateSchema.parse({ ...installed, appId: "char-siu-bao" });
+
+    expect(() =>
+      transitionInstallJob(job, { type: "INSTALLED", installedApp: wrongApp, at: later }),
+    ).toThrow(JobInvariantError);
   });
 
   it("exposes bounded failure codes instead of raw commands or URLs", () => {
