@@ -1,0 +1,85 @@
+{
+  "name": "ding-ding-app-store",
+  "version": "0.1.0",
+  "private": false,
+  "description": "Material Design 3 desktop app store for Ding Ding Projects.",
+  "author": "Ding Ding Projects",
+  "license": "Apache-2.0",
+  "homepage": "https://ding-ding-projects.github.io/ding-ding-app-store/",
+  "main": "dist/main/main.js",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build:renderer && npm run build:main && npm run build:preload",
+    "build:renderer": "vite build",
+    "build:main": "tsc -p tsconfig.main.json",
+    "build:preload": "esbuild src/preload/index.ts --bundle --platform=node --format=cjs --external:electron --outfile=dist/preload/index.cjs",
+    "check": "tsc -p tsconfig.renderer.json --noEmit && tsc -p tsconfig.main.json --noEmit && vitest run tests && npm run typecheck --workspaces --if-present && npm run test --workspaces --if-present",
+    "dev": "npm run build && electron .",
+    "start": "npm run build && electron .",
+    "test": "vitest run tests",
+    "dist": "npm run build && electron-builder --win squirrel --publish never"
+  },
+  "dependencies": {
+    "electron-squirrel-startup": "^1.0.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "semver": "^7.8.5",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@types/semver": "^7.8.0",
+    "@vitejs/plugin-react": "^5.2.0",
+    "electron": "^43.3.0",
+    "electron-builder": "^26.15.3",
+    "electron-builder-squirrel-windows": "^26.15.3",
+    "esbuild": "^0.28.1",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.6",
+    "vitest": "^4.1.10"
+  },
+  "build": {
+    "appId": "org.dingdingprojects.appstore",
+    "productName": "Ding Ding App Store",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "data/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "squirrel",
+          "arch": ["x64"]
+        }
+      ],
+      "forceCodeSigning": false,
+      "signExecutable": false,
+      "signAndEditExecutable": false
+    },
+    "squirrelWindows": {
+      "name": "DingDingAppStore",
+      "artifactName": "DingDingAppStore-Setup.${ext}",
+      "iconUrl": "https://github.com/favicon.ico",
+      "msi": false
+    },
+    "publish": {
+      "provider": "generic",
+      "url": "https://github.com/Ding-Ding-Projects/ding-ding-app-store/releases/latest/download/"
+    }
+  },
+  "allowScripts": {
+    "electron@43.3.0": true,
+    "electron-winstaller@5.4.0": true,
+    "esbuild@0.28.1": true
+  }
+}
