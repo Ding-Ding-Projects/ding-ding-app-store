@@ -39,6 +39,7 @@ describe('desktop security and update contracts', () => {
     expect(main).toContain("setWindowOpenHandler(() => ({ action: 'deny' }))");
     expect(main).toContain('setPermissionRequestHandler');
     expect(main).toContain('setPermissionCheckHandler');
+    expect(main).toContain("'index.cjs'");
   });
 
   it('exposes typed actions without a generic command bridge', async () => {
@@ -61,11 +62,12 @@ describe('desktop security and update contracts', () => {
 
   it('keeps self-updates unsigned, staged, and user-restarted', async () => {
     const updater = await read('src/main/update-service.ts');
-    expect(updater).toContain('autoUpdater.autoDownload = false');
-    expect(updater).toContain('autoUpdater.autoInstallOnAppQuit = false');
+    expect(updater).toContain("const RELEASES_URL = `${FEED_URL}RELEASES`");
+    expect(updater).toContain("if (this.state.status !== 'available')");
+    expect(updater).toContain('autoUpdater.setFeedURL({ url: FEED_URL })');
     expect(updater).toContain("status: 'ready'");
     expect(updater).toContain('unsigned: true');
-    expect(updater).toContain('quitAndInstall(false, true)');
+    expect(updater).toContain('autoUpdater.quitAndInstall()');
   });
 
   it('packages only unsigned Squirrel.Windows output', async () => {

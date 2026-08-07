@@ -18,7 +18,9 @@ Evidence must not expose tokens, credentials, private paths, or user data. Exter
 
 ## Verification
 
-For this lane, static source/documentation checks are the only intended evidence. Desktop runtime, installer, updater, offline bundle, visual capture, CI, and release verification are pending until implementation exists.
+The packaged Windows x64 application was launched on the sanctioned cheap hidden desktop from the unsigned `win-unpacked` artifact. The real catalog surface rendered and loaded the curated public catalog; the capture is stored at [`docs/assets/screenshots/catalog-runtime.png`](../assets/screenshots/catalog-runtime.png). The same pass found and fixed a CommonJS updater import crash, a missing bundled preload bridge, and the packaged catalog path.
+
+The startup update checker truthfully reports HTTP 404 because this new repository has no published `RELEASES` asset yet. That is runtime proof of the failure state, not update-feed success. CI, published installer, real update download/restart, source-build execution, and full offline cross-repository documentation remain unverified.
 
 ## Suggested articles
 

@@ -71,9 +71,7 @@ interface CachedCatalog extends CatalogSnapshot {
 }
 
 function dataPath(): string {
-  return app.isPackaged
-    ? path.join(process.resourcesPath, 'data', 'catalog.v1.json')
-    : path.join(app.getAppPath(), 'data', 'catalog.v1.json');
+  return path.join(app.getAppPath(), 'data', 'catalog.v1.json');
 }
 
 async function fetchJson(url: URL): Promise<unknown> {

@@ -9,12 +9,15 @@ The initial application foundation is in active development on `codex/initial-ap
 - Strict renderer and main-process TypeScript compilation.
 - Vite production renderer build.
 - Initial security, packaging, catalog, update, language, regex, navigation, and destructive-confirmation contract tests.
+- Unsigned Squirrel.Windows package creation with `Setup.exe`, `RELEASES`, and a full `.nupkg`; setup and packaged app both report `NotSigned`.
+- Packaged application launch on the sanctioned cheap hidden desktop; the curated catalog rendered in the real artifact. See `docs/assets/screenshots/catalog-runtime.png`.
 
 ## Remaining
 
 - Source builds are intentionally blocked until the disposable Windows runner is implemented.
 - Install adapters need real-release verification per application; opaque installers remain unsupported instead of receiving guessed flags.
-- Offline documentation import, full universal navigation/appearance/history/export/scheduling features, packaging, hidden-desktop runtime evidence, CI, release, update feed, and documentation deployment remain.
+- Offline documentation import, full universal navigation/appearance/history/export/scheduling features, CI, release, working update feed, and documentation deployment remain.
+- The self-update failure state is runtime-verified: the repository has no release yet, so `RELEASES` returns HTTP 404. No successful update is claimed.
 - A real labelled self-hosted runner has not yet been observed for this repository; no remote CI or release claim is valid.
 
 ## Next owner action

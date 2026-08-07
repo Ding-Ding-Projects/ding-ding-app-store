@@ -24,7 +24,7 @@ function createWindow(): BrowserWindow {
     titleBarStyle: 'hidden',
     backgroundColor: '#F7F2FA',
     webPreferences: {
-      preload: path.join(dirname, '..', 'preload', 'index.js'),
+      preload: path.join(dirname, '..', 'preload', 'index.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -81,4 +81,3 @@ void app.whenReady().then(async () => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
-

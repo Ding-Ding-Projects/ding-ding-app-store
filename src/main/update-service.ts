@@ -1,47 +1,70 @@
-import { app, BrowserWindow } from 'electron';
-import { autoUpdater } from 'electron-updater';
+import { app, autoUpdater, BrowserWindow } from 'electron';
+import semver from 'semver';
 import type { AppStoreUpdateState, OperationResult } from '../shared/contracts.js';
+
+const FEED_URL = 'https://github.com/Ding-Ding-Projects/ding-ding-app-store/releases/latest/download/';
+const RELEASES_URL = `${FEED_URL}RELEASES`;
+const MAX_RELEASES_BYTES = 128_000;
+const RELEASE_HOSTS = new Set(['github.com', 'release-assets.githubusercontent.com', 'objects.githubusercontent.com']);
+
+async function fetchReleases(): Promise<string> {
+  let url = new URL(RELEASES_URL);
+  let response: Response | null = null;
+  for (let redirect = 0; redirect <= 3; redirect += 1) {
+    if (url.protocol !== 'https:' || url.username || url.password || !RELEASE_HOSTS.has(url.hostname)) {
+      throw new Error(`Blocked update feed origin: ${url.origin}`);
+    }
+    response = await fetch(url, {
+      redirect: 'manual',
+      headers: { 'User-Agent': 'Ding-Ding-App-Store' },
+      signal: AbortSignal.timeout(15_000),
+    });
+    if ([301, 302, 303, 307, 308].includes(response.status)) {
+      const location = response.headers.get('location');
+      if (!location) throw new Error('Update feed redirected without a destination.');
+      url = new URL(location, url);
+      continue;
+    }
+    break;
+  }
+  if (!response?.ok) throw new Error(`Update feed request failed: HTTP ${response?.status ?? 0}`);
+  const declared = Number(response.headers.get('content-length') ?? 0);
+  if (declared > MAX_RELEASES_BYTES) throw new Error('Update feed metadata exceeded 128 KB.');
+  const text = await response.text();
+  if (text.length > MAX_RELEASES_BYTES) throw new Error('Update feed metadata exceeded 128 KB.');
+  return text;
+}
+
+function latestVersionFromReleases(input: string): string | null {
+  const versions = input.split(/\r?\n/).map((line) => {
+    const match = line.trim().match(/^[A-Fa-f0-9]{40}\s+DingDingAppStore-([0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?)-full\.nupkg\s+[0-9]+$/);
+    return match?.[1] && semver.valid(match[1]) ? match[1] : null;
+  }).filter((value): value is string => Boolean(value));
+  return versions.sort(semver.rcompare)[0] ?? null;
+}
 
 export class UpdateService {
   private state: AppStoreUpdateState = { status: 'idle' };
   private restartAuthorized = false;
 
   constructor(private readonly getWindow: () => BrowserWindow | null) {
-    autoUpdater.autoDownload = false;
-    autoUpdater.autoInstallOnAppQuit = false;
-    autoUpdater.allowPrerelease = false;
-    autoUpdater.on('checking-for-update', () => this.publish({ status: 'checking' }));
-    autoUpdater.on('update-not-available', () => this.publish({ status: 'up-to-date', checkedAt: new Date().toISOString() }));
-    autoUpdater.on('update-available', (info) => this.publish({
-      status: 'available',
-      version: info.version,
-      releaseNotesUrl: `https://github.com/Ding-Ding-Projects/ding-ding-app-store/releases/tag/v${info.version}`,
-    }));
-    autoUpdater.on('download-progress', () => {
-      if (this.state.status === 'available' || this.state.status === 'downloading') {
-        this.publish({ ...this.state, status: 'downloading' });
-      }
+    autoUpdater.on('update-downloaded', (_event, _notes, _name, _date, url) => {
+      const version = this.state.status === 'downloading' ? this.state.version : app.getVersion();
+      this.publish({ status: 'ready', version, releaseNotesUrl: url || `https://github.com/Ding-Ding-Projects/ding-ding-app-store/releases/tag/v${version}`, unsigned: true });
     });
-    autoUpdater.on('update-downloaded', (info) => this.publish({
-      status: 'ready',
-      version: info.version,
-      releaseNotesUrl: `https://github.com/Ding-Ding-Projects/ding-ding-app-store/releases/tag/v${info.version}`,
-      unsigned: true,
-    }));
+    autoUpdater.on('update-not-available', () => this.publish({ status: 'up-to-date', checkedAt: new Date().toISOString() }));
     autoUpdater.on('error', (error) => this.publish({ status: 'failed', message: error.message, checkedAt: new Date().toISOString() }));
   }
 
-  current(): AppStoreUpdateState {
-    return this.state;
-  }
+  current(): AppStoreUpdateState { return this.state; }
 
   async check(): Promise<AppStoreUpdateState> {
-    if (!app.isPackaged) {
-      return this.publish({ status: 'up-to-date', checkedAt: new Date().toISOString() });
-    }
+    if (!app.isPackaged) return this.publish({ status: 'up-to-date', checkedAt: new Date().toISOString() });
+    this.publish({ status: 'checking' });
     try {
-      await autoUpdater.checkForUpdates();
-      return this.state;
+      const latest = latestVersionFromReleases(await fetchReleases());
+      if (!latest || !semver.gt(latest, app.getVersion())) return this.publish({ status: 'up-to-date', checkedAt: new Date().toISOString() });
+      return this.publish({ status: 'available', version: latest, releaseNotesUrl: `https://github.com/Ding-Ding-Projects/ding-ding-app-store/releases/tag/v${latest}` });
     } catch (error) {
       return this.publish({ status: 'failed', message: (error as Error).message, checkedAt: new Date().toISOString() });
     }
@@ -49,18 +72,17 @@ export class UpdateService {
 
   async download(): Promise<AppStoreUpdateState> {
     if (this.state.status !== 'available') return this.state;
-    await autoUpdater.downloadUpdate();
-    return this.state;
+    const downloading: AppStoreUpdateState = { ...this.state, status: 'downloading' };
+    this.publish(downloading);
+    autoUpdater.setFeedURL({ url: FEED_URL });
+    autoUpdater.checkForUpdates();
+    return downloading;
   }
 
   restart(): OperationResult {
-    if (this.state.status !== 'ready') {
-      return { ok: false, appId: 'ding-ding-app-store', message: 'No verified update is ready to install.' };
-    }
+    if (this.state.status !== 'ready') return { ok: false, appId: 'ding-ding-app-store', message: 'No verified update is ready to install.' };
     this.restartAuthorized = true;
-    setImmediate(() => {
-      if (this.restartAuthorized) autoUpdater.quitAndInstall(false, true);
-    });
+    setImmediate(() => { if (this.restartAuthorized) autoUpdater.quitAndInstall(); });
     return { ok: true, appId: 'ding-ding-app-store', message: `Restarting to install ${this.state.version}.` };
   }
 
@@ -71,3 +93,5 @@ export class UpdateService {
     return state;
   }
 }
+
+export const updateInternals = { latestVersionFromReleases };
