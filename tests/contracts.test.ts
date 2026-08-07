@@ -28,6 +28,13 @@ describe('catalog contract', () => {
       expect(app.assetPattern).toBeTruthy();
     }
   });
+
+  it('anchors source builds to the repositories actual build manifests', async () => {
+    const catalog = JSON.parse(await read('data/catalog.v1.json')) as { apps: Array<{ id: string; sourceManifest: string | null }> };
+    const manifests = new Map(catalog.apps.map((app) => [app.id, app.sourceManifest]));
+    expect(manifests.get('minecraft-world-downloader')).toBe('pom.xml');
+    expect(manifests.get('thunderbird-desktop')).toBe('pyproject.toml');
+  });
 });
 
 describe('desktop security and update contracts', () => {
