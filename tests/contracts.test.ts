@@ -48,6 +48,19 @@ describe('desktop security and update contracts', () => {
     expect(preload).not.toMatch(/exec|shell|spawn|command:run|filesystem/i);
     expect(preload).toContain("ipcRenderer.invoke('operations:install'");
     expect(preload).toContain("ipcRenderer.invoke('operations:uninstall'");
+    expect(preload).toContain("ipcRenderer.invoke('operations:installed'");
+    expect(preload).toContain("ipcRenderer.invoke('operations:history'");
+  });
+
+  it('discovers only allowlisted install records and keeps append-only local history', async () => {
+    const installed = await read('src/main/installed-service.ts');
+    const history = await read('src/main/history-service.ts');
+    expect(installed).toContain("record.uninstallStrategy !== 'squirrel'");
+    expect(installed).toContain("record.uninstallStrategy !== 'msi-registry'");
+    expect(installed).toContain("source: 'portable-managed'");
+    expect(history).toContain("appendFile(this.logPath");
+    expect(history).toContain("git(this.repositoryPath, ['commit', '-m', label])");
+    expect(history.toLowerCase()).toContain('history snapshots must never fail the operation');
   });
 
   it('requires asset digest, bounded bytes, fixed shell-free launch, and exact confirmations', async () => {
@@ -93,6 +106,8 @@ describe('visible product contracts', () => {
     for (const primitive of ['Literal', 'Class', 'Anchor', 'Group', 'Alternation', 'Quantifier']) expect(app).toContain(primitive);
     expect(app).toContain('slice(0, 160)');
     expect(app).toContain('slice(0, 10_000)');
+    expect(app).toContain('placeholder="Search operation history"');
+    expect(app).toContain('Export filtered operation history');
   });
 
   it('ships all language modes and two independent funny-level controls', async () => {

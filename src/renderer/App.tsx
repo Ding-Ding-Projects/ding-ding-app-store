@@ -3,6 +3,9 @@ import type {
   AppStoreUpdateState,
   CatalogApp,
   CatalogSnapshot,
+  HistoryExportFormat,
+  InstalledAppRecord,
+  OperationHistoryEntry,
   OperationResult,
   UserSettings,
 } from '../shared/contracts';
@@ -167,6 +170,13 @@ export function App() {
   const [settings, setSettings] = useState(defaultSettings);
   const [activeTab, setActiveTab] = useState<TabId>('catalog');
   const [catalog, setCatalog] = useState<CatalogSnapshot | null>(null);
+  const [installedRecords, setInstalledRecords] = useState<InstalledAppRecord[]>([]);
+  const [historyEntries, setHistoryEntries] = useState<OperationHistoryEntry[]>([]);
+  const [historyQuery, setHistoryQuery] = useState('');
+  const [historyRegex, setHistoryRegex] = useState<{ pattern: string; flags: string } | null>(null);
+  const [historyFrom, setHistoryFrom] = useState('');
+  const [historyTo, setHistoryTo] = useState('');
+  const [historyActions, setHistoryActions] = useState<string[]>([]);
   const [query, setQuery] = useState('');
   const [regexMode, setRegexMode] = useState<{ pattern: string; flags: string } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -184,11 +194,25 @@ export function App() {
     finally { setLoading(false); }
   }, []);
 
+  const loadOperations = useCallback(async () => {
+    try {
+      const [installed, history] = await Promise.all([window.dingDingStore.operations.installed(), window.dingDingStore.operations.history()]);
+      setInstalledRecords(installed);
+      setHistoryEntries(history);
+    } catch (error) {
+      setToast({ ok: false, appId: 'operations', message: (error as Error).message });
+    }
+  }, []);
+
+  const refreshAll = useCallback(async (refreshCatalog = false) => {
+    await Promise.all([loadCatalog(refreshCatalog), loadOperations()]);
+  }, [loadCatalog, loadOperations]);
+
   useEffect(() => {
     void window.dingDingStore.settings.load().then(setSettings);
-    void loadCatalog();
+    void refreshAll();
     return window.dingDingStore.updates.subscribe(setUpdateState);
-  }, [loadCatalog]);
+  }, [refreshAll]);
 
   useEffect(() => {
     const listener = (event: KeyboardEvent) => { if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'f') { event.preventDefault(); setPaletteOpen(true); } if (event.key === 'Escape') { setPaletteOpen(false); setAction(null); } };
@@ -202,8 +226,13 @@ export function App() {
     document.documentElement.style.setProperty('--seed', settings.accent);
   }, [settings]);
 
+  const effectiveApps = useMemo(() => {
+    const versions = new Map(installedRecords.map((record) => [record.appId, record.version]));
+    return (catalog?.apps ?? []).map((item) => ({ ...item, installedVersion: versions.get(item.id) ?? item.installedVersion }));
+  }, [catalog, installedRecords]);
+
   const filtered = useMemo(() => {
-    const source = catalog?.apps ?? [];
+    const source = effectiveApps;
     if (!query) return source;
     if (regexMode) {
       try { const expression = new RegExp(regexMode.pattern, regexMode.flags.replace('g', '')); return source.filter((item) => expression.test(`${item.name}\n${item.description}\n${item.repository}`)); }
@@ -211,10 +240,29 @@ export function App() {
     }
     const needle = query.toLocaleLowerCase();
     return source.filter((item) => `${item.name}\n${item.description}\n${item.repository}`.toLocaleLowerCase().includes(needle));
-  }, [catalog, query, regexMode]);
+  }, [effectiveApps, query, regexMode]);
 
-  const shownApps = activeTab === 'installed' ? filtered.filter((item) => item.installedVersion) : activeTab === 'updates' ? filtered.filter((item) => item.updateState === 'available') : filtered;
+  const installedIds = useMemo(() => new Set(installedRecords.map((record) => record.appId)), [installedRecords]);
+  const shownApps = activeTab === 'installed' ? filtered.filter((item) => installedIds.has(item.id)) : activeTab === 'updates' ? filtered.filter((item) => item.updateState === 'available') : filtered;
+  const actionCounts = useMemo(() => historyEntries.reduce<Record<string, number>>((counts, entry) => ({ ...counts, [entry.action]: (counts[entry.action] ?? 0) + 1 }), {}), [historyEntries]);
+  const filteredHistory = useMemo(() => historyEntries.filter((entry) => {
+    if (historyActions.length && !historyActions.includes(entry.action)) return false;
+    if (historyFrom && entry.startedAt < `${historyFrom}T00:00:00`) return false;
+    if (historyTo && entry.startedAt > `${historyTo}T23:59:59.999`) return false;
+    if (!historyQuery) return true;
+    const haystack = `${entry.appId}\n${entry.action}\n${entry.status}\n${entry.message}\n${entry.version ?? ''}`;
+    if (historyRegex) { try { return new RegExp(historyRegex.pattern, historyRegex.flags.replace('g', '')).test(haystack); } catch { return false; } }
+    return haystack.toLocaleLowerCase().includes(historyQuery.toLocaleLowerCase());
+  }), [historyActions, historyEntries, historyFrom, historyQuery, historyRegex, historyTo]);
   const saveSettings = async (value: UserSettings) => { const saved = await window.dingDingStore.settings.save(value); setSettings(saved); setToast({ ok: true, appId: 'settings', message: 'Settings saved and applied.' }); };
+  const exportHistory = async (format: HistoryExportFormat) => {
+    const exported = await window.dingDingStore.operations.exportHistory(format, filteredHistory.map((entry) => entry.id));
+    const url = URL.createObjectURL(new Blob([exported.content], { type: `${exported.mediaType};charset=utf-8` }));
+    const link = document.createElement('a');
+    link.href = url; link.download = exported.fileName; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1_000);
+    setToast({ ok: true, appId: 'history', message: `${filteredHistory.length} filtered history entries exported as ${format.toUpperCase()}.` });
+  };
   const pageTitle = tabs.find((tab) => tab.id === activeTab)!;
   const moveTabFocus = (index: number, direction: number) => { const target = (index + direction + tabs.length) % tabs.length; tabRefs.current[target]?.focus(); };
 
@@ -223,16 +271,16 @@ export function App() {
     <aside className="navigation" aria-label="Primary navigation"><div className="nav-title">Ding Ding</div><div role="tablist" aria-orientation="vertical">{tabs.map((tab, index) => <button key={tab.id} ref={(node) => { tabRefs.current[index] = node; }} role="tab" aria-selected={activeTab === tab.id} tabIndex={activeTab === tab.id ? 0 : -1} onKeyDown={(event) => { if (event.key === 'ArrowDown') moveTabFocus(index, 1); if (event.key === 'ArrowUp') moveTabFocus(index, -1); if (event.key === 'Enter' || event.key === ' ') setActiveTab(tab.id); }} onClick={() => setActiveTab(tab.id)}><Icon>{tab.icon}</Icon><span>{label(settings, tab.en, tab.yue)}</span>{tab.id === 'updates' && (catalog?.apps.some((app) => app.updateState === 'available') || updateState.status === 'ready') && <span className="nav-dot" aria-label="Updates available" />}</button>)}</div><button className="palette-hint" onClick={() => setPaletteOpen(true)}><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd><span>Commands</span></button></aside>
     <main className="content" role="tabpanel" aria-label={pageTitle.en}>
       {(updateState.status === 'available' || updateState.status === 'downloading' || updateState.status === 'ready' || updateState.status === 'failed') && <section className={`update-banner ${updateState.status}`} role="status"><Icon>system_update</Icon><div><strong>{updateState.status === 'ready' ? `Ding Ding App Store ${updateState.version} is ready` : updateState.status === 'available' ? `Version ${updateState.version} is available` : updateState.status === 'downloading' ? 'Downloading update…' : 'Update check failed'}</strong><p>{updateState.status === 'failed' ? updateState.message : 'Unsigned artifact: HTTPS feed metadata and package hashes protect transport integrity; no code signature is claimed.'}</p></div>{updateState.status === 'available' && <button className="filled-button" onClick={() => void window.dingDingStore.updates.downloadStore().then(setUpdateState)}>Download</button>}{updateState.status === 'ready' && <><button className="text-button">Later</button><button className="filled-button" onClick={() => void window.dingDingStore.updates.restartStore()}>Restart to install update</button></>}</section>}
-      <div className="page-heading"><div><span className="eyebrow">DING DING PROJECTS</span><h1>{label(settings, pageTitle.en, pageTitle.yue)}</h1><p>{activeTab === 'catalog' ? label(settings, 'Trusted apps, their releases, and their complete documentation in one place.', '可信 apps、release 同完整文件，一個位睇晒。') : activeTab === 'updates' ? label(settings, 'Check every installed app and the store itself without surprise restarts.', '檢查所有已安裝 app 同商店自己，唔會突然重開。') : ''}</p></div>{['catalog', 'installed', 'updates'].includes(activeTab) && <button className="tonal-button" disabled={loading} onClick={() => void loadCatalog(true)}><Icon>refresh</Icon>{loading ? 'Refreshing…' : 'Refresh'}</button>}</div>
+      <div className="page-heading"><div><span className="eyebrow">DING DING PROJECTS</span><h1>{label(settings, pageTitle.en, pageTitle.yue)}</h1><p>{activeTab === 'catalog' ? label(settings, 'Trusted apps, their releases, and their complete documentation in one place.', '可信 apps、release 同完整文件，一個位睇晒。') : activeTab === 'updates' ? label(settings, 'Check every installed app and the store itself without surprise restarts.', '檢查所有已安裝 app 同商店自己，唔會突然重開。') : activeTab === 'installed' ? label(settings, `${installedRecords.length} verified or discovered installations.`, `搵到 ${installedRecords.length} 個已驗證或者偵測到嘅安裝。`) : ''}</p></div>{['catalog', 'installed', 'updates'].includes(activeTab) && <button className="tonal-button" disabled={loading} onClick={() => void refreshAll(true)}><Icon>refresh</Icon>{loading ? 'Refreshing…' : 'Refresh'}</button>}</div>
       {['catalog', 'installed', 'updates'].includes(activeTab) && <SearchBox value={query} onChange={setQuery} regexMode={regexMode} onRegexMode={setRegexMode} placeholder="Search apps, descriptions, and repositories" />}
       {catalog?.warning && <div className="notice warning" role="status"><Icon>wifi_off</Icon>{catalog.warning}</div>}
       {loading && <div className="loading-grid" aria-label="Loading catalog">{Array.from({ length: 6 }, (_, index) => <div className="skeleton" key={index} />)}</div>}
       {!loading && ['catalog', 'installed', 'updates'].includes(activeTab) && (shownApps.length ? <section className="app-grid">{shownApps.map((app) => <AppCard key={app.id} app={app} settings={settings} onAction={(kind, selected) => setAction({ kind, app: selected })} />)}</section> : <div className="empty-state"><Icon>search_off</Icon><h2>No matching apps</h2><p>The current search and tab filters found nothing. Clear the query or refresh the catalog.</p></div>)}
       {activeTab === 'docs' && <section className="docs-layout"><nav aria-label="Documentation articles">{docs.map((article) => <a href={`#docs-${article.id}`} key={article.id}>{article.title}</a>)}</nav><div>{docs.map((article) => <article key={article.id} id={`docs-${article.id}`} tabIndex={-1}><h2>{article.title}</h2><p>{article.body}</p><h3>Suggested articles</h3><p>Security boundaries · Update checker · Verification</p></article>)}</div></section>}
-      {activeTab === 'activity' && <div className="empty-state"><Icon>history</Icon><h2>No operations yet · 仲未有操作</h2><p>Installs, builds, updates, uninstalls, failures, and recoveries will appear here with exact results and export controls.</p></div>}
+      {activeTab === 'activity' && <section className="history-panel"><SearchBox value={historyQuery} onChange={setHistoryQuery} regexMode={historyRegex} onRegexMode={setHistoryRegex} placeholder="Search operation history" /><div className="history-filters"><label>From date<input type="date" value={historyFrom} onChange={(event) => setHistoryFrom(event.target.value)} /></label><label>To date<input type="date" value={historyTo} onChange={(event) => setHistoryTo(event.target.value)} /></label><fieldset><legend>Filter by action</legend><div className="chip-row">{Object.entries(actionCounts).map(([actionName, count]) => <button key={actionName} aria-pressed={historyActions.includes(actionName)} className={historyActions.includes(actionName) ? 'filter-chip selected' : 'filter-chip'} onClick={() => setHistoryActions((current) => current.includes(actionName) ? current.filter((item) => item !== actionName) : [...current, actionName])}>{actionName} ({count})</button>)}</div></fieldset><button className="text-button" disabled={!historyQuery && !historyFrom && !historyTo && !historyActions.length} onClick={() => { setHistoryQuery(''); setHistoryRegex(null); setHistoryFrom(''); setHistoryTo(''); setHistoryActions([]); }}>Clear filters</button></div><div className="history-toolbar"><div><h2>Operation history · 操作記錄</h2><p>{filteredHistory.length} of {historyEntries.length} entries; completed state is append-only and successful changes also receive a local Git snapshot.</p></div><div className="chip-row" aria-label="Export filtered operation history">{(['json','jsonl','csv','markdown'] as HistoryExportFormat[]).map((format) => <button key={format} onClick={() => void exportHistory(format)}>Export {format.toUpperCase()}</button>)}</div></div>{filteredHistory.length ? <div className="history-list" role="list">{filteredHistory.map((entry) => <article role="listitem" key={entry.id} className={`history-entry ${entry.status}`}><div><strong>{entry.action} · {entry.appId}</strong><span className={`status-pill ${entry.status}`}>{entry.status}</span></div><p>{entry.message}</p><small>{entry.startedAt}{entry.finishedAt ? ` → ${entry.finishedAt}` : ' · running'}</small></article>)}</div> : <div className="empty-state"><Icon>history</Icon><h2>{historyEntries.length ? 'No matching history · 冇符合記錄' : 'No operations yet · 仲未有操作'}</h2><p>{historyEntries.length ? 'Clear or adjust the text, regex, date, and action filters.' : 'Installs, builds, updates, uninstalls, failures, and recoveries will appear here with exact results and export controls.'}</p></div>}</section>}
       {activeTab === 'settings' && <><SearchBox value={query} onChange={setQuery} regexMode={regexMode} onRegexMode={setRegexMode} placeholder="Search every setting" /><SettingsPanel settings={settings} onSave={(value) => void saveSettings(value)} /></>}
     </main>
-    {action && <ActionDialog action={action} settings={settings} onClose={() => setAction(null)} onResult={(result) => { setToast(result); if (result.ok) void loadCatalog(true); }} />}
+    {action && <ActionDialog action={action} settings={settings} onClose={() => setAction(null)} onResult={(result) => { setToast(result); void refreshAll(result.ok); }} />}
     {paletteOpen && <div className="scrim" role="presentation"><section className="command-palette" role="dialog" aria-modal="true" aria-label="Command palette"><header><h2>Command palette · 指令板</h2><button className="icon-button" onClick={() => setPaletteOpen(false)} aria-label="Close command palette"><Icon>close</Icon></button></header><SearchBox value={paletteQuery} onChange={setPaletteQuery} regexMode={null} onRegexMode={() => undefined} placeholder="Search commands, pages, settings, and apps" /><div className="command-list">{tabs.filter((tab) => `${tab.en} ${tab.yue}`.toLowerCase().includes(paletteQuery.toLowerCase())).map((tab) => <button key={tab.id} onClick={() => { setActiveTab(tab.id); setPaletteOpen(false); }}><Icon>{tab.icon}</Icon><span><strong>{tab.en} · {tab.yue}</strong><small>Open exact page</small></span><Icon>arrow_forward</Icon></button>)}</div></section></div>}
     {toast && <div className={`snackbar ${toast.ok ? 'success' : 'error'}`} role="status"><Icon>{toast.ok ? 'check_circle' : 'error'}</Icon><span>{toast.message}</span><button className="icon-button" onClick={() => setToast(null)} aria-label="Dismiss notification"><Icon>close</Icon></button></div>}
   </div>;

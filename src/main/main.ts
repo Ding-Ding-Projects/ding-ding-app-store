@@ -4,6 +4,8 @@ import { app, BrowserWindow, ipcMain, session } from 'electron';
 import squirrelStartup from 'electron-squirrel-startup';
 import type { OperationRequest, UserSettings } from '../shared/contracts.js';
 import { CatalogService } from './catalog-service.js';
+import { HistoryService } from './history-service.js';
+import { InstalledService } from './installed-service.js';
 import { OperationService } from './operation-service.js';
 import { SettingsService } from './settings-service.js';
 import { UpdateService } from './update-service.js';
@@ -47,7 +49,9 @@ void app.whenReady().then(async () => {
   session.defaultSession.setPermissionCheckHandler(() => false);
 
   const catalog = new CatalogService();
-  const operations = new OperationService(catalog);
+  const installed = new InstalledService(catalog);
+  const history = new HistoryService();
+  const operations = new OperationService(catalog, installed, history);
   const settings = new SettingsService();
   const updates = new UpdateService(() => mainWindow);
 
@@ -56,12 +60,25 @@ void app.whenReady().then(async () => {
   ipcMain.handle('operations:install', (_event, request: OperationRequest) => operations.install(request));
   ipcMain.handle('operations:build', (_event, request: OperationRequest) => operations.build(request));
   ipcMain.handle('operations:uninstall', (_event, request: OperationRequest) => operations.uninstall(request));
+  ipcMain.handle('operations:installed', () => operations.listInstalled());
+  ipcMain.handle('operations:history', () => operations.listHistory());
+  ipcMain.handle('operations:history-export', (_event, format, entryIds) => operations.exportHistory(format, entryIds));
   ipcMain.handle('updates:catalog', () => catalog.list(true));
   ipcMain.handle('updates:store-check', () => updates.check());
   ipcMain.handle('updates:store-download', () => updates.download());
   ipcMain.handle('updates:store-restart', () => updates.restart());
   ipcMain.handle('settings:load', () => settings.load());
-  ipcMain.handle('settings:save', (_event, value: UserSettings) => settings.save(value));
+  ipcMain.handle('settings:save', async (_event, value: UserSettings) => {
+    const started = await history.start('settings', 'settings', 'settings change requested').catch(() => null);
+    try {
+      const saved = await settings.save(value);
+      if (started) await history.finish(started, 'succeeded', 'Settings changed.').catch(() => undefined);
+      return saved;
+    } catch (error) {
+      if (started) await history.finish(started, 'failed', (error as Error).message).catch(() => undefined);
+      throw error;
+    }
+  });
   ipcMain.on('window:minimize', () => mainWindow?.minimize());
   ipcMain.on('window:toggle-maximize', () => {
     if (mainWindow?.isMaximized()) mainWindow.unmaximize(); else mainWindow?.maximize();
@@ -69,6 +86,7 @@ void app.whenReady().then(async () => {
   ipcMain.on('window:close', () => mainWindow?.close());
 
   mainWindow = createWindow();
+  void installed.discover().catch(() => undefined);
   mainWindow.on('closed', () => { mainWindow = null; });
   setTimeout(() => void updates.check(), 5_000);
   setInterval(() => void updates.check(), 6 * 60 * 60 * 1000).unref();

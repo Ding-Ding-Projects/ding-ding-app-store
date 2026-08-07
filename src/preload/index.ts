@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { AppStoreUpdateState, DingDingStoreApi, OperationRequest, UserSettings } from '../shared/contracts.js';
+import type { AppStoreUpdateState, DingDingStoreApi, HistoryExportFormat, OperationRequest, UserSettings } from '../shared/contracts.js';
 
 const api: DingDingStoreApi = {
   catalog: {
@@ -10,6 +10,9 @@ const api: DingDingStoreApi = {
     install: (request: OperationRequest) => ipcRenderer.invoke('operations:install', request),
     build: (request: OperationRequest) => ipcRenderer.invoke('operations:build', request),
     uninstall: (request: OperationRequest) => ipcRenderer.invoke('operations:uninstall', request),
+    installed: () => ipcRenderer.invoke('operations:installed'),
+    history: () => ipcRenderer.invoke('operations:history'),
+    exportHistory: (format: HistoryExportFormat, entryIds?: string[]) => ipcRenderer.invoke('operations:history-export', format, entryIds),
   },
   updates: {
     checkCatalog: () => ipcRenderer.invoke('updates:catalog'),
