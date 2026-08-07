@@ -1,8 +1,25 @@
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 
 const root = new URL('../', import.meta.url);
 const read = (relative: string) => readFile(new URL(relative, root), 'utf8');
+
+async function rendererFiles(relative = 'src/renderer/'): Promise<string[]> {
+  const entries = await readdir(new URL(relative, root), { withFileTypes: true });
+  const files: string[] = [];
+  for (const entry of entries) {
+    if (entry.isDirectory()) files.push(...(await rendererFiles(`${relative}${entry.name}/`)));
+    else if (/\.tsx?$/.test(entry.name)) files.push(`${relative}${entry.name}`);
+  }
+  return files;
+}
+
+/** The renderer is split across many files; product contracts are asserted against every source at once. */
+async function readRendererSources(): Promise<string> {
+  const paths = (await rendererFiles()).sort();
+  const sources = await Promise.all(paths.map((relative) => read(relative)));
+  return sources.join('\n');
+}
 
 describe('catalog contract', () => {
   it('ships a versioned public Ding Ding Projects catalog', async () => {
@@ -82,28 +99,28 @@ describe('desktop security and update contracts', () => {
 
 describe('visible product contracts', () => {
   it('ships catalog, installed, updates, docs, activity, and settings tabs', async () => {
-    const app = await read('src/renderer/App.tsx');
+    const app = await readRendererSources();
     for (const tab of ["'catalog'", "'installed'", "'updates'", "'docs'", "'activity'", "'settings'"]) expect(app).toContain(tab);
     expect(app).toContain("event.ctrlKey && event.shiftKey");
     expect(app).toContain("event.key.toLowerCase() === 'f'");
   });
 
   it('ships full regex-builder primitives and bounded sample evaluation', async () => {
-    const app = await read('src/renderer/App.tsx');
+    const app = await readRendererSources();
     for (const primitive of ['Literal', 'Class', 'Anchor', 'Group', 'Alternation', 'Quantifier']) expect(app).toContain(primitive);
     expect(app).toContain('slice(0, 160)');
     expect(app).toContain('slice(0, 10_000)');
   });
 
   it('ships all language modes and two independent funny-level controls', async () => {
-    const app = await read('src/renderer/App.tsx');
+    const app = await readRendererSources();
     expect(app).toContain('English funny level');
     expect(app).toContain('粵語 funny level');
     expect(app).toContain('English + 香港粵語');
   });
 
   it('requires two keys and a completed slider for uninstall', async () => {
-    const app = await read('src/renderer/App.tsx');
+    const app = await readRendererSources();
     expect(app).toContain('firstKey && secondKey && slider === 100');
     expect(app).toContain('Emergency exit · 緊急離開');
   });
@@ -139,13 +156,98 @@ describe('activity history and export', () => {
   });
 
   it('renders real activity with search, action/result/date filters, and export controls', async () => {
-    const app = await read('src/renderer/App.tsx');
-    expect(app).toContain('function HistoryPanel(');
+    const app = await readRendererSources();
+    expect(app).toMatch(/function (HistoryPanel|ActivityPage)\(/);
     expect(app).toContain("Search activity by app, action, or message");
     expect(app).toContain("'all', 'install', 'build', 'uninstall'");
     expect(app).toContain("'all', 'ok', 'failed'");
     expect(app).toContain("'all', 'today', '7d', '30d'");
     expect(app).toContain('Copy JSON');
-    expect(app).toContain("void loadHistory()");
+    expect(app).toMatch(/loadHistory\(\)/);
+  });
+});
+
+describe('tab, appearance, and schedule bridge contracts', () => {
+  it('keeps the renderer away from electron, node, and the network', async () => {
+    const renderer = await readRendererSources();
+    for (const forbidden of ["from 'electron'", 'require(', 'child_process', 'window.open(', 'fetch(', "new URL('http"]) {
+      expect(renderer).not.toContain(forbidden);
+    }
+  });
+
+  it('adds fifteen typed workspace, appearance, and schedule methods to the bridge', async () => {
+    const preload = await read('src/preload/index.ts');
+    for (const channel of [
+      "ipcRenderer.invoke('workspace:load')",
+      "ipcRenderer.invoke('workspace:save', value)",
+      "ipcRenderer.invoke('workspace:reset')",
+      "ipcRenderer.invoke('workspace:export')",
+      "ipcRenderer.invoke('workspace:import', document)",
+      "ipcRenderer.invoke('appearance:load')",
+      "ipcRenderer.invoke('appearance:set-element', key, override)",
+      "ipcRenderer.invoke('appearance:reset-element', key)",
+      "ipcRenderer.invoke('appearance:reset-all')",
+      "ipcRenderer.invoke('appearance:export')",
+      "ipcRenderer.invoke('appearance:import', payload)",
+      "ipcRenderer.invoke('schedule:load')",
+      "ipcRenderer.invoke('schedule:save', config)",
+      "ipcRenderer.invoke('schedule:run-now', task)",
+      "ipcRenderer.on('schedule:status', handler)",
+    ]) {
+      expect(preload).toContain(channel);
+    }
+    expect(preload).not.toMatch(/exec|shell|spawn|command:run|filesystem/i);
+    expect(preload).not.toMatch(/from 'zod'/);
+    expect(preload).toContain("import type {");
+    expect(preload).not.toMatch(/^import \{[^}]*\} from '\.\.\/shared\/contracts\.js'/m);
+  });
+
+  it('wires every new document and schedule handler in the main process', async () => {
+    const main = await read('src/main/main.ts');
+    for (const channel of [
+      'workspace:load', 'workspace:save', 'workspace:reset', 'workspace:export', 'workspace:import',
+      'appearance:load', 'appearance:set-element', 'appearance:reset-element', 'appearance:reset-all', 'appearance:export', 'appearance:import',
+      'schedule:load', 'schedule:save', 'schedule:run-now',
+    ]) {
+      expect(main).toContain(`ipcMain.handle('${channel}'`);
+    }
+    expect(main.match(/ipcMain\.handle\('(workspace|appearance|schedule):/g)?.length).toBe(14);
+    expect(main).not.toContain('setInterval');
+    expect(main).toContain('scheduler.runStartupCheck()');
+  });
+
+  it('keeps every timer in one drift-safe scheduler that never polls', async () => {
+    const scheduler = await read('src/main/scheduler.ts');
+    expect(scheduler).toContain('powerMonitor');
+    expect(scheduler).toContain('clearTimeout');
+    expect(scheduler).toContain('generation');
+    expect(scheduler).toContain('timer.unref()');
+    expect(scheduler).toContain("'catch-up'");
+    expect(scheduler).toContain('Previous run was still in progress.');
+    expect(scheduler).not.toContain('setInterval');
+    expect(scheduler).not.toContain('autoUpdater');
+  });
+
+  it('persists tabs, appearance, and schedule beside settings without touching it', async () => {
+    const settings = await read('src/main/settings-service.ts');
+    expect(settings).toContain("'settings.v1.json'");
+    expect(settings).not.toContain('workspace');
+    expect(settings).not.toContain('appearance');
+    expect(await read('src/main/workspace-service.ts')).toContain("'workspace.v1.json'");
+    expect(await read('src/main/appearance-service.ts')).toContain("'appearance.v1.json'");
+    const schedule = await read('src/main/schedule-service.ts');
+    expect(schedule).toContain("'schedule.v1.json'");
+    expect(schedule).toContain("'schedule-runs.v1.json'");
+    expect(schedule).toContain('fromPreviousSession: true');
+  });
+
+  it('never reports a cached catalog or a development build as a real refresh', async () => {
+    const catalog = await read('src/main/catalog-service.ts');
+    expect(catalog).toContain('async runScheduled()');
+    expect(catalog).toContain("if (snapshot.warning !== null) return { outcome: 'failed', message: snapshot.warning }");
+    const updater = await read('src/main/update-service.ts');
+    expect(updater).toContain('Development build: no update feed request was made.');
+    expect(updater).toMatch(/runScheduled[\s\S]*?this\.check\(\)/);
+    expect(updater).not.toMatch(/runScheduled[\s\S]*?this\.download\(\)/);
   });
 });

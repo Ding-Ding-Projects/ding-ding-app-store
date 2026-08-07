@@ -1,6 +1,6 @@
 import { app, autoUpdater, BrowserWindow } from 'electron';
 import semver from 'semver';
-import type { AppStoreUpdateState, OperationResult } from '../shared/contracts.js';
+import type { AppStoreUpdateState, OperationResult, ScheduleTaskResult, ScheduleTrigger } from '../shared/contracts.js';
 
 const FEED_URL = 'https://github.com/Ding-Ding-Projects/ding-ding-app-store/releases/latest/download/';
 const RELEASES_URL = `${FEED_URL}RELEASES`;
@@ -68,6 +68,14 @@ export class UpdateService {
     } catch (error) {
       return this.publish({ status: 'failed', message: (error as Error).message, checkedAt: new Date().toISOString() });
     }
+  }
+
+  async runScheduled(_trigger: ScheduleTrigger): Promise<ScheduleTaskResult> {
+    if (!app.isPackaged) return { outcome: 'ok', message: 'Development build: no update feed request was made.' };
+    const state = await this.check();
+    if (state.status === 'failed') return { outcome: 'failed', message: state.message };
+    if (state.status === 'available' || state.status === 'ready') return { outcome: 'ok', message: `Update ${state.version} is available.` };
+    return { outcome: 'ok', message: 'The App Store is up to date.' };
   }
 
   async download(): Promise<AppStoreUpdateState> {
