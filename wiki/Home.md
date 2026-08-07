@@ -12,6 +12,9 @@ This wiki mirrors the categorized documentation in `docs/` and keeps the feature
 | Per-app update checker | [Per-app update checker](Per-App-Update-Checker) |
 | App Store self-updater | [App Store self-updater](App-Store-Self-Updater) |
 | Offline documentation browser | [Offline documentation browser](Offline-Documentation-Browser) |
+| Tab navigation | [Tab navigation](Tab-Navigation) |
+| Appearance editor | [Appearance editor](Appearance-Editor) |
+| Update schedule | [Update schedule](Update-Schedule) |
 | Privacy and security | [Privacy and security](Privacy-and-Security) |
 | Verification | [Verification](Verification) |
 

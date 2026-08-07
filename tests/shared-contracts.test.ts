@@ -16,9 +16,12 @@ import {
   appearanceDocumentSchema,
   appearanceExportSchema,
   scheduleSchema,
+  SURFACE_IDS,
   tabWorkspaceSchema,
   toCssVariables,
 } from '../src/shared/contracts.js';
+import { iconMap } from '../src/renderer/icons';
+import { buildRegistry, SCHEDULE_FIELDS } from '../src/renderer/registry';
 import type { AppearanceElements, ElementKey, ElementOverride, TabWorkspace } from '../src/shared/contracts.js';
 
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
@@ -244,5 +247,86 @@ describe('update schedule contract', () => {
     expect(scheduleSchema.safeParse(scheduleWith((draft) => {
       draft.quietHours = { enabled: false, startMinute: 600, endMinute: 600 };
     })).success).toBe(true);
+  });
+});
+
+describe('command registry reachability', () => {
+  const settings = {
+    language: 'bilingual', englishFunnyLevel: 2, cantoneseFunnyLevel: 4,
+    theme: 'system', density: 'comfortable', accent: '#6750A4', displayName: 'Ding Ding App Store',
+  } as const;
+
+  const registry = buildRegistry({
+    settings,
+    workspace: clone(DEFAULT_TAB_WORKSPACE),
+    appearance: {},
+    schedule: clone(DEFAULT_SCHEDULE),
+    apps: [],
+  });
+
+  it('reaches every page surface exactly once', () => {
+    for (const surface of SURFACE_IDS) {
+      expect(registry.filter((entry) => entry.kind === 'page' && entry.action.type === 'open-surface' && entry.action.surface === surface)).toHaveLength(1);
+    }
+    expect(registry.filter((entry) => entry.kind === 'page')).toHaveLength(SURFACE_IDS.length);
+  });
+
+  it('reaches every user setting exactly once', () => {
+    const keys = Object.keys(settings);
+    for (const key of keys) {
+      expect(registry.filter((entry) => entry.kind === 'setting' && entry.action.type === 'set-setting' && entry.action.key === key)).toHaveLength(1);
+    }
+    expect(registry.filter((entry) => entry.kind === 'setting')).toHaveLength(keys.length);
+  });
+
+  it('reaches every editable element and token pair exactly once', () => {
+    let pairs = 0;
+    for (const element of ELEMENTS) {
+      for (const token of element.tokens) {
+        pairs += 1;
+        expect(registry.filter((entry) => entry.kind === 'appearance' && entry.action.type === 'set-appearance' && entry.action.target === element.key && entry.action.token === token)).toHaveLength(1);
+      }
+      expect(registry.some((entry) => entry.action.type === 'command' && entry.action.command === `edit-element:${element.key}`)).toBe(true);
+      expect(registry.some((entry) => entry.action.type === 'command' && entry.action.command === `reset-element:${element.key}`)).toBe(true);
+    }
+    expect(registry.filter((entry) => entry.kind === 'appearance')).toHaveLength(pairs);
+  });
+
+  it('reaches every schedule field exactly once', () => {
+    for (const field of SCHEDULE_FIELDS) {
+      expect(registry.filter((entry) => entry.kind === 'schedule' && entry.action.type === 'set-schedule' && entry.action.key === field.key)).toHaveLength(1);
+    }
+    expect(registry.filter((entry) => entry.kind === 'schedule')).toHaveLength(SCHEDULE_FIELDS.length);
+  });
+
+  it('keeps every entry unique, bilingual, icon-backed, and free of paths or URLs', () => {
+    const ids = registry.map((entry) => entry.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    const dangerous = /^(https?:|[A-Za-z]:\\|\/|\.\.)/;
+    for (const entry of registry) {
+      expect(entry.en.length).toBeGreaterThan(0);
+      expect(entry.yue.length).toBeGreaterThan(0);
+      expect(iconMap[entry.icon]).toBeTruthy();
+      expect(['open-surface', 'set-setting', 'set-appearance', 'set-schedule', 'command']).toContain(entry.action.type);
+      for (const value of Object.values(entry.action)) {
+        if (typeof value === 'string') expect(dangerous.test(value)).toBe(false);
+      }
+    }
+  });
+
+  it('ships the tab, appearance, and schedule commands the product contract names', () => {
+    const commands = new Set(registry.filter((entry) => entry.action.type === 'command').map((entry) => (entry.action as { command: string }).command));
+    for (const command of [
+      'refresh-catalog', 'clear-all-searches', 'focus-tab-search', 'new-group', 'collapse-all-groups',
+      'show-overflow', 'reset-tabs', 'export-tabs', 'import-tabs', 'rail-side:left', 'rail-side:top',
+      'label-mode:icon', 'tab-height:tall', 'overflow-mode:scroll', 'toggle-badges', 'toggle-color-bar',
+      'toggle-pinned-icon-only', 'toggle-appearance-edit', 'reset-appearance-all', 'export-appearance',
+      'import-appearance', 'open-schedule', 'check-store-update', 'refresh-catalog-now',
+      'toggle-self-update-repeat', 'toggle-catalog-refresh', 'toggle-quiet-hours', 'apply-quiet-night',
+      'show-next-runs', 'self-interval:1440', 'catalog-interval:30', 'pin:catalog', 'move-up:settings',
+      'move-down:docs', 'clear-search:activity', 'open-regex:tabs',
+    ]) {
+      expect(commands.has(command)).toBe(true);
+    }
   });
 });

@@ -12,6 +12,9 @@ These feature articles describe the proposed Ding Ding App Store desktop experie
 - [Per-app update checker](features/per-app-update-checker.md)
 - [App Store self-updater](features/app-store-self-updater.md)
 - [Offline documentation browser](features/offline-documentation-browser.md)
+- [Tab navigation](features/tab-navigation.md)
+- [Appearance editor](features/appearance-editor.md)
+- [Update schedule](features/update-schedule.md)
 - [Privacy and security](features/privacy-and-security.md)
 - [Verification](features/verification.md)
 

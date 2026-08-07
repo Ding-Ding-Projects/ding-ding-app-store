@@ -126,6 +126,60 @@ describe('visible product contracts', () => {
   });
 });
 
+describe('split renderer keeps every product contract in its own file', () => {
+  it('keeps the shell, its palette shortcut, and no shared query state in App.tsx', async () => {
+    const shell = await read('src/renderer/App.tsx');
+    expect(shell).toContain('event.ctrlKey && event.shiftKey');
+    expect(shell).toContain("event.key.toLowerCase() === 'f'");
+    expect(shell).not.toContain('const [query, setQuery]');
+    expect(shell).toContain('<SearchContext.Provider');
+  });
+
+  it('keeps every regex primitive and both evaluation bounds in the one regex builder', async () => {
+    const builder = await read('src/renderer/components/RegexBuilder.tsx');
+    for (const primitive of ['Literal', 'Class', 'Anchor', 'Group', 'Alternation', 'Quantifier']) expect(builder).toContain(primitive);
+    expect(builder).toContain('slice(0, 160)');
+    expect(builder).toContain('slice(0, 10_000)');
+  });
+
+  it('keeps the two-key plus full-slider super-confirmation and the emergency exit in the action dialog', async () => {
+    const dialog = await read('src/renderer/components/ActionDialog.tsx');
+    expect(dialog).toContain('firstKey && secondKey && slider === 100');
+    expect(dialog).toContain('Emergency exit · 緊急離開');
+    expect(dialog).toContain('export function SuperConfirm(');
+  });
+
+  it('keeps the activity filters, search, and export controls on the activity page', async () => {
+    const activity = await read('src/renderer/pages/ActivityPage.tsx');
+    expect(activity).toContain('Search activity by app, action, or message');
+    expect(activity).toContain("'all', 'install', 'build', 'uninstall'");
+    expect(activity).toContain("'all', 'ok', 'failed'");
+    expect(activity).toContain("'all', 'today', '7d', '30d'");
+    expect(activity).toContain('Copy JSON');
+  });
+
+  it('gives every search surface its own state and the full regex builder', async () => {
+    const search = await read('src/renderer/search.ts');
+    expect(search).toContain('export const EMPTY_SEARCH');
+    expect(search).toContain('useSurfaceSearch');
+    const box = await read('src/renderer/components/SearchBox.tsx');
+    expect(box).toContain('useSurfaceSearch(surface)');
+    expect(box).toContain('<RegexBuilder');
+    const palette = await read('src/renderer/components/CommandPalette.tsx');
+    expect(palette).toContain('surface="palette"');
+    expect(palette).not.toContain('regexMode={null}');
+  });
+
+  it('applies appearance overrides through CSSOM only, never injected style text', async () => {
+    const renderer = await readRendererSources();
+    expect(renderer).toContain('root.style.setProperty(name, value)');
+    expect(renderer).not.toContain('innerHTML');
+    expect(renderer).not.toContain("setAttribute('style'");
+    expect(renderer).not.toContain('dangerouslySetInnerHTML');
+    expect(renderer).not.toContain('setInterval');
+  });
+});
+
 describe('activity history and export', () => {
   it('records every install, build, and uninstall outcome through one main-process path', async () => {
     const operations = await read('src/main/operation-service.ts');
