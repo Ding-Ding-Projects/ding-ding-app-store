@@ -34,7 +34,7 @@ This is a sanitized public mirror of the applicable shared project rules. Update
 - Maintain separate state machines for managed-app updates and the App Store self-updater. Update discovery never starts an installer.
 - The self-updater checks on startup and a bounded schedule, downloads only after policy validation, warns that artifacts are unsigned, and restarts only after `Restart to install update`.
 - Code signing is permanently prohibited. Squirrel.Windows output must include `Setup.exe`, `RELEASES`, and a full `.nupkg`; verify executables are unsigned.
-- GitHub Actions jobs use explicitly labelled self-hosted runners and bootstrap all dependencies. If no verified runner exists, report the external blocker instead of using a hosted runner.
+- GitHub Actions jobs use GitHub-hosted runners (`ubuntu-latest` for checks and Pages, `windows-latest` for the Squirrel build). This repository is public; a self-hosted runner would let any pull request execute code on infrastructure the owner controls, so hosted runners are the safer default here. If a verified self-hosted runner is later registered for a specific labelled job, its workflow may target that label instead — record the label and evidence in `HANDOFF.md` when that happens.
 - Successful push/dispatch workflows test first and publish one unique non-draft release with a real installer, verified timing, line-count table, and required release metadata. Failed tests publish no release.
 
 ## Documentation and evidence

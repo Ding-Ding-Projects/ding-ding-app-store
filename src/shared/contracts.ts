@@ -42,6 +42,19 @@ export interface OperationResult {
   operationId?: string;
 }
 
+export type OperationKind = 'install' | 'build' | 'uninstall';
+export type HistoryExportFormat = 'json' | 'csv' | 'markdown';
+
+export interface HistoryEntry {
+  id: string;
+  appId: string;
+  displayName: string;
+  kind: OperationKind;
+  ok: boolean;
+  message: string;
+  occurredAt: string;
+}
+
 export type AppStoreUpdateState =
   | { status: 'idle' | 'checking' | 'up-to-date'; checkedAt?: string }
   | { status: 'available' | 'downloading'; version: string; releaseNotesUrl: string }
@@ -78,6 +91,10 @@ export interface DingDingStoreApi {
   settings: {
     load(): Promise<UserSettings>;
     save(settings: UserSettings): Promise<UserSettings>;
+  };
+  history: {
+    list(): Promise<HistoryEntry[]>;
+    export(format: HistoryExportFormat): Promise<string>;
   };
   window: {
     minimize(): void;

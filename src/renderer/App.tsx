@@ -3,6 +3,9 @@ import type {
   AppStoreUpdateState,
   CatalogApp,
   CatalogSnapshot,
+  HistoryEntry,
+  HistoryExportFormat,
+  OperationKind,
   OperationResult,
   UserSettings,
 } from '../shared/contracts';
@@ -48,7 +51,7 @@ const iconMap: Record<string, string> = {
   apps: '⊞', inventory_2: '▣', system_update: '↻', menu_book: '▤', history: '◴', settings: '⚙',
   close: '×', search: '⌕', regular_expression: '.*', deployed_code: '◆', download: '↓', star: '★',
   build: '⌁', delete: '⌫', storefront: '◈', remove: '−', crop_square: '□', refresh: '↻', wifi_off: '⌁',
-  search_off: '∅', arrow_forward: '→', check_circle: '✓', error: '!',
+  search_off: '∅', arrow_forward: '→', check_circle: '✓', error: '!', content_copy: '⧉',
 };
 
 function Icon({ children }: { children: string }) {
@@ -163,6 +166,100 @@ function SettingsPanel({ settings, onSave }: { settings: UserSettings; onSave: (
   </section>;
 }
 
+type HistoryPreset = 'all' | 'today' | '7d' | '30d';
+type HistoryResult = 'all' | 'ok' | 'failed';
+
+const historyPresetSpans: Record<Exclude<HistoryPreset, 'all'>, number> = {
+  today: 24 * 60 * 60 * 1000,
+  '7d': 7 * 24 * 60 * 60 * 1000,
+  '30d': 30 * 24 * 60 * 60 * 1000,
+};
+
+function withinPreset(occurredAt: string, preset: HistoryPreset): boolean {
+  if (preset === 'all') return true;
+  return Date.now() - new Date(occurredAt).getTime() <= historyPresetSpans[preset];
+}
+
+function downloadText(filename: string, content: string, mime: string): void {
+  const url = URL.createObjectURL(new Blob([content], { type: mime }));
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function HistoryPanel({ entries, loading, query, regexMode }: { entries: HistoryEntry[]; loading: boolean; query: string; regexMode: { pattern: string; flags: string } | null }) {
+  const [kind, setKind] = useState<'all' | OperationKind>('all');
+  const [result, setResult] = useState<HistoryResult>('all');
+  const [preset, setPreset] = useState<HistoryPreset>('all');
+  const [exportBusy, setExportBusy] = useState<HistoryExportFormat | null>(null);
+  const [copyBusy, setCopyBusy] = useState(false);
+
+  const filtered = useMemo(() => {
+    let source = entries;
+    if (kind !== 'all') source = source.filter((entry) => entry.kind === kind);
+    if (result !== 'all') source = source.filter((entry) => (result === 'ok' ? entry.ok : !entry.ok));
+    source = source.filter((entry) => withinPreset(entry.occurredAt, preset));
+    if (!query) return source;
+    if (regexMode) {
+      try {
+        const expression = new RegExp(regexMode.pattern, regexMode.flags.replace('g', ''));
+        return source.filter((entry) => expression.test(`${entry.displayName}\n${entry.kind}\n${entry.message}`));
+      } catch {
+        return [];
+      }
+    }
+    const needle = query.toLocaleLowerCase();
+    return source.filter((entry) => `${entry.displayName}\n${entry.kind}\n${entry.message}`.toLocaleLowerCase().includes(needle));
+  }, [entries, kind, result, preset, query, regexMode]);
+
+  const runExport = async (format: HistoryExportFormat) => {
+    setExportBusy(format);
+    try {
+      const content = await window.dingDingStore.history.export(format);
+      const extension = format === 'json' ? 'json' : format === 'csv' ? 'csv' : 'md';
+      const mime = format === 'json' ? 'application/json' : format === 'csv' ? 'text/csv' : 'text/markdown';
+      downloadText(`ding-ding-app-store-history.${extension}`, content, mime);
+    } finally {
+      setExportBusy(null);
+    }
+  };
+
+  const copyJson = async () => {
+    setCopyBusy(true);
+    try {
+      await navigator.clipboard.writeText(await window.dingDingStore.history.export('json'));
+    } finally {
+      setCopyBusy(false);
+    }
+  };
+
+  if (loading) return <div className="loading-grid" aria-label="Loading activity"><div className="skeleton" /><div className="skeleton" /></div>;
+  if (!entries.length) {
+    return <div className="empty-state"><Icon>history</Icon><h2>No operations yet · 仲未有操作</h2><p>Installs, builds, updates, uninstalls, failures, and recoveries will appear here with exact results and export controls.</p></div>;
+  }
+
+  return <section className="history-panel">
+    <div className="chip-row" role="group" aria-label="Filter by action">{(['all', 'install', 'build', 'uninstall'] as const).map((value) => <button key={value} aria-pressed={kind === value} onClick={() => setKind(value)}>{value === 'all' ? 'All actions' : value}</button>)}</div>
+    <div className="chip-row" role="group" aria-label="Filter by result">{(['all', 'ok', 'failed'] as const).map((value) => <button key={value} aria-pressed={result === value} onClick={() => setResult(value)}>{value === 'all' ? 'Any result' : value === 'ok' ? 'Succeeded' : 'Failed'}</button>)}</div>
+    <div className="chip-row" role="group" aria-label="Filter by date">{(['all', 'today', '7d', '30d'] as const).map((value) => <button key={value} aria-pressed={preset === value} onClick={() => setPreset(value)}>{value === 'all' ? 'All time' : value === 'today' ? 'Today' : value === '7d' ? '7 days' : '30 days'}</button>)}</div>
+    <div className="card-actions">
+      <button className="text-button" disabled={copyBusy} onClick={() => void copyJson()}><Icon>content_copy</Icon>{copyBusy ? 'Copying…' : 'Copy JSON'}</button>
+      <button className="text-button" disabled={exportBusy === 'json'} onClick={() => void runExport('json')}><Icon>download</Icon>JSON</button>
+      <button className="text-button" disabled={exportBusy === 'csv'} onClick={() => void runExport('csv')}><Icon>download</Icon>CSV</button>
+      <button className="text-button" disabled={exportBusy === 'markdown'} onClick={() => void runExport('markdown')}><Icon>download</Icon>Markdown</button>
+    </div>
+    {filtered.length ? <ul className="history-list">{filtered.map((entry) => <li key={entry.id} className={entry.ok ? 'history-row ok' : 'history-row failed'}>
+      <Icon>{entry.ok ? 'check_circle' : 'error'}</Icon>
+      <div className="history-copy">
+        <div className="history-heading"><strong>{entry.displayName}</strong><span className="status-pill">{entry.kind}</span><time dateTime={entry.occurredAt}>{new Date(entry.occurredAt).toLocaleString()}</time></div>
+        <p>{entry.message}</p>
+      </div>
+    </li>)}</ul> : <div className="empty-state"><Icon>search_off</Icon><h2>No matching activity</h2><p>Clear the search, action, result, or date filters to see more history.</p></div>}
+  </section>;
+}
+
 export function App() {
   const [settings, setSettings] = useState(defaultSettings);
   const [activeTab, setActiveTab] = useState<TabId>('catalog');
@@ -175,6 +272,8 @@ export function App() {
   const [updateState, setUpdateState] = useState<AppStoreUpdateState>({ status: 'idle' });
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteQuery, setPaletteQuery] = useState('');
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   const loadCatalog = useCallback(async (refresh = false) => {
@@ -184,11 +283,18 @@ export function App() {
     finally { setLoading(false); }
   }, []);
 
+  const loadHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    try { setHistory(await window.dingDingStore.history.list()); }
+    finally { setHistoryLoading(false); }
+  }, []);
+
   useEffect(() => {
     void window.dingDingStore.settings.load().then(setSettings);
     void loadCatalog();
+    void loadHistory();
     return window.dingDingStore.updates.subscribe(setUpdateState);
-  }, [loadCatalog]);
+  }, [loadCatalog, loadHistory]);
 
   useEffect(() => {
     const listener = (event: KeyboardEvent) => { if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'f') { event.preventDefault(); setPaletteOpen(true); } if (event.key === 'Escape') { setPaletteOpen(false); setAction(null); } };
@@ -223,16 +329,17 @@ export function App() {
     <aside className="navigation" aria-label="Primary navigation"><div className="nav-title">Ding Ding</div><div role="tablist" aria-orientation="vertical">{tabs.map((tab, index) => <button key={tab.id} ref={(node) => { tabRefs.current[index] = node; }} role="tab" aria-selected={activeTab === tab.id} tabIndex={activeTab === tab.id ? 0 : -1} onKeyDown={(event) => { if (event.key === 'ArrowDown') moveTabFocus(index, 1); if (event.key === 'ArrowUp') moveTabFocus(index, -1); if (event.key === 'Enter' || event.key === ' ') setActiveTab(tab.id); }} onClick={() => setActiveTab(tab.id)}><Icon>{tab.icon}</Icon><span>{label(settings, tab.en, tab.yue)}</span>{tab.id === 'updates' && (catalog?.apps.some((app) => app.updateState === 'available') || updateState.status === 'ready') && <span className="nav-dot" aria-label="Updates available" />}</button>)}</div><button className="palette-hint" onClick={() => setPaletteOpen(true)}><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd><span>Commands</span></button></aside>
     <main className="content" role="tabpanel" aria-label={pageTitle.en}>
       {(updateState.status === 'available' || updateState.status === 'downloading' || updateState.status === 'ready' || updateState.status === 'failed') && <section className={`update-banner ${updateState.status}`} role="status"><Icon>system_update</Icon><div><strong>{updateState.status === 'ready' ? `Ding Ding App Store ${updateState.version} is ready` : updateState.status === 'available' ? `Version ${updateState.version} is available` : updateState.status === 'downloading' ? 'Downloading update…' : 'Update check failed'}</strong><p>{updateState.status === 'failed' ? updateState.message : 'Unsigned artifact: HTTPS feed metadata and package hashes protect transport integrity; no code signature is claimed.'}</p></div>{updateState.status === 'available' && <button className="filled-button" onClick={() => void window.dingDingStore.updates.downloadStore().then(setUpdateState)}>Download</button>}{updateState.status === 'ready' && <><button className="text-button">Later</button><button className="filled-button" onClick={() => void window.dingDingStore.updates.restartStore()}>Restart to install update</button></>}</section>}
-      <div className="page-heading"><div><span className="eyebrow">DING DING PROJECTS</span><h1>{label(settings, pageTitle.en, pageTitle.yue)}</h1><p>{activeTab === 'catalog' ? label(settings, 'Trusted apps, their releases, and their complete documentation in one place.', '可信 apps、release 同完整文件，一個位睇晒。') : activeTab === 'updates' ? label(settings, 'Check every installed app and the store itself without surprise restarts.', '檢查所有已安裝 app 同商店自己，唔會突然重開。') : ''}</p></div>{['catalog', 'installed', 'updates'].includes(activeTab) && <button className="tonal-button" disabled={loading} onClick={() => void loadCatalog(true)}><Icon>refresh</Icon>{loading ? 'Refreshing…' : 'Refresh'}</button>}</div>
+      <div className="page-heading"><div><span className="eyebrow">DING DING PROJECTS</span><h1>{label(settings, pageTitle.en, pageTitle.yue)}</h1><p>{activeTab === 'catalog' ? label(settings, 'Trusted apps, their releases, and their complete documentation in one place.', '可信 apps、release 同完整文件，一個位睇晒。') : activeTab === 'updates' ? label(settings, 'Check every installed app and the store itself without surprise restarts.', '檢查所有已安裝 app 同商店自己，唔會突然重開。') : activeTab === 'activity' ? label(settings, 'Every install, build, and uninstall you ran, with exact results and export.', '你做過嘅安裝、build 同解除安裝，連結果同匯出都齊。') : ''}</p></div>{['catalog', 'installed', 'updates'].includes(activeTab) && <button className="tonal-button" disabled={loading} onClick={() => void loadCatalog(true)}><Icon>refresh</Icon>{loading ? 'Refreshing…' : 'Refresh'}</button>}</div>
       {['catalog', 'installed', 'updates'].includes(activeTab) && <SearchBox value={query} onChange={setQuery} regexMode={regexMode} onRegexMode={setRegexMode} placeholder="Search apps, descriptions, and repositories" />}
+      {activeTab === 'activity' && history.length > 0 && <SearchBox value={query} onChange={setQuery} regexMode={regexMode} onRegexMode={setRegexMode} placeholder="Search activity by app, action, or message" />}
       {catalog?.warning && <div className="notice warning" role="status"><Icon>wifi_off</Icon>{catalog.warning}</div>}
       {loading && <div className="loading-grid" aria-label="Loading catalog">{Array.from({ length: 6 }, (_, index) => <div className="skeleton" key={index} />)}</div>}
       {!loading && ['catalog', 'installed', 'updates'].includes(activeTab) && (shownApps.length ? <section className="app-grid">{shownApps.map((app) => <AppCard key={app.id} app={app} settings={settings} onAction={(kind, selected) => setAction({ kind, app: selected })} />)}</section> : <div className="empty-state"><Icon>search_off</Icon><h2>No matching apps</h2><p>The current search and tab filters found nothing. Clear the query or refresh the catalog.</p></div>)}
       {activeTab === 'docs' && <section className="docs-layout"><nav aria-label="Documentation articles">{docs.map((article) => <a href={`#docs-${article.id}`} key={article.id}>{article.title}</a>)}</nav><div>{docs.map((article) => <article key={article.id} id={`docs-${article.id}`} tabIndex={-1}><h2>{article.title}</h2><p>{article.body}</p><h3>Suggested articles</h3><p>Security boundaries · Update checker · Verification</p></article>)}</div></section>}
-      {activeTab === 'activity' && <div className="empty-state"><Icon>history</Icon><h2>No operations yet · 仲未有操作</h2><p>Installs, builds, updates, uninstalls, failures, and recoveries will appear here with exact results and export controls.</p></div>}
+      {activeTab === 'activity' && <HistoryPanel entries={history} loading={historyLoading} query={activeTab === 'activity' ? query : ''} regexMode={regexMode} />}
       {activeTab === 'settings' && <><SearchBox value={query} onChange={setQuery} regexMode={regexMode} onRegexMode={setRegexMode} placeholder="Search every setting" /><SettingsPanel settings={settings} onSave={(value) => void saveSettings(value)} /></>}
     </main>
-    {action && <ActionDialog action={action} settings={settings} onClose={() => setAction(null)} onResult={(result) => { setToast(result); if (result.ok) void loadCatalog(true); }} />}
+    {action && <ActionDialog action={action} settings={settings} onClose={() => setAction(null)} onResult={(result) => { setToast(result); void loadHistory(); if (result.ok) void loadCatalog(true); }} />}
     {paletteOpen && <div className="scrim" role="presentation"><section className="command-palette" role="dialog" aria-modal="true" aria-label="Command palette"><header><h2>Command palette · 指令板</h2><button className="icon-button" onClick={() => setPaletteOpen(false)} aria-label="Close command palette"><Icon>close</Icon></button></header><SearchBox value={paletteQuery} onChange={setPaletteQuery} regexMode={null} onRegexMode={() => undefined} placeholder="Search commands, pages, settings, and apps" /><div className="command-list">{tabs.filter((tab) => `${tab.en} ${tab.yue}`.toLowerCase().includes(paletteQuery.toLowerCase())).map((tab) => <button key={tab.id} onClick={() => { setActiveTab(tab.id); setPaletteOpen(false); }}><Icon>{tab.icon}</Icon><span><strong>{tab.en} · {tab.yue}</strong><small>Open exact page</small></span><Icon>arrow_forward</Icon></button>)}</div></section></div>}
     {toast && <div className={`snackbar ${toast.ok ? 'success' : 'error'}`} role="status"><Icon>{toast.ok ? 'check_circle' : 'error'}</Icon><span>{toast.message}</span><button className="icon-button" onClick={() => setToast(null)} aria-label="Dismiss notification"><Icon>close</Icon></button></div>}
   </div>;

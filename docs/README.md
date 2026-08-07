@@ -8,6 +8,7 @@ These feature articles describe the proposed Ding Ding App Store desktop experie
 - [Verified installer operations](features/verified-installer-operations.md)
 - [Source-build security](features/source-build-security.md)
 - [Uninstall](features/uninstall.md)
+- [Activity history and export](features/activity-history.md)
 - [Per-app update checker](features/per-app-update-checker.md)
 - [App Store self-updater](features/app-store-self-updater.md)
 - [Offline documentation browser](features/offline-documentation-browser.md)

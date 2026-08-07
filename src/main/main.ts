@@ -2,8 +2,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, ipcMain, session } from 'electron';
 import squirrelStartup from 'electron-squirrel-startup';
-import type { OperationRequest, UserSettings } from '../shared/contracts.js';
+import type { HistoryExportFormat, OperationRequest, UserSettings } from '../shared/contracts.js';
 import { CatalogService } from './catalog-service.js';
+import { HistoryService } from './history-service.js';
 import { OperationService } from './operation-service.js';
 import { SettingsService } from './settings-service.js';
 import { UpdateService } from './update-service.js';
@@ -47,7 +48,8 @@ void app.whenReady().then(async () => {
   session.defaultSession.setPermissionCheckHandler(() => false);
 
   const catalog = new CatalogService();
-  const operations = new OperationService(catalog);
+  const history = new HistoryService();
+  const operations = new OperationService(catalog, history);
   const settings = new SettingsService();
   const updates = new UpdateService(() => mainWindow);
 
@@ -62,6 +64,8 @@ void app.whenReady().then(async () => {
   ipcMain.handle('updates:store-restart', () => updates.restart());
   ipcMain.handle('settings:load', () => settings.load());
   ipcMain.handle('settings:save', (_event, value: UserSettings) => settings.save(value));
+  ipcMain.handle('history:list', () => history.list());
+  ipcMain.handle('history:export', (_event, format: HistoryExportFormat) => history.export(format));
   ipcMain.on('window:minimize', () => mainWindow?.minimize());
   ipcMain.on('window:toggle-maximize', () => {
     if (mainWindow?.isMaximized()) mainWindow.unmaximize(); else mainWindow?.maximize();
