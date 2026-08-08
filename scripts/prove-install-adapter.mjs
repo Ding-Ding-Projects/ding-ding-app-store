@@ -26,6 +26,10 @@ const appId = option('--app-id');
 const output = option('--output', path.resolve('install-proof.json'));
 const dataRoot = option('--data-root', path.resolve('install-proof-data'));
 const repositoryRoot = path.resolve('.');
+// The proof copies third-party portable archives as ordinary files. Electron's
+// ASAR fs wrapper would inspect a partially written resources/app.asar during
+// extraction and reject it before the ZIP transaction can finish.
+process.noAsar = true;
 const configuredTimeout = Number(process.env.DING_DING_INSTALL_PROOF_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS);
 const proofTimeoutMs = Number.isFinite(configuredTimeout) ? Math.min(Math.max(configuredTimeout, 60_000), 30 * 60_000) : DEFAULT_TIMEOUT_MS;
 
