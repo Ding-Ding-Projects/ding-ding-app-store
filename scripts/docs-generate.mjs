@@ -43,6 +43,7 @@ const articles = [
 ].map(([id, title, titleYue, category, wiki, status, related]) => ({ id, title, titleYue, category, wiki, status, related }));
 
 const requiredSections = ['Behaviour', 'Configuration', 'Failure modes', 'Security considerations', 'Verification', 'Suggested articles'];
+const normalizeEol = (value) => value?.replace(/\r\n/g, '\n');
 
 function parseArticle(raw, expected) {
   const match = raw.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
@@ -145,7 +146,7 @@ for (const [relative, content] of outputs) {
   const target = path.join(root, relative);
   if (check) {
     const actual = await readFile(target, 'utf8').catch(() => null);
-    if (actual !== content) failures.push(relative);
+    if (normalizeEol(actual) !== normalizeEol(content)) failures.push(relative);
   } else {
     await mkdir(path.dirname(target), { recursive: true });
     await writeFile(target, content, 'utf8');

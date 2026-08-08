@@ -83,4 +83,10 @@ describe('global renderer UI completion', () => {
     expect(regex).toContain('worker.terminate()');
     expect(regex).toContain('}, 150)');
   });
+
+  it('keeps generated documentation checks stable across Windows checkout line endings', async () => {
+    const generator = await read('scripts/docs-generate.mjs');
+    expect(generator).toContain("const normalizeEol = (value) => value?.replace(/\\r\\n/g, '\\n')");
+    expect(generator).toContain('normalizeEol(actual) !== normalizeEol(content)');
+  });
 });
