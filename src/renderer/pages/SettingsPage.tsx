@@ -186,7 +186,7 @@ export function SettingsPage({ settings, settingsProvenance, onSave, workspace, 
               {ABOUT_ROWS.filter((row) => matcher(`${row.en}\n${row.yue}\n${row.body}`)).map((row) => (
                 <div className="settings-card" key={row.en} {...el('settings-card')}>
                   <h2>{label(settings, row.en, row.yue)}</h2>
-                  <p className="supporting">{row.body}</p>
+                  <p className="supporting">{row.en === 'Version' ? `${settings.displayName} preview 0.1.0.` : row.body}</p>
                 </div>
               ))}
               {matcher('external editor Visual Studio Code VS Code exports') && <ExternalEditorSettings settings={settings} notify={notify} />}

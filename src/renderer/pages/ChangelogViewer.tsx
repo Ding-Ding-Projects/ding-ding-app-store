@@ -75,7 +75,7 @@ export function ChangelogViewer({ settings, notify, openRegex, onRegexHandled }:
   };
 
   const copy = async () => {
-    await navigator.clipboard.writeText(changelogMarkdown(exportEntries));
+    await navigator.clipboard.writeText(changelogMarkdown(exportEntries, settings.displayName));
     notify({ ok: true, message: `Copied ${exportEntries.length} changelog entries.` });
   };
 
@@ -98,8 +98,8 @@ export function ChangelogViewer({ settings, notify, openRegex, onRegexHandled }:
         <button className="text-button" onClick={() => setSelected((current) => new Set(filtered.filter((entry) => !current.has(entry.version)).map((entry) => entry.version)))} disabled={!filtered.length}>Invert shown</button>
         <button className="text-button" onClick={() => setSelected(new Set())} disabled={!selected.size}>Clear</button>
         <button className="text-button" onClick={() => void copy()} disabled={!exportEntries.length}><Icon>content_copy</Icon>Copy</button>
-        <button className="text-button" onClick={() => { downloadText('ding-ding-app-store-changelog.md', changelogMarkdown(exportEntries), 'text/markdown'); notify({ ok: true, message: `Exported ${exportEntries.length} changelog entries.` }); }} disabled={!exportEntries.length}><Icon>download</Icon>Export Markdown</button>
-        <button className="text-button" onClick={() => void openExportInVsCode({ recordKind: 'changelog', suggestedName: 'ding-ding-app-store-changelog.md', mime: 'text/markdown', content: changelogMarkdown(exportEntries) }).then((result) => notify({ ok: result.ok, message: result.ok ? `Opened ${exportEntries.length} changelog entries in Visual Studio Code.` : result.message }))} disabled={!exportEntries.length || !isExternalEditorBridgeAvailable()} title={isExternalEditorBridgeAvailable() ? undefined : 'Unavailable: this build has no reviewed Visual Studio Code adapter.'}><Icon>code</Icon>{isExternalEditorBridgeAvailable() ? 'Open in VS Code' : 'VS Code unavailable'}</button>
+        <button className="text-button" onClick={() => { downloadText('ding-ding-app-store-changelog.md', changelogMarkdown(exportEntries, settings.displayName), 'text/markdown'); notify({ ok: true, message: `Exported ${exportEntries.length} changelog entries.` }); }} disabled={!exportEntries.length}><Icon>download</Icon>Export Markdown</button>
+        <button className="text-button" onClick={() => void openExportInVsCode({ recordKind: 'changelog', suggestedName: 'ding-ding-app-store-changelog.md', mime: 'text/markdown', content: changelogMarkdown(exportEntries, settings.displayName) }).then((result) => notify({ ok: result.ok, message: result.ok ? `Opened ${exportEntries.length} changelog entries in Visual Studio Code.` : result.message }))} disabled={!exportEntries.length || !isExternalEditorBridgeAvailable()} title={isExternalEditorBridgeAvailable() ? undefined : 'Unavailable: this build has no reviewed Visual Studio Code adapter.'}><Icon>code</Icon>{isExternalEditorBridgeAvailable() ? 'Open in VS Code' : 'VS Code unavailable'}</button>
       </div>
       {!dateError && !dataIssues.length && (filtered.length ? <ol className="changelog-list">{filtered.map((entry, index) => <li key={entry.version}>
         <label className="selection-check"><input type="checkbox" checked={selected.has(entry.version)} onClick={(event) => selectAt(index, event.currentTarget.checked, event.shiftKey)} onChange={() => undefined} /><span className="visually-hidden">Select {entry.version}</span></label>

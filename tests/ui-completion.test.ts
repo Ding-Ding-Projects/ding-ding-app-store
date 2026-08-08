@@ -25,6 +25,17 @@ describe('global renderer UI completion', () => {
     for (const entry of CHANGELOG_ENTRIES) expect(markdown).toContain(entry.commit);
   });
 
+  it('carries the configured display name through app-owned update and changelog surfaces', async () => {
+    const [app, viewer, settingsPage] = await Promise.all([
+      read('src/renderer/App.tsx'), read('src/renderer/pages/ChangelogViewer.tsx'), read('src/renderer/pages/SettingsPage.tsx'),
+    ]);
+    expect(app).toContain('`${settings.displayName} ${updateState.version} is ready`');
+    expect(app).toContain('`${settings.displayName} ${updateState.version} 準備好喇`');
+    expect(viewer).toContain('changelogMarkdown(exportEntries, settings.displayName)');
+    expect(settingsPage).toContain("row.en === 'Version' ? `${settings.displayName} preview 0.1.0.`");
+    expect(changelogMarkdown(CHANGELOG_ENTRIES.slice(0, 1), 'My Store')).toContain('# My Store changelog');
+  });
+
   it('rejects changelog rows whose commit SHA is missing or shortened', () => {
     expect(validateChangelog([{ ...CHANGELOG_ENTRIES[0], commit: 'b4a94f3' }])).toContain(`${CHANGELOG_ENTRIES[0].version} is missing a full commit SHA.`);
   });

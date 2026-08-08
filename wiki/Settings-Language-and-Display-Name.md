@@ -12,7 +12,7 @@ About includes a searchable in-app changelog for every existing release tag in t
 
 The external-editor card persists Visual Studio Code as the preferred editor and exposes detection plus export-opening controls for catalog, activity, notifications, and changelog records. The renderer sends only a typed record kind, suggested filename, MIME type, and content. Until a reviewed privileged adapter implements installation discovery, controlled temporary-file creation, and launch, the controls report unavailable and normal downloads remain usable; no executable path or command is guessed.
 
-The display name changes the title bar label only. Package identity, user-data directory, installer name, feed, and diagnostic product identity remain fixed. Reset restores the shipped values.
+The display name changes every app-owned introduction surface: the custom title bar, the ready-to-install update banner, the About version card, and the heading of in-app changelog exports. Package identity, user-data directory, installer name, feed, and diagnostic product identity remain fixed. Reset restores the shipped values. Changelog exports generated outside the renderer retain the shipped name unless a display name is explicitly supplied.
 
 The Schedule sub-tab can optionally resolve scheduled language, funny levels, theme, density, accent, and display name through a versioned HTTPS API or a Home Assistant boolean entity. These source controls are keyboard reachable, localized with the active settings mode, and discoverable through the sub-tab's existing search and adjacent regex builder. A Home Assistant token is not a settings field: the renderer cannot read or save it, and the privileged source service reads it only from the operating-system-protected vault.
 
