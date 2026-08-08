@@ -739,15 +739,50 @@ export const SCHEDULE_BOUNDS = {
 
 const scheduleDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use an ISO date (YYYY-MM-DD).');
 const scheduleTimeZoneSchema = z.string().trim().min(1).max(SCHEDULE_BOUNDS.ruleTimeZoneLength).regex(/^[A-Za-z0-9_+./-]+$/);
-function privateOrLoopbackHost(hostname: string): boolean {
-  const host = hostname.toLowerCase().replace(/^\[|\]$/g, '');
-  if (host === 'localhost' || host.endsWith('.localhost') || host === '::1' || host === '0.0.0.0') return true;
-  if (/^(?:fc|fd|fe[89ab])[0-9a-f:]*$/i.test(host)) return true;
-  const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-  if (!ipv4) return false;
-  const [a, b, c, d] = ipv4.slice(1).map(Number);
-  if ([a, b, c, d].some((part) => part > 255)) return true;
+function ipv4Parts(hostname: string): number[] | null {
+  const ipv4 = hostname.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (!ipv4) return null;
+  const parts = ipv4.slice(1).map(Number);
+  return parts.some((part) => part > 255) ? null : parts;
+}
+
+function privateOrLoopbackIpv4(parts: readonly number[]): boolean {
+  const [a, b] = parts;
   return a === 0 || a === 10 || a === 127 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127);
+}
+
+function ipv6Parts(hostname: string): number[] | null {
+  const halves = hostname.split('::');
+  if (halves.length > 2) return null;
+  const parse = (half: string): number[] | null => {
+    if (!half) return [];
+    const parts = half.split(':');
+    if (parts.some((part) => !/^[0-9a-f]{1,4}$/i.test(part))) return null;
+    return parts.map((part) => Number.parseInt(part, 16));
+  };
+  const left = parse(halves[0]);
+  const right = parse(halves[1] ?? '');
+  if (!left || !right) return null;
+  if (halves.length === 1) return left.length === 8 ? left : null;
+  if (left.length + right.length >= 8) return null;
+  return [...left, ...Array(8 - left.length - right.length).fill(0), ...right];
+}
+
+export function privateOrLoopbackHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
+  if (host === 'localhost' || host.endsWith('.localhost')) return true;
+  const ipv4 = ipv4Parts(host);
+  if (ipv4) return privateOrLoopbackIpv4(ipv4);
+  const ipv6 = ipv6Parts(host);
+  if (!ipv6) return false;
+  const [first] = ipv6;
+  if (ipv6.every((part) => part === 0) || (ipv6.slice(0, 7).every((part) => part === 0) && ipv6[7] === 1)) return true;
+  if ((first & 0xfe00) === 0xfc00 || (first & 0xffc0) === 0xfe80) return true;
+  if (ipv6.slice(0, 5).every((part) => part === 0) && ipv6[5] === 0xffff) return true;
+  const compatibleIpv4 = ipv6.slice(0, 6).every((part) => part === 0)
+    ? [ipv6[6] >> 8, ipv6[6] & 0xff, ipv6[7] >> 8, ipv6[7] & 0xff]
+    : null;
+  return compatibleIpv4 !== null && privateOrLoopbackIpv4(compatibleIpv4);
 }
 const scheduledSettingsValuesSchema = z.object({
   language: z.enum(['en', 'yue', 'bilingual']).optional(),
@@ -768,13 +803,17 @@ const httpsExternalUrlSchema = z.string().trim().max(SCHEDULE_BOUNDS.externalUrl
   } catch { return false; }
 }, 'Use an HTTPS URL without embedded credentials.');
 
-const homeAssistantUrlSchema = z.string().trim().max(SCHEDULE_BOUNDS.externalUrlLength).url().refine((value) => {
+export function allowedHomeAssistantBaseUrl(value: string): boolean {
   try {
     const url = new URL(value);
-    const loopbackHttp = url.protocol === 'http:' && (url.hostname === '127.0.0.1' || url.hostname === '[::1]');
-    return (url.protocol === 'https:' || loopbackHttp) && !url.username && !url.password && !url.hash;
+    const literalLoopbackHttp = /^http:\/\/127\.0\.0\.1(?::\d+)?(?:[/?]|$)/i.test(value);
+    return !url.username && !url.password && !url.hash
+      && ((url.protocol === 'https:' && !privateOrLoopbackHost(url.hostname))
+        || (url.protocol === 'http:' && url.hostname === '127.0.0.1' && literalLoopbackHttp));
   } catch { return false; }
-}, 'Use HTTPS, or an explicit loopback development URL, without embedded credentials.');
+}
+
+const homeAssistantUrlSchema = z.string().trim().max(SCHEDULE_BOUNDS.externalUrlLength).url().refine(allowedHomeAssistantBaseUrl, 'Use public HTTPS, or an explicit http://127.0.0.1 development URL, without embedded credentials.');
 
 export const scheduledSettingSourceSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('local') }).strict(),
