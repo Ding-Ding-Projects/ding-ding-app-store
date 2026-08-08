@@ -40,7 +40,7 @@ The wiki mirrors the same canonical feature articles bundled into the applicatio
 
 ## Installed apps and history
 
-- [Installed app discovery](Installed-App-Discovery) — **shipped** — Reconciles App Store records with exact reviewed registry identities and the managed portable directory, then derives uninstall authority afresh.
+- [Installed app discovery](Installed-App-Discovery) — **shipped** — Detects reviewed registry installs while keeping external discovery separate from exact App Store ownership and removal authority.
 - [Activity history and export](Activity-History) — **shipped** — Appends every install, build, and uninstall result, offers composed filters, exports the selected or filtered log, and links into local version history.
 - [Local history and version restore](History-Versioning) — **limited** — Browses bounded local-Git snapshots with diff, labels, and an explicit reversible restore path.
 

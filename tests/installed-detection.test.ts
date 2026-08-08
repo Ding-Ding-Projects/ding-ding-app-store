@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { collectRegistrySnapshot, collectRegistrySnapshotResult, exactDisplayNameMatch, extractMsiProductCode, extractQuotedExecutable, latestSquirrelVersion, ownershipHiveKey, parseRegistryUninstallOutput, pathWithinRoots, registryEntryFingerprint, safeReviewedUninstaller, safeSquirrelLocation, selectChangedRegistryEntry, selectSameVersionOwnedRegistryEntry } from '../src/main/installed-detection';
+import { collectRegistrySnapshot, collectRegistrySnapshotResult, exactDisplayNameMatch, extractMsiProductCode, extractQuotedExecutable, latestSquirrelVersion, ownershipHiveKey, parseRegistryUninstallOutput, pathWithinRoots, registryEntryFingerprint, safeReviewedUninstaller, safeSquirrelLocation, selectChangedRegistryEntry, selectSameVersionOwnedRegistryEntry, selectUniqueReviewedRegistryEntry } from '../src/main/installed-detection';
 
 describe('installed-app detection', () => {
   it('parses multiple Windows uninstall registry records', () => {
@@ -46,6 +46,14 @@ HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Two
   it('matches only exact reviewed registry display names', () => {
     expect(exactDisplayNameMatch('Material Email', ['Material Email'])).toBe(true);
     expect(exactDisplayNameMatch('Material Email Preview', ['Material Email'])).toBe(false);
+  });
+
+  it('surfaces discovery-only registry identity only when the reviewed match is unique', () => {
+    const first = { key: 'HKEY_CURRENT_USER\\Software\\One', displayName: 'Codex Material', displayVersion: '1.0.0', installLocation: 'C:\\Apps\\One', uninstallString: 'MsiExec.exe /x {12345678-1234-1234-1234-1234567890AB}' };
+    const second = { ...first, key: 'HKEY_LOCAL_MACHINE\\Software\\Two' };
+    expect(selectUniqueReviewedRegistryEntry([first], ['Codex Studio', 'Codex Material'])).toEqual(first);
+    expect(selectUniqueReviewedRegistryEntry([first, second], ['Codex Studio', 'Codex Material'])).toBeNull();
+    expect(selectUniqueReviewedRegistryEntry([{ ...first, displayName: 'Codex Material Preview' }], ['Codex Material'])).toBeNull();
   });
 
   it('parses only safely delimited executable command prefixes', () => {

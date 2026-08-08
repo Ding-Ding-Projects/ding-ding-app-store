@@ -440,7 +440,8 @@ export function App() {
 
   useEffect(() => {
     if (activeTab !== 'updates' || loading || !catalog) return;
-    for (const app of catalog.apps.filter((item) => item.installedVersion && !managedChecks.current.has(item.id))) {
+    const managedIds = new Set(installed.filter((record) => record.ownership && record.uninstall).map((record) => record.appId));
+    for (const app of catalog.apps.filter((item) => item.installedVersion && managedIds.has(item.id) && !managedChecks.current.has(item.id))) {
       managedChecks.current.add(app.id);
       void window.dingDingStore.updates.checkApp(app.id)
         .then((state) => setManagedUpdates((current) => ({ ...current, [app.id]: state })))
@@ -456,7 +457,7 @@ export function App() {
           },
         }));
     }
-  }, [activeTab, catalog, loading, notify]);
+  }, [activeTab, catalog, installed, loading, notify]);
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -842,6 +843,7 @@ export function App() {
             <AppsPage
               mode={activeTab}
               apps={apps}
+              installed={installed}
               settings={settings}
               loading={loading}
               onAction={(kind, app, trigger) => void startAction(kind, app, trigger)}

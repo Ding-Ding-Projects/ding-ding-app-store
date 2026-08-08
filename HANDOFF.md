@@ -4,6 +4,13 @@
 
 The repository contains a sandboxed Electron/React/TypeScript shell, reviewed 24-application catalog, stable-release/update comparison, SHA-256-gated installer path, protected uninstall path, App Store self-updater state machine, Material Design 3 navigation, language/funny-level settings, regex builder, command palette, real local operation history with export, generated offline documentation, and a fail-closed common automatic source-repair runtime.
 
+## 2026-08-08 discovery-only upstream installations
+
+- `InstalledService` now examines reviewed registry identities even when no prior App Store ownership record exists. It requires a complete registry snapshot, exactly one reviewed display-name match, a canonical MSI product code or an existing approved uninstaller under an allowlisted root, and returns only a typed discovery record.
+- External detections carry `ownership: null`, `uninstall: null`, and no renderer-visible install root. They are not persisted into `installed-apps.v1.json`, and the privileged `get()` lookup still returns `null`, so discovery cannot silently grant removal authority.
+- Installed and Updates surfaces label the state **Detected outside App Store** and withhold single/bulk install, managed update, source build, and uninstall actions. App Store-managed records keep their existing exact key/fingerprint and portable-root checks.
+- Focused tests exercise unowned MSI detection, non-persistence, null privileged lookup, incomplete-hive refusal, ambiguous identity refusal, typed management state, and UI action gating. A packaged hidden-desktop capture of the new label remains unverified and must not be inferred from the automated gates.
+
 ## 2026-08-08 Truthful export registry and Activity archive
 
 - Added `src/shared/export-registry.ts` as the one serializer for flat `HistoryEntry` records in JSON, JSONL, YAML, TOML, XML, CSV, TSV, Markdown, HTML, SQL, TypeScript, JavaScript, Python, Go, Rust, JSON Schema, and Protocol Buffers.

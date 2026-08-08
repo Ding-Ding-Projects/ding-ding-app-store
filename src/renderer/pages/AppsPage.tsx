@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import type { CatalogApp, ManagedUpdateState, OperationProgressEvent, OperationProgressPhase, UserSettings } from '../../shared/contracts';
+import { installationManagementState } from '../../shared/contracts';
+import type { CatalogApp, InstalledAppRecord, ManagedUpdateState, OperationProgressEvent, OperationProgressPhase, UserSettings } from '../../shared/contracts';
 import { el } from '../el';
 import { Icon } from '../icons';
 import { label } from '../i18n';
@@ -40,7 +41,10 @@ function operationPhaseLabel(settings: UserSettings, phase: OperationProgressPha
   return label(settings, en, yue);
 }
 
-export function AppCard({ app, settings, onAction, onManagedUpdate, onCancelInstall, managedUpdate, operationProgress, searchLabel, runningAction, selected, onSelect }: { app: CatalogApp; settings: UserSettings; onAction: (kind: ActionKind, app: CatalogApp, trigger: HTMLButtonElement) => void; onManagedUpdate: (kind: 'download' | 'cancel' | 'restart', app: CatalogApp, trigger: HTMLButtonElement) => void; onCancelInstall: (app: CatalogApp, trigger: HTMLButtonElement) => void; managedUpdate: ManagedUpdateState | undefined; operationProgress: OperationProgressEvent | undefined; searchLabel: ReactNode; runningAction: RunningAction | null; selected: boolean; onSelect(checked: boolean, shiftKey: boolean): void }) {
+export function AppCard({ app, installedRecord, settings, onAction, onManagedUpdate, onCancelInstall, managedUpdate, operationProgress, searchLabel, runningAction, selected, onSelect }: { app: CatalogApp; installedRecord: InstalledAppRecord | undefined; settings: UserSettings; onAction: (kind: ActionKind, app: CatalogApp, trigger: HTMLButtonElement) => void; onManagedUpdate: (kind: 'download' | 'cancel' | 'restart', app: CatalogApp, trigger: HTMLButtonElement) => void; onCancelInstall: (app: CatalogApp, trigger: HTMLButtonElement) => void; managedUpdate: ManagedUpdateState | undefined; operationProgress: OperationProgressEvent | undefined; searchLabel: ReactNode; runningAction: RunningAction | null; selected: boolean; onSelect(checked: boolean, shiftKey: boolean): void }) {
+  const management = installationManagementState(installedRecord);
+  const managed = management === 'store-managed';
+  const discoveryOnly = management === 'discovery-only';
   const operationBusy = runningAction !== null || (operationProgress && !operationProgress.final) || operationProgress?.locked === true || managedUpdate?.status === 'downloading' || managedUpdate?.status === 'installing';
   const installBusy = (runningAction?.appId === app.id && runningAction.kind === 'install') || (operationProgress?.kind === 'install' && !operationProgress.final);
   const sourceBusy = runningAction?.appId === app.id && runningAction.kind === 'build';
@@ -55,22 +59,23 @@ export function AppCard({ app, settings, onAction, onManagedUpdate, onCancelInst
       <div className="app-copy">
         <div className="card-heading"><h3 {...el('app-card-title')}>{searchLabel}</h3><span className={`status-pill ${app.updateState}`} {...el('status-pill')}>{app.updateState.replaceAll('-', ' ')}</span></div>
         <p {...el('app-card-description')}>{app.description}</p>
-        <div className="meta"><span><Icon>deployed_code</Icon>{app.latestVersion ?? 'No stable release'}</span><span><Icon>download</Icon>{app.packageType}</span><span><Icon>star</Icon>{app.stars}</span></div>
+        <div className="meta"><span><Icon>deployed_code</Icon>{app.latestVersion ?? 'No stable release'}</span><span><Icon>download</Icon>{app.packageType}</span><span><Icon>star</Icon>{app.stars}</span>{installedRecord && <span><Icon>{managed ? 'verified_user' : 'visibility'}</Icon>{managed ? label(settings, 'Managed by App Store', '由 App Store 管理') : label(settings, 'Detected outside App Store', '偵測到外部安裝')}</span>}</div>
+        {discoveryOnly && <p className="operation-status warning" role="status">{label(settings, `Detected ${installedRecord?.version ?? 'unknown version'} from the reviewed ${installedRecord?.source ?? 'registry'} identity. This App Store did not install it, so install, update, and uninstall actions stay unavailable.`, `由已審核嘅 ${installedRecord?.source ?? 'registry'} 身份偵測到版本 ${installedRecord?.version ?? '不明'}。唔係呢個 App Store 安裝，所以安裝、更新同解除安裝操作都唔會開放。`)}</p>}
         <div className="card-actions">
-          {app.availability === 'installable' && <button className="filled-button" data-install-action={app.id} {...el('button-filled')} disabled={operationBusy} aria-busy={installBusy} title={busyExplanation} onClick={(event) => onAction('install', app, event.currentTarget)}><Icon>download</Icon>{installBusy ? label(settings, 'Installing…', '安裝緊…') : label(settings, app.installedVersion ? 'Reinstall' : 'Install', app.installedVersion ? '重新安裝' : '安裝')}</button>}
-          {app.availability === 'source-build' && <button className="tonal-button" data-install-action={app.id} {...el('button-tonal')} disabled={operationBusy} aria-busy={sourceBusy} title={busyExplanation} onClick={(event) => onAction('build', app, event.currentTarget)}><Icon>build</Icon>{sourceBusy ? label(settings, 'Preparing source install…', '準備緊 source 安裝…') : label(settings, 'Install from source', '由 source 安裝')}</button>}
-          {app.installedVersion && <button className="text-button danger" disabled={operationBusy} title={busyExplanation} onClick={(event) => onAction('uninstall', app, event.currentTarget)}><Icon>delete</Icon>{label(settings, 'Uninstall', '解除安裝')}</button>}
+          {app.availability === 'installable' && !discoveryOnly && <button className="filled-button" data-install-action={app.id} {...el('button-filled')} disabled={operationBusy} aria-busy={installBusy} title={busyExplanation} onClick={(event) => onAction('install', app, event.currentTarget)}><Icon>download</Icon>{installBusy ? label(settings, 'Installing…', '安裝緊…') : label(settings, managed ? 'Reinstall' : 'Install', managed ? '重新安裝' : '安裝')}</button>}
+          {app.availability === 'source-build' && !installedRecord && <button className="tonal-button" data-install-action={app.id} {...el('button-tonal')} disabled={operationBusy} aria-busy={sourceBusy} title={busyExplanation} onClick={(event) => onAction('build', app, event.currentTarget)}><Icon>build</Icon>{sourceBusy ? label(settings, 'Preparing source install…', '準備緊 source 安裝…') : label(settings, 'Install from source', '由 source 安裝')}</button>}
+          {managed && <button className="text-button danger" disabled={operationBusy} title={busyExplanation} onClick={(event) => onAction('uninstall', app, event.currentTarget)}><Icon>delete</Icon>{label(settings, 'Uninstall', '解除安裝')}</button>}
           {installBusy && installProgress?.cancellable && <button className="text-button" aria-label={label(settings, `Cancel installation of ${app.name}`, `取消 ${app.name} 安裝`)} onClick={(event) => onCancelInstall(app, event.currentTarget)}><Icon>cancel</Icon>{label(settings, 'Cancel install', '取消安裝')}</button>}
           {installBusy && installProgress?.phase === 'installer-running' && <span className="operation-status" role="status" aria-live="polite">{operationPhaseLabel(settings, installProgress.phase)}</span>}
           {installProgress?.final && installProgress.phase === 'unknown' && <span className="operation-status warning" role="alert" tabIndex={-1} data-operation-status={app.id}>{operationPhaseLabel(settings, installProgress.phase)}</span>}
-          {app.updateState === 'available' && app.installedVersion && managedUpdate?.status !== 'ready' && (
+          {managed && app.updateState === 'available' && app.installedVersion && managedUpdate?.status !== 'ready' && (
             <button className="tonal-button" disabled={operationBusy} aria-busy={managedUpdate?.status === 'downloading'} title={managedUpdate?.status === 'offline' ? managedUpdate.message : 'Download and verify this stable release. Installation starts only after you choose Restart to install update.'} onClick={(event) => onManagedUpdate('download', app, event.currentTarget)}>
               <Icon>download_for_offline</Icon>{managedUpdate?.status === 'downloading' ? `Downloading ${managedUpdate.progress}%` : managedUpdate?.status === 'failed' || managedUpdate?.status === 'cancelled' ? 'Retry update' : 'Download update'}
             </button>
           )}
-          {managedUpdate?.status === 'downloading' && managedUpdate.appId === app.id && <button className="text-button" onClick={(event) => onManagedUpdate('cancel', app, event.currentTarget)}>Cancel</button>}
-          {managedUpdate?.status === 'ready' && managedUpdate.appId === app.id && <button className="filled-button" disabled={operationBusy} onClick={(event) => onManagedUpdate('restart', app, event.currentTarget)} title="The verified installer is staged. Choose this explicit action to install it; no discovery path launches an installer."><Icon>restart_alt</Icon>Restart to install update</button>}
-          {managedUpdate?.status === 'ready' && managedUpdate.releaseNotesUrl && <a className="text-button" href={managedUpdate.releaseNotesUrl} target="_blank" rel="noreferrer">Release notes</a>}
+          {managed && managedUpdate?.status === 'downloading' && managedUpdate.appId === app.id && <button className="text-button" onClick={(event) => onManagedUpdate('cancel', app, event.currentTarget)}>Cancel</button>}
+          {managed && managedUpdate?.status === 'ready' && managedUpdate.appId === app.id && <button className="filled-button" disabled={operationBusy} onClick={(event) => onManagedUpdate('restart', app, event.currentTarget)} title="The verified installer is staged. Choose this explicit action to install it; no discovery path launches an installer."><Icon>restart_alt</Icon>Restart to install update</button>}
+          {managed && managedUpdate?.status === 'ready' && managedUpdate.releaseNotesUrl && <a className="text-button" href={managedUpdate.releaseNotesUrl} target="_blank" rel="noreferrer">Release notes</a>}
           <button className="text-button" {...el('button-text')} onClick={() => window.document.getElementById(`docs-${app.id}`)?.focus()}><Icon>menu_book</Icon>{label(settings, 'Docs', '文件')}</button>
         </div>
         {installBusy && installProgress && <div className="operation-progress" role="status" aria-live="polite">
@@ -83,9 +88,10 @@ export function AppCard({ app, settings, onAction, onManagedUpdate, onCancelInst
   );
 }
 
-export function AppsPage({ mode, apps, settings, loading, onAction, onManagedUpdate, onCancelInstall, managedUpdates, operationProgress, onBulkAction, runningAction, openRegex, onRegexHandled, notify }: {
+export function AppsPage({ mode, apps, installed, settings, loading, onAction, onManagedUpdate, onCancelInstall, managedUpdates, operationProgress, onBulkAction, runningAction, openRegex, onRegexHandled, notify }: {
   mode: AppsMode;
   apps: CatalogApp[];
+  installed: InstalledAppRecord[];
   settings: UserSettings;
   loading: boolean;
   onAction(kind: ActionKind, app: CatalogApp, trigger: HTMLButtonElement): void;
@@ -103,6 +109,7 @@ export function AppsPage({ mode, apps, settings, loading, onAction, onManagedUpd
   const matcher = useMemo(() => makeMatcher(search.state), [search.state]);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const lastSelected = useRef<number | null>(null);
+  const installedById = useMemo(() => new Map(installed.map((record) => [record.appId, record])), [installed]);
   const scoped = useMemo(() => mode === 'installed' ? apps.filter((app) => app.installedVersion) : mode === 'updates' ? apps.filter((app) => app.updateState === 'available') : apps, [apps, mode]);
   const shown = useMemo(() => scoped.filter((app) => matcher(`${app.name}\n${app.description}\n${app.repository}`)), [scoped, matcher]);
   useEffect(() => {
@@ -110,9 +117,9 @@ export function AppsPage({ mode, apps, settings, loading, onAction, onManagedUpd
     setSelected((current) => new Set([...current].filter((id) => ids.has(id))));
   }, [apps]);
   const selectedApps = shown.filter((app) => selected.has(app.id));
-  const installable = selectedApps.filter((app) => app.availability === 'installable');
-  const sourceBuilds = selectedApps.filter((app) => app.availability === 'source-build');
-  const installedApps = selectedApps.filter((app) => Boolean(app.installedVersion));
+  const installable = selectedApps.filter((app) => app.availability === 'installable' && installationManagementState(installedById.get(app.id)) !== 'discovery-only');
+  const sourceBuilds = selectedApps.filter((app) => app.availability === 'source-build' && !installedById.has(app.id));
+  const installedApps = selectedApps.filter((app) => installationManagementState(installedById.get(app.id)) === 'store-managed');
   const selectAt = (index: number, checked: boolean, shiftKey: boolean) => {
     setSelected((current) => {
       const next = new Set(current);
@@ -152,7 +159,7 @@ export function AppsPage({ mode, apps, settings, loading, onAction, onManagedUpd
       </div>
       {loading && <div className="loading-grid" aria-label="Loading catalog">{Array.from({ length: 6 }, (_, index) => <div className="skeleton" key={index} />)}</div>}
       {!loading && (shown.length
-        ? <section className="app-grid">{shown.map((app, index) => <AppCard key={app.id} app={app} settings={settings} onAction={onAction} onManagedUpdate={onManagedUpdate} onCancelInstall={onCancelInstall} managedUpdate={managedUpdates[app.id]} operationProgress={operationProgress[app.id]} runningAction={runningAction} searchLabel={highlight(search.state, app.name)} selected={selected.has(app.id)} onSelect={(checked, shiftKey) => selectAt(index, checked, shiftKey)} />)}</section>
+        ? <section className="app-grid">{shown.map((app, index) => <AppCard key={app.id} app={app} installedRecord={installedById.get(app.id)} settings={settings} onAction={onAction} onManagedUpdate={onManagedUpdate} onCancelInstall={onCancelInstall} managedUpdate={managedUpdates[app.id]} operationProgress={operationProgress[app.id]} runningAction={runningAction} searchLabel={highlight(search.state, app.name)} selected={selected.has(app.id)} onSelect={(checked, shiftKey) => selectAt(index, checked, shiftKey)} />)}</section>
         : <div className="empty-state" {...el('empty-state')}><Icon>search_off</Icon><h2>No matching apps</h2><p>The current search and tab filters found nothing. Clear the query or refresh the catalog.</p></div>)}
     </>
   );

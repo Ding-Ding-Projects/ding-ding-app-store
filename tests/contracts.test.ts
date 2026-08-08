@@ -76,9 +76,23 @@ describe('desktop security and update contracts', () => {
     expect(installed).toContain('adapterFor(record.id)');
     expect(installed).toContain('exactDisplayNameMatch');
     expect(installed).toContain("source: 'portable-managed'");
+    expect(installed).toContain('selectUniqueReviewedRegistryEntry');
+    expect(installed).not.toContain('if (!prior?.ownership) continue;');
     expect(history).toContain("appendFile(this.logPath");
     expect(history).toContain("git(this.repositoryPath, ['commit', '-m', label])");
     expect(history.toLowerCase()).toContain('history snapshots must never fail the operation');
+  });
+
+  it('keeps externally discovered installs visible but unavailable to install, update, and uninstall actions', async () => {
+    const apps = await read('src/renderer/pages/AppsPage.tsx');
+    expect(apps).toContain("management === 'discovery-only'");
+    expect(apps).toContain('Detected outside App Store');
+    expect(apps).toContain('This App Store did not install it');
+    expect(apps).toContain("installationManagementState(installedById.get(app.id)) === 'store-managed'");
+    expect(apps).toMatch(/managed && app\.updateState === 'available'/);
+    expect(apps).toMatch(/managed && managedUpdate\?\.status === 'ready'/);
+    const operations = await read('src/main/operation-service.ts');
+    expect(operations).toMatch(/const current = await this\.installed\.get\(request\.appId\);[\s\S]*if \(!current\?\.uninstall\)/);
   });
 
   it('requires asset digest, bounded bytes, fixed shell-free launch, and exact typed decisions', async () => {
