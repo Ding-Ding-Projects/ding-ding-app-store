@@ -1,0 +1,12 @@
+{
+  "name": "@ding-ding/offline-docs",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.mjs",
+  "scripts": {
+    "build": "node src/verify-cli.mjs --catalog ../../data/catalog.v1.json --bundle ../../data/offline-docs",
+    "test": "node --test --test-reporter=spec test/*.test.mjs",
+    "typecheck": "node --check src/index.mjs && node --check src/importer.mjs && node --check src/gh-provider.mjs && node --check src/cache-provider.mjs && node --check src/verify.mjs && node --check src/cli.mjs"
+  }
+}

@@ -1,0 +1,102 @@
+# Overlay surfaces and viewport fitting
+
+Floating menus, regex builders, colour pickers, the queue popover and
+non-modal transfer windows are rendered in the renderer layers from
+`dom.js`. Anchored surfaces use one positioning
+contract: they paint their own Material surface, stay within the logical
+viewport, flip when the opposite side has room, and scroll when their content
+is taller than the available side space.
+
+## The bounded fix
+
+The shared `overlayLayout()` calculation uses the measured anchor and surface
+boxes plus an 8px viewport inset. It no longer forces a 160px minimum height:
+that minimum was larger than the real space in short windows and could make a
+popover cover its anchor or paint outside the viewport. `anchorTo()` applies
+the calculated cap before its final measurement and gives the anchored surface
+an `overflow-y: auto` contract.
+
+The queue popover has an additional flex constraint. Its root and body now use
+`min-height: 0`; the root clips its chrome and the queue list owns scrolling.
+This prevents the queue toolbar and empty/list state from pushing through the
+surface at a short viewport.
+
+Blocking dialogs use the same narrow-window discipline. The scrim gutter
+shrinks from 24px to 8px as needed and scrolls if the viewport is shorter than
+the dialog. The dialog is `box-sizing: border-box`, capped to the available
+width and height, and clips its shell so `.modal-body` owns vertical scrolling;
+the action row therefore remains reachable instead of being painted below the
+window.
+
+## Configuration and failure modes
+
+There is no user setting for overlay placement. The surface follows the
+control that opened it and is recalculated on resize, document scrolling,
+anchor resize and surface resize. If there is only a few pixels of room, the
+surface remains usable at that size and exposes a scrollbar; content is not
+deleted to satisfy a visual cap. Coordinate menus receive the same positive
+height guard for extremely small viewports.
+
+Overlay backgrounds are provided by the `surface-1/2/3` tokens and each
+floating root carries a surface class plus its border/elevation. The shared
+menu, popover, modal and transfer-window rules also declare their own
+background, border and elevation, so a missing or overridden utility class
+cannot turn an overlay transparent. Transparent gradients inside the colour
+picker's alpha rail are intentional data visualisation, not the panel
+background.
+
+Menu labels wrap instead of being silently ellipsized. A long bilingual action
+therefore increases the row height and remains readable; the menu itself keeps
+its viewport cap and scrolls the remaining rows. The same rule applies to the
+keyboard path: selecting an item resets the opener's `aria-expanded` state and
+detached handle, so the menu can be reopened without a mouse.
+
+The toast stack owns a vertical scrollbar when persistent messages exceed the
+viewport, so a warning or error never becomes unreachable behind the window
+edge. New toasts stay visible when the user is at the latest end, while a
+reader who has scrolled up is not pulled away from older messages. Toasts and
+the notification centre cap their width against the available
+viewport, and modal titles wrap inside the dialog. Progress values are clamped
+before they reach the accessible progress bar, preventing malformed producer
+data from creating `NaN` geometry or announcements.
+
+Overlay animations and progress motion stop when either the persisted reduced-
+motion preference or the operating-system `prefers-reduced-motion` signal is
+active, including for surfaces that were already open when the setting changed.
+
+Resizable modeless editor windows clamp both pointer and keyboard resizing to
+an 8px viewport gutter. Their shell has a direct surface and border contract,
+and their body remains the scroll owner when the viewport is shorter than the
+requested editor size.
+
+Anchored dropdowns and submenus receive the viewport-height cap before
+`anchorTo()` measures them. Long bilingual or action-heavy menus therefore
+stay inside the window and use the existing `overflow-y: auto` rule for the
+remaining content instead of disappearing below the bottom edge.
+
+## Security and accessibility
+
+Positioning is local DOM arithmetic. No overlay content or geometry is sent to
+the network. Modal focus is restored to the opener on close, and the deferred
+initial-focus pass is cancelled by state when Escape, the scrim, or another
+action closes the dialog before the next animation frame. A detached modal is
+never focused after teardown. Non-modal `aria-modal="false"` surfaces keep
+their existing keyboard Escape handling and scrollable-region contracts.
+
+## Verification
+
+- `test/overlay.test.js` checks bounded geometry, side flipping, tiny viewport
+  dimensions, the modal narrow-window contract, the modal teardown/focus race,
+  and the production surface/scroll contracts.
+- `test/e2e-overlays.test.js` opens the real regex builder and queue popover in
+  a 420×260 Electron window and checks their real rectangles, computed
+  backgrounds and overflow behaviour.
+- Syntax, `git diff --check`, the port matrix and the site build are run for
+  this slice.
+
+Remaining gaps are broader overlay inventory work: every legacy WinSCP dialog
+still needs a dedicated visual capture at all display scales, and the smoke
+does not claim that every possible localized string or user-authored appearance
+override is visually perfect.
+
+Suggested related articles: [Colour picker](app-doc://article/material-winscp.repository.25d2616d40d87a4c), [Regex builder](app-doc://article/material-winscp.repository.e00a792e9bc916e2), [Notifications](app-doc://article/material-winscp.repository.e5539f064fd1d9fe), and [Accessibility](app-doc://article/material-winscp.repository.f552e9dcc6996690).
