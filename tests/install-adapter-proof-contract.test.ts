@@ -54,6 +54,9 @@ describe('cloud install adapter proof boundary', () => {
     expect(script).toContain('sha256Verified: result.ok && downloadCompleted && releaseMatchedResult');
     expect(script).toContain('&& integrity.sha256Verified');
     expect(script).toContain('persistedAfterCleanup.length === 0');
+    expect(script).toContain('const MAX_PROGRESS_EVENTS = 256');
+    expect(script).toContain('phaseChanged || progressChanged || event.final');
+    expect(script).toContain('droppedProgressEvents');
     expect(script).toContain('setInterval');
     expect(script).toContain('withProofTimeout');
     expect(script).toContain('DING_DING_INSTALL_PROOF_TIMEOUT_MS');

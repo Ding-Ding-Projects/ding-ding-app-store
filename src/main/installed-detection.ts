@@ -47,6 +47,17 @@ export interface RegistrySnapshotResult {
   failedKeys: string[];
 }
 
+const ENGLISH_MISSING_REGISTRY_KEY = /^ERROR:\s+The system was unable to find the specified registry key or value\.\s*$/i;
+
+/**
+ * reg.exe uses exit code 1 for both an absent key and real query failures. Only
+ * its exact key-not-found result is a confirmed empty hive; access errors and
+ * every unfamiliar/localized response continue to fail closed.
+ */
+export function isConfirmedMissingRegistryKey(exitCode: number | null, stderr: string): boolean {
+  return exitCode === 1 && ENGLISH_MISSING_REGISTRY_KEY.test(stderr.trim());
+}
+
 export async function collectRegistrySnapshotResult(
   keys: readonly string[],
   query: (key: string) => Promise<string>,

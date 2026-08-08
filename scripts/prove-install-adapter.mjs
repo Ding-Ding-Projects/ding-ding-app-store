@@ -6,6 +6,7 @@ import { app } from 'electron';
 const APP_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,127}$/;
 const PROOF_SCHEMA = 'ding-ding-app-store.install-proof.v1';
 const DEFAULT_TIMEOUT_MS = 20 * 60_000;
+const MAX_PROGRESS_EVENTS = 256;
 
 function option(name, fallback = null) {
   const index = process.argv.indexOf(name);
@@ -53,6 +54,7 @@ const deadline = Date.now() + proofTimeoutMs;
 let lastPhase = 'initializing';
 let lastProgress = null;
 let lastBytes = null;
+let droppedProgressEvents = 0;
 let operationService = null;
 let timedOut = false;
 let proof;
@@ -65,7 +67,9 @@ function logMilestone(label, details = '') {
 }
 
 function progressEvent(event) {
-  events.push({
+  const phaseChanged = event.phase !== lastPhase;
+  const progressChanged = event.progress !== lastProgress;
+  const boundedEvent = {
     operationId: event.operationId,
     appId: event.appId,
     phase: event.phase,
@@ -75,10 +79,17 @@ function progressEvent(event) {
     cancellable: event.cancellable,
     locked: event.locked,
     final: event.final,
-  });
+  };
+  if (phaseChanged || progressChanged || event.final) {
+    if (events.length < MAX_PROGRESS_EVENTS) events.push(boundedEvent);
+    else {
+      droppedProgressEvents += 1;
+      if (event.final) events[events.length - 1] = boundedEvent;
+    }
+  }
   lastProgress = event.progress ?? null;
   lastBytes = event.bytesTotal ? `${event.bytesReceived ?? 0}/${event.bytesTotal}` : null;
-  if (event.phase !== lastPhase) {
+  if (phaseChanged) {
     lastPhase = event.phase;
     logMilestone('phase', `name=${event.phase} progress=${lastProgress ?? 'n/a'} bytes=${lastBytes ?? 'n/a'}`);
   }
@@ -226,6 +237,7 @@ try {
     afterCleanup,
     persistedAfterCleanup,
     progress: events,
+    droppedProgressEvents,
     verdict: supportedSuccess,
   };
   exitCode = proof.verdict ? 0 : 1;
@@ -240,6 +252,7 @@ try {
     timedOut,
     milestones,
     progress: events,
+    droppedProgressEvents,
     verdict: false,
     error: error instanceof Error ? error.message : String(error),
   };
@@ -257,6 +270,7 @@ try {
       timedOut,
       milestones,
       progress: events,
+      droppedProgressEvents,
       verdict: false,
       error: 'The proof exited before it could produce a result.',
     };
