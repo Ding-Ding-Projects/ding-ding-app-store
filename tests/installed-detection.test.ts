@@ -1,8 +1,17 @@
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { collectRegistrySnapshot, collectRegistrySnapshotResult, exactDisplayNameMatch, extractMsiProductCode, extractQuotedExecutable, latestSquirrelVersion, ownershipHiveKey, parseRegistryUninstallOutput, pathWithinRoots, registryEntryFingerprint, safeReviewedUninstaller, safeSquirrelLocation, selectChangedRegistryEntry, selectSameVersionOwnedRegistryEntry, selectUniqueReviewedRegistryEntry } from '../src/main/installed-detection';
+import { collectRegistrySnapshot, collectRegistrySnapshotResult, exactDisplayNameMatch, extractMsiProductCode, extractQuotedExecutable, isConfirmedMissingRegistryKey, latestSquirrelVersion, ownershipHiveKey, parseRegistryUninstallOutput, pathWithinRoots, registryEntryFingerprint, safeReviewedUninstaller, safeSquirrelLocation, selectChangedRegistryEntry, selectSameVersionOwnedRegistryEntry, selectUniqueReviewedRegistryEntry } from '../src/main/installed-detection';
 
 describe('installed-app detection', () => {
+  it('accepts only the exact reg.exe key-not-found result as a confirmed empty hive', () => {
+    const missing = 'ERROR: The system was unable to find the specified registry key or value.\r\n';
+    expect(isConfirmedMissingRegistryKey(1, missing)).toBe(true);
+    expect(isConfirmedMissingRegistryKey(0, missing)).toBe(false);
+    expect(isConfirmedMissingRegistryKey(1, 'ERROR: Access is denied.')).toBe(false);
+    expect(isConfirmedMissingRegistryKey(1, `${missing}unexpected detail`)).toBe(false);
+    expect(isConfirmedMissingRegistryKey(null, missing)).toBe(false);
+  });
+
   it('parses multiple Windows uninstall registry records', () => {
     const records = parseRegistryUninstallOutput(`
 HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\One

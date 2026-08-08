@@ -12,6 +12,7 @@ import {
   collectRegistrySnapshotResult,
   exactDisplayNameMatch,
   extractMsiProductCode,
+  isConfirmedMissingRegistryKey,
   latestSquirrelVersion,
   ownershipHiveKey,
   registryEntryFingerprint,
@@ -54,7 +55,7 @@ async function capture(executable: string, arguments_: string[], timeoutMs = 30_
     child.once('exit', (code) => {
       clearTimeout(timer);
       if (overflow) reject(new Error('Registry discovery output exceeded its safety limit.'));
-      else if (code === 0) resolve(stdout);
+      else if (code === 0 || isConfirmedMissingRegistryKey(code, stderr)) resolve(stdout);
       else reject(new Error(`Registry discovery failed with code ${code}: ${stderr.trim()}`));
     });
   });

@@ -6,6 +6,7 @@
 - `src/main/install-proof-targets.ts` is the typed execution allowlist. The qBittorrent Material contract requires a direct GitHub SHA-256 digest, refuses any non-empty initial target state, and expects an App Store-owned registry record plus Squirrel uninstall descriptor.
 - `scripts/prove-install-adapter.mjs` records bounded public integrity metadata and proves install, exact rediscovery, reviewed uninstall, post-cleanup discovery absence, and persisted ownership removal. It still records `sourceRuntimeInvoked:false` and never invokes source jobs or OpenCode.
 - Focused verification is green: `tests/install-adapter-proof-contract.test.ts` plus `tests/install-adapters.test.ts` passed 18/18 tests, the main-process typecheck passed, and `git diff --check` passed. A cloud dispatch has not run yet, so this section does not claim clean-Windows lifecycle success.
+- First dispatch `31268452270` failed safely before installer launch: the direct SHA-256 download completed, but a missing clean-runner HKCU uninstall key was misclassified as an incomplete snapshot. The follow-up recognizes only the exact pinned-image `reg.exe` key-not-found response as empty and continues to fail closed for every other query failure. It also bounds progress evidence to 256 phase/percentage changes after the failed manifest exposed excessive per-chunk entries. A replacement dispatch is pending.
 
 ## Current state
 
