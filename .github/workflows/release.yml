@@ -62,7 +62,8 @@ jobs:
           RELEASE_TAG: ${{ steps.version.outputs.tag }}
           WORKFLOW_STARTED: ${{ steps.timing.outputs.started_at }}
         run: |
-          gh api --paginate --slurp "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" | Out-File -FilePath release-inventory.json -Encoding utf8
+          gh api --paginate --slurp "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" | Out-File -FilePath release-inventory.raw.json -Encoding utf8
+          node scripts/compact-release-inventory.mjs --input release-inventory.raw.json --output release-inventory.json
           node scripts/select-dim-sum-release.mjs --repository $env:GITHUB_REPOSITORY | Out-File -FilePath release-dish.json -Encoding utf8
           node scripts/generate-release-changelog.mjs `
             --inventory release-inventory.json `

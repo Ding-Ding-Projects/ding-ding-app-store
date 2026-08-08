@@ -60,6 +60,8 @@ describe('GitHub-hosted workflow and bootstrap contract', () => {
     expect(generate).toBeGreaterThan(tag);
     expect(build).toBeGreaterThan(generate);
     expect(release).toContain("gh api --paginate --slurp \"repos/$env:GITHUB_REPOSITORY/releases?per_page=100\"");
+    expect(release).toContain('release-inventory.raw.json');
+    expect(release).toContain('scripts/compact-release-inventory.mjs');
     expect(release).toContain('scripts/generate-release-changelog.mjs');
     expect(release).toContain('--reconcile');
     expect(release).toContain('release-changelog.json');
