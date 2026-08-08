@@ -5,7 +5,7 @@ Material Design 3 desktop software center for discovering, documenting, installi
 `npm install && npm start`
 
 **Documentation site:** <https://ding-ding-projects.github.io/ding-ding-app-store/><br>
-**Current state:** active development; the latest verified unsigned Windows release is [`v0.1.0-622-1`](https://github.com/Ding-Ding-Projects/ding-ding-app-store/releases/tag/v0.1.0-622-1), code-named **Crispy Taro Dumplings · 蜂巢芋角**. Newer verified builds are listed on the [releases page](https://github.com/Ding-Ding-Projects/ding-ding-app-store/releases).
+**Current state:** active development; every successful cloud workflow publishes a verified unsigned Windows release with immutable Squirrel assets. See the [releases page](https://github.com/Ding-Ding-Projects/ding-ding-app-store/releases) for the current version, code name, timing, line-count table, and download files.
 
 ## Contents
 
