@@ -70,6 +70,8 @@ export function ActivityPage({ entries, revisions, loading, settings, openRegex,
       }
       downloadText(`ding-ding-app-store-history.${definition.extension}`, exportHistoryEntries(exportEntries, exportFormat), definition.mime);
       notify({ ok: true, message: `Exported ${exportEntries.length} filtered activity records as ${definition.label}.` });
+    } catch (error) {
+      notify({ ok: false, message: (error as Error).message || 'The Activity export could not be written.' });
     } finally {
       setExportBusy(null);
     }
