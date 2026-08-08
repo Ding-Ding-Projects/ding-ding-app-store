@@ -5,7 +5,7 @@ Material Design 3 desktop software center for discovering, documenting, installi
 `npm install && npm start`
 
 **Documentation site:** <https://ding-ding-projects.github.io/ding-ding-app-store/><br>
-**Current state:** active development; the latest verified unsigned Windows release is [`v0.1.0-610-1`](https://github.com/Ding-Ding-Projects/ding-ding-app-store/releases/tag/v0.1.0-610-1), code-named **Matcha Chocolate Crystal Dumpling · 抹茶朱古力水晶餃**. Newer verified builds are listed on the [releases page](https://github.com/Ding-Ding-Projects/ding-ding-app-store/releases).
+**Current state:** active development; the latest verified unsigned Windows release is [`v0.1.0-622-1`](https://github.com/Ding-Ding-Projects/ding-ding-app-store/releases/tag/v0.1.0-622-1), code-named **Crispy Taro Dumplings · 蜂巢芋角**. Newer verified builds are listed on the [releases page](https://github.com/Ding-Ding-Projects/ding-ding-app-store/releases).
 
 ## Contents
 
@@ -58,6 +58,9 @@ These captures are from the built application on the hidden Windows desktop; the
 | Appearance settings with rail layout preview and customization controls | ![Appearance settings runtime capture](docs/assets/screenshots/final-appearance-runtime.png) |
 | Command palette listing pages and tab commands | ![Command palette runtime capture](docs/assets/screenshots/final-command-palette-runtime.png) |
 | Tab action panel with local filter, regex builder affordance, pinned-tab protection, and bulk-close previews | ![Tab actions runtime capture](docs/assets/screenshots/final-tab-actions-runtime.png) |
+| Earlier catalog capture with the live public metadata state | ![Earlier catalog runtime capture](docs/assets/screenshots/catalog-runtime.png) |
+| Earlier installed-app capture used to validate detection and action layout | ![Earlier installed runtime capture](docs/assets/screenshots/installed-runtime.png) |
+| Earlier activity-history capture with export controls | ![Earlier activity runtime capture](docs/assets/screenshots/activity-runtime.png) |
 
 </details>
 
