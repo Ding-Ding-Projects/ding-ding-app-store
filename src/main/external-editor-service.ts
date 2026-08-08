@@ -65,6 +65,15 @@ async function commandCandidates(command: string): Promise<string[]> {
   }
 }
 
+function commandExecutableCandidates(found: string, command: string): string[] {
+  if (!found.toLowerCase().endsWith('.cmd')) return [found];
+  const executable = command.toLowerCase().includes('insiders') ? 'Code - Insiders.exe' : 'Code.exe';
+  const directory = path.dirname(found);
+  // The official PATH shim lives in <install>\\bin\\code.cmd while the signed
+  // executable lives one directory above. Never execute or parse the shim.
+  return [path.join(directory, executable), path.join(directory, '..', executable)];
+}
+
 function knownPaths(): string[] {
   const env = process.env;
   const local = env.LOCALAPPDATA;
@@ -97,12 +106,8 @@ export class ExternalEditorService {
     const paths = new Set<string>();
     for (const command of ['code.exe', 'code-insiders.exe', 'code.cmd', 'code-insiders.cmd']) {
       for (const found of await commandCandidates(command)) {
-        if (found.toLowerCase().endsWith('.cmd')) {
-          const sibling = path.join(path.dirname(found), command.toLowerCase().includes('insiders') ? 'Code - Insiders.exe' : 'Code.exe');
-          const resolved = await existingExecutable(sibling);
-          if (resolved) paths.add(resolved);
-        } else {
-          const resolved = await existingExecutable(found);
+        for (const candidate of commandExecutableCandidates(found, command)) {
+          const resolved = await existingExecutable(candidate);
           if (resolved) paths.add(resolved);
         }
       }
@@ -192,11 +197,10 @@ export class ExternalEditorService {
     const result = new Set<string>();
     for (const command of ['code.exe', 'code-insiders.exe', 'code.cmd', 'code-insiders.cmd']) {
       for (const found of await commandCandidates(command)) {
-        const candidate = found.toLowerCase().endsWith('.cmd')
-          ? path.join(path.dirname(found), command.toLowerCase().includes('insiders') ? 'Code - Insiders.exe' : 'Code.exe')
-          : found;
-        const resolved = await existingExecutable(candidate);
-        if (resolved) result.add(path.resolve(resolved));
+        for (const candidate of commandExecutableCandidates(found, command)) {
+          const resolved = await existingExecutable(candidate);
+          if (resolved) result.add(path.resolve(resolved));
+        }
       }
     }
     for (const known of knownPaths()) {
