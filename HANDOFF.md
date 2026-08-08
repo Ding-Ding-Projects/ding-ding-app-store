@@ -1,5 +1,11 @@
 # Handoff
 
+## 2026-08-08 second MSI clean-Windows adapter proof lane
+
+- Branch `codex/next-nonportable-proof` restores the previously verified `keepassxc-msi` typed target that the current documentation references and adds exactly one new target, `codex-material` through the existing reviewed `codex-material-msi` adapter. The portable trio and qBittorrent Squirrel target remain unchanged; the workflow remains manual-dispatch only on `windows-2022`.
+- The new target requires a direct GitHub SHA-256, an empty initial target state, one newly owned `Codex Studio` registry record, an MSI product-code uninstall descriptor, successful cleanup, and zero detected or persisted target records afterward. Source jobs and OpenCode remain excluded and the manifest must retain `sourceRuntimeInvoked:false`.
+- The latest reviewed public release is `v0.1.0+build.646`, carrying exactly one matching `Codex.Studio-0.1.0-x64.msi` asset of 237,932,544 bytes with GitHub SHA-256 `3aae77b70d7efecbd58a1f477e4c5b0b854c4b26490e8f10859e36f644ddf235`. The sibling EXE does not match the MSI adapter's anchored asset pattern. This metadata is not lifecycle proof until the exact branch commit passes the dispatch workflow.
+
 ## 2026-08-08 first MSI clean-Windows adapter proof lane
 
 - Branch `codex/msi-adapter-proof` adds exactly one MSI cloud target: `keepassxc` through the existing reviewed `keepassxc-msi` adapter. The portable trio and verified qBittorrent Squirrel target remain unchanged, and the workflow remains manual-dispatch only on `windows-2022`.

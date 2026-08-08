@@ -5,9 +5,9 @@ import { CLOUD_INSTALL_PROOF_TARGETS, cloudInstallProofTargetFor } from '../src/
 const read = (path: string) => readFile(path, 'utf8');
 
 describe('cloud install adapter proof boundary', () => {
-  it('keeps the executable proof allowlist closed to one reviewed Squirrel and one reviewed MSI adapter', () => {
+  it('keeps the executable proof allowlist closed to one reviewed Squirrel and two reviewed MSI adapters', () => {
     expect(Object.keys(CLOUD_INSTALL_PROOF_TARGETS)).toEqual([
-      'dim-sum-atlas', 'winforge', 'wimforge', 'qbittorrent-material', 'keepassxc',
+      'dim-sum-atlas', 'winforge', 'wimforge', 'qbittorrent-material', 'keepassxc', 'codex-material',
     ]);
     expect(cloudInstallProofTargetFor('qbittorrent-material')).toEqual({
       appId: 'qbittorrent-material',
@@ -21,6 +21,15 @@ describe('cloud install adapter proof boundary', () => {
     expect(cloudInstallProofTargetFor('keepassxc')).toEqual({
       appId: 'keepassxc',
       adapterId: 'keepassxc-msi',
+      family: 'msi',
+      ownershipKind: 'registry',
+      uninstallKind: 'msi',
+      requiresCleanStart: true,
+      requiresDirectSha256: true,
+    });
+    expect(cloudInstallProofTargetFor('codex-material')).toEqual({
+      appId: 'codex-material',
+      adapterId: 'codex-material-msi',
       family: 'msi',
       ownershipKind: 'registry',
       uninstallKind: 'msi',
@@ -49,8 +58,10 @@ describe('cloud install adapter proof boundary', () => {
     expect(targets).toContain('wimforge: {');
     expect(targets).toContain("'qbittorrent-material': {");
     expect(targets).toContain('keepassxc: {');
+    expect(targets).toContain("'codex-material': {");
     expect(targets).toContain("adapterId: 'qbittorrent-material-squirrel'");
     expect(targets).toContain("adapterId: 'keepassxc-msi'");
+    expect(targets).toContain("adapterId: 'codex-material-msi'");
     expect(targets).toContain("family: 'squirrel'");
     expect(targets).toContain("ownershipKind: 'registry'");
     expect(targets).toContain('requiresCleanStart: true');
@@ -91,6 +102,7 @@ describe('cloud install adapter proof boundary', () => {
     expect(workflow).toContain('- wimforge');
     expect(workflow).toContain('- qbittorrent-material');
     expect(workflow).toContain('- keepassxc');
+    expect(workflow).toContain('- codex-material');
     expect(workflow).toContain('runs-on: windows-2022');
     expect(workflow).toContain('npm ci');
     expect(workflow).toContain('npx electron scripts/prove-install-adapter.mjs');
