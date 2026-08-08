@@ -6,6 +6,9 @@ import type { Notify } from '../notify';
 export type WorkspaceAction =
   | { type: 'replace'; value: TabWorkspace }
   | { type: 'activate'; id: TabId }
+  | { type: 'close'; id: TabId }
+  | { type: 'reopen'; id: TabId }
+  | { type: 'close-many'; ids: TabId[] }
   | { type: 'pin'; id: TabId; pinned: boolean | 'toggle' }
   | { type: 'move'; id: TabId; direction: -1 | 1 }
   | { type: 'move-to'; id: TabId; targetId: TabId }
@@ -46,7 +49,7 @@ function renormalize(workspace: TabWorkspace): TabWorkspace {
 
 /** Regions in render order: pinned first, then each group in declared order, then ungrouped tabs. */
 export function regionsOf(workspace: TabWorkspace): Region[] {
-  const sorted = (predicate: (tab: TabState) => boolean) => workspace.tabs.filter(predicate).sort((left, right) => left.order - right.order);
+  const sorted = (predicate: (tab: TabState) => boolean) => workspace.tabs.filter((tab) => tab.open && predicate(tab)).sort((left, right) => left.order - right.order);
   const regions: Region[] = [{ kind: 'pinned', group: null, tabs: sorted((tab) => tab.pinned) }];
   for (const group of workspace.groups) regions.push({ kind: 'group', group, tabs: sorted((tab) => !tab.pinned && tab.groupId === group.id) });
   regions.push({ kind: 'ungrouped', group: null, tabs: sorted((tab) => !tab.pinned && !tab.groupId) });
@@ -67,10 +70,36 @@ function reducer(state: TabWorkspace, action: WorkspaceAction): TabWorkspace {
   switch (action.type) {
     case 'replace': return action.value;
     case 'reset': return DEFAULT_TAB_WORKSPACE;
-    case 'activate': return { ...state, activeTabId: action.id };
+    case 'activate': {
+      const target = state.tabs.find((tab) => tab.id === action.id);
+      return target?.open ? { ...state, activeTabId: action.id } : state;
+    }
+    case 'close': {
+      const target = state.tabs.find((tab) => tab.id === action.id);
+      if (!target || !target.open || target.pinned || state.tabs.filter((tab) => tab.open).length <= 1) return state;
+      const tabs = state.tabs.map((tab) => (tab.id === target.id ? { ...tab, open: false, previousGroupId: tab.groupId ?? tab.previousGroupId } : tab));
+      const nextOpen = tabs.filter((tab) => tab.open).sort((left, right) => left.order - right.order);
+      const activeTabId = state.activeTabId === target.id ? (nextOpen[0]?.id ?? state.activeTabId) : state.activeTabId;
+      return renormalize({ ...state, tabs, activeTabId });
+    }
+    case 'reopen': {
+      const target = state.tabs.find((tab) => tab.id === action.id);
+      if (!target || target.open) return state;
+      const candidateGroup = target.groupId ?? target.previousGroupId;
+      const restoredGroup = candidateGroup && state.groups.some((group) => group.id === candidateGroup) ? candidateGroup : null;
+      return renormalize({ ...state, tabs: state.tabs.map((tab) => (tab.id === target.id ? { ...tab, open: true, groupId: restoredGroup, order: 63 } : tab)) });
+    }
+    case 'close-many': {
+      const ids = new Set(action.ids);
+      const tabs = state.tabs.map((tab) => (ids.has(tab.id) && tab.open && !tab.pinned ? { ...tab, open: false, previousGroupId: tab.groupId ?? tab.previousGroupId } : tab));
+      const nextOpen = tabs.filter((tab) => tab.open).sort((left, right) => left.order - right.order);
+      if (!nextOpen.length) return state;
+      const activeTabId = ids.has(state.activeTabId) ? nextOpen[0].id : state.activeTabId;
+      return renormalize({ ...state, tabs, activeTabId });
+    }
     case 'pin': {
       return mapTabs((tab) => {
-        if (tab.id !== action.id) return tab;
+        if (tab.id !== action.id || !tab.open) return tab;
         const pinned = action.pinned === 'toggle' ? !tab.pinned : action.pinned;
         if (pinned === tab.pinned) return tab;
         if (pinned) return { ...tab, pinned: true, previousGroupId: tab.groupId, groupId: null, order: 63 };
@@ -80,7 +109,7 @@ function reducer(state: TabWorkspace, action: WorkspaceAction): TabWorkspace {
     }
     case 'move': {
       const target = state.tabs.find((tab) => tab.id === action.id);
-      if (!target) return state;
+      if (!target || !target.open) return state;
       const siblings = state.tabs.filter((tab) => regionKeyOf(tab) === regionKeyOf(target)).sort((left, right) => left.order - right.order);
       const index = siblings.findIndex((tab) => tab.id === action.id);
       const swap = siblings[index + action.direction];
@@ -90,7 +119,7 @@ function reducer(state: TabWorkspace, action: WorkspaceAction): TabWorkspace {
     case 'move-to': {
       const target = state.tabs.find((tab) => tab.id === action.targetId);
       const source = state.tabs.find((tab) => tab.id === action.id);
-      if (!target || !source || target.id === source.id) return state;
+      if (!target || !source || !target.open || !source.open || target.id === source.id) return state;
       return mapTabs((tab) => (tab.id === source.id
         ? { ...tab, pinned: target.pinned, groupId: target.pinned ? null : target.groupId, order: target.order - 0.5 }
         : tab));
@@ -103,7 +132,7 @@ function reducer(state: TabWorkspace, action: WorkspaceAction): TabWorkspace {
     }
     case 'group-rename': return { ...state, groups: state.groups.map((group) => (group.id === action.groupId ? { ...group, name: action.name.trim().slice(0, 32) || group.name } : group)) };
     case 'group-color': return { ...state, groups: state.groups.map((group) => (group.id === action.groupId ? { ...group, color: action.color } : group)) };
-    case 'group-assign': return mapTabs((tab) => (tab.id === action.id ? { ...tab, pinned: false, groupId: action.groupId, previousGroupId: null, order: 63 } : tab));
+    case 'group-assign': return mapTabs((tab) => (tab.id === action.id && tab.open ? { ...tab, pinned: false, groupId: action.groupId, previousGroupId: null, order: 63 } : tab));
     case 'group-remove': return mapTabs((tab) => (tab.id === action.id ? { ...tab, groupId: null, previousGroupId: null, order: 63 } : tab));
     case 'group-collapse': return { ...state, groups: state.groups.map((group) => (group.id === action.groupId ? { ...group, collapsed: action.collapsed === 'toggle' ? !group.collapsed : action.collapsed } : group)) };
     case 'group-collapse-all': return { ...state, groups: state.groups.map((group) => ({ ...group, collapsed: true })) };

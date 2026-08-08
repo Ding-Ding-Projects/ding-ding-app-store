@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ComponentPropsWithRef, KeyboardEvent as ReactKeyboardEvent, ReactNode, RefObject } from 'react';
 import { MAX_TAB_GROUPS, TAB_GROUP_COLORS } from '../../shared/contracts';
 import type { TabGroup, TabId, TabState, TabWorkspace, UserSettings } from '../../shared/contracts';
@@ -6,7 +6,7 @@ import { el } from '../el';
 import { Icon } from '../icons';
 import { label } from '../i18n';
 import { GROUP_COLOR_LABELS, TAB_META } from '../registry';
-import { highlight, makeMatcher, useSurfaceSearch } from '../search';
+import { EMPTY_SEARCH, compile, highlight, makeMatcher, SearchContext, useSurfaceSearch } from '../search';
 import { newGroupId, regionsOf } from '../state/use-workspace';
 import type { RegionKind, WorkspaceAction } from '../state/use-workspace';
 import { SearchBox } from './SearchBox';
@@ -147,22 +147,29 @@ export function TabContextMenu({ target, workspace, settings, dispatch, onClose,
   target: MenuTarget; workspace: TabWorkspace; settings: UserSettings;
   dispatch(action: WorkspaceAction): void; onClose(): void; onRename(groupId: string): void; announce(message: string): void;
 }) {
+  const menuSearch = useSurfaceSearch('tabs.menu');
+  const menuMatcher = useMemo(() => makeMatcher(menuSearch.state), [menuSearch.state]);
+  const item = (text: string, node: ReactNode) => menuMatcher(text) ? node : null;
+  useEffect(() => { menuSearch.clear(); // Search state is intentionally reset for each newly opened target.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target]);
   const close = (message?: string) => { if (message) announce(message); onClose(); };
   if (target.kind === 'group') {
     const group = workspace.groups.find((item) => item.id === target.groupId);
     if (!group) return null;
     return (
       <div className="popover tab-context-menu" role="menu" aria-label={label(settings, 'Group actions', '分組操作')}>
-        <button role="menuitem" onClick={() => { onRename(group.id); onClose(); }}>{label(settings, 'Rename group', '改分組名')}</button>
-        <button role="menuitem" onClick={() => { dispatch({ type: 'group-collapse', groupId: group.id, collapsed: 'toggle' }); close(group.collapsed ? 'Group expanded' : 'Group collapsed'); }}>{group.collapsed ? label(settings, 'Expand group', '展開分組') : label(settings, 'Collapse group', '收埋分組')}</button>
-        <div className="chip-row" role="group" aria-label={label(settings, 'Group colour', '分組顏色')}>
+        <SearchBox surface="tabs.menu" placeholder={label(settings, 'Search menu actions', '搜尋選單操作')} />
+        {item('Rename group 改分組名', <button role="menuitem" key="rename" onClick={() => { onRename(group.id); onClose(); }}>{label(settings, 'Rename group', '改分組名')}</button>)}
+        {item(`${group.collapsed ? 'Expand' : 'Collapse'} group`, <button role="menuitem" key="collapse" onClick={() => { dispatch({ type: 'group-collapse', groupId: group.id, collapsed: 'toggle' }); close(group.collapsed ? 'Group expanded' : 'Group collapsed'); }}>{group.collapsed ? label(settings, 'Expand group', '展開分組') : label(settings, 'Collapse group', '收埋分組')}</button>)}
+        {item('Group colour', <div className="chip-row" role="group" key="colour" aria-label={label(settings, 'Group colour', '分組顏色')}>
           {TAB_GROUP_COLORS.map((color) => (
             <button key={color} {...el('chip')} aria-pressed={group.color === color} data-color={color} onClick={() => { dispatch({ type: 'group-color', groupId: group.id, color }); close(`Group colour ${color}`); }}>
               {label(settings, GROUP_COLOR_LABELS[color].en, GROUP_COLOR_LABELS[color].yue)}
             </button>
           ))}
-        </div>
-        <button role="menuitem" className="danger" onClick={() => { dispatch({ type: 'group-delete', groupId: group.id }); close('Group deleted; its tabs moved out of the group'); }}>{label(settings, 'Delete group (tabs are kept)', '刪除分組（分頁會留低）')}</button>
+        </div>)}
+        {item('Delete group', <button role="menuitem" key="delete" className="danger" onClick={() => { dispatch({ type: 'group-delete', groupId: group.id }); close('Group deleted; its tabs moved out of the group'); }}>{label(settings, 'Delete group (tabs are kept)', '刪除分組（分頁會留低）')}</button>)}
       </div>
     );
   }
@@ -171,10 +178,13 @@ export function TabContextMenu({ target, workspace, settings, dispatch, onClose,
   const meta = TAB_META[tab.id];
   return (
     <div className="popover tab-context-menu" role="menu" aria-label={label(settings, `${meta.en} actions`, `${meta.yue} 操作`)}>
-      <button role="menuitem" onClick={() => { dispatch({ type: 'pin', id: tab.id, pinned: 'toggle' }); close(tab.pinned ? `${meta.en} unpinned` : `${meta.en} pinned`); }}>{tab.pinned ? label(settings, 'Unpin tab', '取消釘住') : label(settings, 'Pin tab', '釘住分頁')}</button>
-      <button role="menuitem" onClick={() => { dispatch({ type: 'move', id: tab.id, direction: -1 }); close(`${meta.en} moved up`); }}>{label(settings, 'Move up', '上移')}</button>
-      <button role="menuitem" onClick={() => { dispatch({ type: 'move', id: tab.id, direction: 1 }); close(`${meta.en} moved down`); }}>{label(settings, 'Move down', '下移')}</button>
-      {!tab.pinned && workspace.groups.length < MAX_TAB_GROUPS && (
+      <SearchBox surface="tabs.menu" placeholder={label(settings, 'Search menu actions', '搜尋選單操作')} />
+      {item('Pin tab', <button role="menuitem" key="pin" onClick={() => { dispatch({ type: 'pin', id: tab.id, pinned: 'toggle' }); close(tab.pinned ? `${meta.en} unpinned` : `${meta.en} pinned`); }}><span>{tab.pinned ? label(settings, 'Unpin tab', '取消釘住') : label(settings, 'Pin tab', '釘住分頁')}</span><kbd>Ctrl+Shift+P</kbd></button>)}
+      {item('Move up', <button role="menuitem" key="up" onClick={() => { dispatch({ type: 'move', id: tab.id, direction: -1 }); close(`${meta.en} moved up`); }}><span>{label(settings, 'Move up', '上移')}</span><kbd>Alt+↑</kbd></button>)}
+      {item('Move down', <button role="menuitem" key="down" onClick={() => { dispatch({ type: 'move', id: tab.id, direction: 1 }); close(`${meta.en} moved down`); }}><span>{label(settings, 'Move down', '下移')}</span><kbd>Alt+↓</kbd></button>)}
+      {tab.open && !tab.pinned && item('Close tab', <button role="menuitem" key="close" onClick={() => { dispatch({ type: 'close', id: tab.id }); close(`${meta.en} closed`); }}>{label(settings, 'Close tab', '關閉分頁')}</button>)}
+      {!tab.open && item('Reopen tab', <button role="menuitem" key="reopen" onClick={() => { dispatch({ type: 'reopen', id: tab.id }); close(`${meta.en} reopened`); }}>{label(settings, 'Reopen tab', '重新開啟分頁')}</button>)}
+      {!tab.pinned && workspace.groups.length < MAX_TAB_GROUPS && item('New group',
         <button role="menuitem" onClick={() => {
           const group: TabGroup = { id: newGroupId(), name: `Group ${workspace.groups.length + 1}`, color: TAB_GROUP_COLORS[(workspace.groups.length + 1) % TAB_GROUP_COLORS.length], collapsed: false };
           dispatch({ type: 'group-create', group, memberId: tab.id });
@@ -182,16 +192,90 @@ export function TabContextMenu({ target, workspace, settings, dispatch, onClose,
           onClose();
         }}>{label(settings, 'New group with this tab', '用呢個分頁開新組')}</button>
       )}
-      {!tab.pinned && workspace.groups.filter((group) => group.id !== tab.groupId).map((group) => (
-        <button key={group.id} role="menuitem" onClick={() => { dispatch({ type: 'group-assign', id: tab.id, groupId: group.id }); close(`${meta.en} added to ${group.name}`); }}>{label(settings, `Add to ${group.name}`, `加入 ${group.name}`)}</button>
-      ))}
-      {tab.groupId && <button role="menuitem" onClick={() => { dispatch({ type: 'group-remove', id: tab.id }); close(`${meta.en} removed from its group`); }}>{label(settings, 'Remove from group', '離開分組')}</button>}
+      {!tab.pinned && workspace.groups.filter((group) => group.id !== tab.groupId).map((group) => item(`Add to ${group.name}`, <button key={group.id} role="menuitem" onClick={() => { dispatch({ type: 'group-assign', id: tab.id, groupId: group.id }); close(`${meta.en} added to ${group.name}`); }}>{label(settings, `Add to ${group.name}`, `加入 ${group.name}`)}</button>))}
+      {tab.groupId && item('Remove from group', <button role="menuitem" key="remove" onClick={() => { dispatch({ type: 'group-remove', id: tab.id }); close(`${meta.en} removed from its group`); }}>{label(settings, 'Remove from group', '離開分組')}</button>)}
     </div>
+  );
+}
+
+type BulkCloseMode = 'containing' | 'not-containing';
+
+/**
+ * Local, reversible bulk tab management. The preview is computed from visible labels only;
+ * pinned tabs are protected unless the user explicitly includes them. A second, plain-language
+ * confirmation click is used instead of a type-to-confirm gate, and every closed tab can be reopened.
+ */
+export function TabBulkClosePanel({ workspace, settings, dispatch, announce }: {
+  workspace: TabWorkspace; settings: UserSettings; dispatch(action: WorkspaceAction): void; announce(message: string): void;
+}) {
+  const search = useSurfaceSearch('tabs.bulk-close');
+  const matcher = useMemo(() => makeMatcher(search.state), [search.state]);
+  const invalidRegex = Boolean(search.state.regex && !compile(search.state.regex));
+  const [mode, setMode] = useState<BulkCloseMode | null>(null);
+  const [includePinned, setIncludePinned] = useState(false);
+  const [armed, setArmed] = useState(false);
+  const openTabs = workspace.tabs.filter((tab) => tab.open);
+  const closedTabs = workspace.tabs.filter((tab) => !tab.open);
+  const candidates = useMemo(() => openTabs.filter((tab) => {
+    const text = `${TAB_META[tab.id].en}\n${TAB_META[tab.id].yue}\n${tab.id}`;
+    const hit = matcher(text);
+    if (!mode || !search.state.query || invalidRegex) return false;
+    return (mode === 'containing' ? hit : !hit) && (includePinned || !tab.pinned);
+  }), [openTabs, matcher, mode, search.state.query, includePinned, invalidRegex]);
+  const matchingOpen = useMemo(() => openTabs.filter((tab) => matcher(`${TAB_META[tab.id].en}\n${TAB_META[tab.id].yue}\n${tab.id}`)), [openTabs, matcher]);
+  const ids = candidates.map((tab) => tab.id);
+  const excludedPinned = matchingOpen.filter((tab) => tab.pinned && !includePinned).length;
+  const activateMode = (next: BulkCloseMode) => { setMode(next); setArmed(false); };
+  useEffect(() => { setArmed(false); }, [search.state, includePinned, ids.join(',')]);
+  const apply = () => {
+    if (!ids.length) return;
+    if (!armed) { setArmed(true); return; }
+    dispatch({ type: 'close-many', ids });
+    announce(`${ids.length} tabs closed; reopen them from this panel`);
+    setMode(null);
+    setArmed(false);
+  };
+  return (
+    <details className="tab-management-panel">
+      <summary>{label(settings, search.state.query ? 'Tab actions and discovery · filtered' : 'Tab actions and discovery', search.state.query ? '分頁操作同探索 · 已篩選' : '分頁操作同探索')}</summary>
+      <div className="tab-management-body">
+        <SearchBox surface="tabs.bulk-close" placeholder={label(settings, 'Filter tab labels', '篩選分頁標籤')} />
+        <div className="tab-bulk-actions" role="group" aria-label={label(settings, 'Bulk tab actions', '批量分頁操作')}>
+          <button type="button" className={mode === 'containing' ? 'tonal-button selected' : 'tonal-button'} onClick={() => activateMode('containing')} disabled={!search.state.query}>
+            {label(settings, 'Close tabs containing text', '關閉包含文字嘅分頁')}
+          </button>
+          <button type="button" className={mode === 'not-containing' ? 'tonal-button selected' : 'tonal-button'} onClick={() => activateMode('not-containing')} disabled={!search.state.query}>
+            {label(settings, 'Close tabs not containing text', '關閉唔包含文字嘅分頁')}
+          </button>
+          <label className="switch-row"><input type="checkbox" checked={includePinned} onChange={(event) => { setIncludePinned(event.target.checked); setArmed(false); }} /><span>{label(settings, 'Include pinned tabs', '包括釘住分頁')}</span></label>
+        </div>
+        <p className="supporting" aria-live="polite">
+          {!search.state.query
+            ? label(settings, 'Enter text or open the regex builder to preview matching labels.', '輸入文字或者開 regex 建造器預覽符合嘅標籤。')
+            : invalidRegex
+              ? label(settings, 'This pattern is invalid or exceeds the safety limit; no tab can close.', '呢個 pattern 無效或者超出安全限制；唔會關閉任何分頁。')
+            : mode === null
+              ? label(settings, 'Choose a close direction to preview affected tabs.', '揀一個關閉方向預覽受影響分頁。')
+              : label(settings, `${ids.length} tab${ids.length === 1 ? '' : 's'} will close${excludedPinned ? `; ${excludedPinned} pinned tab${excludedPinned === 1 ? '' : 's'} protected` : ''}.`, `${ids.length} 個分頁會關閉${excludedPinned ? `；${excludedPinned} 個釘住分頁受到保護` : ''}。`)}
+        </p>
+        {mode !== null && ids.length > 0 && <button type="button" className="danger tonal-button" onClick={apply}>{armed ? label(settings, `Confirm close ${ids.length} tabs`, `確認關閉 ${ids.length} 個分頁`) : label(settings, `Review and close ${ids.length} tabs`, `檢查並關閉 ${ids.length} 個分頁`)}</button>}
+        {mode !== null && ids.length === 0 && search.state.query && <p className="supporting">{label(settings, 'No closable tabs match this preview.', '呢個預覽冇可關閉分頁。')}</p>}
+        {closedTabs.length > 0 && (
+          <div className="closed-tabs" aria-label={label(settings, 'Closed tabs', '已關閉分頁')}>
+            <strong>{label(settings, 'Closed tabs', '已關閉分頁')}</strong>
+            {closedTabs.map((tab) => <button type="button" className="text-button" key={tab.id} onClick={() => { dispatch({ type: 'reopen', id: tab.id }); announce(`${TAB_META[tab.id].en} reopened`); }}>{label(settings, `Reopen ${TAB_META[tab.id].en}`, `重新開啟 ${TAB_META[tab.id].yue}`)}</button>)}
+          </div>
+        )}
+      </div>
+    </details>
   );
 }
 
 export function TabRail({ settings, workspace, dispatch, updatesBadge, onOpenPalette, announce, openOverflow, onOverflowHandled, openTabRegex, onTabRegexHandled, renameGroupId: renameRequest, onRenameHandled }: TabRailProps) {
   const search = useSurfaceSearch('tabs');
+  const groupNames = useSurfaceSearch('tabs.groups');
+  const master = useSurfaceSearch('tabs.master');
+  const searchContext = useContext(SearchContext);
   const stripRef = useRef<HTMLDivElement | null>(null);
   const stopRefs = useRef(new Map<string, HTMLButtonElement>());
   const [focusKey, setFocusKey] = useState<string>(`t:${workspace.activeTabId}`);
@@ -202,14 +286,21 @@ export function TabRail({ settings, workspace, dispatch, updatesBadge, onOpenPal
   const [dropKey, setDropKey] = useState<string | null>(null);
 
   const matcher = useMemo(() => makeMatcher(search.state), [search.state]);
-  const horizontal = workspace.rail.side === 'top';
+  const groupNameMatcher = useMemo(() => makeMatcher(groupNames.state), [groupNames.state]);
+  const masterMatcher = useMemo(() => makeMatcher(master.state), [master.state]);
+  const horizontal = workspace.rail.side === 'top' || workspace.rail.side === 'bottom';
 
   const { rows, matchCount } = useMemo(() => {
     const built: TabRow[] = [];
     let matched = 0;
     for (const region of regionsOf(workspace)) {
+      const groupNameHit = region.group ? groupNameMatcher(`${region.group.name}\n${region.group.color}`) : true;
+      if (!groupNameHit) continue;
+      const groupSearchState = region.group ? (searchContext?.states[`tabs.group.${region.group.id}`] ?? EMPTY_SEARCH) : EMPTY_SEARCH;
+      const groupMatcher = region.group ? makeMatcher(groupSearchState) : () => true;
       const visible = region.tabs.filter((tab) => {
-        const hit = matcher(`${TAB_META[tab.id].en}\n${TAB_META[tab.id].yue}\n${tab.id}`);
+        const text = `${TAB_META[tab.id].en}\n${TAB_META[tab.id].yue}\n${tab.id}\n${region.group?.name ?? ''}`;
+        const hit = matcher(text) && groupMatcher(text) && masterMatcher(text);
         if (hit) matched += 1;
         return hit || tab.id === workspace.activeTabId;
       });
@@ -225,7 +316,7 @@ export function TabRail({ settings, workspace, dispatch, updatesBadge, onOpenPal
       }
     }
     return { rows: built, matchCount: matched };
-  }, [workspace, matcher]);
+  }, [workspace, matcher, groupNameMatcher, masterMatcher, searchContext?.states]);
 
   const capacity = useTabOverflow(stripRef, ROW_HEIGHT[workspace.rail.tabHeight], rows.length, horizontal);
   const overflowing = workspace.rail.overflowMode === 'menu' && rows.length > capacity;
@@ -390,6 +481,11 @@ export function TabRail({ settings, workspace, dispatch, updatesBadge, onOpenPal
               window.setTimeout(() => focusStop(row.key), 0);
             }}
           />
+          <SearchBox
+            surface={`tabs.group.${row.group.id}`}
+            className="tab-group-search"
+            placeholder={label(settings, `Search ${row.group.name}`, `搜尋 ${row.group.name}`)}
+          />
           <div role="tablist" aria-orientation={horizontal ? 'horizontal' : 'vertical'} aria-label={row.group.name} id={bodyId} className="tab-group-body" hidden={row.group.collapsed && body.length === 0}>
             {body.map((child) => renderTab(child, visibleRows.indexOf(child)))}
           </div>
@@ -422,6 +518,13 @@ export function TabRail({ settings, workspace, dispatch, updatesBadge, onOpenPal
     <nav className="navigation" aria-label={label(settings, 'Tabs', '分頁')} {...el('nav-rail')}>
       <div className="nav-title" {...el('nav-title')}>Ding Ding</div>
       <SearchBox surface="tabs" className="tab-search" placeholder={label(settings, 'Search tabs', '搵分頁')} openBuilder={openTabRegex} onBuilderHandled={onTabRegexHandled} />
+      <details className="tab-discovery-panel">
+        <summary>{label(settings, groupNames.state.query || master.state.query ? 'All tab searches · filtered' : 'All tab searches', groupNames.state.query || master.state.query ? '所有分頁搜尋 · 已篩選' : '所有分頁搜尋')}</summary>
+        <SearchBox surface="tabs.groups" placeholder={label(settings, 'Search tab groups', '搜尋分頁組')} />
+        <SearchBox surface="tabs.master" placeholder={label(settings, 'Search every open tab', '搜尋所有開啟分頁')} />
+        <p className="supporting">{label(settings, 'Use the strip search for this rail, group search inside each group, group search for names, or master search across every open tab.', '分頁列搜尋查呢條列；分組搜尋查組內；分頁組搜尋查組名；主搜尋查所有開啟分頁。')}</p>
+      </details>
+      <TabBulkClosePanel workspace={workspace} settings={settings} dispatch={dispatch} announce={announce} />
       <div className="tab-strip" ref={stripRef}>
         {blocks}
         {Boolean(search.state.query) && matchCount === 0 && (

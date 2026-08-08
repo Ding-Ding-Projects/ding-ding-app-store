@@ -140,6 +140,30 @@ describe('visible product contracts', () => {
     expect(app).toContain('English + 香港粵語');
   });
 
+  it('ships four independent tab searches, safe bulk close, and all four dock edges', async () => {
+    const tabRail = await read('src/renderer/components/TabRail.tsx');
+    const contracts = await read('src/shared/contracts.ts');
+    for (const surface of ['tabs', 'tabs.groups', 'tabs.master', 'tabs.bulk-close', 'tabs.menu']) {
+      expect(tabRail).toContain(`surface="${surface}"`);
+    }
+    expect(tabRail).toContain('surface={`tabs.group.${row.group.id}`}');
+    expect(tabRail).toContain('Close tabs containing text');
+    expect(tabRail).toContain('Close tabs not containing text');
+    expect(tabRail).toContain('Include pinned tabs');
+    expect(tabRail).toContain('close-many');
+    expect(tabRail).toContain('aria-live="polite"');
+    expect(contracts).toContain("z.enum(['left', 'right', 'top', 'bottom'])");
+    expect(contracts).toContain('open: z.boolean().default(true)');
+  });
+
+  it('re-arms bulk close after preview inputs change and repairs an all-closed import', async () => {
+    const tabRail = await read('src/renderer/components/TabRail.tsx');
+    const workspaceService = await read('src/main/workspace-service.ts');
+    expect(tabRail).toContain("useEffect(() => { setArmed(false); }, [search.state, includePinned, ids.join(',')])");
+    expect(workspaceService).toContain('const safeTabs = tabs.some((tab) => tab.open)');
+    expect(workspaceService).toContain('index === 0 ? { ...tab, open: true }');
+  });
+
   it('requires two keys and a completed slider for uninstall', async () => {
     const app = await readRendererSources();
     expect(app).toContain('firstKey && secondKey && slider === 100');

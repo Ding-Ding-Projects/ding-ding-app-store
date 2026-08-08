@@ -221,7 +221,9 @@ export const TOKEN_SECTIONS: ReadonlyArray<{ id: TokenSection; en: string; yue: 
 
 export const RAIL_COMMANDS = [
   { command: 'rail-side:left' as CommandId, en: 'Move tabs to the left rail', yue: '分頁擺左邊' },
+  { command: 'rail-side:right' as CommandId, en: 'Move tabs to the right rail', yue: '分頁擺右邊' },
   { command: 'rail-side:top' as CommandId, en: 'Move tabs to the top rail', yue: '分頁擺上面' },
+  { command: 'rail-side:bottom' as CommandId, en: 'Move tabs to the bottom rail', yue: '分頁擺下面' },
   { command: 'label-mode:full' as CommandId, en: 'Show full tab labels', yue: '顯示完整分頁標籤' },
   { command: 'label-mode:compact' as CommandId, en: 'Show compact tab labels', yue: '顯示精簡分頁標籤' },
   { command: 'label-mode:icon' as CommandId, en: 'Show icon-only tabs', yue: '淨係顯示圖示' },

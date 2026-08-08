@@ -37,7 +37,7 @@ Catalog comparisons, the App Store updater, repeat checks, and quiet hours.
 
 Tabs, search, command palette, settings, appearance, and notifications.
 
-- [Tab workspace](./experience/tab-navigation.md) — **shipped** — Keeps six fixed pages in a persistent searchable rail with pinning, groups, reordering, overflow, keyboard control, and JSON import/export.
+- [Tab workspace](./experience/tab-navigation.md) — **shipped** — Keeps six recoverable browser-style pages in a persistent four-edge tab rail with pinning, groups, independent searches, bulk close/reopen, overflow, keyboard control, and JSON import/export.
 - [Search and regex builder](./experience/search-and-regex-builder.md) — **shipped** — Gives every current collection/settings surface independent plain-text-first search and the same adjacent guided JavaScript regex builder.
 - [Command palette](./experience/command-palette.md) — **shipped** — Opens with Ctrl+Shift+F and searches page, tab, appearance, schedule, search, setting, and catalog-app registry entries.
 - [Settings, language, and display name](./experience/settings-language-and-display-name.md) — **shipped** — Persists language, two independent funny levels, theme, density, accent, and a display-only app name through tabbed searchable settings.

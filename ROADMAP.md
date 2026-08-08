@@ -16,7 +16,7 @@
 - [ ] Complete source-build execution only after a real hard-disposable broker exists; keep bounded OpenCode repair and its current host refusal intact
 - [ ] Complete offline wiki/repository-doc import for every catalog application
 - [x] Local operation history: every install/build/uninstall outcome recorded, filterable by action/result/date, exported as JSON/CSV/Markdown
-- [x] Persistent tab rail with pinning, grouping, overflow, tab search, and full keyboard control
+- [x] Persistent tab rail with left/right/top/bottom docking, pinning, grouping, overflow, four independent regex-backed tab searches, reversible bulk close/reopen, and full keyboard control
 - [x] Independent search state and a full regex builder on every surface, including the command palette
 - [x] Per-element appearance editor with live preview, reset, export, and import
 - [x] Update schedule editor with last-run/next-run reporting and quiet hours
