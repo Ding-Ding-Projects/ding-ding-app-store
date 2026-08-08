@@ -18,6 +18,7 @@ import type {
   SourceJobRequest,
   SourceTerminalEvent,
   TabWorkspace,
+  SettingsProvenance,
   UserSettings,
 } from '../shared/contracts.js';
 
@@ -82,6 +83,7 @@ const api: DingDingStoreApi = {
   settings: {
     load: () => ipcRenderer.invoke('settings:load'),
     save: (settings: UserSettings) => ipcRenderer.invoke('settings:save', settings),
+    provenance: () => ipcRenderer.invoke('settings:provenance') as Promise<SettingsProvenance>,
   },
   history: {
     list: () => ipcRenderer.invoke('history:list'),

@@ -59,6 +59,7 @@ function newTask(id: ScheduleTaskId): TaskState {
 
 export class Scheduler {
   private config: ScheduleConfig = DEFAULT_SCHEDULE;
+  private configSource: 'persisted' | 'fallback' = 'fallback';
   private readonly tasks: Record<ScheduleTaskId, TaskState> = {
     'self-update': newTask('self-update'),
     'catalog-refresh': newTask('catalog-refresh'),
@@ -75,7 +76,9 @@ export class Scheduler {
   async start(): Promise<void> {
     if (this.started) return;
     this.started = true;
-    this.config = await this.options.service.load();
+    const loaded = await this.options.service.loadWithProvenance();
+    this.config = loaded.config;
+    this.configSource = loaded.source;
     const runs = await this.options.service.loadRuns();
     this.tasks['self-update'].lastRun = runs.selfUpdate;
     this.tasks['catalog-refresh'].lastRun = runs.catalogRefresh;
@@ -115,6 +118,7 @@ export class Scheduler {
     const nextChange = this.nextQuietChange();
     return {
       config: this.config,
+      configSource: this.configSource,
       tasks: {
         'self-update': this.taskStatus('self-update'),
         'catalog-refresh': this.taskStatus('catalog-refresh'),
@@ -162,6 +166,7 @@ export class Scheduler {
   private applyConfig(next: ScheduleConfig): void {
     const previous = this.config;
     this.config = next;
+    this.configSource = 'persisted';
     for (const id of TASK_IDS) {
       const task = this.tasks[id];
       if (!this.enabledFor(id, next)) {

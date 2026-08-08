@@ -1,6 +1,7 @@
 import path from 'node:path';
+import { readFile } from 'node:fs/promises';
 import { app } from 'electron';
-import type { ScheduleConfig, ScheduleRunRecord } from '../shared/contracts.js';
+import type { ScheduleConfig, ScheduleRunRecord, SettingsValueSource } from '../shared/contracts.js';
 import { DEFAULT_SCHEDULE, scheduleSchema } from '../shared/contracts.js';
 import { readJson, writeJsonAtomic } from './json-store.js';
 
@@ -23,19 +24,31 @@ function stamp(record: ScheduleRunRecord | null | undefined): ScheduleRunRecord 
 export class ScheduleService {
   private readonly filePath = path.join(app.getPath('userData'), 'schedule.v1.json');
   private readonly runsPath = path.join(app.getPath('userData'), 'schedule-runs.v1.json');
+  private lastSource: SettingsValueSource = 'fallback';
 
   async load(): Promise<ScheduleConfig> {
+    return (await this.loadWithProvenance()).config;
+  }
+
+  async loadWithProvenance(): Promise<{ config: ScheduleConfig; source: SettingsValueSource }> {
     try {
-      const stored = await readJson<unknown>(this.filePath, DEFAULT_SCHEDULE);
+      const stored = JSON.parse(await readFile(this.filePath, 'utf8')) as unknown;
       const migrated = this.migrate(stored);
       const parsed = scheduleSchema.safeParse(migrated);
-      if (!parsed.success) return DEFAULT_SCHEDULE;
+      if (!parsed.success) {
+        this.lastSource = 'fallback';
+        return { config: DEFAULT_SCHEDULE, source: this.lastSource };
+      }
       if (migrated !== stored) await writeJsonAtomic(this.filePath, parsed.data).catch(() => undefined);
-      return parsed.data;
+      this.lastSource = 'persisted';
+      return { config: parsed.data, source: this.lastSource };
     } catch {
-      return DEFAULT_SCHEDULE;
+      this.lastSource = 'fallback';
+      return { config: DEFAULT_SCHEDULE, source: this.lastSource };
     }
   }
+
+  source(): SettingsValueSource { return this.lastSource; }
 
   private migrate(value: unknown): unknown {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
@@ -54,11 +67,13 @@ export class ScheduleService {
       };
     }
     await writeJsonAtomic(this.filePath, parsed.data);
+    this.lastSource = 'persisted';
     return { ok: true, config: parsed.data };
   }
 
   async reset(): Promise<ScheduleConfig> {
     await writeJsonAtomic(this.filePath, DEFAULT_SCHEDULE);
+    this.lastSource = 'persisted';
     return DEFAULT_SCHEDULE;
   }
 

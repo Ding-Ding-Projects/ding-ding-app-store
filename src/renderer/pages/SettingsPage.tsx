@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { UserSettings } from '../../shared/contracts';
+import type { SettingsProvenance, UserSettings } from '../../shared/contracts';
 import { SearchBox } from '../components/SearchBox';
 import { ExternalEditorSettings } from '../components/ExternalEditorSettings';
 import { el } from '../el';
@@ -27,8 +27,24 @@ const ABOUT_ROWS = [
   { en: 'Licence', yue: '授權', body: 'Apache-2.0. The catalog lists only reviewed public Ding Ding Projects applications.' },
 ] as const;
 
-export function SettingsPage({ settings, onSave, workspace, appearance, schedule, notify, subTab, onSubTab, regexRequest, onRegexHandled }: {
+function SettingExplanation({ settings, field, provenance }: { settings: UserSettings; field: SettingField; provenance: SettingsProvenance }) {
+  const persisted = provenance.source === 'persisted';
+  return (
+    <details className="setting-help">
+      <summary>{label(settings, 'What this controls', '呢個控制咩')}</summary>
+      <p>{label(settings, field.explanation.en, field.explanation.yue)}</p>
+      <p className="provenance-line">
+        {persisted
+          ? label(settings, 'Current value: persisted in the validated settings file.', '目前值：已儲存喺驗證過嘅設定檔。')
+          : label(settings, `Current value: compiled fallback (${field.defaultValue}).`, `目前值：編譯內置後備值（${field.defaultValue}）。`)}
+      </p>
+    </details>
+  );
+}
+
+export function SettingsPage({ settings, settingsProvenance, onSave, workspace, appearance, schedule, notify, subTab, onSubTab, regexRequest, onRegexHandled }: {
   settings: UserSettings;
+  settingsProvenance: SettingsProvenance;
   onSave(next: UserSettings): void;
   workspace: WorkspaceApi;
   appearance: AppearanceApi;
@@ -72,19 +88,20 @@ export function SettingsPage({ settings, onSave, workspace, appearance, schedule
   const renderField = (field: SettingField) => {
     const id = `setting-${field.key}`;
     const text = label(settings, field.en, field.yue);
+    const explanation = <SettingExplanation settings={settings} field={field} provenance={settingsProvenance} />;
     if (field.kind === 'select') {
-      return <label key={field.key} htmlFor={id}>{text}<select id={id} value={String(draft[field.key])} onChange={(event) => set(field.key, event.target.value as UserSettings[typeof field.key])}>{(field.options ?? []).map((option) => <option key={option.value} value={option.value}>{option.en}</option>)}</select></label>;
+      return <div className="setting-field" key={field.key}><label htmlFor={id}>{text}<select id={id} value={String(draft[field.key])} onChange={(event) => set(field.key, event.target.value as UserSettings[typeof field.key])}>{(field.options ?? []).map((option) => <option key={option.value} value={option.value}>{label(settings, option.en, option.yue)}</option>)}</select></label>{explanation}</div>;
     }
     if (field.kind === 'range') {
-      return <label key={field.key} htmlFor={id}>{text} <span>{String(draft[field.key])}</span><input id={id} type="range" min={field.min} max={field.max} value={Number(draft[field.key])} onChange={(event) => set(field.key, Number(event.target.value) as UserSettings[typeof field.key])} /></label>;
+      return <div className="setting-field" key={field.key}><label htmlFor={id}>{text} <span>{String(draft[field.key])}</span><input id={id} type="range" min={field.min} max={field.max} value={Number(draft[field.key])} onChange={(event) => set(field.key, Number(event.target.value) as UserSettings[typeof field.key])} /></label>{explanation}</div>;
     }
     if (field.kind === 'color') {
-      return <label key={field.key} htmlFor={id}>{text}<input id={id} type="color" value={String(draft[field.key])} onChange={(event) => set(field.key, event.target.value as UserSettings[typeof field.key])} /></label>;
+      return <div className="setting-field" key={field.key}><label htmlFor={id}>{text}<input id={id} type="color" value={String(draft[field.key])} onChange={(event) => set(field.key, event.target.value as UserSettings[typeof field.key])} /></label>{explanation}</div>;
     }
     if (field.kind === 'switch') {
-      return <label key={field.key} htmlFor={id} className="switch-row"><input id={id} type="checkbox" checked={Boolean(draft[field.key])} onChange={(event) => set(field.key, event.target.checked as UserSettings[typeof field.key])} /><span>{text}</span></label>;
+      return <div className="setting-field" key={field.key}><label htmlFor={id} className="switch-row"><input id={id} type="checkbox" checked={Boolean(draft[field.key])} onChange={(event) => set(field.key, event.target.checked as UserSettings[typeof field.key])} /><span>{text}</span></label>{explanation}</div>;
     }
-    return <label key={field.key} htmlFor={id}>{text}<input id={id} value={String(draft[field.key])} maxLength={64} onChange={(event) => set(field.key, event.target.value as UserSettings[typeof field.key])} /></label>;
+    return <div className="setting-field" key={field.key}><label htmlFor={id}>{text}<input id={id} value={String(draft[field.key])} maxLength={64} onChange={(event) => set(field.key, event.target.value as UserSettings[typeof field.key])} /></label>{explanation}</div>;
   };
 
   const moveSubTab = (delta: number) => {

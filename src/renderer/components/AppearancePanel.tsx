@@ -122,6 +122,20 @@ function ancestorTrail(key: ElementKey): ElementKey[] {
   return trail.length ? trail : [key];
 }
 
+function SettingExplanation({ settings, explanation, persisted, fallback }: { settings: UserSettings; explanation: { en: string; yue: string }; persisted: boolean; fallback: string }) {
+  return (
+    <details className="setting-help">
+      <summary>{label(settings, 'What this controls', '呢個控制咩')}</summary>
+      <p>{label(settings, explanation.en, explanation.yue)}</p>
+      <p className="provenance-line">
+        {persisted
+          ? label(settings, 'Current value: persisted appearance override.', '目前值：已儲存嘅外觀覆蓋。')
+          : label(settings, `Current value: compiled fallback (${fallback}).`, `目前值：編譯內置後備值（${fallback}）。`)}
+      </p>
+    </details>
+  );
+}
+
 function ColorField({ token, value, settings, onChange }: { token: TokenId; value: ColorValue | undefined; settings: UserSettings; onChange(next: ColorValue | undefined): void }) {
   const hex = value?.kind === 'hex' ? value.hex : '#6750a4';
   const [hexText, setHexText] = useState(hex);
@@ -139,6 +153,7 @@ function ColorField({ token, value, settings, onChange }: { token: TokenId; valu
   return (
     <div className="appearance-token-row">
       <span className="token-name">{label(settings, TOKEN_META[token].en, TOKEN_META[token].yue)}</span>
+      <SettingExplanation settings={settings} explanation={TOKEN_META[token].explanation} persisted={value !== undefined} fallback={TOKEN_META[token].defaultValue} />
       <label>
         {label(settings, 'Role', '角色')}
         <select
@@ -187,6 +202,7 @@ function FontFamilyField({ token, value, settings, onChange }: { token: TokenId;
   return (
     <div className="appearance-token-row">
       <span className="token-name">{label(settings, TOKEN_META[token].en, TOKEN_META[token].yue)}</span>
+      <SettingExplanation settings={settings} explanation={TOKEN_META[token].explanation} persisted={value !== undefined} fallback={TOKEN_META[token].defaultValue} />
       <label>{label(settings, 'Search installed and bundled fonts', '搜尋已安裝同內置字型')}
         <input value={query} list="appearance-font-families" onChange={(event) => { const next = event.target.value; setQuery(next); if (FONT_FAMILIES.includes(next as (typeof FONT_FAMILIES)[number])) onChange(next); }} />
       </label>
@@ -204,6 +220,7 @@ function NumberField({ token, value, min, max, step, unit, settings, onChange }:
   return (
     <div className="appearance-token-row">
       <span className="token-name">{label(settings, TOKEN_META[token].en, TOKEN_META[token].yue)}</span>
+      <SettingExplanation settings={settings} explanation={TOKEN_META[token].explanation} persisted={value !== undefined} fallback={TOKEN_META[token].defaultValue} />
       <label><input type="range" min={min} max={max} step={step} value={current} aria-valuetext={`${current}${unit}`} onChange={(event) => onChange(Number(event.target.value))} /><span>{current}{unit}</span></label>
       <button className="text-button" type="button" onClick={() => onChange(undefined)}>{label(settings, 'Use default', '用預設')}</button>
     </div>
@@ -216,6 +233,7 @@ function ChipField<T extends string>({ token, options, value, settings, onChange
   return (
     <div className="appearance-token-row">
       <span className="token-name">{label(settings, TOKEN_META[token].en, TOKEN_META[token].yue)}</span>
+      <SettingExplanation settings={settings} explanation={TOKEN_META[token].explanation} persisted={value !== undefined} fallback={TOKEN_META[token].defaultValue} />
       <div className="chip-row" role="group" aria-label={label(settings, TOKEN_META[token].en, TOKEN_META[token].yue)}>
         <button aria-pressed={value === undefined} onClick={() => onChange(undefined)}>{label(settings, 'Default', '預設')}</button>
         {options.map((option) => <button key={option} aria-pressed={value === option} onClick={() => onChange(option)}>{render ? render(option) : option}</button>)}
@@ -231,6 +249,7 @@ function ScaleField({ token, value, min, max, settings, onChange, onCommit }: {
   return (
     <div className="appearance-token-row">
       <span className="token-name">{label(settings, TOKEN_META[token].en, TOKEN_META[token].yue)}</span>
+      <SettingExplanation settings={settings} explanation={TOKEN_META[token].explanation} persisted={value !== undefined} fallback={TOKEN_META[token].defaultValue} />
       <label>
         <input
           type="range"
