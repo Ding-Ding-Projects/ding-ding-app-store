@@ -17,6 +17,12 @@ The repository contains a sandboxed Electron/React/TypeScript shell, reviewed 24
 - The narrator uses only already-visible notification text; it has no IPC surface, network request, recording, secret, or privileged audio bridge. Browser platforms do not disclose screen-reader presence, so the queue yields only to an explicit `data-screen-reader-active` integration marker instead of guessing.
 - Verification: focused narrator/settings contracts passed 35 tests; `npm run check` passed 212 root tests plus package suites; `npm run build` passed renderer/main/preload. Packaged hidden-desktop speech and actual screen-reader handoff remain runtime evidence gaps.
 
+## 2026-08-08 release tag recursion guard
+
+- `.github/workflows/release.yml` now runs for ordinary branch pushes and `workflow_dispatch` only. Its explicit all-branches filter excludes generated release-tag refs, preventing a published immutable release tag from starting a duplicate release for the same source commit.
+- The trigger-only change preserves the exact source-target check, unsigned Squirrel.Windows asset verification, workflow timing, CI-produced line-count table, dim-sum metadata, and pinned GitHub-hosted runner policy. `tests/workflow-contracts.test.ts` asserts the branch-push/manual-dispatch contract and the excluded tag path.
+- Verification: the focused workflow contract passed 8/8; `npm run check` passed 28 root test files / 214 tests plus catalog 11/11, domain 20/20, and offline-docs 20/20; `npm run docs:check`, `npm run build`, and `git diff --check` passed. No cloud run or release has been requested from this branch yet.
+
 ## 2026-08-08 bounded release inventory compaction
 
 - The release workflow now saves the paginated GitHui release response as a bounded raw file, then runs `scripts/compact-release-inventory.mjs` before generating the in-app changelog. The compactor and generator enforce 32 pages, 2,000 records, 16 MiB raw input, 64 KiB per release body, and emit only the tag, draft state, publication time, trusted URL candidate, and exact source/dim-sum evidence lines needed by the manifest generator.

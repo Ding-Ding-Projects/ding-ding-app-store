@@ -14,6 +14,8 @@ Verification reports a specific revision and labels every evidence class indepen
 
 Each release resolves the first unused bilingual dim-sum code name whose image is already a published `catalog-v1*` asset in the public `Ding-Ding-Projects/dim-sum-photos` catalog. The release title and notes link that public photo; this repository does not copy or attach it. Catalog failure is recorded but does not block the software release.
 
+The release workflow runs for ordinary branch pushes and manual dispatches only. Its branch filter deliberately excludes generated release-tag pushes, preventing a newly published immutable tag from recursively starting a second release for the same source commit while preserving the exact source-target verification, unsigned Squirrel assets, timing, line-count, and dim-sum metadata contract.
+
 The repository keeps genuine hidden-desktop captures for the catalog, installed, updates, documentation, activity, settings, appearance settings, command palette, and tab-action surfaces. The documentation generator supplies a reproducible count and exact synchronized-output check rather than relying on a manual file list.
 
 ## Configuration
