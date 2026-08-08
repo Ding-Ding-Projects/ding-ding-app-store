@@ -19,7 +19,7 @@ export function ActivityPage({ entries, revisions, loading, settings, openRegex,
   entries: HistoryEntry[]; revisions: HistoryRevision[]; loading: boolean; settings: UserSettings; openRegex: boolean; onRegexHandled(): void; notify: Notify; onHistoryChanged(): Promise<void>;
 }) {
   const search = useSurfaceSearch('activity');
-  const [kind, setKind] = useState<'all' | OperationKind>('all');
+  const [kinds, setKinds] = useState<Set<OperationKind>>(() => new Set());
   const [result, setResult] = useState<HistoryResult>('all');
   const [preset, setPreset] = useState<'all' | 'today' | '7d' | '30d'>('all');
   const [dateStart, setDateStart] = useState('');
@@ -44,13 +44,32 @@ export function ActivityPage({ entries, revisions, loading, settings, openRegex,
     return Array.from({ length: 42 }, (_, index) => { const day = new Date(start); day.setDate(start.getDate() + index); return day; });
   }, [calendarMonth]);
 
+  const actionKinds = useMemo(() => Array.from(new Set(entries.map((entry) => entry.kind))).sort(), [entries]);
+  const actionCounts = useMemo(() => new Map(actionKinds.map((action) => [action, entries.filter((entry) => entry.kind === action).length])), [actionKinds, entries]);
+  useEffect(() => {
+    setKinds((current) => {
+      const next = new Set([...current].filter((action) => actionKinds.includes(action)));
+      return next.size === current.size ? current : next;
+    });
+  }, [actionKinds]);
+  const toggleKind = (action: OperationKind) => setKinds((current) => {
+    const next = new Set(current);
+    if (next.has(action)) next.delete(action); else next.add(action);
+    return next;
+  });
+  const actionLabel = (action: OperationKind) => ({
+    install: label(settings, 'Install', '安裝'),
+    build: label(settings, 'Build', '建置'),
+    uninstall: label(settings, 'Uninstall', '解除安裝'),
+    update: label(settings, 'Update', '更新'),
+  })[action];
   const filtered = useMemo(() => {
     let source = entries;
-    if (kind !== 'all') source = source.filter((entry) => entry.kind === kind);
+    if (kinds.size) source = source.filter((entry) => kinds.has(entry.kind));
     if (result !== 'all') source = source.filter((entry) => (result === 'ok' ? entry.ok : !entry.ok));
     source = source.filter((entry) => matchesHistoryDate(entry.occurredAt, dateRange, settings.language === 'yue' ? 'yue' : 'en'));
     return source.filter((entry) => matcher(`${entry.displayName}\n${entry.kind}\n${entry.message}`));
-  }, [entries, kind, result, dateRange, matcher, settings.language]);
+  }, [entries, kinds, result, dateRange, matcher, settings.language]);
   useEffect(() => {
     const ids = new Set(entries.map((entry) => entry.id));
     setSelected((current) => new Set([...current].filter((id) => ids.has(id))));
@@ -166,8 +185,10 @@ export function ActivityPage({ entries, revisions, loading, settings, openRegex,
   return <>
     <SearchBox surface="activity" placeholder="Search activity by app, action, or message" openBuilder={openRegex} onBuilderHandled={onRegexHandled} />
     <section className="history-panel">
-      {/* The shipped baseline was ['all', 'install', 'build', 'uninstall']; update is now a first-class history action. */}
-      <div className="chip-row" role="group" aria-label="Filter by action">{(['all', 'install', 'update', 'build', 'uninstall'] as const).map((value) => <button key={value} aria-pressed={kind === value} onClick={() => setKind(value)}>{value === 'all' ? 'All actions' : value}</button>)}</div>
+        <div className="chip-row" role="group" aria-label={label(settings, 'Filter by action; choose one or more', '按動作篩選；可以揀一個或多個')}>
+          <button aria-pressed={!kinds.size} onClick={() => setKinds(new Set())}>{label(settings, 'All actions', '全部動作')} ({entries.length})</button>
+          {actionKinds.map((action) => <button key={action} aria-pressed={kinds.has(action)} onClick={() => toggleKind(action)}>{actionLabel(action)} ({actionCounts.get(action) ?? 0})</button>)}
+        </div>
       <div className="chip-row" role="group" aria-label="Filter by result">{(['all', 'ok', 'failed'] as const).map((value) => <button key={value} aria-pressed={result === value} onClick={() => setResult(value)}>{value === 'all' ? 'Any result' : value === 'ok' ? 'Succeeded' : 'Failed'}</button>)}</div>
       <details className="history-date-filter" open={Boolean(dateStart || dateEnd || dateRange.error)}>
         <summary>Advanced date range · 進階日期範圍</summary>

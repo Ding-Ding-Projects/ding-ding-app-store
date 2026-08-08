@@ -230,7 +230,9 @@ describe('split renderer keeps every product contract in its own file', () => {
   it('keeps the activity filters, search, and export controls on the activity page', async () => {
     const activity = await read('src/renderer/pages/ActivityPage.tsx');
     expect(activity).toContain('Search activity by app, action, or message');
-    expect(activity).toContain("'all', 'install', 'build', 'uninstall'");
+    expect(activity).toContain('const actionKinds = useMemo');
+    expect(activity).toContain('const actionCounts = useMemo');
+    expect(activity).toContain('choose one or more');
     expect(activity).toContain("'all', 'ok', 'failed'");
     expect(activity).toContain("'all', 'today', '7d', '30d'");
     expect(activity).toContain('Copy JSON');
@@ -316,7 +318,8 @@ describe('activity history and export', () => {
     const app = await readRendererSources();
     expect(app).toMatch(/function (HistoryPanel|ActivityPage)\(/);
     expect(app).toContain("Search activity by app, action, or message");
-    expect(app).toContain("'all', 'install', 'build', 'uninstall'");
+    expect(app).toContain('const actionKinds = useMemo');
+    expect(app).toContain('const actionCounts = useMemo');
     expect(app).toContain("'all', 'ok', 'failed'");
     expect(app).toContain("'all', 'today', '7d', '30d'");
     expect(app).toContain('Copy JSON');
