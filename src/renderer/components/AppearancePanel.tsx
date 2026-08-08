@@ -41,11 +41,64 @@ function resolveColor(value: ColorValue | undefined, settings: UserSettings, dar
 const channel = (part: number) => (part <= 0.03928 ? part / 12.92 : ((part + 0.055) / 1.055) ** 2.4);
 
 function luminance(hex: string): number | null {
-  const match = /^#([0-9a-f]{6})$/i.exec(hex.trim());
+  const match = /^#([0-9a-f]{6})(?:[0-9a-f]{2})?$/i.exec(hex.trim());
   if (!match) return null;
   const value = Number.parseInt(match[1], 16);
-  const [red, green, blue] = [(value >> 16) & 255, (value >> 8) & 255, value & 255].map((part) => channel(part / 255));
+  const alphaMatch = /^#[0-9a-f]{6}([0-9a-f]{2})$/i.exec(hex.trim());
+  const alpha = alphaMatch ? Number.parseInt(alphaMatch[1], 16) / 255 : 1;
+  const [red, green, blue] = [(value >> 16) & 255, (value >> 8) & 255, value & 255].map((part) => channel((part * alpha + 255 * (1 - alpha)) / 255));
   return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+}
+
+function clamp(value: number, min: number, max: number): number { return Math.min(max, Math.max(min, value)); }
+
+function hexToRgb(hex: string): [number, number, number, number] {
+  const clean = hex.replace('#', '');
+  const value = Number.parseInt(clean.slice(0, 6), 16);
+  const alpha = clean.length === 8 ? Number.parseInt(clean.slice(6), 16) / 255 : 1;
+  return [(value >> 16) & 255, (value >> 8) & 255, value & 255, alpha];
+}
+
+function rgbToHex(red: number, green: number, blue: number, alpha = 1): string {
+  const bytes = [red, green, blue].map((value) => clamp(Math.round(value), 0, 255).toString(16).padStart(2, '0'));
+  const suffix = alpha < 0.999 ? clamp(Math.round(alpha * 255), 0, 255).toString(16).padStart(2, '0') : '';
+  return `#${bytes.join('')}${suffix}`;
+}
+
+function hexToHsl(hex: string): [number, number, number, number] {
+  const [red, green, blue, alpha] = hexToRgb(hex).map((value, index) => index === 3 ? value : value / 255) as [number, number, number, number];
+  const max = Math.max(red, green, blue); const min = Math.min(red, green, blue); const delta = max - min;
+  let hue = 0;
+  if (delta) {
+    if (max === red) hue = 60 * (((green - blue) / delta) % 6);
+    else if (max === green) hue = 60 * ((blue - red) / delta + 2);
+    else hue = 60 * ((red - green) / delta + 4);
+  }
+  if (hue < 0) hue += 360;
+  const lightness = (max + min) / 2;
+  const saturation = delta === 0 ? 0 : delta / (1 - Math.abs(2 * lightness - 1));
+  return [Math.round(hue), Math.round(saturation * 100), Math.round(lightness * 100), alpha];
+}
+
+function hslToHex(hue: number, saturation: number, lightness: number, alpha = 1): string {
+  const h = ((hue % 360) + 360) % 360 / 360; const s = clamp(saturation, 0, 100) / 100; const l = clamp(lightness, 0, 100) / 100;
+  const c = (1 - Math.abs(2 * l - 1)) * s; const x = c * (1 - Math.abs((h * 6) % 2 - 1)); const m = l - c / 2;
+  const [r, g, b] = h < 1 / 6 ? [c, x, 0] : h < 2 / 6 ? [x, c, 0] : h < 3 / 6 ? [0, c, x] : h < 4 / 6 ? [0, x, c] : h < 5 / 6 ? [x, 0, c] : [c, 0, x];
+  return rgbToHex((r + m) * 255, (g + m) * 255, (b + m) * 255, alpha);
+}
+
+function parseRgb(value: string, alpha: number): string | null {
+  const match = /^\s*rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:\s*[,/]\s*([\d.]+%?))?\s*\)$/i.exec(value);
+  if (!match) return null;
+  const parsedAlpha = match[4] ? (match[4].endsWith('%') ? Number.parseFloat(match[4]) / 100 : Number.parseFloat(match[4])) : alpha;
+  return rgbToHex(Number(match[1]), Number(match[2]), Number(match[3]), parsedAlpha);
+}
+
+function parseHsl(value: string, alpha: number): string | null {
+  const match = /^\s*hsla?\(\s*([\d.]+)(?:deg)?[,\s]+([\d.]+)%[,\s]+([\d.]+)%(?:\s*[,/]\s*([\d.]+%?))?\s*\)$/i.exec(value);
+  if (!match) return null;
+  const parsedAlpha = match[4] ? (match[4].endsWith('%') ? Number.parseFloat(match[4]) / 100 : Number.parseFloat(match[4])) : alpha;
+  return hslToHex(Number(match[1]), Number(match[2]), Number(match[3]), parsedAlpha);
 }
 
 export function contrastRatio(foreground: string, background: string): number | null {
@@ -70,8 +123,18 @@ function ancestorTrail(key: ElementKey): ElementKey[] {
 
 function ColorField({ token, value, settings, onChange }: { token: TokenId; value: ColorValue | undefined; settings: UserSettings; onChange(next: ColorValue | undefined): void }) {
   const hex = value?.kind === 'hex' ? value.hex : '#6750a4';
-  const [text, setText] = useState(hex);
-  useEffect(() => setText(hex), [hex]);
+  const [hexText, setHexText] = useState(hex);
+  const [rgbText, setRgbText] = useState('');
+  const [hslText, setHslText] = useState('');
+  const [hue, saturation, lightness, alpha] = hexToHsl(hex);
+  const alphaPercent = Math.round(alpha * 100);
+  useEffect(() => {
+    const [red, green, blue] = hexToRgb(hex);
+    setHexText(hex);
+    setRgbText(alpha < 1 ? `rgba(${red}, ${green}, ${blue}, ${alpha.toFixed(2)})` : `rgb(${red}, ${green}, ${blue})`);
+    setHslText(alpha < 1 ? `hsla(${hue} ${saturation}% ${lightness}% / ${alpha.toFixed(2)})` : `hsl(${hue} ${saturation}% ${lightness}%)`);
+  }, [hex, hue, saturation, lightness, alpha]);
+  const emitHex = (next: string) => { if (/^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/.test(next)) onChange({ kind: 'hex', hex: next.toLowerCase() }); };
   return (
     <div className="appearance-token-row">
       <span className="token-name">{label(settings, TOKEN_META[token].en, TOKEN_META[token].yue)}</span>
@@ -93,11 +156,55 @@ function ColorField({ token, value, settings, onChange }: { token: TokenId; valu
       </label>
       {value?.kind === 'hex' && (
         <>
-          <label>{label(settings, 'Picker', '色板')}<input type="color" value={hex} onChange={(event) => onChange({ kind: 'hex', hex: event.target.value })} /></label>
-          <label>{label(settings, 'Hex', '十六進位')}<input value={text} maxLength={7} onChange={(event) => { const next = event.target.value; setText(next); if (/^#[0-9a-fA-F]{6}$/.test(next)) onChange({ kind: 'hex', hex: next.toLowerCase() }); }} /></label>
+          <label>{label(settings, 'Continuous colour field', '連續色彩場')}<input type="color" value={hex.slice(0, 7)} aria-label={label(settings, 'Continuous colour field', '連續色彩場')} onChange={(event) => emitHex(`${event.target.value}${alpha < 1 ? Math.round(alpha * 255).toString(16).padStart(2, '0') : ''}`)} /></label>
+          <div className="color-spectrum" style={{ background: `linear-gradient(90deg, hsl(${hue} 100% 50%), hsl(${hue} 0% 50%))` }} aria-label={label(settings, 'Saturation and lightness field', '飽和度同亮度色場')}>
+            <label>{label(settings, 'Hue', '色相')}<input type="range" min="0" max="360" value={hue} onChange={(event) => emitHex(hslToHex(Number(event.target.value), saturation, lightness, alpha))} /></label>
+            <label>{label(settings, 'Saturation', '飽和度')}<input type="range" min="0" max="100" value={saturation} onChange={(event) => emitHex(hslToHex(hue, Number(event.target.value), lightness, alpha))} /></label>
+            <label>{label(settings, 'Lightness', '亮度')}<input type="range" min="0" max="100" value={lightness} onChange={(event) => emitHex(hslToHex(hue, saturation, Number(event.target.value), alpha))} /></label>
+          </div>
+          <label>{label(settings, 'Alpha', '透明度')}<input type="range" min="0" max="100" value={alphaPercent} aria-valuetext={`${alphaPercent}%`} onChange={(event) => emitHex(hslToHex(hue, saturation, lightness, Number(event.target.value) / 100))} /><span>{alphaPercent}%</span></label>
+          <label>{label(settings, 'HEX / HEX8', 'HEX / HEX8')}<input value={hexText} maxLength={9} onChange={(event) => { setHexText(event.target.value); emitHex(event.target.value); }} /></label>
+          <label>{label(settings, 'RGB / RGBA', 'RGB / RGBA')}<input value={rgbText} onChange={(event) => { setRgbText(event.target.value); const parsed = parseRgb(event.target.value, alpha); if (parsed) emitHex(parsed); }} /></label>
+          <label>{label(settings, 'HSL / HSLA', 'HSL / HSLA')}<input value={hslText} onChange={(event) => { setHslText(event.target.value); const parsed = parseHsl(event.target.value, alpha); if (parsed) emitHex(parsed); }} /></label>
+          <p className="supporting">{label(settings, 'The picker persists HEX/HEX8, RGB/A, and HSL/A. HSV/HSB, HWB, Lab/LCH, OKLab/OKLCH, and CMYK are shown as unsupported and are not silently converted.', '色板會儲存 HEX/HEX8、RGB/A 同 HSL/A。HSV/HSB、HWB、Lab/LCH、OKLab/OKLCH 同 CMYK 目前標示未支援，唔會靜默轉換。')}</p>
           <p className="supporting">{label(settings, 'A fixed colour will not follow the dark theme.', '固定顏色唔會跟深色主題變。')}</p>
         </>
       )}
+    </div>
+  );
+}
+
+const FONT_FAMILIES = [
+  'Segoe UI Variable', 'Segoe UI', 'Arial', 'Calibri', 'Consolas', 'Cascadia Mono', 'Tahoma',
+  'Verdana', 'Georgia', 'Times New Roman', 'Noto Sans', 'Noto Sans CJK TC', 'Microsoft JhengHei',
+] as const;
+
+function FontFamilyField({ token, value, settings, onChange }: { token: TokenId; value: string | undefined; settings: UserSettings; onChange(next: string | undefined): void }) {
+  const [query, setQuery] = useState(value ?? '');
+  const choices = FONT_FAMILIES.filter((family) => !query.trim() || family.toLowerCase().includes(query.trim().toLowerCase()));
+  useEffect(() => setQuery(value ?? ''), [value]);
+  return (
+    <div className="appearance-token-row">
+      <span className="token-name">{label(settings, TOKEN_META[token].en, TOKEN_META[token].yue)}</span>
+      <label>{label(settings, 'Search installed and bundled fonts', '搜尋已安裝同內置字型')}
+        <input value={query} list="appearance-font-families" onChange={(event) => { const next = event.target.value; setQuery(next); if (FONT_FAMILIES.includes(next as (typeof FONT_FAMILIES)[number])) onChange(next); }} />
+      </label>
+      <datalist id="appearance-font-families">{choices.map((family) => <option key={family} value={family}>{family}</option>)}</datalist>
+      <div className="font-choice-row" role="listbox" aria-label={label(settings, 'Font families', '字型家族')}>
+        {choices.map((family) => <button key={family} type="button" role="option" aria-selected={value === family} style={{ fontFamily: family }} onClick={() => { setQuery(family); onChange(family); }}>{family}</button>)}
+      </div>
+      <button className="text-button" type="button" onClick={() => { setQuery(''); onChange(undefined); }}>{label(settings, 'Use default font', '用預設字型')}</button>
+    </div>
+  );
+}
+
+function NumberField({ token, value, min, max, step, unit, settings, onChange }: { token: TokenId; value: number | undefined; min: number; max: number; step: number; unit: string; settings: UserSettings; onChange(next: number | undefined): void }) {
+  const current = value ?? (token === 'lineHeight' ? 140 : 0);
+  return (
+    <div className="appearance-token-row">
+      <span className="token-name">{label(settings, TOKEN_META[token].en, TOKEN_META[token].yue)}</span>
+      <label><input type="range" min={min} max={max} step={step} value={current} aria-valuetext={`${current}${unit}`} onChange={(event) => onChange(Number(event.target.value))} /><span>{current}{unit}</span></label>
+      <button className="text-button" type="button" onClick={() => onChange(undefined)}>{label(settings, 'Use default', '用預設')}</button>
     </div>
   );
 }
@@ -220,6 +327,21 @@ export function AppearancePanel({ appearance, settings, notify, onClose }: {
           if (token === 'fontWeight') {
             return <ChipField key={token} token={token} settings={settings} options={['400', '500', '600', '700', '800'] as const} value={override.fontWeight ? String(override.fontWeight) as '400' : undefined} onChange={(next) => { appearance.setToken(token, next ? Number(next) as 400 : undefined); appearance.commit(); }} />;
           }
+          if (token === 'fontFamily') {
+            return <FontFamilyField key={token} token={token} settings={settings} value={override.fontFamily} onChange={(next) => { appearance.setToken(token, next); appearance.commit(); }} />;
+          }
+          if (token === 'fontStyle') {
+            return <ChipField key={token} token={token} settings={settings} options={['normal', 'italic', 'oblique'] as const} value={override.fontStyle} onChange={(next) => { appearance.setToken(token, next); appearance.commit(); }} />;
+          }
+          if (token === 'textDecoration') {
+            return <ChipField key={token} token={token} settings={settings} options={['none', 'underline', 'line-through', 'underline line-through'] as const} value={override.textDecoration} onChange={(next) => { appearance.setToken(token, next); appearance.commit(); }} />;
+          }
+          if (token === 'letterSpacing') {
+            return <NumberField key={token} token={token} settings={settings} value={override.letterSpacing} min={-4} max={16} step={1} unit="/10em" onChange={(next) => { appearance.setToken(token, next); appearance.commit(); }} />;
+          }
+          if (token === 'lineHeight') {
+            return <NumberField key={token} token={token} settings={settings} value={override.lineHeight} min={80} max={240} step={5} unit="%" onChange={(next) => { appearance.setToken(token, next); appearance.commit(); }} />;
+          }
           if (token === 'borderWidth') {
             return <ChipField key={token} token={token} settings={settings} options={['0', '1', '2', '3'] as const} value={override.borderWidth === undefined ? undefined : String(override.borderWidth) as '0'} onChange={(next) => { appearance.setToken(token, next === undefined ? undefined : Number(next)); appearance.commit(); }} render={(option) => `${option}px`} />;
           }
@@ -227,15 +349,13 @@ export function AppearancePanel({ appearance, settings, notify, onClose }: {
           return <ScaleField key={token} token={token} settings={settings} value={token === 'fontScale' ? override.fontScale : override.paddingScale} min={bounds.min} max={bounds.max} onChange={(next) => appearance.setToken(token, next)} onCommit={appearance.commit} />;
         }) : <p className="supporting">{label(settings, 'No control in this section matches the search.', '呢個分類冇設定配到搜尋。')}</p>}
       </div>
-      {ratio !== null && ratio < threshold && (
-        <p className="notice warning" role="status">
-          <Icon>contrast</Icon>
-          {label(settings, `Contrast is ${ratio.toFixed(2)}:1, below the ${threshold}:1 guideline.`, `對比度 ${ratio.toFixed(2)}:1，低過 ${threshold}:1 建議值。`)}
-          <button className="text-button" onClick={() => { appearance.setToken('foreground', { kind: 'hex', hex: (contrastRatio(ON_DARK, background ?? '#ffffff') ?? 0) >= (contrastRatio(ON_LIGHT, background ?? '#ffffff') ?? 0) ? ON_DARK : ON_LIGHT }); appearance.commit(); }}>
-            {label(settings, 'Fix contrast', '修正對比')}
-          </button>
-        </p>
-      )}
+      {ratio !== null && <p className={ratio < threshold ? 'notice warning' : 'supporting'} role="status">
+        <Icon>contrast</Icon>
+        {label(settings, `Contrast readout: ${ratio.toFixed(2)}:1${ratio < threshold ? ` (below ${threshold}:1 guideline)` : ''}.`, `對比度讀數：${ratio.toFixed(2)}:1${ratio < threshold ? `（低過 ${threshold}:1 建議值）` : ''}。`)}
+        {ratio < threshold && <button className="text-button" onClick={() => { appearance.setToken('foreground', { kind: 'hex', hex: (contrastRatio(ON_DARK, background ?? '#ffffff') ?? 0) >= (contrastRatio(ON_LIGHT, background ?? '#ffffff') ?? 0) ? ON_DARK : ON_LIGHT }); appearance.commit(); }}>
+          {label(settings, 'Fix contrast', '修正對比')}
+        </button>}
+      </p>}
       <footer>
         <button className="text-button" onClick={() => appearance.resetElement(selected)}>{label(settings, 'Reset element', '重設元素')}</button>
         <button className="text-button danger" onClick={() => appearance.resetAll()}>{label(settings, 'Reset all…', '全部重設…')}</button>

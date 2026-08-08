@@ -155,6 +155,7 @@ export function useAppearance(notify: Notify): AppearanceApi {
  */
 export function useAppearanceVars(elements: AppearanceElements): void {
   const applied = useRef<string[]>([]);
+  const appliedElements = useRef<HTMLElement[]>([]);
   useLayoutEffect(() => {
     const pairs = toCssVariables(elements);
     const names = pairs.map(([name]) => name);
@@ -162,5 +163,21 @@ export function useAppearanceVars(elements: AppearanceElements): void {
     for (const name of applied.current) if (!names.includes(name)) root.style.removeProperty(name);
     for (const [name, value] of pairs) root.style.setProperty(name, value);
     applied.current = names;
+    for (const element of appliedElements.current) {
+      for (const property of ['--appearance-font-family', '--appearance-font-style', '--appearance-text-decoration', '--appearance-letter-spacing', '--appearance-line-height']) element.style.removeProperty(property);
+    }
+    const byElement = new Map<string, Record<string, string>>();
+    for (const [name, value] of pairs) {
+      const match = /^--elx-([a-z0-9-]+)-(font-family|font-style|text-decoration|letter-spacing|line-height)$/.exec(name);
+      if (match) (byElement.get(match[1]) ?? (byElement.set(match[1], {}), byElement.get(match[1])!))[match[2]] = value;
+    }
+    const nextElements: HTMLElement[] = [];
+    for (const element of Array.from(root.ownerDocument.querySelectorAll<HTMLElement>('[data-el]'))) {
+      const values = byElement.get(element.dataset.el ?? '');
+      if (!values) continue;
+      for (const [property, value] of Object.entries(values)) element.style.setProperty(`--appearance-${property}`, value);
+      nextElements.push(element);
+    }
+    appliedElements.current = nextElements;
   }, [elements]);
 }

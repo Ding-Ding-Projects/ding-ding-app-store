@@ -107,6 +107,19 @@
   .popover footer, .dialog footer, .appearance-panel footer { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin-top: 18px; }
   .match-result { padding: 12px; border-radius: 12px; background: var(--surface-container); overflow-wrap: anywhere; }
 
+  /* Appearance typography tokens are applied per registered element by the CSSOM bridge. */
+  [data-el] {
+    font-family: var(--appearance-font-family, inherit);
+    font-style: var(--appearance-font-style, inherit);
+    text-decoration: var(--appearance-text-decoration, inherit);
+    letter-spacing: var(--appearance-letter-spacing, inherit);
+    line-height: var(--appearance-line-height, inherit);
+  }
+  .color-spectrum { display: grid; gap: 6px; padding: 10px; border-radius: 14px; background-size: 100% 100%; border: 1px solid color-mix(in srgb, var(--outline) 45%, transparent); }
+  .font-choice-row { display: flex; flex-wrap: wrap; gap: 6px; max-height: 140px; overflow: auto; }
+  .font-choice-row button { min-height: 40px; padding: 7px 10px; border: 1px solid var(--outline); border-radius: 10px; background: var(--surface-container); }
+  .font-choice-row button[aria-selected="true"] { color: var(--on-primary); background: var(--primary); }
+
   .status-pill {
     flex: none;
     padding: calc(5px * var(--elx-status-pill-pad-scale, 1)) calc(9px * var(--elx-status-pill-pad-scale, 1));

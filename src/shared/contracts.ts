@@ -276,7 +276,11 @@ export const DEFAULT_TAB_WORKSPACE: TabWorkspace = {
   },
 };
 
-export const TOKEN_IDS = ['background', 'foreground', 'radius', 'paddingScale', 'fontScale', 'fontWeight', 'borderWidth', 'elevation'] as const;
+export const TOKEN_IDS = [
+  'background', 'foreground', 'radius', 'paddingScale', 'fontScale', 'fontWeight',
+  'fontFamily', 'fontStyle', 'textDecoration', 'letterSpacing', 'lineHeight',
+  'borderWidth', 'elevation',
+] as const;
 export type TokenId = (typeof TOKEN_IDS)[number];
 
 export const COLOR_ROLES = [
@@ -328,6 +332,11 @@ export const CSS_SUFFIX: Readonly<Record<TokenId, string>> = Object.freeze({
   paddingScale: 'pad-scale',
   fontScale: 'font-scale',
   fontWeight: 'font-weight',
+  fontFamily: 'font-family',
+  fontStyle: 'font-style',
+  textDecoration: 'text-decoration',
+  letterSpacing: 'letter-spacing',
+  lineHeight: 'line-height',
   borderWidth: 'border-width',
   elevation: 'elevation',
 });
@@ -343,7 +352,7 @@ export interface ElementDefinition {
 }
 
 const ALL: readonly TokenId[] = TOKEN_IDS;
-const TEXT: readonly TokenId[] = ['foreground', 'fontScale', 'fontWeight'];
+const TEXT: readonly TokenId[] = ['foreground', 'fontScale', 'fontWeight', 'fontFamily', 'fontStyle', 'textDecoration', 'letterSpacing', 'lineHeight'];
 const BOX: readonly TokenId[] = ['background', 'foreground', 'radius', 'paddingScale', 'fontScale', 'borderWidth'];
 const BOX_RAISED: readonly TokenId[] = [...BOX, 'elevation'];
 const PILL: readonly TokenId[] = ['background', 'foreground', 'radius', 'paddingScale', 'fontScale', 'fontWeight', 'borderWidth'];
@@ -390,12 +399,12 @@ export const ELEMENTS: readonly ElementDefinition[] = Object.freeze(ELEMENT_LIST
 export const ELEMENT_KEYS = ELEMENT_LIST.map((element) => element.key) as unknown as [ElementKey, ...ElementKey[]];
 export const ELEMENT_BY_KEY: ReadonlyMap<string, ElementDefinition> = new Map(ELEMENTS.map((element) => [element.key, element]));
 
-export const MAX_TOKENS_PER_ELEMENT = 8;
+export const MAX_TOKENS_PER_ELEMENT = 16;
 export const MAX_IMPORT_BYTES = 64_000;
 
 export const colorValueSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('role'), role: z.enum(COLOR_ROLES) }),
-  z.strictObject({ kind: z.literal('hex'), hex: z.string().regex(/^#[0-9a-fA-F]{6}$/).transform((value) => value.toLowerCase()) }),
+  z.strictObject({ kind: z.literal('hex'), hex: z.string().regex(/^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/).transform((value) => value.toLowerCase()) }),
 ]);
 
 export const elementOverrideSchema = z.strictObject({
@@ -405,6 +414,11 @@ export const elementOverrideSchema = z.strictObject({
   paddingScale: z.number().int().min(50).max(200).optional(),
   fontScale: z.number().int().min(75).max(150).optional(),
   fontWeight: z.union([z.literal(400), z.literal(500), z.literal(600), z.literal(700), z.literal(800)]).optional(),
+  fontFamily: z.string().trim().min(1).max(96).regex(/^[A-Za-z0-9 _-]+$/, 'Use an installed font family name.').optional(),
+  fontStyle: z.enum(['normal', 'italic', 'oblique']).optional(),
+  textDecoration: z.enum(['none', 'underline', 'line-through', 'underline line-through']).optional(),
+  letterSpacing: z.number().int().min(-4).max(16).optional(),
+  lineHeight: z.number().int().min(80).max(240).optional(),
   borderWidth: z.number().int().min(0).max(3).optional(),
   elevation: z.enum(ELEVATIONS).optional(),
 });
@@ -474,7 +488,8 @@ export type AppearanceImportResult =
   | { ok: false; message: string; issues: string[] };
 
 const UNSAFE_VALUE = /[;{}<>\n\r]|url\(|@import|expression\(|\/\*/i;
-const SAFE_HEX = /^#[0-9a-f]{6}$/;
+const SAFE_HEX = /^#[0-9a-f]{6}([0-9a-f]{2})?$/;
+const SAFE_FONT = /^[A-Za-z0-9 _-]{1,96}$/;
 
 function tokenValue(token: TokenId, override: ElementOverride): string | null {
   switch (token) {
@@ -493,6 +508,16 @@ function tokenValue(token: TokenId, override: ElementOverride): string | null {
       return typeof override.fontScale === 'number' ? (override.fontScale / 100).toFixed(2) : null;
     case 'fontWeight':
       return typeof override.fontWeight === 'number' ? String(override.fontWeight) : null;
+    case 'fontFamily':
+      return typeof override.fontFamily === 'string' && SAFE_FONT.test(override.fontFamily) ? override.fontFamily : null;
+    case 'fontStyle':
+      return override.fontStyle ?? null;
+    case 'textDecoration':
+      return override.textDecoration ?? null;
+    case 'letterSpacing':
+      return typeof override.letterSpacing === 'number' ? `${override.letterSpacing / 10}em` : null;
+    case 'lineHeight':
+      return typeof override.lineHeight === 'number' ? `${override.lineHeight / 100}` : null;
     case 'borderWidth':
       return typeof override.borderWidth === 'number' ? `${override.borderWidth}px` : null;
     case 'elevation':
