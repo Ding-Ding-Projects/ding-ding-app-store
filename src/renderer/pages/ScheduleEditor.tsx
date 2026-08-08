@@ -96,6 +96,7 @@ function RuleCard({ rule, settings, onChange, onRemove }: { rule: ScheduledSetti
         <label>{label(settings, 'From', '由')}<input type="time" value={formatClock(rule.startMinute)} onChange={(event) => onChange({ ...rule, startMinute: clockToMinutes(event.target.value) })} /></label>
         <label>{label(settings, 'To', '到')}<input type="time" value={formatClock(rule.endMinute)} onChange={(event) => onChange({ ...rule, endMinute: clockToMinutes(event.target.value) })} /></label>
         <label>{label(settings, 'Time zone', '時區')}<input value={rule.timeZone} maxLength={64} onChange={(event) => onChange({ ...rule, timeZone: event.target.value || 'local' })} /><small>{label(settings, 'Times use this zone; daylight-saving changes are honoured.', '時間用呢個時區，會跟夏令時間變。')}</small></label>
+        <label>{label(settings, 'Priority (lower wins)', '優先次序（數字越細越先）')}<input type="number" min={0} max={100} value={rule.priority} onChange={(event) => onChange({ ...rule, priority: Math.max(0, Math.min(100, Number(event.target.value) || 0)) })} /></label>
       </div>
       <div className="chip-row" role="group" aria-label={label(settings, 'Weekdays', '星期')}><span className="supporting">{label(settings, 'Days', '日子')}:</span>{WEEKDAYS.map(([value, en, yue]) => { const day = Number(value); return <button key={value} aria-pressed={rule.weekdays.includes(day)} onClick={() => toggleDay(day)}>{label(settings, en, yue)}</button>; })}</div>
       {rule.startMinute > rule.endMinute && <p className="quiet-badge">{label(settings, 'Cross-midnight window', '跨過凌晨時段')}</p>}
