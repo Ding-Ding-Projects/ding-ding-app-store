@@ -69,7 +69,11 @@ void app.whenReady().then(async () => {
   const history = new HistoryService();
   const installed = new InstalledService(catalog);
   catalog.setInstalledProvider(async () => await installed.list(true));
-  const operations = new OperationService(catalog, history, installed);
+  const operations = new OperationService(catalog, history, installed, (event) => {
+    const contents = mainWindow?.webContents;
+    if (!contents || contents.isDestroyed()) return;
+    try { contents.send('operations:progress', event); } catch { /* Renderer teardown must never interrupt a privileged install. */ }
+  });
   const settings = new SettingsService();
   const sourceJobs = new SourceJobService(
     catalog,
@@ -104,6 +108,7 @@ void app.whenReady().then(async () => {
   ipcMain.handle('catalog:refresh', () => catalog.list(true));
   ipcMain.handle('operations:install', (_event, request: OperationRequest) => operations.install(request));
   ipcMain.handle('operations:cancel-install', (_event, request: InstallCancelRequest) => operations.cancelInstall(request));
+  ipcMain.handle('operations:status', (event) => event.sender === mainWindow?.webContents ? operations.listActive() : []);
   ipcMain.handle('operations:build', (_event, request: OperationRequest) => operations.build(request));
   ipcMain.handle('operations:uninstall', (_event, request: OperationRequest) => operations.uninstall(request));
   ipcMain.handle('operations:installed', () => operations.listInstalled());

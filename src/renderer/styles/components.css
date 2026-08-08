@@ -140,6 +140,17 @@
   .status-pill.up-to-date { color: var(--success); background: color-mix(in srgb, var(--success) 12%, var(--surface)); }
   .status-pill.failed { color: var(--error); background: color-mix(in srgb, var(--error) 12%, var(--surface)); }
 
+  .operation-progress {
+    display: grid; grid-template-columns: minmax(120px, 1fr) auto; align-items: center; gap: 7px 12px;
+    margin-top: 12px; padding: 10px 12px; border-radius: 14px;
+    color: var(--outline); background: var(--surface-container); font-size: .88rem;
+  }
+  .operation-progress progress { width: 100%; min-height: 10px; accent-color: var(--primary); }
+  .operation-progress span { min-width: 0; overflow-wrap: anywhere; }
+  .operation-progress small { grid-column: 1 / -1; color: var(--outline); }
+  .operation-status { color: var(--outline); font-size: .82rem; line-height: 1.35; max-width: 48ch; }
+  .operation-status.warning { color: var(--error); font-weight: 700; }
+
   .notice, .update-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; max-width: 1480px; margin: 0 auto 20px; padding: 14px 18px; border-radius: 18px; background: var(--surface-container); }
   .notice {
     color: var(--elx-notice-foreground, inherit);

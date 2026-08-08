@@ -12,6 +12,7 @@ import type {
   ManagedUpdateCancelRequest,
   ManagedUpdateRequest,
   ManagedUpdateState,
+  OperationProgressEvent,
   OperationRequest,
   ScheduleConfig,
   ScheduleStatus,
@@ -29,6 +30,8 @@ import type {
 const SOURCE_STATES = new Set(['queued', 'preparing', 'running', 'repairing', 'cancelling', 'succeeded', 'failed', 'cancelled']);
 const SOURCE_STREAMS = new Set(['system', 'progress', 'stdout', 'stderr']);
 const SOURCE_EVENT_KEYS = new Set(['jobId', 'appId', 'sequence', 'at', 'stream', 'state', 'text', 'progress', 'final']);
+const OPERATION_PHASES = new Set(['queued', 'resolving', 'downloading', 'extracting', 'launching', 'committing', 'installer-running', 'cancelling', 'succeeded', 'failed', 'cancelled', 'unknown']);
+const OPERATION_EVENT_KEYS = new Set(['operationId', 'appId', 'kind', 'phase', 'progress', 'bytesReceived', 'bytesTotal', 'cancellable', 'locked', 'message', 'final']);
 
 function parseSourceIsolationStatus(value: unknown): SourceIsolationStatus {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('The source isolation status response was invalid.');
@@ -57,6 +60,25 @@ function isSourceTerminalEvent(value: unknown): value is SourceTerminalEvent {
     && typeof event.final === 'boolean';
 }
 
+function isOperationProgressEvent(value: unknown): value is OperationProgressEvent {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const event = value as Record<string, unknown>;
+  const keys = Object.keys(event);
+  return keys.length === OPERATION_EVENT_KEYS.size
+    && keys.every((key) => OPERATION_EVENT_KEYS.has(key))
+    && typeof event.operationId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(event.operationId)
+    && typeof event.appId === 'string' && /^[a-z0-9][a-z0-9-]{0,127}$/.test(event.appId)
+    && (event.kind === 'install' || event.kind === 'uninstall')
+    && typeof event.phase === 'string' && OPERATION_PHASES.has(event.phase)
+    && (event.progress === null || (Number.isInteger(event.progress) && Number(event.progress) >= 0 && Number(event.progress) <= 100))
+    && Number.isInteger(event.bytesReceived) && Number(event.bytesReceived) >= 0 && Number(event.bytesReceived) <= 1_500_000_000
+    && (event.bytesTotal === null || (Number.isInteger(event.bytesTotal) && Number(event.bytesTotal) >= 0 && Number(event.bytesTotal) <= 1_500_000_000))
+    && typeof event.cancellable === 'boolean'
+    && typeof event.locked === 'boolean'
+    && typeof event.message === 'string' && event.message.length <= 512
+    && typeof event.final === 'boolean';
+}
+
 const api: DingDingStoreApi = {
   catalog: {
     list: () => ipcRenderer.invoke('catalog:list'),
@@ -65,6 +87,18 @@ const api: DingDingStoreApi = {
   operations: {
     install: (request: OperationRequest) => ipcRenderer.invoke('operations:install', request),
     cancelInstall: (request: InstallCancelRequest) => ipcRenderer.invoke('operations:cancel-install', request),
+    status: async (): Promise<OperationProgressEvent[]> => {
+      const value = await ipcRenderer.invoke('operations:status');
+      if (!Array.isArray(value) || value.some((event) => !isOperationProgressEvent(event))) throw new Error('The operation status response was invalid.');
+      return value.map((event) => Object.freeze({ ...event }));
+    },
+    subscribe: (listener: (event: Readonly<OperationProgressEvent>) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, value: unknown) => {
+        if (isOperationProgressEvent(value)) listener(Object.freeze({ ...value }));
+      };
+      ipcRenderer.on('operations:progress', handler);
+      return () => ipcRenderer.removeListener('operations:progress', handler);
+    },
     build: (request: OperationRequest) => ipcRenderer.invoke('operations:build', request),
     uninstall: (request: OperationRequest) => ipcRenderer.invoke('operations:uninstall', request),
     installed: () => ipcRenderer.invoke('operations:installed'),

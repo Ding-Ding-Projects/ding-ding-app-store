@@ -8,6 +8,7 @@ import type {
   HistoryEntry,
   InstalledAppRecord,
   ManagedUpdateState,
+  OperationProgressEvent,
   SourceTerminalEvent,
   TabGroup,
   TabGroupColor,
@@ -77,6 +78,9 @@ export function App() {
   const [installed, setInstalled] = useState<InstalledAppRecord[]>([]);
   const [action, setAction] = useState<{ kind: 'uninstall'; apps: CatalogApp[]; returnFocus: HTMLButtonElement } | null>(null);
   const [runningAction, setRunningAction] = useState<RunningAction | null>(null);
+  const [operationProgress, setOperationProgress] = useState<Record<string, OperationProgressEvent>>({});
+  const latestOperationIds = useRef(new Map<string, string>());
+  const cancellationFocusTargets = useRef(new Map<string, HTMLElement>());
   const [sourceTerminal, setSourceTerminal] = useState<{
     appId: string;
     appName: string;
@@ -145,13 +149,14 @@ export function App() {
     catch (error) { notify({ ok: false, message: (error as Error).message }); }
   }, [notify]);
 
-  const reportOperation = useCallback((result: { ok: boolean; message: string }) => {
-    notify({ ok: result.ok, message: result.message });
-    announce(result.message);
+  const reportOperation = useCallback((result: { ok: boolean; message: string; messageYue?: string }) => {
+    const message = result.messageYue ? label(settings, result.message, result.messageYue) : result.message;
+    notify({ ok: result.ok, message });
+    announce(message);
     void loadHistory();
     void loadInstalled();
     if (result.ok) void loadCatalog(true);
-  }, [announce, loadCatalog, loadHistory, loadInstalled, notify]);
+  }, [announce, loadCatalog, loadHistory, loadInstalled, notify, settings]);
 
   const handleManagedUpdate = useCallback(async (kind: 'download' | 'cancel' | 'restart', app: CatalogApp, trigger: HTMLButtonElement) => {
     try {
@@ -181,6 +186,63 @@ export function App() {
       window.setTimeout(() => trigger.focus(), 0);
     }
   }, [announce, notify, reportOperation]);
+
+  const cancelInstall = useCallback(async (app: CatalogApp, trigger: HTMLButtonElement) => {
+    const fallback = trigger.closest('.app-card')?.querySelector<HTMLElement>(`[data-install-action="${app.id}"]`) ?? trigger;
+    cancellationFocusTargets.current.set(app.id, fallback);
+    try {
+      const result = await window.dingDingStore.operations.cancelInstall({ appId: app.id, decision: 'cancel-install' });
+      const message = result.messageYue ? label(settings, result.message, result.messageYue) : result.message;
+      notify({ ok: result.ok, message });
+      announce(message);
+      if (!result.ok) {
+        window.setTimeout(() => { if (fallback.isConnected) fallback.focus(); cancellationFocusTargets.current.delete(app.id); }, 0);
+      }
+    } catch (error) {
+      const message = (error as Error).message;
+      notify({ ok: false, message });
+      announce(message);
+      window.setTimeout(() => { if (fallback.isConnected) fallback.focus(); cancellationFocusTargets.current.delete(app.id); }, 0);
+    } finally {
+      // A successful cancellation unmounts the Cancel button on the next
+      // progress event; focus is restored by the final event handler below.
+    }
+  }, [announce, notify, settings]);
+
+  const receiveOperationProgress = useCallback((event: OperationProgressEvent) => {
+    setOperationProgress((current) => {
+      const previous = current[event.appId];
+      const latest = latestOperationIds.current.get(event.appId);
+      if (latest && latest !== event.operationId) {
+        // A new queued event starts a new operation; every other mismatched
+        // event is stale and must not overwrite the current operation.
+        if (event.phase !== 'queued' || (previous && !previous.final)) return current;
+      }
+      latestOperationIds.current.set(event.appId, event.operationId);
+      if (event.final) {
+        const target = cancellationFocusTargets.current.get(event.appId);
+        if (target) window.setTimeout(() => {
+          const lockedStatus = event.phase === 'unknown'
+            ? window.document.querySelector<HTMLElement>(`[data-operation-status="${event.appId}"]`)
+            : null;
+          if (lockedStatus?.isConnected) lockedStatus.focus();
+          else if (target.isConnected && (!(target instanceof HTMLButtonElement) || !target.disabled)) target.focus();
+          cancellationFocusTargets.current.delete(event.appId);
+        }, 0);
+      }
+      return { ...current, [event.appId]: event };
+    });
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    void window.dingDingStore.operations.status().then((events) => {
+      if (!active) return;
+      for (const event of events) receiveOperationProgress(event);
+    }).catch((error) => notify({ ok: false, message: (error as Error).message }));
+    const remove = window.dingDingStore.operations.subscribe(receiveOperationProgress);
+    return () => { active = false; remove(); };
+  }, [notify, receiveOperationProgress]);
 
   useEffect(() => window.dingDingStore.sourceJobs.subscribe((event) => {
     setSourceTerminal((current) => {
@@ -695,6 +757,8 @@ export function App() {
               managedUpdates={managedUpdates}
               onBulkAction={(kind, selectedApps, trigger) => void startBulkAction(kind, selectedApps, trigger)}
               runningAction={runningAction}
+              operationProgress={operationProgress}
+              onCancelInstall={(app, trigger) => void cancelInstall(app, trigger)}
               notify={notify}
               openRegex={regexRequest === activeTab}
               onRegexHandled={() => setRegexRequest(null)}
