@@ -29,6 +29,7 @@ Material Design 3 desktop software center for discovering, documenting, installi
 - Persistent browser-style tab rail with left/right/top/bottom docking, pinning, grouping, overflow, four independent regex-backed tab searches, reversible bulk close/reopen, and complete keyboard control.
 - Per-surface search state, a full regex builder everywhere, and a command palette that reaches every page, command, setting, and appearance control.
 - Per-element appearance editor with live preview, reset, and export/import, applied through CSS custom properties only.
+- Every exposed export surface also offers a truthful Open in VS Code action: the main process validates PATH/install locations or a native portable selection, writes an app-owned workspace, and launches with shell-free arguments; ordinary downloads remain available when VS Code is absent.
 - Main-process update schedule with a launch check that cannot be disabled, bounded repeat intervals, and quiet hours that hold notifications without delaying checks.
 
 </details>

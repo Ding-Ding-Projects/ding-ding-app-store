@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, ipcMain, session } from 'electron';
 import squirrelStartup from 'electron-squirrel-startup';
 import { z } from 'zod';
-import type { ElementKey, ElementOverride, HistoryExportFormat, InstallCancelRequest, OperationRequest, SourceJobCancelRequest, SourceJobRequest, TabWorkspace, UserSettings } from '../shared/contracts.js';
+import type { ElementKey, ElementOverride, ExternalEditorOpenRequest, ExternalEditorPreference, HistoryExportFormat, InstallCancelRequest, OperationRequest, SourceJobCancelRequest, SourceJobRequest, TabWorkspace, UserSettings } from '../shared/contracts.js';
 import { AppearanceService } from './appearance-service.js';
 import { CatalogService } from './catalog-service.js';
 import { HistoryService } from './history-service.js';
@@ -16,6 +16,7 @@ import { SourceJobService } from './source-job-service.js';
 import { SettingsService } from './settings-service.js';
 import { UpdateService } from './update-service.js';
 import { WorkspaceService } from './workspace-service.js';
+import { ExternalEditorService } from './external-editor-service.js';
 
 const scheduleTaskSchema = z.enum(['self-update', 'catalog-refresh']);
 
@@ -77,6 +78,7 @@ void app.whenReady().then(async () => {
   const appearance = new AppearanceService();
   const schedule = new ScheduleService();
   const dimSum = new DimSumService();
+  const externalEditor = new ExternalEditorService();
   const scheduler = new Scheduler({
     getWindow: () => mainWindow,
     service: schedule,
@@ -124,6 +126,11 @@ void app.whenReady().then(async () => {
   ipcMain.handle('schedule:save', (_event, config: unknown) => scheduler.save(config));
   ipcMain.handle('schedule:run-now', (_event, task: unknown) => scheduler.runNow(scheduleTaskSchema.parse(task)));
   ipcMain.handle('dim-sum:startup', () => dimSum.startup());
+  ipcMain.handle('external-editor:detect', (event) => event.sender === mainWindow?.webContents ? externalEditor.detect() : []);
+  ipcMain.handle('external-editor:preference', (event) => event.sender === mainWindow?.webContents ? externalEditor.preference() : { editor: 'vscode', edition: 'unknown' as const });
+  ipcMain.handle('external-editor:set-preference', (event, value: ExternalEditorPreference) => event.sender === mainWindow?.webContents ? externalEditor.setPreference(value) : { editor: 'vscode', edition: 'unknown' as const });
+  ipcMain.handle('external-editor:add-validated', (event) => event.sender === mainWindow?.webContents ? externalEditor.addValidated() : null);
+  ipcMain.handle('external-editor:open-export', (event, request: ExternalEditorOpenRequest) => event.sender === mainWindow?.webContents ? externalEditor.openExport(request) : { ok: false as const, reason: 'bridge-unavailable' as const, message: 'Blocked external editor request from an unknown renderer.' });
   ipcMain.on('window:minimize', () => mainWindow?.minimize());
   ipcMain.on('window:toggle-maximize', () => {
     if (mainWindow?.isMaximized()) mainWindow.unmaximize(); else mainWindow?.maximize();
