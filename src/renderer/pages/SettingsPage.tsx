@@ -87,7 +87,7 @@ export function SettingsPage({ settings, settingsProvenance, onSave, workspace, 
     'settings.about': ABOUT_ROWS.filter((row) => matcher(`${row.en}\n${row.yue}\n${aboutRowBody(row, settings.displayName)}`)).length
       + (matcher('external editor Visual Studio Code VS Code exports') ? 1 : 0)
       + (matcher('changelog releases versions dates commits') ? 1 : 0),
-  }), [matcher]);
+  }), [matcher, settings.displayName]);
 
   const fieldsFor = (section: SettingField['section']) => SETTING_FIELDS.filter((field) => field.section === section && matcher(`${field.en}\n${field.yue}\n${field.keywords.join(' ')}`));
 
