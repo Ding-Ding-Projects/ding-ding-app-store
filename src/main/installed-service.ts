@@ -111,6 +111,12 @@ export class InstalledService {
     const record = await this.catalog.recordFor(appId);
     const prior = (await this.list(false)).find((candidate) => candidate.appId === appId);
     if (!prior?.ownership) return null;
+    // Managed portable installs have no registry authority. Re-discover them
+    // from their app-owned path without touching the Windows registry, which
+    // may be unavailable or incomplete on a fresh cloud runner.
+    if (prior.ownership.kind === 'portable') {
+      return await this.discoverRecord(record, [], new Date().toISOString(), prior.ownership);
+    }
     const registry = await this.registrySnapshot();
     return await this.discoverRecord(record, registry, new Date().toISOString(), prior.ownership);
   }

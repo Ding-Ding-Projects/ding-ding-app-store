@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -73,5 +73,28 @@ describe('InstalledService discovery-only records', () => {
   it('fails discovery-only matching closed when a registry hive is unavailable or identity is ambiguous', async () => {
     await expect(serviceWith([registryEntry()], ['HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall']).discover()).resolves.toEqual([]);
     await expect(serviceWith([registryEntry(), registryEntry('HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\CodexMaterial')]).discover()).resolves.toEqual([]);
+  });
+
+  it('re-discovers managed portable installs without requiring a registry snapshot', async () => {
+    const portableRecord = {
+      ...catalogRecord,
+      id: 'dim-sum-atlas',
+      repository: 'dim-sum-atlas',
+      displayName: 'Dim Sum Atlas',
+      packageType: 'archive',
+      adapterId: 'dim-sum-atlas-portable-zip',
+    } as const;
+    const catalog = { manifest: async () => ({ schemaVersion: 1 as const, organization: 'Ding-Ding-Projects' as const, apps: [portableRecord] }), recordFor: async () => portableRecord };
+    const service = new InstalledService(catalog as never);
+    const root = path.join(electronState.userData, 'portable', portableRecord.id);
+    await mkdir(root, { recursive: true });
+    await writeFile(path.join(root, 'DimSumAtlas.exe'), 'portable executable');
+    await service.record({
+      appId: portableRecord.id, displayName: portableRecord.displayName, version: 'v0.1.13', packageType: 'archive', source: 'portable-managed',
+      installRoot: root, uninstall: { kind: 'portable', executable: null, arguments: [] },
+      ownership: { kind: 'portable', adapterId: portableRecord.adapterId, installRoot: root }, installedAt: null, detectedAt: new Date().toISOString(),
+    });
+    (service as unknown as { registrySnapshot(): Promise<never> }).registrySnapshot = async () => { throw new Error('registry should not be queried for portable ownership'); };
+    await expect(service.get(portableRecord.id)).resolves.toEqual(expect.objectContaining({ appId: portableRecord.id, source: 'portable-managed', uninstall: { kind: 'portable', executable: null, arguments: [] } }));
   });
 });
