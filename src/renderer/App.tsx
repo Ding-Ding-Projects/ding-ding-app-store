@@ -72,6 +72,7 @@ export function App() {
   const [overflowRequest, setOverflowRequest] = useState(false);
   const [renameRequest, setRenameRequest] = useState<string | null>(null);
   const [subTab, setSubTab] = useState<SettingsSubTabId>('settings.general');
+  const [docRequest, setDocRequest] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState('');
   const [pendingToken, setPendingToken] = useState<{ token: TokenId; value: TokenValue } | null>(null);
 
@@ -267,6 +268,11 @@ export function App() {
         workspace.dispatch({ type: 'activate', id: 'catalog' });
         const app = catalog?.apps.find((item) => item.id === arg);
         if (app) search.dispatch({ type: 'set', surface: 'catalog', patch: { query: app.name, regex: null } });
+        return;
+      }
+      case 'open-doc': {
+        workspace.dispatch({ type: 'activate', id: 'docs' });
+        setDocRequest(arg);
         return;
       }
       default: return;
@@ -481,7 +487,7 @@ export function App() {
               onRegexHandled={() => setRegexRequest(null)}
             />
           )}
-          {activeTab === 'docs' && <DocsPage settings={settings} openRegex={regexRequest === 'docs'} onRegexHandled={() => setRegexRequest(null)} />}
+          {activeTab === 'docs' && <DocsPage settings={settings} openRegex={regexRequest === 'docs'} onRegexHandled={() => setRegexRequest(null)} articleRequest={docRequest} onArticleHandled={() => setDocRequest(null)} />}
           {activeTab === 'activity' && <ActivityPage entries={history} loading={historyLoading} settings={settings} openRegex={regexRequest === 'activity'} onRegexHandled={() => setRegexRequest(null)} />}
           {activeTab === 'settings' && (
             <SettingsPage
