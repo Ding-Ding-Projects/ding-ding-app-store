@@ -7,6 +7,7 @@ import type {
   ElementKey,
   HistoryEntry,
   InstalledAppRecord,
+  SourceTerminalEvent,
   TabGroup,
   TabGroupColor,
   TabId,
@@ -18,6 +19,7 @@ import { ActionDialog } from './components/ActionDialog';
 import type { ActionKind, ImmediateActionKind } from './components/ActionDialog';
 import { AppearancePanel } from './components/AppearancePanel';
 import { CommandPalette } from './components/CommandPalette';
+import { SourceTerminalPanel } from './components/SourceTerminalPanel';
 import { TabRail } from './components/TabRail';
 import { el } from './el';
 import { downloadText, pickTextFile } from './files';
@@ -64,6 +66,14 @@ export function App() {
   const [installed, setInstalled] = useState<InstalledAppRecord[]>([]);
   const [action, setAction] = useState<{ kind: 'uninstall'; app: CatalogApp; returnFocus: HTMLButtonElement } | null>(null);
   const [runningAction, setRunningAction] = useState<RunningAction | null>(null);
+  const [sourceTerminal, setSourceTerminal] = useState<{
+    appId: string;
+    appName: string;
+    jobId: string | null;
+    events: Readonly<SourceTerminalEvent>[];
+    fallbackMessage?: string;
+    returnFocus: HTMLButtonElement;
+  } | null>(null);
   const operationRunningRef = useRef(false);
   const [updateState, setUpdateState] = useState<AppStoreUpdateState>({ status: 'idle' });
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -105,6 +115,24 @@ export function App() {
     if (result.ok) void loadCatalog(true);
   }, [announce, loadCatalog, loadHistory, loadInstalled, notify]);
 
+  useEffect(() => window.dingDingStore.sourceJobs.subscribe((event) => {
+    setSourceTerminal((current) => {
+      if (!current || current.appId !== event.appId || (current.jobId && current.jobId !== event.jobId)) return current;
+      return { ...current, jobId: event.jobId, events: [...current.events, event] };
+    });
+    if (event.final) {
+      operationRunningRef.current = false;
+      setRunningAction(null);
+      reportOperation({ ok: event.state === 'succeeded', message: event.text });
+    }
+  }), [reportOperation]);
+
+  const closeSourceTerminal = useCallback(() => {
+    const target = sourceTerminal?.returnFocus;
+    setSourceTerminal(null);
+    if (target) window.setTimeout(() => target.focus(), 0);
+  }, [sourceTerminal]);
+
   const closeAction = useCallback(() => {
     const returnFocus = action?.returnFocus;
     setAction(null);
@@ -122,13 +150,33 @@ export function App() {
     setRunningAction(next);
     announce(kind === 'install' ? `Installing ${selectedApp.name}` : `Preparing the source install for ${selectedApp.name}`);
     try {
-      const result = await window.dingDingStore.operations[kind]({ appId: selectedApp.id, decision: kind });
+      if (kind === 'build') {
+        setSourceTerminal({ appId: selectedApp.id, appName: selectedApp.name, jobId: null, events: [], returnFocus: trigger });
+        const result = await window.dingDingStore.sourceJobs.start({ appId: selectedApp.id, decision: 'build' });
+        const jobId = result.jobId;
+        if (!result.ok || !jobId) {
+          setSourceTerminal((current) => current && current.appId === selectedApp.id ? { ...current, fallbackMessage: result.message } : current);
+          reportOperation(result);
+          operationRunningRef.current = false;
+          setRunningAction(null);
+        } else {
+          setSourceTerminal((current) => current && current.appId === selectedApp.id ? { ...current, jobId } : current);
+        }
+        return;
+      }
+      const result = await window.dingDingStore.operations.install({ appId: selectedApp.id, decision: 'install' });
       reportOperation(result);
     } catch (error) {
-      reportOperation({ ok: false, message: (error as Error).message });
-    } finally {
+      const message = (error as Error).message;
+      if (kind === 'build') setSourceTerminal((current) => current && current.appId === selectedApp.id ? { ...current, fallbackMessage: message } : current);
+      reportOperation({ ok: false, message });
       operationRunningRef.current = false;
       setRunningAction(null);
+    } finally {
+      if (kind !== 'build') {
+        operationRunningRef.current = false;
+        setRunningAction(null);
+      }
     }
   }, [announce, reportOperation]);
 
@@ -508,6 +556,17 @@ export function App() {
         {panelOpen && appearance.editMode && <AppearancePanel appearance={appearance} settings={settings} notify={notify} onClose={() => setPanelOpen(false)} />}
 
         {action && <ActionDialog action={action} settings={settings} onClose={closeAction} onResult={reportOperation} />}
+
+        {sourceTerminal && (
+          <SourceTerminalPanel
+            appName={sourceTerminal.appName}
+            events={sourceTerminal.events}
+            fallbackMessage={sourceTerminal.fallbackMessage}
+            settings={settings}
+            onCancel={() => sourceTerminal.jobId && void window.dingDingStore.sourceJobs.cancel({ jobId: sourceTerminal.jobId, decision: 'cancel' })}
+            onClose={closeSourceTerminal}
+          />
+        )}
 
         {paletteOpen && (
           <CommandPalette

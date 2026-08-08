@@ -10,9 +10,9 @@ The wiki mirrors the same canonical feature articles bundled into the applicatio
 
 - [Verified installer operations](Verified-Installer-Operations) — **limited** — Downloads one allowlisted stable asset, verifies its declared size and GitHub SHA-256 digest, then launches a fixed silent Squirrel or MSI argument vector.
 - [One-click installation and adapter coverage](One-Click-Installation) — **limited** — Starts install and source-install requests in one click while keeping privileged choices in reviewed per-application adapters.
-- [Source-build security](Source-Build-Security) — **limited** — Catalogues source manifests but deliberately withholds execution until a disposable, resource-bounded Windows build runner exists.
+- [Source-build security](Source-Build-Security) — **limited** — Provides a typed, bounded source-job and repair runtime but deliberately withholds execution until an attested hard-disposable Windows broker and reviewed recipe exist.
 - [Protected uninstall](Uninstall) — **shipped** — Removes only an installation whose Squirrel, MSI, or managed-portable ownership route was recorded or safely rediscovered.
-- [Automatic repair and universal adapters](Automatic-Repair-and-Universal-Adapters) — **pending** — Records the requested touchless terminal, dependency bootstrap, OpenCode repair, and fresh-Windows adapter goal without presenting it as shipped.
+- [Automatic repair and universal adapters](Automatic-Repair-and-Universal-Adapters) — **limited** — Implements the typed terminal, pinned OpenCode, bounded repair, consent, and isolation contracts while failing closed until a real hard-disposable broker and reviewed per-app recipes are supplied.
 
 ## Installed apps and history
 

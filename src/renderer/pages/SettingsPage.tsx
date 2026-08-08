@@ -69,6 +69,9 @@ export function SettingsPage({ settings, onSave, workspace, appearance, schedule
     if (field.kind === 'color') {
       return <label key={field.key} htmlFor={id}>{text}<input id={id} type="color" value={String(draft[field.key])} onChange={(event) => set(field.key, event.target.value as UserSettings[typeof field.key])} /></label>;
     }
+    if (field.kind === 'switch') {
+      return <label key={field.key} htmlFor={id} className="switch-row"><input id={id} type="checkbox" checked={Boolean(draft[field.key])} onChange={(event) => set(field.key, event.target.checked as UserSettings[typeof field.key])} /><span>{text}</span></label>;
+    }
     return <label key={field.key} htmlFor={id}>{text}<input id={id} value={String(draft[field.key])} maxLength={64} onChange={(event) => set(field.key, event.target.value as UserSettings[typeof field.key])} /></label>;
   };
 
@@ -117,6 +120,7 @@ export function SettingsPage({ settings, onSave, workspace, appearance, schedule
               <h2>Language &amp; voice · 語言同語氣</h2>
               {fieldsFor('general').map(renderField)}
               <p className="supporting">Funny levels style all messages, including warnings and errors, but never change facts. You can reset them any time.</p>
+              <p className="supporting">Automatic source repair gives OpenCode blanket tool approval only inside an attested disposable environment with no host mounts, user profile, credentials, secrets, or Git metadata. The app fails closed when that isolation is unavailable. This consent is persisted and can be revoked here; ordinary release installation never invokes OpenCode.</p>
             </div>
             <div className="settings-actions">
               <button className="text-button" onClick={() => setDraft(defaultSettings)}>Reset</button>

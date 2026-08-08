@@ -212,4 +212,28 @@
   .snackbar.success { background: var(--elx-snackbar-background, var(--success)); }
   .snackbar.error { background: var(--elx-snackbar-background, var(--error)); }
   .snackbar .icon-button, .snackbar .text-button { color: white; }
+
+  .source-terminal-panel {
+    position: fixed; z-index: 70; inset: 64px 20px 20px auto;
+    display: flex; flex-direction: column; gap: 14px;
+    width: min(760px, calc(100vw - 40px)); min-width: min(520px, calc(100vw - 40px));
+    max-height: calc(100vh - 84px); padding: 22px;
+    color: var(--on-surface); background: var(--surface); border: 1px solid var(--outline);
+    border-radius: 28px; box-shadow: 0 24px 72px #0008; overflow: hidden;
+  }
+  .source-terminal-panel header { display: flex; align-items: start; justify-content: space-between; gap: 18px; }
+  .source-terminal-panel h2 { display: flex; align-items: center; gap: 10px; margin: 2px 0; }
+  .terminal-status { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; }
+  .terminal-status progress { width: 100%; height: 10px; accent-color: var(--primary); }
+  .terminal-output {
+    flex: 1; min-height: 220px; overflow: auto; overscroll-behavior: contain;
+    padding: 14px; color: #e8f0e9; background: #111512; border: 1px solid #657068;
+    border-radius: 18px; font: 500 13px/1.55 ui-monospace, "Cascadia Mono", Consolas, monospace;
+  }
+  .terminal-line { display: grid; grid-template-columns: 4ch 8ch minmax(0, 1fr); gap: 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .terminal-sequence, .terminal-stream { color: #9ca89f; user-select: none; }
+  .terminal-stderr { color: #ffb4ab; }
+  .terminal-progress { color: #d0bcff; }
+  .terminal-system { color: #b4c5ff; }
+  .source-terminal-panel footer { display: flex; justify-content: flex-end; }
 }

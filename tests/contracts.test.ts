@@ -151,7 +151,8 @@ describe('visible product contracts', () => {
     const apps = await read('src/renderer/pages/AppsPage.tsx');
     const dialog = await read('src/renderer/components/ActionDialog.tsx');
     expect(shell).toContain("if (kind === 'uninstall')");
-    expect(shell).toContain('window.dingDingStore.operations[kind]({ appId: selectedApp.id, decision: kind })');
+    expect(shell).toContain("window.dingDingStore.operations.install({ appId: selectedApp.id, decision: 'install' })");
+    expect(shell).toContain("window.dingDingStore.sourceJobs.start({ appId: selectedApp.id, decision: 'build' })");
     expect(apps).toContain("onAction('install', app, event.currentTarget)");
     expect(apps).toContain("onAction('build', app, event.currentTarget)");
     expect(apps).toContain('Install from source');
