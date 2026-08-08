@@ -8,6 +8,8 @@ import type {
   ExternalEditorOpenRequest,
   ExternalEditorPreference,
   HistoryExportFormat,
+  HistoryMutationResult,
+  HistoryRevision,
   InstallCancelRequest,
   ManagedUpdateCancelRequest,
   ManagedUpdateRequest,
@@ -148,6 +150,10 @@ const api: DingDingStoreApi = {
   history: {
     list: () => ipcRenderer.invoke('history:list'),
     export: (format: HistoryExportFormat) => ipcRenderer.invoke('history:export', format),
+    revisions: () => ipcRenderer.invoke('history:revisions') as Promise<HistoryRevision[]>,
+    diff: (revisionId: string) => ipcRenderer.invoke('history:diff', revisionId) as Promise<string>,
+    label: (revisionId: string, label: string) => ipcRenderer.invoke('history:label', revisionId, label) as Promise<HistoryMutationResult>,
+    restore: (revisionId: string) => ipcRenderer.invoke('history:restore', revisionId) as Promise<HistoryMutationResult>,
   },
   workspace: {
     load: () => ipcRenderer.invoke('workspace:load'),

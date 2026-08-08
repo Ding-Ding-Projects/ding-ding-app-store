@@ -230,6 +230,21 @@ export interface HistoryEntry {
   occurredAt: string;
 }
 
+/** A bounded, local-Git revision of the App Store's own state snapshots. */
+export interface HistoryRevision {
+  id: string;
+  occurredAt: string;
+  subject: string;
+  label: string;
+  changedFiles: string[];
+  restorable: boolean;
+}
+
+export interface HistoryMutationResult {
+  ok: boolean;
+  message: string;
+}
+
 export interface UpdatePackageMetadata {
   /** The exact Squirrel full-package filename named by RELEASES. */
   fileName: string;
@@ -1028,6 +1043,10 @@ export interface DingDingStoreApi {
   history: {
     list(): Promise<HistoryEntry[]>;
     export(format: HistoryExportFormat): Promise<string>;
+    revisions(): Promise<HistoryRevision[]>;
+    diff(revisionId: string): Promise<string>;
+    label(revisionId: string, label: string): Promise<HistoryMutationResult>;
+    restore(revisionId: string): Promise<HistoryMutationResult>;
   };
   workspace: {
     load(): Promise<TabWorkspace>;

@@ -47,7 +47,8 @@ Verified install adapters, fail-closed source builds, removal, and pending autom
 Windows discovery, owned records, operation history, snapshots, and export.
 
 - [Installed app discovery](./installed/installed-app-discovery.md) — **shipped** — Reconciles App Store records with exact reviewed registry identities and the managed portable directory, then derives uninstall authority afresh.
-- [Activity history and export](./installed/activity-history.md) — **shipped** — Appends every install, build, and uninstall result, offers composed filters, and exports the selected or filtered log through a truthful 17-format registry.
+- [Activity history and export](./installed/activity-history.md) — **shipped** — Appends every install, build, and uninstall result, offers composed filters, exports the selected or filtered log, and links into local version history.
+- [Local history and version restore](./installed/history-versioning.md) — **limited** — Browses bounded local-Git snapshots with diff, labels, and an explicit reversible restore path.
 
 ## Updates and schedules
 

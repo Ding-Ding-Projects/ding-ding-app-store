@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { HistoryEntry, HistoryExportFormat, OperationKind, UserSettings } from '../../shared/contracts';
+import type { HistoryEntry, HistoryExportFormat, HistoryRevision, OperationKind, UserSettings } from '../../shared/contracts';
 import { SearchBox } from '../components/SearchBox';
 import { el } from '../el';
 import { downloadText } from '../files';
@@ -11,11 +11,12 @@ import { HISTORY_EXPORT_FORMATS, historyExportFormat } from '../../shared/export
 import { isExternalEditorBridgeAvailable, openExportInVsCode } from '../external-editor';
 import type { Notify } from '../notify';
 import { dateKey, matchesHistoryDate, presetRange, resolveHistoryDateRange } from '../history-date-filter';
+import { DestructiveConfirmDialog } from '../components/DestructiveConfirmDialog';
 
 type HistoryResult = 'all' | 'ok' | 'failed';
 
-export function ActivityPage({ entries, loading, settings, openRegex, onRegexHandled, notify }: {
-  entries: HistoryEntry[]; loading: boolean; settings: UserSettings; openRegex: boolean; onRegexHandled(): void; notify: Notify;
+export function ActivityPage({ entries, revisions, loading, settings, openRegex, onRegexHandled, notify, onHistoryChanged }: {
+  entries: HistoryEntry[]; revisions: HistoryRevision[]; loading: boolean; settings: UserSettings; openRegex: boolean; onRegexHandled(): void; notify: Notify; onHistoryChanged(): Promise<void>;
 }) {
   const search = useSurfaceSearch('activity');
   const [kind, setKind] = useState<'all' | OperationKind>('all');
@@ -28,6 +29,11 @@ export function ActivityPage({ entries, loading, settings, openRegex, onRegexHan
   const [exportFormat, setExportFormat] = useState<HistoryExportFormat>('json');
   const [copyBusy, setCopyBusy] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [revisionDiffs, setRevisionDiffs] = useState<Record<string, string>>({});
+  const [revisionBusy, setRevisionBusy] = useState<string | null>(null);
+  const [restoreRevision, setRestoreRevision] = useState<HistoryRevision | null>(null);
+  const [labelRevision, setLabelRevision] = useState<HistoryRevision | null>(null);
+  const [labelDraft, setLabelDraft] = useState('');
   const lastSelected = useRef<number | null>(null);
   const matcher = useMemo(() => makeMatcher(search.state), [search.state]);
   const dateRange = useMemo(() => resolveHistoryDateRange(dateStart, dateEnd, settings.language === 'yue' ? 'yue' : 'en'), [dateStart, dateEnd, settings.language]);
@@ -92,8 +98,43 @@ export function ActivityPage({ entries, loading, settings, openRegex, onRegexHan
     lastSelected.current = index;
   };
 
+  const showDiff = async (revision: HistoryRevision) => {
+    if (revisionDiffs[revision.id] !== undefined) {
+      setRevisionDiffs((current) => { const next = { ...current }; delete next[revision.id]; return next; });
+      return;
+    }
+    setRevisionBusy(revision.id);
+    try {
+      const value = await window.dingDingStore.history.diff(revision.id);
+      setRevisionDiffs((current) => ({ ...current, [revision.id]: value || 'No textual state changes in this revision.' }));
+    } catch (error) { notify({ ok: false, message: (error as Error).message }); }
+    finally { setRevisionBusy(null); }
+  };
+
+  const saveRevisionLabel = async () => {
+    if (!labelRevision) return;
+    setRevisionBusy(labelRevision.id);
+    try {
+      const result = await window.dingDingStore.history.label(labelRevision.id, labelDraft);
+      notify(result);
+      if (result.ok) { setLabelRevision(null); setLabelDraft(''); await onHistoryChanged(); }
+    } catch (error) { notify({ ok: false, message: (error as Error).message }); }
+    finally { setRevisionBusy(null); }
+  };
+
+  const restoreSelectedRevision = async () => {
+    if (!restoreRevision) return;
+    setRevisionBusy(restoreRevision.id);
+    try {
+      const result = await window.dingDingStore.history.restore(restoreRevision.id);
+      notify(result);
+      if (result.ok) await onHistoryChanged();
+    } catch (error) { notify({ ok: false, message: (error as Error).message }); }
+    finally { setRevisionBusy(null); setRestoreRevision(null); }
+  };
+
   if (loading) return <div className="loading-grid" aria-label="Loading activity"><div className="skeleton" /><div className="skeleton" /></div>;
-  if (!entries.length) {
+  if (!entries.length && !revisions.length) {
     return <div className="empty-state" {...el('empty-state')}><Icon>history</Icon><h2>No operations yet · 仲未有操作</h2><p>Installs, builds, updates, uninstalls, failures, and recoveries will appear here with exact results and export controls.</p></div>;
   }
 
@@ -131,6 +172,16 @@ export function ActivityPage({ entries, loading, settings, openRegex, onRegexHan
         {dateRange.error && <p className="field-error" role="alert">{dateRange.error}</p>}
       </details>
       <div className="chip-row" role="group" aria-label="Filter by date">{(['all', 'today', '7d', '30d'] as const).map((value) => <button key={value} aria-pressed={preset === value} onClick={() => setPresetAndRange(value)}>{value === 'all' ? 'All time' : value === 'today' ? 'Today' : value === '7d' ? '7 days' : '30 days'}</button>)}</div>
+      <details className="history-revisions" open={revisions.length > 0}>
+        <summary>Local versions · 本機版本 ({revisions.length})</summary>
+        <p className="supporting">These versions contain only App Store-owned installed-app and settings snapshots. Restore creates a new revision; it never rewrites local history.</p>
+        {revisions.length ? <ol className="revision-list">{revisions.map((revision) => <li key={revision.id} className="revision-row">
+          <div className="revision-copy"><strong>{revision.label}</strong><span>{new Date(revision.occurredAt).toLocaleString()} · <code>{revision.id.slice(0, 12)}</code></span><small>{revision.changedFiles.length ? revision.changedFiles.join(', ') : 'No tracked file delta'}</small></div>
+          <div className="revision-actions"><button className="text-button" disabled={revisionBusy === revision.id} onClick={() => void showDiff(revision)}>{revisionDiffs[revision.id] === undefined ? 'View diff' : 'Hide diff'}</button><button className="text-button" disabled={!revision.restorable || revisionBusy === revision.id} onClick={() => { setLabelRevision(revision); setLabelDraft(revision.label); }}>Label</button><button className="text-button" disabled={!revision.restorable || revisionBusy === revision.id} onClick={() => setRestoreRevision(revision)}>Restore</button></div>
+          {revisionDiffs[revision.id] !== undefined && <pre className="revision-diff" aria-label={`Diff for ${revision.label}`}>{revisionDiffs[revision.id]}</pre>}
+          {labelRevision?.id === revision.id && <form className="revision-label-form" onSubmit={(event) => { event.preventDefault(); void saveRevisionLabel(); }}><label>Revision label<input autoFocus maxLength={80} value={labelDraft} onChange={(event) => setLabelDraft(event.target.value)} /></label><button className="filled-button" disabled={revisionBusy === revision.id || !labelDraft.trim()} type="submit">Save label</button><button className="text-button" type="button" onClick={() => setLabelRevision(null)}>Cancel</button></form>}
+        </li>)}</ol> : <p className="empty-state compact">No local snapshots yet. A successful App Store operation creates the first version.</p>}
+      </details>
       <div className="card-actions">
         <button className="text-button" disabled={copyBusy} onClick={() => void copyJson()}><Icon>content_copy</Icon>{copyBusy ? 'Copying…' : 'Copy JSON'}</button>
         <label>Export format<select value={exportFormat} onChange={(event) => setExportFormat(event.target.value as HistoryExportFormat)}>{HISTORY_EXPORT_FORMATS.map((format) => <option key={format.id} value={format.id}>{format.label}</option>)}</select></label>
@@ -148,5 +199,6 @@ export function ActivityPage({ entries, loading, settings, openRegex, onRegexHan
         </div>
       </li>)}</ul> : <div className="empty-state" {...el('empty-state')}><Icon>search_off</Icon><h2>No matching activity</h2><p>{label(settings, 'Clear the search, action, result, or date filters to see more history.', '清除搜尋、動作、結果或者日期篩選就會見到更多記錄。')}</p></div>}
     </section>
+    {restoreRevision && <DestructiveConfirmDialog title={`Restore “${restoreRevision.label}”?`} description="This replaces the App Store's own installed-app and settings files with the selected local snapshot. A before-restore revision and a new restore revision are recorded; user project files are never touched." actionLabel="RESTORE LOCAL VERSION" onClose={() => setRestoreRevision(null)} onConfirm={() => void restoreSelectedRevision()} />}
   </>;
 }

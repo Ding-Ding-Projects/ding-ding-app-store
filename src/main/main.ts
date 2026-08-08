@@ -146,6 +146,14 @@ void app.whenReady().then(async () => {
   ipcMain.handle('settings:save', (_event, value: UserSettings) => settings.save(value));
   ipcMain.handle('history:list', () => history.list());
   ipcMain.handle('history:export', (_event, format: HistoryExportFormat) => history.export(format));
+  ipcMain.handle('history:revisions', (event) => event.sender === mainWindow?.webContents ? history.revisions() : []);
+  ipcMain.handle('history:diff', (event, revisionId: unknown) => event.sender === mainWindow?.webContents && typeof revisionId === 'string' ? history.diff(revisionId) : '');
+  ipcMain.handle('history:label', (event, revisionId: unknown, requestedLabel: unknown) => event.sender === mainWindow?.webContents && typeof revisionId === 'string' && typeof requestedLabel === 'string'
+    ? history.label(revisionId, requestedLabel)
+    : { ok: false, message: 'Blocked local history label request from an unknown renderer.' });
+  ipcMain.handle('history:restore', (event, revisionId: unknown) => event.sender === mainWindow?.webContents && typeof revisionId === 'string'
+    ? history.restore(revisionId)
+    : { ok: false, message: 'Blocked local history restore request from an unknown renderer.' });
   ipcMain.handle('workspace:load', () => workspace.load());
   ipcMain.handle('workspace:save', (_event, value: TabWorkspace) => workspace.save(value));
   ipcMain.handle('workspace:reset', () => workspace.reset());
