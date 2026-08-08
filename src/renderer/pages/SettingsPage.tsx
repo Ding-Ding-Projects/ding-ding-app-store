@@ -28,6 +28,11 @@ const ABOUT_ROWS = [
   { en: 'Licence', yue: '授權', body: 'Apache-2.0. The catalog lists only reviewed public Ding Ding Projects applications.' },
 ] as const;
 
+/** Keep About search text identical to the value rendered in the card. */
+export function aboutRowBody(row: { en: string; body: string }, displayName: string): string {
+  return row.en === 'Version' ? `${displayName} preview 0.1.0.` : row.body;
+}
+
 function SettingExplanation({ settings, field, provenance }: { settings: UserSettings; field: SettingField; provenance: SettingsProvenance }) {
   const persisted = provenance.source === 'persisted';
   return (
@@ -79,7 +84,7 @@ export function SettingsPage({ settings, settingsProvenance, onSave, workspace, 
     'settings.appearance': SETTING_FIELDS.filter((field) => field.section === 'appearance' && matcher(`${field.en}\n${field.yue}\n${field.keywords.join(' ')}`)).length
       + (matcher('rail tabs layout appearance element override') ? 1 : 0),
     'settings.schedule': SCHEDULE_FIELDS.filter((field) => matcher(`${field.en}\n${field.yue}\n${field.keywords.join(' ')}`)).length,
-    'settings.about': ABOUT_ROWS.filter((row) => matcher(`${row.en}\n${row.yue}\n${row.body}`)).length
+    'settings.about': ABOUT_ROWS.filter((row) => matcher(`${row.en}\n${row.yue}\n${aboutRowBody(row, settings.displayName)}`)).length
       + (matcher('external editor Visual Studio Code VS Code exports') ? 1 : 0)
       + (matcher('changelog releases versions dates commits') ? 1 : 0),
   }), [matcher]);
@@ -183,10 +188,10 @@ export function SettingsPage({ settings, settingsProvenance, onSave, workspace, 
         {subTab === 'settings.about' && counts[subTab] > 0 && (
           <>
             <section className="settings-grid">
-              {ABOUT_ROWS.filter((row) => matcher(`${row.en}\n${row.yue}\n${row.body}`)).map((row) => (
+              {ABOUT_ROWS.filter((row) => matcher(`${row.en}\n${row.yue}\n${aboutRowBody(row, settings.displayName)}`)).map((row) => (
                 <div className="settings-card" key={row.en} {...el('settings-card')}>
                   <h2>{label(settings, row.en, row.yue)}</h2>
-                  <p className="supporting">{row.en === 'Version' ? `${settings.displayName} preview 0.1.0.` : row.body}</p>
+                  <p className="supporting">{aboutRowBody(row, settings.displayName)}</p>
                 </div>
               ))}
               {matcher('external editor Visual Studio Code VS Code exports') && <ExternalEditorSettings settings={settings} notify={notify} />}
