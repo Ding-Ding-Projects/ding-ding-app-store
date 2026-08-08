@@ -25,6 +25,7 @@ function fail(message) {
 const appId = option('--app-id');
 const output = option('--output', path.resolve('install-proof.json'));
 const dataRoot = option('--data-root', path.resolve('install-proof-data'));
+const repositoryRoot = path.resolve('.');
 const configuredTimeout = Number(process.env.DING_DING_INSTALL_PROOF_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS);
 const proofTimeoutMs = Number.isFinite(configuredTimeout) ? Math.min(Math.max(configuredTimeout, 60_000), 30 * 60_000) : DEFAULT_TIMEOUT_MS;
 
@@ -36,6 +37,10 @@ if (process.exitCode) process.exit();
 await mkdir(path.dirname(path.resolve(output)), { recursive: true });
 await mkdir(path.resolve(dataRoot), { recursive: true });
 app.setPath('userData', path.resolve(dataRoot));
+// Electron resolves app-owned data from the entry script directory. The proof
+// entrypoint lives under scripts/, while the reviewed catalog lives at the
+// repository root, so pin this renderer-less harness to the checkout root.
+app.getAppPath = () => repositoryRoot;
 // Cloud runners have no interactive desktop. Configure the renderer-less Electron
 // process before readiness so GPU/sandbox startup cannot turn into an unbounded wait.
 app.commandLine.appendSwitch('disable-gpu');

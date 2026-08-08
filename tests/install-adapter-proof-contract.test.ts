@@ -26,6 +26,8 @@ describe('cloud install adapter proof boundary', () => {
     expect(script).toContain('DING_DING_INSTALL_PROOF_TIMEOUT_MS');
     expect(script).toContain('app.exit(exitCode)');
     expect(script).toContain("logMilestone('electron-readiness-skipped')");
+    expect(script).toContain('const repositoryRoot = path.resolve(\'.\')');
+    expect(script).toContain('app.getAppPath = () => repositoryRoot');
     expect(script).not.toContain('app.whenReady()');
     expect(script).toContain("app.commandLine.appendSwitch('disable-gpu')");
     expect(script).toContain("app.commandLine.appendSwitch('no-sandbox')");
