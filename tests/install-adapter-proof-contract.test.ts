@@ -25,7 +25,8 @@ describe('cloud install adapter proof boundary', () => {
     expect(script).toContain('withProofTimeout');
     expect(script).toContain('DING_DING_INSTALL_PROOF_TIMEOUT_MS');
     expect(script).toContain('app.exit(exitCode)');
-    expect(script).toContain("withProofTimeout(app.whenReady(), 'Electron readiness')");
+    expect(script).toContain("logMilestone('electron-readiness-skipped')");
+    expect(script).not.toContain('app.whenReady()');
     expect(script).toContain("app.commandLine.appendSwitch('disable-gpu')");
     expect(script).toContain("app.commandLine.appendSwitch('no-sandbox')");
     expect(script).toContain("APP_ID_PATTERN");

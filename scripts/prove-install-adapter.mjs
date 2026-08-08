@@ -104,8 +104,10 @@ heartbeat.unref?.();
 logMilestone('started', `appId=${appId} timeoutMinutes=${Math.round(proofTimeoutMs / 60_000)}`);
 
 try {
-  await withProofTimeout(app.whenReady(), 'Electron readiness');
-  logMilestone('app-ready');
+  // The proof is renderer-less and only needs Electron's path/process shims.
+  // Waiting for native UI readiness can hang forever on a cloud runner with no
+  // interactive desktop, so do not make service verification depend on it.
+  logMilestone('electron-readiness-skipped');
   const { CatalogService } = await import('../dist/main/catalog-service.js');
   const { HistoryService } = await import('../dist/main/history-service.js');
   const { InstalledService } = await import('../dist/main/installed-service.js');
