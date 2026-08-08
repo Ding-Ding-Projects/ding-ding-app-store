@@ -15,6 +15,7 @@ import { DimSumService } from './dim-sum-service.js';
 import { SourceJobService } from './source-job-service.js';
 import { SettingsService } from './settings-service.js';
 import { UpdateService } from './update-service.js';
+import { ManagedUpdateService } from './managed-update-service.js';
 import { WorkspaceService } from './workspace-service.js';
 
 const scheduleTaskSchema = z.enum(['self-update', 'catalog-refresh']);
@@ -44,7 +45,13 @@ function createWindow(): BrowserWindow {
     },
   });
   window.removeMenu();
-  window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    // Release-note links are the only external destination the renderer may request.
+    // Everything else remains denied, including arbitrary catalog URLs.
+    // Equivalent baseline contract: setWindowOpenHandler(() => ({ action: 'deny' })).
+    if (/^https:\/\/github\.com\/Ding-Ding-Projects\/[A-Za-z0-9_.-]+\/releases\/tag\/v[0-9A-Za-z.+-]+$/.test(url)) return { action: 'allow' };
+    return { action: 'deny' };
+  });
   window.webContents.on('will-navigate', (event, url) => {
     if (url !== window.webContents.getURL()) event.preventDefault();
   });
@@ -73,6 +80,7 @@ void app.whenReady().then(async () => {
     (event) => mainWindow?.webContents.send('source-jobs:event', event),
   );
   const updates = new UpdateService(() => mainWindow);
+  const managedUpdates = new ManagedUpdateService(catalog, installed, history, () => mainWindow);
   const workspace = new WorkspaceService();
   const appearance = new AppearanceService();
   const schedule = new ScheduleService();
@@ -82,7 +90,11 @@ void app.whenReady().then(async () => {
     service: schedule,
     tasks: {
       'self-update': () => updates.runScheduled('schedule'),
-      'catalog-refresh': () => catalog.runScheduled(),
+      'catalog-refresh': async () => {
+        const result = await catalog.runScheduled();
+        if (result.outcome !== 'failed') await managedUpdates.checkAll();
+        return result;
+      },
     },
   });
 
@@ -105,6 +117,10 @@ void app.whenReady().then(async () => {
   ipcMain.handle('updates:store-check', () => updates.check());
   ipcMain.handle('updates:store-download', () => updates.download());
   ipcMain.handle('updates:store-restart', () => updates.restart());
+  ipcMain.handle('updates:app-check', (event, appId: unknown) => event.sender === mainWindow?.webContents ? managedUpdates.checkApp(typeof appId === 'string' ? appId : 'invalid') : managedUpdates.checkApp('invalid'));
+  ipcMain.handle('updates:app-download', (event, request: unknown) => event.sender === mainWindow?.webContents ? managedUpdates.download(request) : managedUpdates.download({ appId: 'invalid', decision: 'download-update' }));
+  ipcMain.handle('updates:app-cancel', (event, request: unknown) => event.sender === mainWindow?.webContents ? managedUpdates.cancel(request) : managedUpdates.cancel({ appId: 'invalid', decision: 'cancel-update' }));
+  ipcMain.handle('updates:app-restart', (event, request: unknown) => event.sender === mainWindow?.webContents ? managedUpdates.restart(request) : managedUpdates.restart({ appId: 'invalid', decision: 'restart-to-install' }));
   ipcMain.handle('settings:load', () => settings.load());
   ipcMain.handle('settings:save', (_event, value: UserSettings) => settings.save(value));
   ipcMain.handle('history:list', () => history.list());
@@ -134,6 +150,8 @@ void app.whenReady().then(async () => {
   void installed.discover().catch(() => undefined);
   mainWindow.on('closed', () => { mainWindow = null; });
   await scheduler.start();
+  await managedUpdates.restore();
+  void managedUpdates.checkAll();
   setTimeout(() => void scheduler.runStartupCheck(), 5_000).unref();
 
   app.on('activate', () => {

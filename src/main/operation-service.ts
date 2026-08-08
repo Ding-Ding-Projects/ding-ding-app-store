@@ -100,7 +100,7 @@ async function terminateProcessTree(child: ReturnType<typeof spawn>): Promise<bo
   return taskkillResult.code === 0 && !taskkillResult.timedOut && launcherClosed;
 }
 
-async function run(executable: string, args: readonly string[], signal?: AbortSignal, timeoutMs = 15 * 60_000, operationLabel = 'installer'): Promise<number> {
+export async function run(executable: string, args: readonly string[], signal?: AbortSignal, timeoutMs = 15 * 60_000, operationLabel = 'installer'): Promise<number> {
   if (signal?.aborted) throw new Error('Installation cancelled before the installer started.');
   return await new Promise<number>((resolve, reject) => {
     const child = spawn(executable, [...args], {

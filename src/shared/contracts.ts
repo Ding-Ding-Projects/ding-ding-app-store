@@ -111,7 +111,7 @@ export interface InstalledAppRecord {
   detectedAt: string;
 }
 
-export type OperationKind = 'install' | 'build' | 'uninstall';
+export type OperationKind = 'install' | 'build' | 'uninstall' | 'update';
 export type HistoryExportFormat = 'json' | 'jsonl' | 'csv' | 'markdown';
 
 export type ExternalEditorId = 'vscode';
@@ -144,6 +144,30 @@ export interface HistoryEntry {
   ok: boolean;
   message: string;
   occurredAt: string;
+}
+
+/**
+ * Per-application update state.  This is deliberately separate from the
+ * App Store self-updater state: discovering a release never starts an
+ * installer, and an app update is only launched after the user chooses the
+ * explicit restart action.
+ */
+export type ManagedUpdateState =
+  | { appId: string; status: 'idle' | 'up-to-date'; installedVersion: string | null; checkedAt?: string }
+  | { appId: string; status: 'available'; installedVersion: string; version: string; releaseNotesUrl: string; unsigned: true }
+  | { appId: string; status: 'downloading'; installedVersion: string; version: string; releaseNotesUrl: string; progress: number; bytesDownloaded: number; bytesTotal: number; unsigned: true }
+  | { appId: string; status: 'ready'; installedVersion: string; version: string; releaseNotesUrl: string; progress: 100; bytesDownloaded: number; bytesTotal: number; unsigned: true }
+  | { appId: string; status: 'installing'; installedVersion: string; version: string; releaseNotesUrl: string; unsigned: true }
+  | { appId: string; status: 'cancelled' | 'failed' | 'offline'; installedVersion: string | null; version?: string; releaseNotesUrl?: string; message: string; checkedAt: string; unsigned?: true };
+
+export interface ManagedUpdateRequest {
+  appId: string;
+  decision: 'download-update' | 'restart-to-install';
+}
+
+export interface ManagedUpdateCancelRequest {
+  appId: string;
+  decision: 'cancel-update';
 }
 
 export type AppStoreUpdateState =
@@ -689,6 +713,11 @@ export interface DingDingStoreApi {
     checkStore(): Promise<AppStoreUpdateState>;
     downloadStore(): Promise<AppStoreUpdateState>;
     restartStore(): Promise<OperationResult>;
+    checkApp(appId: string): Promise<ManagedUpdateState>;
+    downloadApp(request: ManagedUpdateRequest): Promise<ManagedUpdateState>;
+    cancelApp(request: ManagedUpdateCancelRequest): Promise<ManagedUpdateState>;
+    restartApp(request: ManagedUpdateRequest): Promise<OperationResult>;
+    subscribeApp(listener: (state: ManagedUpdateState) => void): () => void;
     subscribe(listener: (state: AppStoreUpdateState) => void): () => void;
   };
   settings: {

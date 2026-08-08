@@ -29,7 +29,7 @@ Windows discovery, owned records, operation history, snapshots, and export.
 
 Catalog comparisons, the App Store updater, repeat checks, and quiet hours.
 
-- [Per-app update checker](./updates/per-app-update-checker.md) — **limited** — Compares each discovered version with the latest stable catalog release whenever catalog metadata refreshes; it does not yet download app updates.
+- [Per-app update checker](./updates/per-app-update-checker.md) — **limited** — Compares discovered versions with stable releases and lets a user download, verify, cancel, and explicitly restart to install a staged per-app update.
 - [App Store self-updater](./updates/app-store-self-updater.md) — **limited** — Checks a bounded unsigned Squirrel RELEASES feed, separates availability from download, and restarts only after an explicit ready-state action.
 - [Update schedule](./updates/update-schedule.md) — **shipped** — Runs one unavoidable startup self-check plus bounded repeat self-check and catalog-refresh timers with explicit history, backoff, and quiet-hour semantics.
 

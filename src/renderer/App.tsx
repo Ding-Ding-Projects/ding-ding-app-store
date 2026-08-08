@@ -7,6 +7,7 @@ import type {
   ElementKey,
   HistoryEntry,
   InstalledAppRecord,
+  ManagedUpdateState,
   SourceTerminalEvent,
   TabGroup,
   TabGroupColor,
@@ -86,6 +87,8 @@ export function App() {
   } | null>(null);
   const operationRunningRef = useRef(false);
   const [updateState, setUpdateState] = useState<AppStoreUpdateState>({ status: 'idle' });
+  const [managedUpdates, setManagedUpdates] = useState<Record<string, ManagedUpdateState>>({});
+  const managedChecks = useRef(new Set<string>());
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   const [notificationCenterOpen, setNotificationCenterOpen] = useState(false);
@@ -148,6 +151,35 @@ export function App() {
     void loadInstalled();
     if (result.ok) void loadCatalog(true);
   }, [announce, loadCatalog, loadHistory, loadInstalled, notify]);
+
+  const handleManagedUpdate = useCallback(async (kind: 'download' | 'cancel' | 'restart', app: CatalogApp, trigger: HTMLButtonElement) => {
+    try {
+      if (kind === 'download') {
+        const state = await window.dingDingStore.updates.downloadApp({ appId: app.id, decision: 'download-update' });
+        setManagedUpdates((current) => ({ ...current, [app.id]: state }));
+        const message = 'message' in state ? state.message : undefined;
+        announce(state.status === 'ready' ? `${app.name} update is ready. Choose Restart to install update when the app is safe to restart.` : message ?? `${app.name} update ${state.status}.`);
+        notify({ ok: state.status === 'ready', message: state.status === 'ready' ? `${app.name} is downloaded and verified. It will not install until you choose Restart to install update.` : message ?? `${app.name} update ${state.status}.` });
+      } else if (kind === 'cancel') {
+        const state = await window.dingDingStore.updates.cancelApp({ appId: app.id, decision: 'cancel-update' });
+        setManagedUpdates((current) => ({ ...current, [app.id]: state }));
+        notify({ ok: state.status === 'cancelled', message: 'message' in state ? state.message : `${app.name} update cancellation requested.` });
+      } else {
+        const result = await window.dingDingStore.updates.restartApp({ appId: app.id, decision: 'restart-to-install' });
+        reportOperation(result);
+        if (!result.ok) {
+          const state = await window.dingDingStore.updates.checkApp(app.id);
+          setManagedUpdates((current) => ({ ...current, [app.id]: state }));
+        }
+      }
+    } catch (error) {
+      const message = (error as Error).message;
+      notify({ ok: false, message });
+      announce(message);
+    } finally {
+      window.setTimeout(() => trigger.focus(), 0);
+    }
+  }, [announce, notify, reportOperation]);
 
   useEffect(() => window.dingDingStore.sourceJobs.subscribe((event) => {
     setSourceTerminal((current) => {
@@ -239,13 +271,25 @@ export function App() {
     void loadCatalog();
     void loadHistory();
     void loadInstalled();
-    return window.dingDingStore.updates.subscribe(setUpdateState);
+    const removeStoreListener = window.dingDingStore.updates.subscribe(setUpdateState);
+    const removeAppListener = window.dingDingStore.updates.subscribeApp((state) => setManagedUpdates((current) => ({ ...current, [state.appId]: state })));
+    return () => { removeStoreListener(); removeAppListener(); };
   }, [loadCatalog, loadHistory, loadInstalled]);
 
   const apps = useMemo(() => {
     const versions = new Map(installed.map((record) => [record.appId, record.version]));
     return (catalog?.apps ?? []).map((item) => ({ ...item, installedVersion: versions.get(item.id) ?? item.installedVersion }));
   }, [catalog, installed]);
+
+  useEffect(() => {
+    if (activeTab !== 'updates' || loading || !catalog) return;
+    for (const app of catalog.apps.filter((item) => item.installedVersion && !managedChecks.current.has(item.id))) {
+      managedChecks.current.add(app.id);
+      void window.dingDingStore.updates.checkApp(app.id)
+        .then((state) => setManagedUpdates((current) => ({ ...current, [app.id]: state })))
+        .catch((error) => notify({ ok: false, message: (error as Error).message }));
+    }
+  }, [activeTab, catalog, loading, notify]);
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -512,7 +556,7 @@ export function App() {
     if (appearance.selectedKey) window.document.querySelector(`[data-el="${appearance.selectedKey}"]`)?.setAttribute('data-el-selected', 'true');
   }, [appearance.selectedKey, appearance.elements, activeTab, subTab]);
 
-  const updatesBadge = Boolean(catalog?.apps.some((app) => app.updateState === 'available') || updateState.status === 'ready');
+  const updatesBadge = Boolean(catalog?.apps.some((app) => app.updateState === 'available') || Object.values(managedUpdates).some((state) => state.status === 'ready' || state.status === 'downloading') || updateState.status === 'ready');
   const entries = useMemo(() => buildRegistry({
     settings,
     workspace: workspace.workspace,
@@ -595,6 +639,8 @@ export function App() {
               settings={settings}
               loading={loading}
               onAction={(kind, app, trigger) => void startAction(kind, app, trigger)}
+              onManagedUpdate={(kind, app, trigger) => void handleManagedUpdate(kind, app, trigger)}
+              managedUpdates={managedUpdates}
               onBulkAction={(kind, selectedApps, trigger) => void startBulkAction(kind, selectedApps, trigger)}
               runningAction={runningAction}
               notify={notify}

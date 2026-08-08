@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import type { CatalogApp, UserSettings } from '../../shared/contracts';
+import type { CatalogApp, ManagedUpdateState, UserSettings } from '../../shared/contracts';
 import { el } from '../el';
 import { Icon } from '../icons';
 import { label } from '../i18n';
@@ -20,8 +20,8 @@ export interface RunningAction {
   total: number;
 }
 
-export function AppCard({ app, settings, onAction, searchLabel, runningAction, selected, onSelect }: { app: CatalogApp; settings: UserSettings; onAction: (kind: ActionKind, app: CatalogApp, trigger: HTMLButtonElement) => void; searchLabel: ReactNode; runningAction: RunningAction | null; selected: boolean; onSelect(checked: boolean, shiftKey: boolean): void }) {
-  const operationBusy = runningAction !== null;
+export function AppCard({ app, settings, onAction, onManagedUpdate, managedUpdate, searchLabel, runningAction, selected, onSelect }: { app: CatalogApp; settings: UserSettings; onAction: (kind: ActionKind, app: CatalogApp, trigger: HTMLButtonElement) => void; onManagedUpdate: (kind: 'download' | 'cancel' | 'restart', app: CatalogApp, trigger: HTMLButtonElement) => void; managedUpdate: ManagedUpdateState | undefined; searchLabel: ReactNode; runningAction: RunningAction | null; selected: boolean; onSelect(checked: boolean, shiftKey: boolean): void }) {
+  const operationBusy = runningAction !== null || managedUpdate?.status === 'downloading' || managedUpdate?.status === 'installing';
   const installBusy = runningAction?.appId === app.id && runningAction.kind === 'install';
   const sourceBusy = runningAction?.appId === app.id && runningAction.kind === 'build';
   const busyExplanation = operationBusy ? 'Wait for the current installation to finish before starting another action.' : undefined;
@@ -37,6 +37,14 @@ export function AppCard({ app, settings, onAction, searchLabel, runningAction, s
           {app.availability === 'installable' && <button className="filled-button" {...el('button-filled')} disabled={operationBusy} aria-busy={installBusy} title={busyExplanation} onClick={(event) => onAction('install', app, event.currentTarget)}><Icon>download</Icon>{installBusy ? label(settings, 'Installing…', '安裝緊…') : label(settings, app.installedVersion ? 'Reinstall' : 'Install', app.installedVersion ? '重新安裝' : '安裝')}</button>}
           {app.availability === 'source-build' && <button className="tonal-button" {...el('button-tonal')} disabled={operationBusy} aria-busy={sourceBusy} title={busyExplanation} onClick={(event) => onAction('build', app, event.currentTarget)}><Icon>build</Icon>{sourceBusy ? label(settings, 'Preparing source install…', '準備緊 source 安裝…') : label(settings, 'Install from source', '由 source 安裝')}</button>}
           {app.installedVersion && <button className="text-button danger" disabled={operationBusy} title={busyExplanation} onClick={(event) => onAction('uninstall', app, event.currentTarget)}><Icon>delete</Icon>{label(settings, 'Uninstall', '解除安裝')}</button>}
+          {app.updateState === 'available' && app.installedVersion && managedUpdate?.status !== 'ready' && (
+            <button className="tonal-button" disabled={operationBusy} aria-busy={managedUpdate?.status === 'downloading'} title={managedUpdate?.status === 'offline' ? managedUpdate.message : 'Download and verify this stable release. Installation starts only after you choose Restart to install update.'} onClick={(event) => onManagedUpdate('download', app, event.currentTarget)}>
+              <Icon>download_for_offline</Icon>{managedUpdate?.status === 'downloading' ? `Downloading ${managedUpdate.progress}%` : managedUpdate?.status === 'failed' || managedUpdate?.status === 'cancelled' ? 'Retry update' : 'Download update'}
+            </button>
+          )}
+          {managedUpdate?.status === 'downloading' && managedUpdate.appId === app.id && <button className="text-button" onClick={(event) => onManagedUpdate('cancel', app, event.currentTarget)}>Cancel</button>}
+          {managedUpdate?.status === 'ready' && managedUpdate.appId === app.id && <button className="filled-button" disabled={operationBusy} onClick={(event) => onManagedUpdate('restart', app, event.currentTarget)} title="The verified installer is staged. Choose this explicit action to install it; no discovery path launches an installer."><Icon>restart_alt</Icon>Restart to install update</button>}
+          {managedUpdate?.status === 'ready' && managedUpdate.releaseNotesUrl && <a className="text-button" href={managedUpdate.releaseNotesUrl} target="_blank" rel="noreferrer">Release notes</a>}
           <button className="text-button" {...el('button-text')} onClick={() => window.document.getElementById(`docs-${app.id}`)?.focus()}><Icon>menu_book</Icon>{label(settings, 'Docs', '文件')}</button>
         </div>
       </div>
@@ -44,12 +52,14 @@ export function AppCard({ app, settings, onAction, searchLabel, runningAction, s
   );
 }
 
-export function AppsPage({ mode, apps, settings, loading, onAction, onBulkAction, runningAction, openRegex, onRegexHandled, notify }: {
+export function AppsPage({ mode, apps, settings, loading, onAction, onManagedUpdate, managedUpdates, onBulkAction, runningAction, openRegex, onRegexHandled, notify }: {
   mode: AppsMode;
   apps: CatalogApp[];
   settings: UserSettings;
   loading: boolean;
   onAction(kind: ActionKind, app: CatalogApp, trigger: HTMLButtonElement): void;
+  onManagedUpdate(kind: 'download' | 'cancel' | 'restart', app: CatalogApp, trigger: HTMLButtonElement): void;
+  managedUpdates: Readonly<Record<string, ManagedUpdateState>>;
   onBulkAction(kind: ActionKind, apps: CatalogApp[], trigger: HTMLButtonElement): void;
   runningAction: RunningAction | null;
   openRegex: boolean;
@@ -109,7 +119,7 @@ export function AppsPage({ mode, apps, settings, loading, onAction, onBulkAction
       </div>
       {loading && <div className="loading-grid" aria-label="Loading catalog">{Array.from({ length: 6 }, (_, index) => <div className="skeleton" key={index} />)}</div>}
       {!loading && (shown.length
-        ? <section className="app-grid">{shown.map((app, index) => <AppCard key={app.id} app={app} settings={settings} onAction={onAction} runningAction={runningAction} searchLabel={highlight(search.state, app.name)} selected={selected.has(app.id)} onSelect={(checked, shiftKey) => selectAt(index, checked, shiftKey)} />)}</section>
+        ? <section className="app-grid">{shown.map((app, index) => <AppCard key={app.id} app={app} settings={settings} onAction={onAction} onManagedUpdate={onManagedUpdate} managedUpdate={managedUpdates[app.id]} runningAction={runningAction} searchLabel={highlight(search.state, app.name)} selected={selected.has(app.id)} onSelect={(checked, shiftKey) => selectAt(index, checked, shiftKey)} />)}</section>
         : <div className="empty-state" {...el('empty-state')}><Icon>search_off</Icon><h2>No matching apps</h2><p>The current search and tab filters found nothing. Clear the query or refresh the catalog.</p></div>)}
     </>
   );
