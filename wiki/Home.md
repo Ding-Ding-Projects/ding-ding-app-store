@@ -8,15 +8,15 @@ The wiki mirrors the same canonical feature articles bundled into the applicatio
 
 ## Installation and removal
 
-- [Verified installer operations](Verified-Installer-Operations) — **limited** — Downloads one allowlisted stable asset, verifies its declared size and GitHub SHA-256 digest, then launches a fixed silent Squirrel or MSI argument vector.
-- [One-click installation and adapter coverage](One-Click-Installation) — **limited** — Starts install and source-install requests in one click while keeping privileged choices in reviewed per-application adapters.
+- [Verified installer operations](Verified-Installer-Operations) — **limited** — Downloads one app-specific Squirrel, MSI, NSIS, jpackage, or portable-ZIP asset, verifies its bytes, and applies only a fixed reviewed adapter.
+- [One-click installation and adapter coverage](One-Click-Installation) — **limited** — Dispatches 21 reviewed release adapters without typed confirmation and reports three current public-release blockers instead of guessing commands.
 - [Source-build security](Source-Build-Security) — **limited** — Provides a typed, bounded source-job and repair runtime but deliberately withholds execution until an attested hard-disposable Windows broker and reviewed recipe exist.
 - [Protected uninstall](Uninstall) — **shipped** — Removes only an installation whose Squirrel, MSI, or managed-portable ownership route was recorded or safely rediscovered.
-- [Automatic repair and universal adapters](Automatic-Repair-and-Universal-Adapters) — **limited** — Implements the typed terminal, pinned OpenCode, bounded repair, consent, and isolation contracts while failing closed until a real hard-disposable broker and reviewed per-app recipes are supplied.
+- [Automatic repair and universal adapters](Automatic-Repair-and-Universal-Adapters) — **limited** — Keeps the typed terminal, pinned OpenCode, bounded repair, consent, and hard-isolation refusal separate from the 24 reviewed release-adapter records.
 
 ## Installed apps and history
 
-- [Installed app discovery](Installed-App-Discovery) — **shipped** — Reconciles App Store records with allowlisted Squirrel roots, Windows uninstall registry entries, and the managed portable directory.
+- [Installed app discovery](Installed-App-Discovery) — **shipped** — Reconciles App Store records with exact reviewed registry identities and the managed portable directory, then derives uninstall authority afresh.
 - [Activity history and export](Activity-History) — **shipped** — Appends every install, build, and uninstall result, offers composed filters, and exports the complete stored log in four text formats.
 
 ## Updates and schedules

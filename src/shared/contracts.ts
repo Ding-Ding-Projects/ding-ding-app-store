@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export type LanguageMode = 'en' | 'yue' | 'bilingual';
 export type ThemeMode = 'system' | 'light' | 'dark';
-export type PackageType = 'squirrel' | 'msi' | 'nsis' | 'archive' | 'source' | 'unsupported';
+export type PackageType = 'squirrel' | 'msi' | 'nsis' | 'jpackage' | 'archive' | 'source' | 'unsupported';
 export type Availability = 'installable' | 'source-build' | 'documentation-only' | 'unsupported';
 
 export interface CatalogApp {
@@ -35,6 +35,11 @@ export interface CatalogSnapshot {
 export interface OperationRequest {
   appId: string;
   decision: OperationKind;
+}
+
+export interface InstallCancelRequest {
+  appId: string;
+  decision: 'cancel-install';
 }
 
 export interface OperationResult {
@@ -86,16 +91,22 @@ export interface SourceJobStartResult {
 export type UninstallDescriptor =
   | { kind: 'squirrel'; executable: string; arguments: ['--uninstall', '-s'] }
   | { kind: 'msi'; executable: 'msiexec.exe'; arguments: ['/x', string, '/qn', '/norestart'] }
+  | { kind: 'reviewed-executable'; executable: string; arguments: string[]; adapterId: string }
   | { kind: 'portable'; executable: null; arguments: [] };
+
+export type InstallOwnership =
+  | { kind: 'registry'; adapterId: string; registryKey: string; fingerprint: string }
+  | { kind: 'portable'; adapterId: string; installRoot: string };
 
 export interface InstalledAppRecord {
   appId: string;
   displayName: string;
   version: string;
   packageType: PackageType;
-  source: 'store' | 'squirrel-discovery' | 'msi-registry' | 'portable-managed';
+  source: 'store' | 'squirrel-discovery' | 'msi-registry' | 'reviewed-registry' | 'portable-managed';
   installRoot: string | null;
   uninstall: UninstallDescriptor | null;
+  ownership: InstallOwnership | null;
   installedAt: string | null;
   detectedAt: string;
 }
@@ -582,6 +593,7 @@ export interface DingDingStoreApi {
   };
   operations: {
     install(request: OperationRequest): Promise<OperationResult>;
+    cancelInstall(request: InstallCancelRequest): Promise<OperationResult>;
     build(request: OperationRequest): Promise<OperationResult>;
     uninstall(request: OperationRequest): Promise<OperationResult>;
     installed(): Promise<InstalledAppRecord[]>;
