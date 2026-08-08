@@ -5,11 +5,12 @@ Material Design 3 desktop software center for discovering, documenting, installi
 `npm install && npm start`
 
 **Documentation site:** <https://ding-ding-projects.github.io/ding-ding-app-store/><br>
-**Current state:** active development; no verified installer has been published yet.
+**Current state:** active development; the latest verified unsigned Windows release is [`v0.1.0-27-1`](https://github.com/Ding-Ding-Projects/ding-ding-app-store/releases/tag/v0.1.0-27-1), code-named **Classic Har Gow · 蝦餃**.
 
 ## Contents
 
 - [Application architecture](#application-architecture)
+- [Screenshot gallery](#screenshot-gallery)
 - [Security and trust](#security-and-trust)
 - [Development](#development)
 - [Project guidance](#project-guidance)
@@ -36,6 +37,19 @@ Material Design 3 desktop software center for discovering, documenting, installi
 <summary><strong>Packaged runtime evidence</strong></summary>
 
 The unsigned packaged application was driven on the sanctioned hidden Windows desktop. The real [Installed screen](docs/assets/screenshots/installed-runtime.png) discovered reviewed Squirrel and managed-portable records, and the [Activity screen](docs/assets/screenshots/activity-runtime.png) rendered an append-only settings event with filtered export controls.
+
+</details>
+
+<details id="screenshot-gallery">
+<summary><strong>Screenshot gallery — real packaged surfaces</strong></summary>
+
+These captures are from the built application on the hidden Windows desktop; they are evidence of the rendered surfaces, not mockups. The gallery covers discovery, installed-app detection, and activity/history export. Install is one click; only uninstall keeps the native destructive gate.
+
+| Surface | Runtime capture |
+| --- | --- |
+| Catalog discovery, bilingual navigation, search, one-click install cards, and command-palette hint | ![Catalog discovery runtime capture](docs/assets/screenshots/catalog-runtime.png) |
+| Installed-app detection with Reinstall, Uninstall, and documentation actions | ![Installed-app detection runtime capture](docs/assets/screenshots/installed-runtime.png) |
+| Append-only activity history with JSON, JSONL, CSV, and Markdown export | ![Activity and export runtime capture](docs/assets/screenshots/activity-runtime.png) |
 
 </details>
 

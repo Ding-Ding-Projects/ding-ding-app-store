@@ -16,8 +16,14 @@ function Assert-GitHubCliVersion {
   $reportedLines = @(& $Executable version 2>&1)
   $exitCode = $LASTEXITCODE
   $reportedText = ($reportedLines | ForEach-Object { [string]$_ }) -join "`n"
+  $firstLine = if ($reportedLines.Count -gt 0) { [string]$reportedLines[0] } else { '' }
+  # Windows runners can preserve a UTF-8 BOM or terminal colour escape on the
+  # first native-output line.  Normalize those presentation bytes, not the
+  # version text, before applying the exact pinned-version check.
+  $firstLine = $firstLine.TrimStart([char]0xFEFF)
+  $firstLine = [regex]::Replace($firstLine, "`e\[[0-9;]*m", '').Trim()
   $expectedPattern = "^gh version $([regex]::Escape($ExpectedVersion))(?:\s|$)"
-  if ($exitCode -ne 0 -or $reportedLines.Count -lt 1 -or [string]$reportedLines[0] -notmatch $expectedPattern) {
+  if ($exitCode -ne 0 -or $reportedLines.Count -lt 1 -or $firstLine -notmatch $expectedPattern) {
     throw "The job-local GitHub CLI did not report pinned version $ExpectedVersion."
   }
   return $reportedText
