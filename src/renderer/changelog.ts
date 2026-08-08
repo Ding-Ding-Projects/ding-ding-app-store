@@ -24,9 +24,10 @@ export function validateChangelog(entries: readonly ChangelogEntry[]): string[] 
   return issues;
 }
 
-export function changelogMarkdown(entries: readonly ChangelogEntry[]): string {
+/** Render an export with the current display name without changing product identity. */
+export function changelogMarkdown(entries: readonly ChangelogEntry[], displayName = 'Ding Ding App Store'): string {
   return [
-    '# Ding Ding App Store changelog',
+    `# ${displayName} changelog`,
     '',
     ...entries.flatMap((entry) => [
       `## ${entry.version} — ${entry.releasedAt.slice(0, 10)}`,
