@@ -96,6 +96,14 @@ describe('cloud install adapter proof boundary', () => {
     expect(script).toContain('changedEntryCount: changedRegistryEntries.length');
     expect(script).toContain("hive: entry.key.toUpperCase().startsWith('HKEY_CURRENT_USER\\\\') ? 'HKEY_CURRENT_USER' : 'HKEY_LOCAL_MACHINE'");
     expect(script).not.toContain('registryKey: entry.key');
+    expect(script).toContain("processTreeBoundary: 'direct-child-only'");
+    expect(script).toContain('uninstallArguments: ownedBeforeCleanup?.uninstall?.arguments ?? []');
+    expect(script).toContain('processObservations');
+    expect(script).toContain('uninstallExecutablePresent');
+    expect(script).toContain('registryBefore: changedRegistryEntries');
+    expect(script).toContain('cleanupDiagnostics.registryAfter');
+    expect(script).not.toContain('installLocation: entry.installLocation');
+    expect(script).not.toContain('uninstallString: entry.uninstallString');
     expect(script).toContain('phaseChanged || progressChanged || event.final');
     expect(script).toContain('droppedProgressEvents');
     expect(script).toContain('setInterval');

@@ -16,7 +16,7 @@ import {
   validateAdapterCoverage,
 } from '../src/main/install-adapters.js';
 import { applyVerifiedInstalledState } from '../src/main/catalog-service.js';
-import { TerminationUnprovenError, checksumFromCompanion, operationMustRetainLock, replacePortableDirectory, writeComplete } from '../src/main/operation-service.js';
+import { TerminationUnprovenError, checksumFromCompanion, operationMustRetainLock, replacePortableDirectory, run, writeComplete } from '../src/main/operation-service.js';
 import { extractZipSafe, validateArchiveEntryName } from '../src/main/safe-zip.js';
 
 async function createZip(entries: Array<{ name: string; contents?: Buffer; mode?: number }>): Promise<{ directory: string; zipPath: string }> {
@@ -221,6 +221,18 @@ describe('installer integrity and archive inputs', () => {
     expect(operationMustRetainLock(new Error('ordinary installer failure'))).toBe(false);
   });
 
+  it('reports the bounded direct child lifecycle without exposing its executable path', async () => {
+    const observations: Array<{ operationLabel: string; stage: string; processId: number | null; exitCode: number | null }> = [];
+    await expect(run(process.execPath, ['-e', 'process.exit(0)'], undefined, 5_000, 'diagnostic fixture', undefined, (event) => {
+      observations.push({ ...event });
+    })).resolves.toBe(0);
+    expect(observations).toHaveLength(2);
+    expect(observations[0]).toMatchObject({ operationLabel: 'diagnostic fixture', stage: 'spawned', exitCode: null });
+    expect(observations[0].processId).toBeTypeOf('number');
+    expect(observations[1]).toEqual({ operationLabel: 'diagnostic fixture', stage: 'exited', processId: observations[0].processId, exitCode: 0 });
+    expect(JSON.stringify(observations)).not.toContain(process.execPath);
+  });
+
   it('uses a portable commit point and never restores old bytes after committed backup-cleanup failure', async () => {
     const paths = new Set(['extracted', 'target']);
     let committed = false;
@@ -275,6 +287,7 @@ describe('installer integrity and archive inputs', () => {
       'extractZipSafe', 'terminateProcessTree', 'taskkill.exe', 'activeOperations', 'cancelInstall',
       "const operationKey = record.id", "kind: 'uninstall'", 'operationMustRetainLock',
       'recordInstalledFromRegistry', 'exact reviewed installed-app entry was not detected',
+      'ProcessExecutionObservation', "stage: 'spawned'", "stage: 'exited'", 'publishProcessObservation',
     ]) expect(source).toContain(contract);
     expect(source).not.toMatch(/exec\(|execFile\(|shell:\s*true/);
   });
