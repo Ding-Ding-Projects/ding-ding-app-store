@@ -75,6 +75,16 @@ describe('GitHub-hosted workflow and bootstrap contract', () => {
     expect(initialSource).toBeLessThan(publish);
   });
 
+  it('keeps every workspace Vitest package on the finite shared timeout policy', async () => {
+    for (const packageName of ['catalog-contract', 'domain']) {
+      const packageJson = JSON.parse(await readFile(path.join(root, 'packages', packageName, 'package.json'), 'utf8')) as { scripts?: Record<string, string> };
+      expect(packageJson.scripts?.test).toContain('vitest run');
+      const config = await readFile(path.join(root, 'packages', packageName, 'vitest.config.ts'), 'utf8');
+      expect(config).toContain('testTimeout: 30_000');
+      expect(config).toContain('hookTimeout: 30_000');
+    }
+  });
+
   it('compares generated documentation independently of checkout line endings', async () => {
     const generator = await read('scripts/docs-generate.mjs');
     expect(generator).toContain("replaceAll('\\r\\n', '\\n')");
