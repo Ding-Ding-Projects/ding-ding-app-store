@@ -18,6 +18,8 @@ import { UpdateService } from './update-service.js';
 import { ManagedUpdateService } from './managed-update-service.js';
 import { WorkspaceService } from './workspace-service.js';
 import { ExternalEditorService } from './external-editor-service.js';
+import { ExternalScheduledSettingsService } from './external-scheduled-settings-service.js';
+import { HomeAssistantVault } from './home-assistant-vault.js';
 
 const scheduleTaskSchema = z.enum(['self-update', 'catalog-refresh']);
 
@@ -89,11 +91,13 @@ void app.whenReady().then(async () => {
   const workspace = new WorkspaceService();
   const appearance = new AppearanceService();
   const schedule = new ScheduleService();
+  const externalScheduledSettings = new ExternalScheduledSettingsService({ tokenStore: new HomeAssistantVault() });
   const dimSum = new DimSumService();
   const externalEditor = new ExternalEditorService();
   const scheduler = new Scheduler({
     getWindow: () => mainWindow,
     service: schedule,
+    externalSources: externalScheduledSettings,
     tasks: {
       'self-update': () => updates.runScheduled('schedule'),
       'catalog-refresh': async () => {

@@ -67,7 +67,10 @@ export function App() {
     const handle = window.setTimeout(() => setScheduleClock((value) => value + 1), 30_000);
     return () => window.clearTimeout(handle);
   }, [scheduleClock]);
-  const settings = useMemo(() => resolveScheduledSettings(baseSettings, schedule.draft), [baseSettings, schedule.draft, scheduleClock]);
+  const externalOverrides = useMemo(() => Object.fromEntries((schedule.status?.externalSources ?? [])
+    .filter((source) => source.state === 'active' && source.values)
+    .map((source) => [source.ruleId, source.values!])), [schedule.status?.externalSources]);
+  const settings = useMemo(() => resolveScheduledSettings(baseSettings, schedule.draft, new Date(), externalOverrides), [baseSettings, schedule.draft, scheduleClock, externalOverrides]);
   const search = useSearchStates();
   useAppearanceVars(appearance.elements);
 
