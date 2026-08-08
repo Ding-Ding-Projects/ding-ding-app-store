@@ -50,8 +50,10 @@ describe('GitHub-hosted workflow and bootstrap contract', () => {
     expect(release).toContain('$dish.photoUrl');
     expect(release).not.toMatch(/gh release create[^\n]*\$dish\.(?:assetName|photoUrl)/);
     expect(release).toContain('gh release create $env:RELEASE_TAG $setup $releases $nupkg --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA');
-    expect(release).toContain('if ($tagSha -ne $env:GITHUB_SHA)');
+    expect(release).not.toContain('$tagRef = gh api');
+    expect(release).not.toContain('if ($tagSha -ne $env:GITHUB_SHA)');
     expect(release).toContain('if ($publishedSha -ne $env:GITHUB_SHA)');
+    expect(release.indexOf('gh release edit $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --draft=false')).toBeLessThan(release.indexOf('if ($publishedSha -ne $env:GITHUB_SHA)'));
   });
 
   it('generates and reconciles the bounded current-release changelog without a repository loop', async () => {
