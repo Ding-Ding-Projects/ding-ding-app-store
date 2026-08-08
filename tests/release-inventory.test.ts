@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { compactReleaseInventory, MAX_RAW_INVENTORY_BYTES } from '../scripts/compact-release-inventory.mjs';
+import { generateReleaseManifest } from '../scripts/generate-release-changelog.mjs';
 
 const sha = '1111111111111111111111111111111111111111';
 const row = {
@@ -24,6 +25,21 @@ describe('release inventory compactor', () => {
 
   it('preserves a missing body as an explicit empty value so the downstream generator fails closed', () => {
     expect(compactReleaseInventory([[{ ...row, body: undefined, draft: true }]])[0].body).toBe('');
+  });
+
+  it('feeds compacted rows through the real manifest generator', () => {
+    const compacted = compactReleaseInventory([[row]]);
+    const manifest = generateReleaseManifest({
+      repository: 'Ding-Ding-Projects/ding-ding-app-store',
+      inventory: compacted,
+      prospective: { version: 'v0.1.0-2', commit: '2222222222222222222222222222222222222222', releasedAt: '2026-08-08T01:12:15Z' },
+      commitMetadata: {
+        [sha]: { subject: 'Ship the initial application', files: ['src/main/main.ts'] },
+        '2222222222222222222222222222222222222222': { subject: 'Generate bounded release metadata', files: ['scripts/compact-release-inventory.mjs'] },
+      },
+      dish: null,
+    });
+    expect(manifest.entries[1].commit).toBe(sha);
   });
 
   it('rejects malformed rows, oversized bodies, and sensitive text', () => {

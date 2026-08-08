@@ -1,6 +1,6 @@
 import { readFile, stat, writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
-import { assertNoSensitiveData, MAX_RELEASE_BODY_BYTES, MAX_RELEASE_PAGES, MAX_RELEASES } from './generate-release-changelog.mjs';
+import { assertNoSensitiveData, MAX_INVENTORY_BYTES, MAX_RELEASE_BODY_BYTES, MAX_RELEASE_PAGES, MAX_RELEASES } from './generate-release-changelog.mjs';
 
 export const MAX_RAW_INVENTORY_BYTES = 16 * 1024 * 1024;
 
@@ -30,7 +30,7 @@ function compactBody(body, tag) {
 }
 
 export function compactReleaseInventory(input) {
-  return flattenPages(input).map((release, index) => {
+  const compacted = flattenPages(input).map((release, index) => {
     if (!release || typeof release !== 'object' || Array.isArray(release)) {
       throw new Error(`Release inventory row ${index} is malformed.`);
     }
@@ -51,6 +51,9 @@ export function compactReleaseInventory(input) {
       body: compactBody(release.body, tag),
     };
   });
+  const compactBytes = Buffer.byteLength(JSON.stringify(compacted), 'utf8');
+  if (compactBytes > MAX_INVENTORY_BYTES) throw new Error(`Compacted GitHub release inventory exceeded ${MAX_INVENTORY_BYTES} bytes.`);
+  return compacted;
 }
 
 async function main() {
