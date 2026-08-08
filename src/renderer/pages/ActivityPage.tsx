@@ -9,20 +9,9 @@ import { highlight, makeMatcher, useSurfaceSearch } from '../search';
 import { exportHistoryEntries } from '../history-export';
 import { isExternalEditorBridgeAvailable, openExportInVsCode } from '../external-editor';
 import type { Notify } from '../notify';
+import { dateKey, matchesHistoryDate, presetRange, resolveHistoryDateRange } from '../history-date-filter';
 
-type HistoryPreset = 'all' | 'today' | '7d' | '30d';
 type HistoryResult = 'all' | 'ok' | 'failed';
-
-const historyPresetSpans: Record<Exclude<HistoryPreset, 'all'>, number> = {
-  today: 24 * 60 * 60 * 1000,
-  '7d': 7 * 24 * 60 * 60 * 1000,
-  '30d': 30 * 24 * 60 * 60 * 1000,
-};
-
-function withinPreset(occurredAt: string, preset: HistoryPreset): boolean {
-  if (preset === 'all') return true;
-  return Date.now() - new Date(occurredAt).getTime() <= historyPresetSpans[preset];
-}
 
 export function ActivityPage({ entries, loading, settings, openRegex, onRegexHandled, notify }: {
   entries: HistoryEntry[]; loading: boolean; settings: UserSettings; openRegex: boolean; onRegexHandled(): void; notify: Notify;
@@ -30,20 +19,30 @@ export function ActivityPage({ entries, loading, settings, openRegex, onRegexHan
   const search = useSurfaceSearch('activity');
   const [kind, setKind] = useState<'all' | OperationKind>('all');
   const [result, setResult] = useState<HistoryResult>('all');
-  const [preset, setPreset] = useState<HistoryPreset>('all');
+  const [preset, setPreset] = useState<'all' | 'today' | '7d' | '30d'>('all');
+  const [dateStart, setDateStart] = useState('');
+  const [dateEnd, setDateEnd] = useState('');
+  const [calendarMonth, setCalendarMonth] = useState(() => dateKey(new Date()).slice(0, 7));
   const [exportBusy, setExportBusy] = useState<HistoryExportFormat | null>(null);
   const [copyBusy, setCopyBusy] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const lastSelected = useRef<number | null>(null);
   const matcher = useMemo(() => makeMatcher(search.state), [search.state]);
+  const dateRange = useMemo(() => resolveHistoryDateRange(dateStart, dateEnd, settings.language === 'yue' ? 'yue' : 'en'), [dateStart, dateEnd, settings.language]);
+  const calendarDays = useMemo(() => {
+    const [year, month] = calendarMonth.split('-').map(Number);
+    const first = new Date(year, month - 1, 1);
+    const start = new Date(year, month - 1, 1 - first.getDay());
+    return Array.from({ length: 42 }, (_, index) => { const day = new Date(start); day.setDate(start.getDate() + index); return day; });
+  }, [calendarMonth]);
 
   const filtered = useMemo(() => {
     let source = entries;
     if (kind !== 'all') source = source.filter((entry) => entry.kind === kind);
     if (result !== 'all') source = source.filter((entry) => (result === 'ok' ? entry.ok : !entry.ok));
-    source = source.filter((entry) => withinPreset(entry.occurredAt, preset));
+    source = source.filter((entry) => matchesHistoryDate(entry.occurredAt, dateRange, settings.language === 'yue' ? 'yue' : 'en'));
     return source.filter((entry) => matcher(`${entry.displayName}\n${entry.kind}\n${entry.message}`));
-  }, [entries, kind, result, preset, matcher]);
+  }, [entries, kind, result, dateRange, matcher, settings.language]);
   useEffect(() => {
     const ids = new Set(entries.map((entry) => entry.id));
     setSelected((current) => new Set([...current].filter((id) => ids.has(id))));
@@ -97,13 +96,40 @@ export function ActivityPage({ entries, loading, settings, openRegex, onRegexHan
     return <div className="empty-state" {...el('empty-state')}><Icon>history</Icon><h2>No operations yet · 仲未有操作</h2><p>Installs, builds, updates, uninstalls, failures, and recoveries will appear here with exact results and export controls.</p></div>;
   }
 
+  const setPresetAndRange = (next: 'all' | 'today' | '7d' | '30d') => {
+    setPreset(next);
+    const range = presetRange(next);
+    setDateStart(range.start); setDateEnd(range.end);
+    if (range.start) setCalendarMonth(range.start.slice(0, 7));
+  };
+  const setManualDate = (setter: (value: string) => void) => (value: string) => { setPreset('all'); setter(value); if (/^\d{4}-\d{2}-\d{2}$/.test(value)) setCalendarMonth(value.slice(0, 7)); };
+  const chooseCalendarDay = (day: Date) => {
+    const value = dateKey(day);
+    if (!dateStart || (dateStart && dateEnd)) setManualDate(setDateStart)(value);
+    else setManualDate(setDateEnd)(value);
+  };
+
   return <>
     <SearchBox surface="activity" placeholder="Search activity by app, action, or message" openBuilder={openRegex} onBuilderHandled={onRegexHandled} />
     <section className="history-panel">
       {/* The shipped baseline was ['all', 'install', 'build', 'uninstall']; update is now a first-class history action. */}
       <div className="chip-row" role="group" aria-label="Filter by action">{(['all', 'install', 'update', 'build', 'uninstall'] as const).map((value) => <button key={value} aria-pressed={kind === value} onClick={() => setKind(value)}>{value === 'all' ? 'All actions' : value}</button>)}</div>
       <div className="chip-row" role="group" aria-label="Filter by result">{(['all', 'ok', 'failed'] as const).map((value) => <button key={value} aria-pressed={result === value} onClick={() => setResult(value)}>{value === 'all' ? 'Any result' : value === 'ok' ? 'Succeeded' : 'Failed'}</button>)}</div>
-      <div className="chip-row" role="group" aria-label="Filter by date">{(['all', 'today', '7d', '30d'] as const).map((value) => <button key={value} aria-pressed={preset === value} onClick={() => setPreset(value)}>{value === 'all' ? 'All time' : value === 'today' ? 'Today' : value === '7d' ? '7 days' : '30 days'}</button>)}</div>
+      <details className="history-date-filter" open={Boolean(dateStart || dateEnd || dateRange.error)}>
+        <summary>Advanced date range · 進階日期範圍</summary>
+        <div className="date-range" aria-label="Activity date range">
+          <label>Start date<input value={dateStart} placeholder="YYYY-MM-DD or locale date" aria-invalid={Boolean(dateRange.error && dateStart)} onChange={(event) => setManualDate(setDateStart)(event.target.value)} /></label>
+          <label className="calendar-field">Start calendar<input type="date" value={/^\d{4}-\d{2}-\d{2}$/.test(dateStart) ? dateStart : ''} onChange={(event) => setManualDate(setDateStart)(event.target.value)} /></label>
+          <label>End date<input value={dateEnd} placeholder="YYYY-MM-DD or locale date" aria-invalid={Boolean(dateRange.error && dateEnd)} onChange={(event) => setManualDate(setDateEnd)(event.target.value)} /></label>
+          <label className="calendar-field">End calendar<input type="date" value={/^\d{4}-\d{2}-\d{2}$/.test(dateEnd) ? dateEnd : ''} onChange={(event) => setManualDate(setDateEnd)(event.target.value)} /></label>
+        </div>
+        <div className="calendar-jump"><label>Calendar month and year<input type="month" value={calendarMonth} onChange={(event) => setCalendarMonth(event.target.value)} /></label><button className="text-button" onClick={() => { setDateStart(''); setDateEnd(''); setPreset('all'); }}>Clear dates</button></div>
+        <div className="calendar-grid" role="grid" aria-label={`Calendar for ${calendarMonth}`}>
+          {calendarDays.map((day) => <button key={day.toISOString()} type="button" className={day.getMonth() === Number(calendarMonth.slice(5, 7)) - 1 ? '' : 'outside-month'} aria-label={day.toLocaleDateString()} onClick={() => chooseCalendarDay(day)}>{day.getDate()}</button>)}
+        </div>
+        {dateRange.error && <p className="field-error" role="alert">{dateRange.error}</p>}
+      </details>
+      <div className="chip-row" role="group" aria-label="Filter by date">{(['all', 'today', '7d', '30d'] as const).map((value) => <button key={value} aria-pressed={preset === value} onClick={() => setPresetAndRange(value)}>{value === 'all' ? 'All time' : value === 'today' ? 'Today' : value === '7d' ? '7 days' : '30 days'}</button>)}</div>
       <div className="card-actions">
         <button className="text-button" disabled={copyBusy} onClick={() => void copyJson()}><Icon>content_copy</Icon>{copyBusy ? 'Copying…' : 'Copy JSON'}</button>
         <button className="text-button" disabled={exportBusy === 'json'} onClick={() => void runExport('json')}><Icon>download</Icon>JSON</button>

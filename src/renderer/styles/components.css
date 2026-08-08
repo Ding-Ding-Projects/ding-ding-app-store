@@ -291,6 +291,16 @@
   .date-range { display: grid; grid-template-columns: minmax(160px, 1fr) minmax(150px, .7fr) minmax(160px, 1fr) minmax(150px, .7fr); gap: 12px; }
   .date-range label { display: grid; gap: 6px; font-weight: 650; }
   .date-range input { width: 100%; min-height: 48px; padding: 10px 12px; border: 1px solid var(--outline); border-radius: 12px; background: var(--surface); }
+  .history-date-filter { margin: 12px 0; padding: 12px; border: 1px solid color-mix(in srgb, var(--outline) 32%, transparent); border-radius: 18px; background: var(--surface-container); }
+  .history-date-filter > summary { cursor: pointer; font-weight: 750; }
+  .history-date-filter .date-range { margin-top: 12px; }
+  .calendar-jump { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin-top: 12px; }
+  .calendar-jump label { display: grid; gap: 6px; min-width: 190px; font-weight: 650; }
+  .calendar-jump input { min-height: 44px; padding: 8px 10px; border: 1px solid var(--outline); border-radius: 12px; background: var(--surface); }
+  .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(34px, 1fr)); gap: 5px; margin-top: 12px; }
+  .calendar-grid button { min-height: 38px; border: 1px solid color-mix(in srgb, var(--outline) 28%, transparent); border-radius: 10px; color: inherit; background: var(--surface); cursor: pointer; }
+  .calendar-grid button:hover, .calendar-grid button:focus-visible { color: var(--on-primary); background: var(--primary); }
+  .calendar-grid button.outside-month { color: var(--outline); opacity: .62; }
   .changelog-viewer { max-width: 1100px; margin: 24px auto; padding: 24px; border-radius: 24px; background: var(--surface-container); }
   .changelog-list > li { grid-template-columns: auto minmax(0, 1fr); background: var(--surface); }
   .changelog-list h3 { margin: 0; }
