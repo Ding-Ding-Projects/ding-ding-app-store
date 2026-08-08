@@ -327,6 +327,22 @@ const appearanceControl = (token: TokenId, override: ElementOverride | undefined
   if (token === 'paddingScale') return { kind: 'range', value: Number(override?.paddingScale ?? 100), min: 50, max: 200, step: 5 };
   if (token === 'fontScale') return { kind: 'range', value: Number(override?.fontScale ?? 100), min: 75, max: 150, step: 5 };
   if (token === 'fontWeight') return { kind: 'range', value: Number(override?.fontWeight ?? 400), min: 400, max: 800, step: 100 };
+  if (token === 'fontFamily') {
+    const current = typeof override?.fontFamily === 'string' ? override.fontFamily : 'system-ui';
+    const families = ['system-ui', 'Segoe UI', 'Arial', 'Tahoma', 'Consolas', 'Microsoft JhengHei'];
+    const options = Array.from(new Set([current, ...families])).map((value) => ({ value, en: value, yue: value }));
+    return { kind: 'select', value: current, options };
+  }
+  if (token === 'fontStyle') {
+    const value = override?.fontStyle ?? 'normal';
+    return { kind: 'select', value, options: ['normal', 'italic', 'oblique'].map((item) => ({ value: item, en: item, yue: item })) };
+  }
+  if (token === 'textDecoration') {
+    const value = override?.textDecoration ?? 'none';
+    return { kind: 'select', value, options: ['none', 'underline', 'line-through', 'underline line-through'].map((item) => ({ value: item, en: item, yue: item })) };
+  }
+  if (token === 'letterSpacing') return { kind: 'range', value: Number(override?.letterSpacing ?? 0), min: -4, max: 16, step: 1 };
+  if (token === 'lineHeight') return { kind: 'range', value: Number(override?.lineHeight ?? 140), min: 80, max: 240, step: 5 };
   if (token === 'borderWidth') return { kind: 'range', value: Number(override?.borderWidth ?? 0), min: 0, max: 3, step: 1 };
   if (token === 'radius') return {
     kind: 'select', value: String(override?.radius ?? 'md'), options: RADII.map((value) => ({ value, en: value, yue: value })),
