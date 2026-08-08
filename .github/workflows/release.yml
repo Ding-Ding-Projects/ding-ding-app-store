@@ -174,7 +174,10 @@ jobs:
               "- Public dish photo: [$($dish.assetName)]($($dish.photoUrl))"
             )
           }
-          gh release create $env:RELEASE_TAG $setup $releases $nupkg --repo $env:GITHUB_REPOSITORY --title $title --notes ($initialNotes -join "`n") --draft
+          gh release create $env:RELEASE_TAG $setup $releases $nupkg --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title $title --notes ($initialNotes -join "`n") --draft
+          $tagRef = gh api "repos/$env:GITHUB_REPOSITORY/git/ref/tags/$env:RELEASE_TAG" | ConvertFrom-Json
+          $tagSha = if ($tagRef.object.type -eq 'tag') { gh api "repos/$env:GITHUB_REPOSITORY/git/tags/$($tagRef.object.sha)" --jq .object.sha } else { $tagRef.object.sha }
+          if ($tagSha -ne $env:GITHUB_SHA) { throw "Release tag $env:RELEASE_TAG resolves to $tagSha, expected workflow SHA $env:GITHUB_SHA." }
           gh release edit $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --draft=false
           $publishedAt = gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/$env:RELEASE_TAG" --jq .published_at
           if (-not $publishedAt) { throw 'The published release did not report published_at.' }
@@ -205,4 +208,7 @@ jobs:
           ) -join "`n"
           $notes | Out-File -FilePath release-notes.md -Encoding utf8
           gh release edit $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --notes-file release-notes.md
+          $publishedRef = gh api "repos/$env:GITHUB_REPOSITORY/git/ref/tags/$env:RELEASE_TAG" | ConvertFrom-Json
+          $publishedSha = if ($publishedRef.object.type -eq 'tag') { gh api "repos/$env:GITHUB_REPOSITORY/git/tags/$($publishedRef.object.sha)" --jq .object.sha } else { $publishedRef.object.sha }
+          if ($publishedSha -ne $env:GITHUB_SHA) { throw "Published release tag $env:RELEASE_TAG resolves to $publishedSha, expected workflow SHA $env:GITHUB_SHA." }
           gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --json isDraft,tagName,targetCommitish,assets --jq '{isDraft,tagName,targetCommitish,assets:[.assets[].name]}'
