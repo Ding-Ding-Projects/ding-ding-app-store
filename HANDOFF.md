@@ -19,7 +19,7 @@ The repository contains a sandboxed Electron/React/TypeScript shell, reviewed 24
 - Offline documentation import for every catalog application remains. Tab pinning/grouping with per-surface searches, the per-element appearance editor, and the schedule editor have landed (see the 2026-08-07 entry below); their packaged-runtime capture remains.
 - The self-update failure state is runtime-verified: the repository has no release yet, so `RELEASES` returns HTTP 404. No successful update is claimed.
 - GitHub Pages is not yet live: creating a Pages site for the first time needs an admin-level token, and the Actions `GITHUB_TOKEN` used by `pages.yml` doesn't have it. See the 2026-08-07 CI/release/Pages entry below for the exact one-time manual step needed.
-- A real labelled self-hosted runner has not yet been observed for this repository; no remote CI or release claim is valid.
+- The owner explicitly selected GitHub-hosted cloud runners on 2026-08-07. Current workflows pin `windows-2022` for checks, packaging, and publication and `ubuntu-24.04` for Pages; record each new run's actual verdict instead of relying on the runner choice alone.
 - The one-click UI/typed-decision boundary does not make the 24 catalog adapters complete. Clean-Windows dependency bootstrap, archive handling, source recipes, the disposable build/run terminal simulator, automatic OpenCode bootstrap, bounded touchless repair, cancellation, retry exhaustion, and per-app runtime proof remain tracked in `docs/features/one-click-installation.md`.
 
 ## Next owner action

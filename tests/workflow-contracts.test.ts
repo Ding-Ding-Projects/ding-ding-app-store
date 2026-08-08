@@ -5,18 +5,17 @@ import { describe, expect, it } from 'vitest';
 const root = path.resolve(import.meta.dirname, '..');
 const read = (file: string) => readFile(path.join(root, file), 'utf8');
 
-describe('self-hosted workflow and bootstrap contract', () => {
-  it('keeps every job on the explicit isolated Windows runner labels', async () => {
-    for (const file of ['.github/workflows/ci.yml', '.github/workflows/pages.yml', '.github/workflows/release.yml']) {
-      const workflow = await read(file);
-      const runsOn = [...workflow.matchAll(/^\s+runs-on:\s*(.+)$/gm)].map((match) => match[1]);
-      expect(runsOn.length).toBeGreaterThan(0);
-      for (const labels of runsOn) {
-        expect(labels).toContain('self-hosted');
-        expect(labels).toContain('Windows');
-        expect(labels).toContain('X64');
-        expect(labels).toContain('ding-ding-app-store');
-      }
+describe('GitHub-hosted workflow and bootstrap contract', () => {
+  it('keeps validation and release jobs on pinned cloud runner images', async () => {
+    const ci = await read('.github/workflows/ci.yml');
+    const release = await read('.github/workflows/release.yml');
+    const pages = await read('.github/workflows/pages.yml');
+    expect(ci).toMatch(/^\s+runs-on:\s*windows-2022\s*$/m);
+    expect(release.match(/^\s+runs-on:\s*windows-2022\s*$/gm)).toHaveLength(3);
+    expect(pages).toMatch(/^\s+runs-on:\s*ubuntu-24\.04\s*$/m);
+    for (const workflow of [ci, release, pages]) {
+      expect(workflow).not.toContain('self-hosted');
+      expect(workflow).not.toContain('ding-ding-app-store]');
       expect(workflow).not.toMatch(/(?:ubuntu|windows|macos)-latest/);
     }
   });
@@ -36,12 +35,6 @@ describe('self-hosted workflow and bootstrap contract', () => {
     expect(bootstrap).toContain('Get-FileHash');
     expect(bootstrap).toContain('SHA-256 mismatch');
     expect(bootstrap).not.toMatch(/winget|choco|scoop|Start-Process|Invoke-Expression/i);
-  });
-
-  it('declares the custom runner label for structural workflow validation', async () => {
-    const config = await read('.github/actionlint.yaml');
-    expect(config).toContain('self-hosted-runner:');
-    expect(config).toContain('- ding-ding-app-store');
   });
 
   it('resolves an unused public dim-sum code name without attaching a copied photo', async () => {

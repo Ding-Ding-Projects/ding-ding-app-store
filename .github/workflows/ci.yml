@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   check:
-    runs-on: [self-hosted, Windows, X64, ding-ding-app-store]
+    runs-on: windows-2022
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
@@ -31,7 +31,7 @@ jobs:
           git --version
           node --version
           npm --version
-          if ($env:RUNNER_OS -ne 'Windows' -or $env:RUNNER_ARCH -ne 'X64') { throw 'The selected runner does not match the reviewed Windows X64 label set.' }
+          if ($env:RUNNER_OS -ne 'Windows' -or $env:RUNNER_ARCH -ne 'X64') { throw 'The GitHub-hosted runner does not match the required Windows X64 environment.' }
       - name: Install locked dependencies from a cache-miss-safe state
         run: npm ci
       - name: Run strict typechecks and all test suites
