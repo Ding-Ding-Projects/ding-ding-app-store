@@ -2,7 +2,6 @@
 
 > **Status: shipped.** This wiki page is generated from the canonical categorized article.
 
-
 ## Behaviour
 
 The frameless Electron window runs with context isolation, renderer sandboxing, Node integration disabled, web security enabled, insecure content disabled, permissions denied, external windows denied, and navigation blocked. A narrow frozen preload bridge exposes typed catalog, operation, update, settings, history, workspace, appearance, schedule, and window actions. The renderer sends app identifiers and user decisions; privileged services own URLs, paths, commands, arguments, persistence locations, and process creation.

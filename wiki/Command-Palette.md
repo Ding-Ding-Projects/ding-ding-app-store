@@ -2,7 +2,6 @@
 
 > **Status: shipped.** This wiki page is generated from the canonical categorized article.
 
-
 ## Behaviour
 
 `Ctrl+Shift+F` opens the global palette. Its registry is built from the same tables that define pages, settings, schedule fields, appearance elements/tokens, tab/group state, search surfaces, and current catalog apps. Results are grouped by Pages, Tabs, Appearance, Schedule, Search, Settings, and Apps. Arrow keys change the active option, Enter runs it, Tab is trapped inside the dialog, Escape closes it, and closing restores focus to the invoker.

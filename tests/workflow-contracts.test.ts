@@ -49,6 +49,7 @@ describe('GitHub-hosted workflow and bootstrap contract', () => {
   it('compares generated documentation independently of checkout line endings', async () => {
     const generator = await read('scripts/docs-generate.mjs');
     expect(generator).toContain("replaceAll('\\r\\n', '\\n')");
+    expect(generator).toContain('raw = normalizeNewlines(raw)');
     expect(generator).toContain('normalizeNewlines(actual) !== normalizeNewlines(content)');
   });
 });

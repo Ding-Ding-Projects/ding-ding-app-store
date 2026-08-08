@@ -2,7 +2,6 @@
 
 > **Status: limited.** This wiki page is generated from the canonical categorized article.
 
-
 ## Behaviour
 
 For each catalog app, the catalog service compares a discovered installed version with the latest stable release tag using semantic-version coercion. Cards report `available`, `up-to-date`, `failed`, `unknown`, or `unsupported`; the Updates tab shows only `available` cards. Comparisons refresh when the catalog refreshes, either manually, at startup/cache expiry, or through its schedule.

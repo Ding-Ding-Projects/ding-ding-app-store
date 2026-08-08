@@ -2,7 +2,6 @@
 
 > **Status: limited.** This wiki page is generated from the canonical categorized article.
 
-
 ## Behaviour
 
 Applications without a reviewed binary adapter can be marked `source-build` and show an Install from source action. That action opens the read-only source terminal immediately and asks the main process to start a strict typed source job. The common runtime validates consent, catalog identity, a pinned recipe, one-job capacity, isolation attestation, fixed steps, output bounds, cancellation, and cleanup before a broker can execute anything.

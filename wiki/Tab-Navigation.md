@@ -2,7 +2,6 @@
 
 > **Status: shipped.** This wiki page is generated from the canonical categorized article.
 
-
 ## Behaviour
 
 Discover, Installed, Updates, Documentation, Activity, and Settings are six fixed browser-style tabs. They cannot be opened, duplicated, or closed, which preserves access to every primary page. Tabs can be pinned into a protected region, reordered within their region, assigned to named color-coded groups, collapsed with their group, or reached through a searchable overflow. The active tab and pinned tabs receive capacity first so the selected page never disappears when space is tight.

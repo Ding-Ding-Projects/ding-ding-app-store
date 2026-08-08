@@ -46,6 +46,7 @@ const articles = [
 const requiredSections = ['Behaviour', 'Configuration', 'Failure modes', 'Security considerations', 'Verification', 'Suggested articles'];
 
 function parseArticle(raw, expected) {
+  raw = normalizeNewlines(raw);
   const match = raw.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
   if (!match) throw new Error(`${expected.id}: missing front matter`);
   const meta = Object.fromEntries(match[1].split(/\r?\n/).filter(Boolean).map((line) => {

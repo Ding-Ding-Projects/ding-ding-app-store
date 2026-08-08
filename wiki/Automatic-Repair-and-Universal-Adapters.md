@@ -2,7 +2,6 @@
 
 > **Status: limited.** This wiki page is generated from the canonical categorized article.
 
-
 ## Behaviour
 
 The common automatic-repair runtime now has a strict `start`/`cancel` IPC contract that accepts only a catalog application ID and `build` or `run` decision. Starting a source action opens a non-interactive Material Design terminal panel with bounded structured progress, stdout, stderr, cancellation, final states, screen-reader log semantics, reduced-motion support, and no command prompt. Main-process events are schema-validated, sanitized, byte/event bounded, and frozen by preload before the renderer sees them.
