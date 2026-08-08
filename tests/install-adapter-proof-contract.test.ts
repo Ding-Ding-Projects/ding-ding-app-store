@@ -5,9 +5,9 @@ import { CLOUD_INSTALL_PROOF_TARGETS, cloudInstallProofTargetFor } from '../src/
 const read = (path: string) => readFile(path, 'utf8');
 
 describe('cloud install adapter proof boundary', () => {
-  it('keeps the executable proof allowlist closed to one reviewed Squirrel adapter', () => {
+  it('keeps the executable proof allowlist closed to one reviewed Squirrel and one reviewed MSI adapter', () => {
     expect(Object.keys(CLOUD_INSTALL_PROOF_TARGETS)).toEqual([
-      'dim-sum-atlas', 'winforge', 'wimforge', 'qbittorrent-material',
+      'dim-sum-atlas', 'winforge', 'wimforge', 'qbittorrent-material', 'keepassxc',
     ]);
     expect(cloudInstallProofTargetFor('qbittorrent-material')).toEqual({
       appId: 'qbittorrent-material',
@@ -15,6 +15,15 @@ describe('cloud install adapter proof boundary', () => {
       family: 'squirrel',
       ownershipKind: 'registry',
       uninstallKind: 'squirrel',
+      requiresCleanStart: true,
+      requiresDirectSha256: true,
+    });
+    expect(cloudInstallProofTargetFor('keepassxc')).toEqual({
+      appId: 'keepassxc',
+      adapterId: 'keepassxc-msi',
+      family: 'msi',
+      ownershipKind: 'registry',
+      uninstallKind: 'msi',
       requiresCleanStart: true,
       requiresDirectSha256: true,
     });
@@ -32,14 +41,16 @@ describe('cloud install adapter proof boundary', () => {
     expect(script).not.toMatch(/sourceJobs|OpenCode|source-runtime|child_process/);
   });
 
-  it('loads a typed allowlist for portable and one reviewed non-portable Squirrel target', async () => {
+  it('loads a typed allowlist for portable and explicitly reviewed non-portable targets', async () => {
     const script = await read('scripts/prove-install-adapter.mjs');
     const targets = await read('src/main/install-proof-targets.ts');
     expect(targets).toContain("'dim-sum-atlas': {");
     expect(targets).toContain('winforge: {');
     expect(targets).toContain('wimforge: {');
     expect(targets).toContain("'qbittorrent-material': {");
+    expect(targets).toContain('keepassxc: {');
     expect(targets).toContain("adapterId: 'qbittorrent-material-squirrel'");
+    expect(targets).toContain("adapterId: 'keepassxc-msi'");
     expect(targets).toContain("family: 'squirrel'");
     expect(targets).toContain("ownershipKind: 'registry'");
     expect(targets).toContain('requiresCleanStart: true');
@@ -79,6 +90,7 @@ describe('cloud install adapter proof boundary', () => {
     expect(workflow).toContain('- winforge');
     expect(workflow).toContain('- wimforge');
     expect(workflow).toContain('- qbittorrent-material');
+    expect(workflow).toContain('- keepassxc');
     expect(workflow).toContain('runs-on: windows-2022');
     expect(workflow).toContain('npm ci');
     expect(workflow).toContain('npx electron scripts/prove-install-adapter.mjs');
@@ -93,6 +105,7 @@ describe('cloud install adapter proof boundary', () => {
     expect(workflow).toContain('$proof.integrity.sha256Verified -ne $true');
     expect(workflow).toContain('$proof.integrity.releaseMatchedResult -ne $true');
     expect(workflow).toContain("$proof.target.ownershipKind -ne 'registry'");
+    expect(workflow).toContain("$proof.family -ne 'msi' -or $proof.target.uninstallKind -ne 'msi'");
     expect(workflow).toContain('@($proof.persistedAfterCleanup).Count -ne 0');
     expect(workflow).not.toContain('expectation:');
     expect(workflow).not.toContain('ubuntu-latest');
