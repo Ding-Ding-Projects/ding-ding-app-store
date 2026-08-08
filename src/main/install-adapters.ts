@@ -85,10 +85,11 @@ const nsis = (
   uninstallExecutableNames: readonly string[],
   evidence: readonly string[],
   checksumAssetPattern?: RegExp,
+  uninstallArguments: readonly string[] = ['/S'],
 ): ExecutableInstallAdapter => ({
   id, appId, supported: true, family: 'nsis', packageType: 'nsis', assetPattern,
   checksumAssetPattern, installArguments: ['/S'], registryDisplayNames, evidence,
-  uninstallExecutableNames, uninstallArguments: ['/S'],
+  uninstallExecutableNames, uninstallArguments,
 });
 
 const msi = (
@@ -121,7 +122,7 @@ export const INSTALL_ADAPTERS: Readonly<Record<CatalogAppId, InstallAdapter>> = 
   'material-bluemap': squirrel('material-bluemap-squirrel', 'material-bluemap', /^Worldlens-[0-9A-Za-z.+-]+-Setup\.exe$/, ['Worldlens', 'Material BlueMap'], ['design/packages/app/electron-builder.config.cjs: Squirrel target and Worldlens package identity']),
   'desktop-material': squirrel('desktop-material-squirrel', 'desktop-material', /^GitHubDesktopSetup-x64\.exe$/, ['GitHub Desktop', 'Desktop Material'], ['app/package.json and build-installers workflow: Squirrel Windows release']),
   'home-assistant-ac-defender': squirrel('home-assistant-ac-defender-squirrel', 'home-assistant-ac-defender', /^AC\.Defender\.Controller\.Setup\.[0-9A-Za-z.+-]+\.exe$/, ['AC Defender Controller', 'Home Assistant AC Defender'], ['desktop-electron/package.json: Squirrel target and ACDefenderController identity']),
-  'material-email': nsis('material-email-nsis', 'material-email', /^Material-Email-[0-9A-Za-z.+-]+-Windows-x64\.exe$/, ['Material Email', 'Material Email 0.105.1'], ['Uninstall Material Email.exe'], ['package.json: electron-builder NSIS x64 target', '.github/workflows/windows-release.yml: installed/uninstalled lifecycle proof', 'GitHub Actions proof 31271436306: v0.105.1 wrote the exact HKCU display name Material Email 0.105.1']),
+  'material-email': nsis('material-email-nsis', 'material-email', /^Material-Email-[0-9A-Za-z.+-]+-Windows-x64\.exe$/, ['Material Email', 'Material Email 0.105.1'], ['Uninstall Material Email.exe'], ['package.json: electron-builder NSIS x64 target', '.github/workflows/windows-release.yml: installed/uninstalled lifecycle proof', 'GitHub Actions proof 31271436306: v0.105.1 wrote the exact HKCU display name Material Email 0.105.1', 'electron-builder installer.nsh: HKCU QuietUninstallString uses /currentuser /S'], undefined, ['/currentuser', '/S']),
   opencodex: squirrel('opencodex-squirrel', 'opencodex', /^opencodex\.Setup\.[0-9A-Za-z.+-]+\.exe$/, ['opencodex', 'OpenCodex'], ['electron-builder.yml: explicit Squirrel.Windows target and lifecycle hooks']),
   'qbittorrent-material': squirrel('qbittorrent-material-squirrel', 'qbittorrent-material', /^qBittorrent-Material-[0-9A-Za-z.+-]+-windows-x64-Setup\.exe$/, ['qBittorrent Material'], ['.github/workflows/release-every-push.yml: built and smoke-tested Squirrel installer']),
   'material-winscp': squirrel('material-winscp-squirrel', 'material-winscp', /^WinSCP\.Material\.[0-9A-Za-z.+-]+\.Setup\.exe$/, ['WinSCP Material'], ['forge.config.js: maker-squirrel and WinSCPMaterial executable identity']),

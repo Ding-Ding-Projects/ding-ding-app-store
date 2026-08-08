@@ -101,6 +101,11 @@ describe('hand-written universal install adapter coverage', () => {
     expect(adapter.registryDisplayNames).toEqual(['Material Email', 'Material Email 0.105.1']);
     expect(adapter.registryDisplayNames).not.toContain('Material Email 0.105.2');
     expect(adapter.uninstallExecutableNames).toEqual(['Uninstall Material Email.exe']);
+    expect(adapter.uninstallArguments).toEqual(['/currentuser', '/S']);
+    const materialOffice = adapterFor('material-office');
+    expect(materialOffice.supported).toBe(true);
+    if (!materialOffice.supported || materialOffice.family === 'portable-zip') throw new Error('Material Office must use its reviewed NSIS adapter.');
+    expect(materialOffice.uninstallArguments).toEqual(['/S']);
   });
 
   it('keeps every unsupported row explicit and evidence-backed', () => {
