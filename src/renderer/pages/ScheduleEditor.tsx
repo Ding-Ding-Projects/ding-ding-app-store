@@ -73,7 +73,7 @@ const WEEKDAYS = [
 
 function newRule(): ScheduledSettingRule {
   const suffix = (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`).replace(/[^a-z0-9]/gi, '').toLowerCase().slice(-8).padStart(8, '0');
-  return { id: `rule_${suffix}`, label: 'Scheduled appearance', enabled: true, startDate: null, endDate: null, startMinute: 540, endMinute: 1020, weekdays: [1, 2, 3, 4, 5, 6, 7], timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'local', priority: 50, values: { theme: 'dark' } };
+  return { id: `rule_${suffix}`, label: 'Scheduled appearance', enabled: true, startDate: null, endDate: null, startMinute: 540, endMinute: 1020, weekdays: [1, 2, 3, 4, 5, 6, 7], timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'local', priority: 50, values: { theme: 'dark' }, source: { kind: 'local' } };
 }
 
 function ruleValue(rule: ScheduledSettingRule, key: RuleKey): string {
@@ -81,8 +81,9 @@ function ruleValue(rule: ScheduledSettingRule, key: RuleKey): string {
   return value === undefined ? '' : String(value);
 }
 
-function RuleCard({ rule, settings, onChange, onRemove }: { rule: ScheduledSettingRule; settings: UserSettings; onChange(rule: ScheduledSettingRule): void; onRemove(): void }) {
+function RuleCard({ rule, sourceStatus, settings, onChange, onRemove }: { rule: ScheduledSettingRule; sourceStatus?: { state: string; message: string | null }; settings: UserSettings; onChange(rule: ScheduledSettingRule): void; onRemove(): void }) {
   const selectedKey = (RULE_KEYS.find((key) => rule.values[key] !== undefined) ?? 'theme') as RuleKey;
+  const homeAssistantSource = rule.source.kind === 'home-assistant' ? rule.source : null;
   const setValue = (key: RuleKey, value: string) => {
     const values = { ...rule.values } as ScheduledSettingRule['values'];
     for (const candidate of RULE_KEYS) delete values[candidate];
@@ -108,9 +109,18 @@ function RuleCard({ rule, settings, onChange, onRemove }: { rule: ScheduledSetti
         <label>{label(settings, 'To', '到')}<input type="time" value={formatClock(rule.endMinute)} onChange={(event) => onChange({ ...rule, endMinute: clockToMinutes(event.target.value) })} /></label>
         <label>{label(settings, 'Time zone', '時區')}<input value={rule.timeZone} maxLength={64} onChange={(event) => onChange({ ...rule, timeZone: event.target.value || 'local' })} /><small>{label(settings, 'Times use this zone; daylight-saving changes are honoured.', '時間用呢個時區，會跟夏令時間變。')}</small></label>
         <label>{label(settings, 'Priority (lower wins)', '優先次序（數字越細越先）')}<input type="number" min={0} max={100} value={rule.priority} onChange={(event) => onChange({ ...rule, priority: Math.max(0, Math.min(100, Number(event.target.value) || 0)) })} /></label>
+        <label>{label(settings, 'Value source', '設定來源')}<select value={rule.source.kind} onChange={(event) => {
+          const kind = event.target.value;
+          if (kind === 'api') onChange({ ...rule, source: { kind: 'api', url: 'https://example.invalid/scheduled-settings.json' } });
+          else if (kind === 'home-assistant') onChange({ ...rule, source: { kind: 'home-assistant', baseUrl: 'https://homeassistant.local', entityId: 'input_boolean.scheduled_settings' } });
+          else onChange({ ...rule, source: { kind: 'local' } });
+        }}><option value="local">{label(settings, 'Local scheduled value', '本機排程值')}</option><option value="api">{label(settings, 'Versioned HTTPS API', '版本化 HTTPS API')}</option><option value="home-assistant">Home Assistant boolean</option></select></label>
+        {rule.source.kind === 'api' && <label>{label(settings, 'HTTPS API URL', 'HTTPS API 網址')}<input type="url" value={rule.source.url} maxLength={2048} onChange={(event) => onChange({ ...rule, source: { kind: 'api', url: event.target.value } })} /><small>{label(settings, 'The API must return version 1 and only supported setting fields. The local scheduled value is retained if validation fails.', 'API 必須回傳版本 1 同支援嘅設定欄位；驗證失敗會保留本機排程值。')}</small></label>}
+        {homeAssistantSource && <><label>{label(settings, 'Home Assistant URL', 'Home Assistant 網址')}<input type="url" value={homeAssistantSource.baseUrl} maxLength={2048} onChange={(event) => onChange({ ...rule, source: { kind: 'home-assistant', baseUrl: event.target.value, entityId: homeAssistantSource.entityId } })} /></label><label>{label(settings, 'Boolean entity', 'Boolean entity')}<input value={homeAssistantSource.entityId} maxLength={128} onChange={(event) => onChange({ ...rule, source: { kind: 'home-assistant', baseUrl: homeAssistantSource.baseUrl, entityId: event.target.value } })} /><small>{label(settings, 'Use input_boolean or binary_sensor. Its token stays only in the operating system credential vault and is never stored in this schedule.', '用 input_boolean 或 binary_sensor。Token 只會留喺作業系統憑證庫，唔會儲喺排程。')}</small></label></>}
       </div>
       <div className="chip-row" role="group" aria-label={label(settings, 'Weekdays', '星期')}><span className="supporting">{label(settings, 'Days', '日子')}:</span>{WEEKDAYS.map(([value, en, yue]) => { const day = Number(value); return <button key={value} aria-pressed={rule.weekdays.includes(day)} onClick={() => toggleDay(day)}>{label(settings, en, yue)}</button>; })}</div>
       {rule.startMinute > rule.endMinute && <p className="quiet-badge">{label(settings, 'Cross-midnight window', '跨過凌晨時段')}</p>}
+      {sourceStatus && <p className={`source-status source-${sourceStatus.state}`} role="status">{label(settings, `External source: ${sourceStatus.state}${sourceStatus.message ? ` — ${sourceStatus.message}` : ''}`, `外部來源：${sourceStatus.state}${sourceStatus.message ? ` — ${sourceStatus.message}` : ''}`)}</p>}
     </div>
   );
 }
@@ -161,7 +171,8 @@ export function ScheduleEditor({ settings, schedule }: { settings: UserSettings;
       <div className="settings-card schedule-card" {...el('schedule-card')}>
         <h2>{label(settings, 'Scheduled settings', '排程設定')}</h2>
         <p className="supporting">{label(settings, 'Temporarily override language, funny levels, theme, density, accent, or display name during a local date/time window. Rules are evaluated in their saved time zone; lower priority numbers win ties. Your base settings remain recoverable when a window ends.', '喺指定本地日期／時間暫時覆蓋語言、幽默程度、主題、密度、主色或者顯示名稱。規則用儲存嘅時區判斷；優先次序數字越細越先。時段完咗之後會返去原本設定。')}</p>
-        {draft.rules.map((rule) => <RuleCard key={rule.id} rule={rule} settings={settings} onChange={(next) => schedule.setRules(draft.rules.map((item) => item.id === next.id ? next : item))} onRemove={() => schedule.setRules(draft.rules.filter((item) => item.id !== rule.id))} />)}
+        <p className="supporting">{label(settings, 'External sources are read only by the main process. A missing Home Assistant vault token appears as a source failure and never creates a schedule field for a secret.', '外部來源只會由主程序讀取。Home Assistant 憑證庫冇 token 會顯示來源失敗，唔會喺排程整一個秘密欄位。')}</p>
+        {draft.rules.map((rule) => <RuleCard key={rule.id} rule={rule} sourceStatus={status?.externalSources.find((item) => item.ruleId === rule.id)} settings={settings} onChange={(next) => schedule.setRules(draft.rules.map((item) => item.id === next.id ? next : item))} onRemove={() => schedule.setRules(draft.rules.filter((item) => item.id !== rule.id))} />)}
         <button className="tonal-button" onClick={() => schedule.setRules([...draft.rules, newRule()])}><Icon>add</Icon>{label(settings, 'Add scheduled setting', '加排程設定')}</button>
         <ScheduleExplanation settings={settings} keyName="rules" source={source} dirty={schedule.dirty} />
         {issueFor('rules') && <p className="field-error" role="alert">{issueFor('rules')}</p>}

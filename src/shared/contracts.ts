@@ -733,10 +733,22 @@ export const SCHEDULE_BOUNDS = {
   ruleLabelLength: { min: 1, max: 64 },
   ruleDateLength: 10,
   ruleTimeZoneLength: 64,
+  externalUrlLength: 2_048,
+  externalEntityLength: 128,
 } as const;
 
 const scheduleDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use an ISO date (YYYY-MM-DD).');
 const scheduleTimeZoneSchema = z.string().trim().min(1).max(SCHEDULE_BOUNDS.ruleTimeZoneLength).regex(/^[A-Za-z0-9_+./-]+$/);
+function privateOrLoopbackHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (host === 'localhost' || host.endsWith('.localhost') || host === '::1' || host === '0.0.0.0') return true;
+  if (/^(?:fc|fd|fe[89ab])[0-9a-f:]*$/i.test(host)) return true;
+  const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (!ipv4) return false;
+  const [a, b, c, d] = ipv4.slice(1).map(Number);
+  if ([a, b, c, d].some((part) => part > 255)) return true;
+  return a === 0 || a === 10 || a === 127 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127);
+}
 const scheduledSettingsValuesSchema = z.object({
   language: z.enum(['en', 'yue', 'bilingual']).optional(),
   englishFunnyLevel: z.number().int().min(1).max(5).optional(),
@@ -746,6 +758,35 @@ const scheduledSettingsValuesSchema = z.object({
   accent: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
   displayName: z.string().trim().min(1).max(64).optional(),
 }).strict().refine((value) => Object.keys(value).length > 0, 'Choose at least one setting to schedule.');
+
+export const scheduledSettingsOverrideSchema = scheduledSettingsValuesSchema;
+
+const httpsExternalUrlSchema = z.string().trim().max(SCHEDULE_BOUNDS.externalUrlLength).url().refine((value) => {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && !url.username && !url.password && !url.hash && !privateOrLoopbackHost(url.hostname);
+  } catch { return false; }
+}, 'Use an HTTPS URL without embedded credentials.');
+
+const homeAssistantUrlSchema = z.string().trim().max(SCHEDULE_BOUNDS.externalUrlLength).url().refine((value) => {
+  try {
+    const url = new URL(value);
+    const loopbackHttp = url.protocol === 'http:' && (url.hostname === '127.0.0.1' || url.hostname === '[::1]');
+    return (url.protocol === 'https:' || loopbackHttp) && !url.username && !url.password && !url.hash;
+  } catch { return false; }
+}, 'Use HTTPS, or an explicit loopback development URL, without embedded credentials.');
+
+export const scheduledSettingSourceSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('local') }).strict(),
+  z.object({ kind: z.literal('api'), url: httpsExternalUrlSchema }).strict(),
+  z.object({
+    kind: z.literal('home-assistant'),
+    baseUrl: homeAssistantUrlSchema,
+    entityId: z.string().trim().min(1).max(SCHEDULE_BOUNDS.externalEntityLength).regex(/^(?:input_boolean|binary_sensor)\.[a-z0-9_]+$/),
+  }).strict(),
+]);
+
+export type ScheduledSettingSource = z.infer<typeof scheduledSettingSourceSchema>;
 
 export const scheduledSettingRuleSchema = z.object({
   id: z.string().regex(/^rule_[a-z0-9]{8}$/),
@@ -759,6 +800,7 @@ export const scheduledSettingRuleSchema = z.object({
   timeZone: scheduleTimeZoneSchema,
   priority: z.number().int().min(0).max(100),
   values: scheduledSettingsValuesSchema,
+  source: scheduledSettingSourceSchema.default({ kind: 'local' }),
 }).strict().superRefine((rule, ctx) => {
   if (rule.startDate && rule.endDate && rule.startDate > rule.endDate) ctx.addIssue({ code: 'custom', path: ['endDate'], message: 'End date must be on or after start date.' });
   if (rule.startMinute === rule.endMinute) ctx.addIssue({ code: 'custom', path: ['endMinute'], message: 'A scheduled window must not start and end at the same minute.' });
@@ -769,7 +811,7 @@ export type ScheduledSettingRule = z.infer<typeof scheduledSettingRuleSchema>;
 
 export const scheduleSchema = z
   .object({
-    schemaVersion: z.literal(2),
+    schemaVersion: z.literal(3),
     selfUpdate: z
       .object({
         repeatEnabled: z.boolean(),
@@ -804,7 +846,7 @@ export const scheduleSchema = z
 export type ScheduleConfig = z.infer<typeof scheduleSchema>;
 
 export const DEFAULT_SCHEDULE: ScheduleConfig = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   selfUpdate: { repeatEnabled: true, intervalMinutes: 360 },
   catalogRefresh: { enabled: true, intervalMinutes: 360 },
   quietHours: { enabled: false, startMinute: 1320, endMinute: 420 },
@@ -848,6 +890,16 @@ export interface ScheduleNotice {
   silent: boolean;
 }
 
+export interface ExternalScheduleSourceStatus {
+  ruleId: string;
+  kind: ScheduledSettingSource['kind'];
+  state: 'idle' | 'active' | 'off' | 'failed';
+  checkedAt: string | null;
+  message: string | null;
+  /** Only validated, allowlisted settings are exposed; URLs and credentials are never echoed here. */
+  values: Partial<Pick<UserSettings, 'language' | 'englishFunnyLevel' | 'cantoneseFunnyLevel' | 'theme' | 'density' | 'accent' | 'displayName'>> | null;
+}
+
 export interface ScheduleStatus {
   config: ScheduleConfig;
   /** Whether the active configuration came from a validated file or DEFAULT_SCHEDULE. */
@@ -858,6 +910,7 @@ export interface ScheduleStatus {
   packagedBuild: boolean;
   now: string;
   notice: ScheduleNotice | null;
+  externalSources: ExternalScheduleSourceStatus[];
 }
 
 export interface DimSumSurprise {

@@ -12,6 +12,7 @@ import type {
 } from '../shared/contracts.js';
 import { DEFAULT_SCHEDULE } from '../shared/contracts.js';
 import type { ScheduleService } from './schedule-service.js';
+import type { ExternalScheduledSettingsService } from './external-scheduled-settings-service.js';
 
 const MAX_DELAY_MS = 2_147_483_000;
 const BACKOFF_BASE_MS = 15 * 60_000;
@@ -40,6 +41,7 @@ export interface SchedulerOptions {
   getWindow: () => BrowserWindow | null;
   service: ScheduleService;
   tasks: Record<ScheduleTaskId, () => Promise<ScheduleTaskResult>>;
+  externalSources?: ExternalScheduledSettingsService;
 }
 
 function newTask(id: ScheduleTaskId): TaskState {
@@ -70,6 +72,7 @@ export class Scheduler {
   private quietWas = false;
   private heldSinceQuietStart = 0;
   private started = false;
+  private externalRefreshTimer: NodeJS.Timeout | null = null;
 
   constructor(private readonly options: SchedulerOptions) {}
 
@@ -95,6 +98,8 @@ export class Scheduler {
     }
     for (const id of TASK_IDS) this.arm(this.tasks[id]);
     this.armQuietBoundary();
+    await this.refreshExternalSources();
+    this.armExternalRefresh();
     this.publish();
   }
 
@@ -133,6 +138,7 @@ export class Scheduler {
       packagedBuild: app.isPackaged,
       now: new Date().toISOString(),
       notice: this.notice,
+      externalSources: this.options.externalSources?.status() ?? [],
     };
   }
 
@@ -187,7 +193,24 @@ export class Scheduler {
     this.quietWas = this.quietActive();
     if (!this.quietWas) this.heldSinceQuietStart = 0;
     this.armQuietBoundary();
+    void this.refreshExternalSources();
     this.publish();
+  }
+
+  private async refreshExternalSources(): Promise<void> {
+    if (!this.options.externalSources) return;
+    await this.options.externalSources.refresh(this.config).catch(() => undefined);
+    this.publish();
+  }
+
+  private armExternalRefresh(): void {
+    if (this.externalRefreshTimer) clearTimeout(this.externalRefreshTimer);
+    if (!this.options.externalSources) return;
+    const timer = setTimeout(() => {
+      void this.refreshExternalSources().finally(() => this.armExternalRefresh());
+    }, 5 * 60_000);
+    timer.unref();
+    this.externalRefreshTimer = timer;
   }
 
   private disarm(task: TaskState): void {

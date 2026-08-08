@@ -40,11 +40,16 @@ export function isScheduledRuleActive(rule: ScheduledSettingRule, now = new Date
 }
 
 /** Resolve temporary scheduled values without mutating the recoverable base settings. */
-export function resolveScheduledSettings(base: UserSettings, config: ScheduleConfig, now = new Date()): UserSettings {
+export function resolveScheduledSettings(
+  base: UserSettings,
+  config: ScheduleConfig,
+  now = new Date(),
+  externalOverrides: Record<string, Partial<UserSettings>> = {},
+): UserSettings {
   const result: UserSettings = { ...base };
   const active = config.rules
     .filter((rule) => isScheduledRuleActive(rule, now))
     .sort((left, right) => left.priority - right.priority || left.id.localeCompare(right.id));
-  for (const rule of active) Object.assign(result, rule.values);
+  for (const rule of active) Object.assign(result, externalOverrides[rule.id] ?? rule.values);
   return result;
 }

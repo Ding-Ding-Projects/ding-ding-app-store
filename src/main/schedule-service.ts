@@ -21,6 +21,22 @@ function stamp(record: ScheduleRunRecord | null | undefined): ScheduleRunRecord 
   return { ...record, fromPreviousSession: true };
 }
 
+/** Pure migration kept outside Electron storage so previous schedule shapes are regression-testable. */
+export function migrateScheduleDocument(value: unknown): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  const record = value as Record<string, unknown>;
+  if (record.schemaVersion === 1) return { ...record, schemaVersion: 3, rules: [] };
+  if (record.schemaVersion === 2) {
+    const rules = Array.isArray(record.rules)
+      ? record.rules.map((rule) => rule && typeof rule === 'object' && !Array.isArray(rule)
+        ? { ...(rule as Record<string, unknown>), source: { kind: 'local' } }
+        : rule)
+      : [];
+    return { ...record, schemaVersion: 3, rules };
+  }
+  return value;
+}
+
 export class ScheduleService {
   private readonly filePath = path.join(app.getPath('userData'), 'schedule.v1.json');
   private readonly runsPath = path.join(app.getPath('userData'), 'schedule-runs.v1.json');
@@ -33,7 +49,7 @@ export class ScheduleService {
   async loadWithProvenance(): Promise<{ config: ScheduleConfig; source: SettingsValueSource }> {
     try {
       const stored = JSON.parse(await readFile(this.filePath, 'utf8')) as unknown;
-      const migrated = this.migrate(stored);
+      const migrated = migrateScheduleDocument(stored);
       const parsed = scheduleSchema.safeParse(migrated);
       if (!parsed.success) {
         this.lastSource = 'fallback';
@@ -49,13 +65,6 @@ export class ScheduleService {
   }
 
   source(): SettingsValueSource { return this.lastSource; }
-
-  private migrate(value: unknown): unknown {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
-    const record = value as Record<string, unknown>;
-    if (record.schemaVersion === 1) return { ...record, schemaVersion: 2, rules: [] };
-    return value;
-  }
 
   async save(input: unknown): Promise<ScheduleConfigSaveResult> {
     const parsed = scheduleSchema.safeParse(input);

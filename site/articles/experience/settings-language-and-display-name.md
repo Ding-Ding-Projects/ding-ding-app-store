@@ -20,6 +20,8 @@ The external-editor card persists Visual Studio Code as the preferred editor and
 
 The display name changes the title bar label only. Package identity, user-data directory, installer name, feed, and diagnostic product identity remain fixed. Reset restores the shipped values.
 
+The Schedule sub-tab can optionally resolve scheduled language, funny levels, theme, density, accent, and display name through a versioned HTTPS API or a Home Assistant boolean entity. These source controls are keyboard reachable, localized with the active settings mode, and discoverable through the sub-tab's existing search and adjacent regex builder. A Home Assistant token is not a settings field: the renderer cannot read or save it, and the privileged source service reads it only from the operating-system-protected vault.
+
 ## Configuration
 
 `settings.v1.json` is validated in the main process. Defaults are bilingual, English funny level 2, Cantonese funny level 4, system theme, comfortable density, accent `#6750A4`, `Ding Ding App Store`, and automatic repair consent `false`. The same compiled object is the provenance fallback contract used by the renderer; no opaque “default” label is shown. Language mode changes shared labels where translations exist; this revision still contains some English-only operational copy, so localization is broad but not complete.

@@ -27,4 +27,11 @@ describe('scheduled setting resolution', () => {
     expect(resolveScheduledSettings(base, config, new Date('2026-08-11T23:30:00.000Z')).theme).toBe('system');
     expect(base.theme).toBe('system');
   });
+
+  it('uses main-process external values only for an active cross-midnight rule', () => {
+    const remote = rule({ source: { kind: 'api' as const, url: 'https://settings.example.test/v1' } });
+    const base = { language: 'en' as const, englishFunnyLevel: 1, cantoneseFunnyLevel: 1, theme: 'system' as const, density: 'comfortable' as const, accent: '#6750A4', displayName: 'Ding Ding App Store', automaticRepairConsent: false };
+    expect(resolveScheduledSettings(base, { ...DEFAULT_SCHEDULE, rules: [remote] }, new Date('2026-08-10T23:30:00.000Z'), { [remote.id]: { theme: 'light' } }).theme).toBe('light');
+    expect(resolveScheduledSettings(base, { ...DEFAULT_SCHEDULE, rules: [remote] }, new Date('2026-08-10T12:00:00.000Z'), { [remote.id]: { theme: 'light' } }).theme).toBe('system');
+  });
 });
