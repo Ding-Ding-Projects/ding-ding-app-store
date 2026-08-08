@@ -23,7 +23,7 @@ Material Design 3 desktop software center for discovering, documenting, installi
 - Reviewed, versioned public catalog; private repositories and infrastructure never enter the product catalog.
 - Stable-release comparison for every catalog entry and a separate unsigned Squirrel self-updater with bounded RELEASES/package-hash validation, cancellable discovery/download states, immutable release-note links, rollback warning, and explicit restart-only installation.
 - A closed 24-ID install-adapter map: 21 reviewed Squirrel/MSI/NSIS/Mozilla-NSIS/jpackage/portable routes and three explicit public-state blockers.
-- Exact registry/managed-portable discovery, freshly derived protected removal descriptors, append-only operation history, a local Git version browser with bounded diffs, labels, and reversible restore, and filtered truthful export (17 flat-history formats plus re-importable JSON for nested documents).
+- Exact registry/managed-portable discovery, freshly derived protected removal descriptors, append-only operation history, a local Git version browser with bounded diffs, labels, and reversible restore, and filtered truthful export (18 formats, including a bounded re-importable ZIP archive with UTF-8/LF manifest metadata).
 - Installer execution owned by the main process; the renderer cannot provide commands, paths, URLs, or arguments.
 - Offline documentation articles with an in-app browser and full local search/regex builder, including 24 generated catalog metadata records with public source links and truthful adapter/blocker boundaries.
 - Persistent browser-style tab rail with left/right/top/bottom docking, pinning, grouping, overflow, four independent regex-backed tab searches, reversible bulk close/reopen, and complete keyboard control.

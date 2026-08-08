@@ -175,7 +175,26 @@ export interface InstalledAppRecord {
 }
 
 export type OperationKind = 'install' | 'build' | 'uninstall' | 'update';
-export type HistoryExportFormat = 'json' | 'jsonl' | 'yaml' | 'toml' | 'xml' | 'csv' | 'tsv' | 'markdown' | 'html' | 'sql' | 'typescript' | 'javascript' | 'python' | 'go' | 'rust' | 'json-schema' | 'protobuf';
+export type HistoryExportFormat = 'json' | 'jsonl' | 'yaml' | 'toml' | 'xml' | 'csv' | 'tsv' | 'markdown' | 'html' | 'sql' | 'typescript' | 'javascript' | 'python' | 'go' | 'rust' | 'json-schema' | 'protobuf' | 'zip';
+
+export const HISTORY_ARCHIVE_MAX_ENTRIES = 10_000;
+export const historyArchiveRequestSchema = z.strictObject({
+  entryIds: z.array(z.string().uuid()).min(1).max(HISTORY_ARCHIVE_MAX_ENTRIES),
+}).superRefine((value, context) => {
+  if (new Set(value.entryIds).size !== value.entryIds.length) context.addIssue({ code: 'custom', path: ['entryIds'], message: 'History archive entry IDs must be unique.' });
+});
+export type HistoryArchiveRequest = z.infer<typeof historyArchiveRequestSchema>;
+
+export interface HistoryArchiveExport {
+  filename: 'ding-ding-app-store-history.zip';
+  mime: 'application/zip';
+  encoding: 'UTF-8';
+  lineEndings: 'LF';
+  schema: 'ding-ding-app-store.history-archive.v1';
+  recordCount: number;
+  /** Base64 keeps the binary result inside Electron's structured-clone bridge. */
+  base64: string;
+}
 
 export type ExternalEditorId = 'vscode';
 export type ExportRecordKind = 'catalog' | 'installed' | 'activity' | 'notifications' | 'changelog' | 'docs' | 'settings' | 'appearance' | 'tabs';
@@ -1043,6 +1062,7 @@ export interface DingDingStoreApi {
   history: {
     list(): Promise<HistoryEntry[]>;
     export(format: HistoryExportFormat): Promise<string>;
+    archive(request: HistoryArchiveRequest): Promise<HistoryArchiveExport>;
     revisions(): Promise<HistoryRevision[]>;
     diff(revisionId: string): Promise<string>;
     label(revisionId: string, label: string): Promise<HistoryMutationResult>;

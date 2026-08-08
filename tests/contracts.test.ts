@@ -284,22 +284,32 @@ describe('activity history and export', () => {
 
   it('bounds append-only history and delegates every supported format to the shared registry', async () => {
     const history = await read('src/main/history-service.ts');
+    const archive = await read('src/main/history-archive.ts');
     const registry = await read('src/shared/export-registry.ts');
     expect(history).toContain('MAX_HISTORY_ENTRIES = 10_000');
     expect(history).toContain(".slice(-MAX_HISTORY_ENTRIES)");
     expect(history).toContain('serializeHistoryEntries(await this.list(), format)');
-    for (const format of ["'json'", "'yaml'", "'toml'", "'xml'", "'tsv'", "'sql'", "'protobuf'"]) expect(registry).toContain(format);
+    for (const format of ["'json'", "'yaml'", "'toml'", "'xml'", "'tsv'", "'sql'", "'protobuf'", "'zip'"]) expect(registry).toContain(format);
     expect(registry).toContain("encoding: 'UTF-8'");
     expect(registry).toContain("lineEndings: 'LF'");
+    expect(history).toContain('createHistoryArchive(selected)');
+    expect(history).toContain('historyArchiveRequestSchema.parse(request)');
+    expect(archive).toContain("const ARCHIVE_SCHEMA = 'ding-ding-app-store.history-archive.v1'");
+    expect(archive).toContain("path: 'manifest.json'");
+    expect(archive).toContain("path: 'history.jsonl'");
+    expect(archive).toContain('MAX_HISTORY_ARCHIVE_BYTES = 16 * 1024 * 1024');
+    expect(archive).toContain('sha256: sha256(file.content)');
   });
 
   it('exposes history over the typed bridge only, never a generic channel', async () => {
     const preload = await read('src/preload/index.ts');
     expect(preload).toContain("ipcRenderer.invoke('history:list')");
     expect(preload).toContain("ipcRenderer.invoke('history:export', format)");
+    expect(preload).toContain("ipcRenderer.invoke('history:archive', request)");
     const main = await read('src/main/main.ts');
     expect(main).toContain("ipcMain.handle('history:list'");
     expect(main).toContain("ipcMain.handle('history:export'");
+    expect(main).toContain("ipcMain.handle('history:archive'");
   });
 
   it('renders real activity with search, action/result/date filters, and export controls', async () => {
@@ -310,6 +320,8 @@ describe('activity history and export', () => {
     expect(app).toContain("'all', 'ok', 'failed'");
     expect(app).toContain("'all', 'today', '7d', '30d'");
     expect(app).toContain('Copy JSON');
+    expect(app).toContain('history.archive');
+    expect(app).toContain('downloadBase64');
     expect(app).toMatch(/loadHistory\(\)/);
   });
 });

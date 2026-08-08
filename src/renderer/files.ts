@@ -10,6 +10,19 @@ export function downloadText(filename: string, content: string, mime: string): v
   URL.revokeObjectURL(url);
 }
 
+/** Saves a bounded binary result returned as base64 by a typed main-process bridge. */
+export function downloadBase64(filename: string, base64: string, mime: string): void {
+  if (!base64 || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(base64)) throw new Error('The binary export was not valid base64.');
+  const binary = window.atob(base64);
+  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
+  const anchor = window.document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
 /**
  * Reads a user-chosen document as text. Only the text crosses the bridge; the path never does,
  * and main revalidates everything before a byte is stored.

@@ -3,8 +3,9 @@ import { spawn } from 'node:child_process';
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { app } from 'electron';
-import type { HistoryEntry, HistoryExportFormat, HistoryMutationResult, HistoryRevision, OperationKind } from '../shared/contracts.js';
+import { historyArchiveRequestSchema, type HistoryArchiveExport, type HistoryArchiveRequest, type HistoryEntry, type HistoryExportFormat, type HistoryMutationResult, type HistoryRevision, type OperationKind } from '../shared/contracts.js';
 import { serializeHistoryEntries } from '../shared/export-registry.js';
+import { createHistoryArchive } from './history-archive.js';
 
 const MAX_HISTORY_BYTES = 10_000_000;
 const MAX_HISTORY_ENTRIES = 10_000;
@@ -97,6 +98,20 @@ export class HistoryService {
 
   async export(format: HistoryExportFormat): Promise<string> {
     return serializeHistoryEntries(await this.list(), format);
+  }
+
+  /**
+   * Archives only records that currently exist in the append-only store. The
+   * renderer sends opaque record IDs, never record contents or filesystem
+   * paths; persisted entries are re-read before the ZIP is built.
+   */
+  async archive(request: HistoryArchiveRequest): Promise<HistoryArchiveExport> {
+    const parsed = historyArchiveRequestSchema.parse(request);
+    const available = await this.list();
+    const wanted = new Set(parsed.entryIds);
+    const selected = available.filter((entry) => wanted.has(entry.id));
+    if (selected.length !== wanted.size) throw new Error('One or more selected Activity records are no longer available for archive export.');
+    return createHistoryArchive(selected);
   }
 
   /**
