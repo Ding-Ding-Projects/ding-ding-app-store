@@ -1,12 +1,12 @@
 import type { CatalogAppId, InstallAdapterId, InstallerFamily } from './install-adapters.js';
 
 export type InstallProofOwnershipKind = 'portable' | 'registry';
-export type InstallProofUninstallKind = 'portable' | 'squirrel';
+export type InstallProofUninstallKind = 'portable' | 'squirrel' | 'msi';
 
 export interface CloudInstallProofTarget {
   readonly appId: CatalogAppId;
   readonly adapterId: InstallAdapterId;
-  readonly family: Extract<InstallerFamily, 'portable-zip' | 'squirrel'>;
+  readonly family: Extract<InstallerFamily, 'portable-zip' | 'squirrel' | 'msi'>;
   readonly ownershipKind: InstallProofOwnershipKind;
   readonly uninstallKind: InstallProofUninstallKind;
   readonly requiresCleanStart: boolean;
@@ -34,6 +34,10 @@ export const CLOUD_INSTALL_PROOF_TARGETS = {
   'qbittorrent-material': {
     appId: 'qbittorrent-material', adapterId: 'qbittorrent-material-squirrel', family: 'squirrel',
     ownershipKind: 'registry', uninstallKind: 'squirrel', requiresCleanStart: true, requiresDirectSha256: true,
+  },
+  keepassxc: {
+    appId: 'keepassxc', adapterId: 'keepassxc-msi', family: 'msi',
+    ownershipKind: 'registry', uninstallKind: 'msi', requiresCleanStart: true, requiresDirectSha256: true,
   },
 } as const satisfies Partial<Record<CatalogAppId, CloudInstallProofTarget>>;
 

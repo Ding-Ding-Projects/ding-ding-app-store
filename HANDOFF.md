@@ -1,5 +1,11 @@
 # Handoff
 
+## 2026-08-08 first MSI clean-Windows adapter proof lane
+
+- Branch `codex/msi-adapter-proof` adds exactly one MSI cloud target: `keepassxc` through the existing reviewed `keepassxc-msi` adapter. The portable trio and verified qBittorrent Squirrel target remain unchanged, and the workflow remains manual-dispatch only on `windows-2022`.
+- The typed contract requires a direct GitHub SHA-256, empty initial target state, one newly owned `KeePassXC` registry record, an MSI product-code uninstall descriptor, successful cleanup, and zero detected or persisted target records afterward. Source jobs and OpenCode remain excluded.
+- The latest reviewed public release is `v0.0.44.1`, carrying one matching `KeePassXC-2.8.0-snapshot-x64.msi` asset of 73,071,506 bytes with GitHub SHA-256 `f7280651a278b57949e9a447f21bf642554a196251eeed06c09ea9f48b461a8d`. This metadata does not become lifecycle proof until the exact branch commit passes the dispatch workflow.
+
 ## 2026-08-08 first non-portable clean-Windows adapter proof lane
 
 - Branch `codex/nonportable-squirrel-proof` adds exactly one non-portable cloud target: `qbittorrent-material` through the existing reviewed `qbittorrent-material-squirrel` adapter. The three portable proof targets remain unchanged, and the workflow remains manual-dispatch only on `windows-2022`.

@@ -15,6 +15,7 @@ on:
           - winforge
           - wimforge
           - qbittorrent-material
+          - keepassxc
 
 permissions:
   contents: read
@@ -73,12 +74,14 @@ jobs:
           if ($proof.matchedAfterInstall -ne $true) { throw 'The exact App Store-owned installed record was not rediscovered.' }
           if ($proof.cleanup.attempted -ne $true -or $proof.cleanup.ok -ne $true) { throw 'The reviewed uninstall route did not complete.' }
           if (@($proof.afterCleanup).Count -ne 0 -or @($proof.persistedAfterCleanup).Count -ne 0) { throw 'Cleanup left a detected or persisted target record.' }
-          if ($env:PROOF_APP_ID -eq 'qbittorrent-material') {
-            if ($proof.family -ne 'squirrel' -or $proof.target.ownershipKind -ne 'registry' -or $proof.target.uninstallKind -ne 'squirrel') { throw 'The non-portable proof target contract drifted.' }
-            if ($proof.cleanStart -ne $true -or @($proof.before).Count -ne 0) { throw 'The Squirrel proof did not start from a clean target state.' }
-            if ($proof.integrity.expectedSha256 -notmatch '^[0-9a-f]{64}$') { throw 'The Squirrel proof did not bind the installer to a direct GitHub SHA-256 digest.' }
+          if ($env:PROOF_APP_ID -in @('qbittorrent-material', 'keepassxc')) {
+            if ($proof.target.ownershipKind -ne 'registry') { throw 'The non-portable proof target did not require registry ownership.' }
+            if ($proof.cleanStart -ne $true -or @($proof.before).Count -ne 0) { throw 'The non-portable proof did not start from a clean target state.' }
+            if ($proof.integrity.expectedSha256 -notmatch '^[0-9a-f]{64}$') { throw 'The non-portable proof did not bind the installer to a direct GitHub SHA-256 digest.' }
             if ($proof.integrity.releaseMatchedResult -ne $true) { throw 'The installed result did not match the release tag resolved for SHA-256 evidence.' }
           }
+          if ($env:PROOF_APP_ID -eq 'qbittorrent-material' -and ($proof.family -ne 'squirrel' -or $proof.target.uninstallKind -ne 'squirrel')) { throw 'The Squirrel proof target contract drifted.' }
+          if ($env:PROOF_APP_ID -eq 'keepassxc' -and ($proof.family -ne 'msi' -or $proof.target.uninstallKind -ne 'msi')) { throw 'The MSI proof target contract drifted.' }
           if ($proof.verdict -ne $true) { throw 'The selected adapter proof did not reach its expected verdict.' }
       - uses: actions/upload-artifact@v4
         if: always()

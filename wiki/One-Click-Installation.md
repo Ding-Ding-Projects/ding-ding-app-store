@@ -63,6 +63,8 @@ The Squirrel lane has stricter clean-runner rules. It requires the selected publ
 
 [Windows proof `31268659194`](https://github.com/Ding-Ding-Projects/ding-ding-app-store/actions/runs/31268659194) is the first successful non-portable lifecycle result. On exact commit `702501675210dd767953cfa7208e8f21e40c4f0a`, the clean runner selected qBittorrent Material `v5.3.97`, downloaded the 91,589,632-byte installer, verified SHA-256 `f0e29a3a28f340680e158aa6236ad3164e24df9cb6c994e34deab2f0138cfcfd`, rediscovered one `store` record owned by `qbittorrent-material-squirrel` with a Squirrel uninstall descriptor, uninstalled it successfully, and found zero detected plus zero persisted records afterward. The bounded manifest recorded 106 progress events, `sourceRuntimeInvoked:false`, and `verdict:true`. This proves the install lifecycle only; it does not prove a packaged UI interaction or application launch.
 
+The typed proof allowlist also contains exactly one MSI target, KeePassXC. It reuses the same direct-SHA, clean-start, exact registry-ownership, bounded-manifest, and cleanup requirements, while additionally requiring an `msi` family result and an MSI product-code uninstall descriptor. The lane selects only the reviewed `keepassxc-msi` adapter; its presence is not lifecycle proof until an exact-commit dispatch succeeds.
+
 The adapter audit uses current public release metadata and source/release configuration as of 2026-08-07. The new workflow provides the fresh-Windows evidence path, but each application still needs its own successful cloud proof run; no adapter is claimed complete merely because the workflow exists. The three external blockers remain genuine incomplete outcomes, not test failures disguised as support.
 
 ## Suggested articles
