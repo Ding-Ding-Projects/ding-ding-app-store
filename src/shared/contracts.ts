@@ -161,17 +161,25 @@ export type InstallOwnership =
   | { kind: 'registry'; adapterId: string; registryKey: string; fingerprint: string }
   | { kind: 'portable'; adapterId: string; installRoot: string };
 
+export type InstalledAppSource = 'store' | 'squirrel-discovery' | 'msi-registry' | 'reviewed-registry' | 'portable-managed';
+export type InstallationManagementState = 'not-installed' | 'store-managed' | 'discovery-only';
+
 export interface InstalledAppRecord {
   appId: string;
   displayName: string;
   version: string;
   packageType: PackageType;
-  source: 'store' | 'squirrel-discovery' | 'msi-registry' | 'reviewed-registry' | 'portable-managed';
+  source: InstalledAppSource;
   installRoot: string | null;
   uninstall: UninstallDescriptor | null;
   ownership: InstallOwnership | null;
   installedAt: string | null;
   detectedAt: string;
+}
+
+export function installationManagementState(record: InstalledAppRecord | undefined): InstallationManagementState {
+  if (!record) return 'not-installed';
+  return record.ownership && record.uninstall ? 'store-managed' : 'discovery-only';
 }
 
 export type OperationKind = 'install' | 'build' | 'uninstall' | 'update';

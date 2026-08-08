@@ -17,6 +17,7 @@ import {
   registryEntryFingerprint,
   selectChangedRegistryEntry,
   selectSameVersionOwnedRegistryEntry,
+  selectUniqueReviewedRegistryEntry,
   safeReviewedUninstaller,
   type RegistryUninstallEntry,
 } from './installed-detection.js';
@@ -79,18 +80,18 @@ export class InstalledService {
     const retained: InstalledAppRecord[] = [];
     for (const record of manifest.apps) {
       const prior = previous.get(record.id);
-      if (!prior?.ownership) continue;
-      if (prior.ownership.kind === 'registry') {
+      if (prior?.ownership?.kind === 'registry') {
         const hive = ownershipHiveKey(prior.ownership.registryKey, REGISTRY_KEYS);
         if (hive && snapshot.failedKeys.includes(hive)) {
           retained.push(prior);
           continue;
         }
       }
-      const discovered = await this.discoverRecord(record, snapshot.entries, now, prior.ownership);
+      if (!prior?.ownership && snapshot.failedKeys.length > 0) continue;
+      const discovered = await this.discoverRecord(record, snapshot.entries, now, prior?.ownership ?? null);
       if (!discovered) continue;
       result.push({ ...discovered, installedAt: prior?.installedAt ?? discovered.installedAt });
-      retained.push({ ...discovered, installedAt: prior?.installedAt ?? discovered.installedAt });
+      if (discovered.ownership) retained.push({ ...discovered, installedAt: prior?.installedAt ?? discovered.installedAt });
     }
     result.sort((left, right) => left.displayName.localeCompare(right.displayName));
     await writeJsonAtomic(this.installedPath, retained.sort((left, right) => left.displayName.localeCompare(right.displayName)));
@@ -172,20 +173,22 @@ export class InstalledService {
       && ownership.adapterId === adapter.id
       && /^[0-9a-f]{64}$/.test(ownership.fingerprint)
       && /^HKEY_(?:CURRENT_USER|LOCAL_MACHINE)\\/i.test(ownership.registryKey);
-    if (!owned || ownership?.kind !== 'registry') return null;
-    const candidates = entries.filter((entry) => entry.key.localeCompare(ownership.registryKey, undefined, { sensitivity: 'accent' }) === 0
-      && registryEntryFingerprint(entry) === ownership.fingerprint
-      && exactDisplayNameMatch(entry.displayName, adapter.registryDisplayNames));
-    if (candidates.length !== 1) return null;
-    for (const entry of candidates) {
+    if (ownership && (!owned || ownership.kind !== 'registry')) return null;
+    const entry = owned && ownership?.kind === 'registry'
+      ? entries.find((candidate) => candidate.key.localeCompare(ownership.registryKey, undefined, { sensitivity: 'accent' }) === 0
+        && registryEntryFingerprint(candidate) === ownership.fingerprint
+        && exactDisplayNameMatch(candidate.displayName, adapter.registryDisplayNames)) ?? null
+      : selectUniqueReviewedRegistryEntry(entries, adapter.registryDisplayNames);
+    if (!entry) return null;
+    {
       let uninstall: UninstallDescriptor | null = null;
       if (adapter.family === 'msi' || adapter.family === 'jpackage') {
         const productCode = extractMsiProductCode(entry.uninstallString);
-        if (!productCode) continue;
+        if (!productCode) return null;
         if (owned) uninstall = { kind: 'msi', executable: 'msiexec.exe', arguments: ['/x', productCode, '/qn', '/norestart'] };
         return {
           appId: record.id, displayName: record.displayName, version: entry.displayVersion || 'unknown', packageType: adapter.packageType,
-          source: owned ? 'store' : 'msi-registry', installRoot: entry.installLocation || null, uninstall,
+          source: owned ? 'store' : 'msi-registry', installRoot: owned ? entry.installLocation || null : null, uninstall,
           ownership: owned ? ownership : null, installedAt: null, detectedAt,
         };
       }
@@ -195,7 +198,7 @@ export class InstalledService {
         ? [localAppData]
         : [localAppData, process.env.ProgramFiles ?? 'C:\\Program Files', process.env['ProgramFiles(x86)'] ?? 'C:\\Program Files (x86)'];
       const reviewed = safeReviewedUninstaller(entry, adapter.uninstallExecutableNames ?? [], allowedRoots);
-      if (!reviewed || !await exists(reviewed.executable)) continue;
+      if (!reviewed || !await exists(reviewed.executable)) return null;
       const version = adapter.family === 'squirrel'
         ? ((latestSquirrelVersion(await readdir(reviewed.installRoot).catch(() => [])) ?? entry.displayVersion) || 'unknown')
         : entry.displayVersion || 'unknown';
@@ -207,11 +210,10 @@ export class InstalledService {
       return {
         appId: record.id, displayName: record.displayName, version, packageType: adapter.packageType,
         source: owned ? 'store' : adapter.family === 'squirrel' ? 'squirrel-discovery' : 'reviewed-registry',
-        installRoot: reviewed.installRoot,
+        installRoot: owned ? reviewed.installRoot : null,
         uninstall, ownership: owned ? ownership : null, installedAt: null, detectedAt,
       };
     }
-    return null;
   }
 
   private async discoverPortable(record: CatalogRecord, executableRelativePath: string, detectedAt: string, ownership: InstallOwnership | null): Promise<InstalledAppRecord | null> {

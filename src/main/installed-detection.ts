@@ -88,6 +88,14 @@ export function exactDisplayNameMatch(displayName: string, allowedNames: readonl
   return allowedNames.some((name) => name.localeCompare(displayName, undefined, { sensitivity: 'accent' }) === 0);
 }
 
+export function selectUniqueReviewedRegistryEntry(
+  entries: readonly RegistryUninstallEntry[],
+  allowedDisplayNames: readonly string[],
+): RegistryUninstallEntry | null {
+  const matches = entries.filter((entry) => exactDisplayNameMatch(entry.displayName, allowedDisplayNames));
+  return matches.length === 1 ? matches[0] : null;
+}
+
 export function registryEntryFingerprint(entry: RegistryUninstallEntry): string {
   return createHash('sha256').update(JSON.stringify({
     key: entry.key,
