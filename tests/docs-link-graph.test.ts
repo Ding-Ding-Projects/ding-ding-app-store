@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import { validateArticleLinks } from '../scripts/docs-link-graph.mjs';
 import { articleIdFromHref } from '../src/renderer/components/MarkdownArticle';
@@ -5,6 +6,13 @@ import { articleIdFromHref } from '../src/renderer/components/MarkdownArticle';
 const article = (id: string, category: string, body: string) => ({ id, category, body });
 
 describe('offline documentation link graph', () => {
+  it('keeps privacy documentation aligned with typed notification recovery boundaries', async () => {
+    const privacyArticle = await readFile(new URL('../docs/features/security/privacy-and-security.md', import.meta.url), 'utf8');
+    expect(privacyArticle).toContain('Typed recovery exists only for verified repeatable operations; unsupported failures remain explicit no-action states.');
+    expect(privacyArticle).toContain('Notification history records the recovery kind without callbacks');
+    expect(privacyArticle).not.toContain('Some errors do not yet have a dedicated recovery action or notification history');
+  });
+
   it('resolves relative article links across categories', () => {
     expect(validateArticleLinks([
       article('one', 'experience', 'See [two](../installed/two.md).'),

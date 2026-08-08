@@ -14,7 +14,7 @@ Users can export history, tab layout, and appearance documents. Sensitive creden
 
 ## Failure modes
 
-Invalid persisted documents fall back, quarantine, or reject according to their service. Network timeouts, origin violations, metadata limits, hash mismatch, missing adapters, unsupported uninstall ownership, and withheld source execution produce explicit failures. History and snapshot failure never rolls back the primary user operation. Some errors do not yet have a dedicated recovery action or notification history; those UX gaps do not expand authority.
+Invalid persisted documents fall back, quarantine, or reject according to their service. Network timeouts, origin violations, metadata limits, hash mismatch, missing adapters, unsupported uninstall ownership, and withheld source execution produce explicit failures. History and snapshot failure never rolls back the primary user operation. Typed recovery exists only for verified repeatable operations; unsupported failures remain explicit no-action states. Notification history records the recovery kind without callbacks, so it preserves audit evidence without making a prior action runnable again after restart.
 
 ## Security considerations
 
