@@ -1,5 +1,11 @@
 # Handoff
 
+## 2026-08-08 first NSIS clean-Windows adapter proof lane
+
+- Branch `codex/next-nsis-proof` first restores the previously verified `codex-material-msi` target that the current documentation references, then adds exactly one new target: `material-email` through the existing reviewed `material-email-nsis` adapter. The portable trio, qBittorrent Squirrel target, and both MSI targets remain unchanged; the workflow remains manual-dispatch only on `windows-2022`.
+- The new target requires a direct GitHub SHA-256, an empty initial target state, one newly owned `Material Email` registry record, an exact reviewed-executable uninstall descriptor with fixed silent arguments, successful cleanup, and zero detected or persisted target records afterward. Source jobs and OpenCode remain excluded and the manifest must retain `sourceRuntimeInvoked:false`.
+- The latest reviewed public release is `v0.105.1`, carrying exactly one asset, `Material-Email-0.105.1-Windows-x64.exe` (126,565,936 bytes) with GitHub SHA-256 `b23c152433044026d6e309ae9db5cf09a93a39958b043243ca50d22b0ce3e31d`. The upstream release workflow already exercises installed/uninstalled lifecycle, while explicitly avoiding a clean-machine or interactive-launch claim. This metadata is not clean-Windows lifecycle proof for the App Store adapter until the exact branch commit passes the dispatch workflow.
+
 ## 2026-08-08 second MSI clean-Windows adapter proof lane
 
 - Branch `codex/next-nonportable-proof` restores the previously verified `keepassxc-msi` typed target that the current documentation references and adds exactly one new target, `codex-material` through the existing reviewed `codex-material-msi` adapter. The portable trio and qBittorrent Squirrel target remain unchanged; the workflow remains manual-dispatch only on `windows-2022`.

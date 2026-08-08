@@ -5,9 +5,9 @@ import { CLOUD_INSTALL_PROOF_TARGETS, cloudInstallProofTargetFor } from '../src/
 const read = (path: string) => readFile(path, 'utf8');
 
 describe('cloud install adapter proof boundary', () => {
-  it('keeps the executable proof allowlist closed to one reviewed Squirrel and two reviewed MSI adapters', () => {
+  it('keeps the executable proof allowlist closed to reviewed Squirrel, MSI, and NSIS adapters', () => {
     expect(Object.keys(CLOUD_INSTALL_PROOF_TARGETS)).toEqual([
-      'dim-sum-atlas', 'winforge', 'wimforge', 'qbittorrent-material', 'keepassxc', 'codex-material',
+      'dim-sum-atlas', 'winforge', 'wimforge', 'qbittorrent-material', 'keepassxc', 'codex-material', 'material-email',
     ]);
     expect(cloudInstallProofTargetFor('qbittorrent-material')).toEqual({
       appId: 'qbittorrent-material',
@@ -36,6 +36,15 @@ describe('cloud install adapter proof boundary', () => {
       requiresCleanStart: true,
       requiresDirectSha256: true,
     });
+    expect(cloudInstallProofTargetFor('material-email')).toEqual({
+      appId: 'material-email',
+      adapterId: 'material-email-nsis',
+      family: 'nsis',
+      ownershipKind: 'registry',
+      uninstallKind: 'reviewed-executable',
+      requiresCleanStart: true,
+      requiresDirectSha256: true,
+    });
     expect(cloudInstallProofTargetFor('material-download-manager')).toBeNull();
     expect(cloudInstallProofTargetFor('../qbittorrent-material')).toBeNull();
   });
@@ -59,9 +68,11 @@ describe('cloud install adapter proof boundary', () => {
     expect(targets).toContain("'qbittorrent-material': {");
     expect(targets).toContain('keepassxc: {');
     expect(targets).toContain("'codex-material': {");
+    expect(targets).toContain("'material-email': {");
     expect(targets).toContain("adapterId: 'qbittorrent-material-squirrel'");
     expect(targets).toContain("adapterId: 'keepassxc-msi'");
     expect(targets).toContain("adapterId: 'codex-material-msi'");
+    expect(targets).toContain("adapterId: 'material-email-nsis'");
     expect(targets).toContain("family: 'squirrel'");
     expect(targets).toContain("ownershipKind: 'registry'");
     expect(targets).toContain('requiresCleanStart: true');
@@ -103,6 +114,7 @@ describe('cloud install adapter proof boundary', () => {
     expect(workflow).toContain('- qbittorrent-material');
     expect(workflow).toContain('- keepassxc');
     expect(workflow).toContain('- codex-material');
+    expect(workflow).toContain('- material-email');
     expect(workflow).toContain('runs-on: windows-2022');
     expect(workflow).toContain('npm ci');
     expect(workflow).toContain('npx electron scripts/prove-install-adapter.mjs');
@@ -118,6 +130,7 @@ describe('cloud install adapter proof boundary', () => {
     expect(workflow).toContain('$proof.integrity.releaseMatchedResult -ne $true');
     expect(workflow).toContain("$proof.target.ownershipKind -ne 'registry'");
     expect(workflow).toContain("$proof.family -ne 'msi' -or $proof.target.uninstallKind -ne 'msi'");
+    expect(workflow).toContain("$proof.family -ne 'nsis' -or $proof.target.uninstallKind -ne 'reviewed-executable'");
     expect(workflow).toContain('@($proof.persistedAfterCleanup).Count -ne 0');
     expect(workflow).not.toContain('expectation:');
     expect(workflow).not.toContain('ubuntu-latest');

@@ -1,12 +1,12 @@
 import type { CatalogAppId, InstallAdapterId, InstallerFamily } from './install-adapters.js';
 
 export type InstallProofOwnershipKind = 'portable' | 'registry';
-export type InstallProofUninstallKind = 'portable' | 'squirrel' | 'msi';
+export type InstallProofUninstallKind = 'portable' | 'squirrel' | 'msi' | 'reviewed-executable';
 
 export interface CloudInstallProofTarget {
   readonly appId: CatalogAppId;
   readonly adapterId: InstallAdapterId;
-  readonly family: Extract<InstallerFamily, 'portable-zip' | 'squirrel' | 'msi'>;
+  readonly family: Extract<InstallerFamily, 'portable-zip' | 'squirrel' | 'msi' | 'nsis'>;
   readonly ownershipKind: InstallProofOwnershipKind;
   readonly uninstallKind: InstallProofUninstallKind;
   readonly requiresCleanStart: boolean;
@@ -42,6 +42,10 @@ export const CLOUD_INSTALL_PROOF_TARGETS = {
   'codex-material': {
     appId: 'codex-material', adapterId: 'codex-material-msi', family: 'msi',
     ownershipKind: 'registry', uninstallKind: 'msi', requiresCleanStart: true, requiresDirectSha256: true,
+  },
+  'material-email': {
+    appId: 'material-email', adapterId: 'material-email-nsis', family: 'nsis',
+    ownershipKind: 'registry', uninstallKind: 'reviewed-executable', requiresCleanStart: true, requiresDirectSha256: true,
   },
 } as const satisfies Partial<Record<CatalogAppId, CloudInstallProofTarget>>;
 
