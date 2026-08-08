@@ -36,6 +36,11 @@ if (process.exitCode) process.exit();
 await mkdir(path.dirname(path.resolve(output)), { recursive: true });
 await mkdir(path.resolve(dataRoot), { recursive: true });
 app.setPath('userData', path.resolve(dataRoot));
+// Cloud runners have no interactive desktop. Configure the renderer-less Electron
+// process before readiness so GPU/sandbox startup cannot turn into an unbounded wait.
+app.commandLine.appendSwitch('disable-gpu');
+app.commandLine.appendSwitch('disable-software-rasterizer');
+app.commandLine.appendSwitch('no-sandbox');
 app.disableHardwareAcceleration();
 
 const startedAt = new Date().toISOString();
@@ -99,7 +104,7 @@ heartbeat.unref?.();
 logMilestone('started', `appId=${appId} timeoutMinutes=${Math.round(proofTimeoutMs / 60_000)}`);
 
 try {
-  await app.whenReady();
+  await withProofTimeout(app.whenReady(), 'Electron readiness');
   logMilestone('app-ready');
   const { CatalogService } = await import('../dist/main/catalog-service.js');
   const { HistoryService } = await import('../dist/main/history-service.js');
