@@ -18,6 +18,7 @@ import { AppearanceEditor } from './AppearanceEditor';
 import { ScheduleEditor } from './ScheduleEditor';
 import { ChangelogViewer } from './ChangelogViewer';
 import { downloadText } from '../files';
+import { serializeStructuredExport } from '../../shared/export-registry';
 import { isExternalEditorBridgeAvailable, openExportInVsCode } from '../external-editor';
 
 const ABOUT_ROWS = [
@@ -58,7 +59,7 @@ export function SettingsPage({ settings, settingsProvenance, onSave, workspace, 
   const [draft, setDraft] = useState(settings);
   useEffect(() => setDraft(settings), [settings]);
   const set = <K extends keyof UserSettings>(key: K, value: UserSettings[K]) => setDraft((current) => ({ ...current, [key]: value }));
-  const settingsExport = () => `${JSON.stringify({ kind: 'ding-ding-app-store.settings', schemaVersion: 1, exportedAt: new Date().toISOString(), settings: draft }, null, 2)}\n`;
+  const settingsExport = () => serializeStructuredExport({ kind: 'ding-ding-app-store.settings', schemaVersion: 1, exportedAt: new Date().toISOString(), settings: draft });
   const downloadSettings = () => { downloadText('ding-ding-app-store-settings.json', settingsExport(), 'application/json'); notify({ ok: true, message: 'Settings export downloaded.' }); };
   const openSettingsInCode = async () => {
     const result = await openExportInVsCode({ recordKind: 'settings', suggestedName: 'ding-ding-app-store-settings.json', mime: 'application/json', content: settingsExport() });

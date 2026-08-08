@@ -4,6 +4,13 @@
 
 The repository contains a sandboxed Electron/React/TypeScript shell, reviewed 24-application catalog, stable-release/update comparison, SHA-256-gated installer path, protected uninstall path, App Store self-updater state machine, Material Design 3 navigation, language/funny-level settings, regex builder, command palette, real local operation history with export, generated offline documentation, and a fail-closed common automatic source-repair runtime.
 
+## 2026-08-08 Truthful export registry
+
+- Added `src/shared/export-registry.ts` as the one serializer for flat `HistoryEntry` records in JSON, JSONL, YAML, TOML, XML, CSV, TSV, Markdown, HTML, SQL, TypeScript, JavaScript, Python, Go, Rust, JSON Schema, and Protocol Buffers.
+- The Activity format picker preserves explicit selection/current filter scope for download and the reviewed VS Code bridge, and states UTF-8, LF, and schema metadata.
+- Catalog, installed, notification, and settings JSON exports now use the shared structured serializer with UTF-8/LF metadata. Nested documents intentionally do not advertise lossy alternative formats; existing appearance/workspace JSON remains their re-import route.
+- Focused static/build evidence is recorded with the task commit; a new packaged hidden-desktop capture of the picker is still required before treating its rendered layout as runtime-verified.
+
 ## 2026-08-08 optional spoken narrator
 
 - Added persisted optional narrator settings (disabled by default), English/Hong Kong Cantonese/both delivery, renderer-only `speechSynthesis`, serialized utterances, stale pending-line replacement, routine category cooldowns, error delivery, and immediate cancellation for quiet hours or reduced-sound mode.

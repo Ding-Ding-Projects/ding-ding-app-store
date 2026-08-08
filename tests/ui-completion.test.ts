@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 import { CHANGELOG_ENTRIES, changelogMarkdown, validateChangelog } from '../src/renderer/changelog';
 import { exportHistoryEntries } from '../src/renderer/history-export';
+import { HISTORY_EXPORT_FORMATS, historyExportFormat } from '../src/shared/export-registry';
 import { MAX_NOTIFICATION_RECORDS, MAX_NOTIFICATION_STORAGE_BYTES, parseNotificationRecords } from '../src/renderer/state/use-notifications';
 import type { HistoryEntry } from '../src/shared/contracts';
 import type { NotificationRecord } from '../src/renderer/notify';
@@ -56,12 +57,21 @@ describe('global renderer UI completion', () => {
     expect(parseNotificationRecords(' '.repeat(MAX_NOTIFICATION_STORAGE_BYTES + 1))).toEqual([]);
   });
 
-  it('exports exactly the selected activity records in every supported durable format', () => {
+  it('exports exactly the selected activity records in every truthful durable format', () => {
     const entry: HistoryEntry = { id: 'op1', appId: 'desktop-material', displayName: 'Desktop Material', kind: 'install', ok: false, message: 'Installer said "no".', occurredAt: '2026-08-07T12:00:00.000Z' };
     expect(JSON.parse(exportHistoryEntries([entry], 'json'))).toEqual([entry]);
     expect(exportHistoryEntries([entry], 'jsonl')).toContain('"appId":"desktop-material"');
     expect(exportHistoryEntries([entry], 'csv')).toContain('"Installer said ""no""."');
     expect(exportHistoryEntries([entry], 'markdown')).toContain('## Desktop Material — install');
+    expect(HISTORY_EXPORT_FORMATS).toHaveLength(17);
+    for (const format of HISTORY_EXPORT_FORMATS) {
+      const content = exportHistoryEntries([entry], format.id);
+      if (format.id !== 'json-schema' && format.id !== 'protobuf') expect(content).toContain('desktop-material');
+      expect(content).not.toContain('\r\n');
+      expect(historyExportFormat(format.id)).toMatchObject({ encoding: 'UTF-8', lineEndings: 'LF' });
+    }
+    expect(exportHistoryEntries([entry], 'json-schema')).toContain('HistoryEntry');
+    expect(exportHistoryEntries([entry], 'protobuf')).toContain('message HistoryEntry');
   });
 
   it('ships searchable bulk surfaces, a super-confirmed notification delete, and safe editor fallback', async () => {
