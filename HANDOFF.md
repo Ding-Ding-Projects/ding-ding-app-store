@@ -20,10 +20,20 @@ The repository contains a sandboxed Electron/React/TypeScript shell, reviewed 24
 - The self-update failure state is runtime-verified: the repository has no release yet, so `RELEASES` returns HTTP 404. No successful update is claimed.
 - GitHub Pages is not yet live: creating a Pages site for the first time needs an admin-level token, and the Actions `GITHUB_TOKEN` used by `pages.yml` doesn't have it. See the 2026-08-07 CI/release/Pages entry below for the exact one-time manual step needed.
 - A real labelled self-hosted runner has not yet been observed for this repository; no remote CI or release claim is valid.
+- The one-click UI/typed-decision boundary does not make the 24 catalog adapters complete. Clean-Windows dependency bootstrap, archive handling, source recipes, the disposable build/run terminal simulator, automatic OpenCode bootstrap, bounded touchless repair, cancellation, retry exhaustion, and per-app runtime proof remain tracked in `docs/features/one-click-installation.md`.
 
 ## Next owner action
 
 Integrate the isolated catalog-domain and documentation branches, run the combined checks, package the unsigned Squirrel application, exercise it on the sanctioned hidden desktop, then continue the remaining roadmap without weakening the execution boundary.
+
+## 2026-08-07 one-click installation dispatch
+
+- Removed the install/build phrase-entry route. Install, Reinstall, and Install from source now dispatch directly from the catalog card; only uninstall can create `ActionDialog`.
+- Replaced the renderer-to-main `confirmation` string with a strict two-field `{ appId, decision }` request. `OperationService` rejects arrays, unknown fields, malformed IDs, unknown decisions, and a decision that does not match the invoked method before an adapter can run.
+- Kept release lookup, allowlisted HTTPS redirects, size and SHA-256 validation, shell-free hidden execution, the 15-minute process bound, staging cleanup, activity recording, and installed-record ownership in the main process. The renderer still cannot submit commands, URLs, paths, dependencies, or arguments.
+- Preserved the native two-key plus full-slider uninstall gate, added initial keyboard focus and an accessible description, prevented Escape from dismissing it while work is active, and returns focus to the initiating uninstall control after close.
+- Added an explicit matrix for all 24 catalog records and the separate future build/repair engine contract. It states that automatic OpenCode bootstrap and bounded touchless repair may run only in a disposable workspace with retry/time/resource limits and no access to arbitrary user paths, user secrets, host credentials, or unrelated repositories.
+- Verification on the isolated branch based at `83c0ad65f85927ac3f7a4f6be2605afd31a0f7f3`: `npm run check` passed (root contracts `58/58`, catalog contract `11/11`, domain `20/20`, plus renderer/main/workspace typechecks), and `npm run build` completed the Vite renderer, TypeScript main process, and bundled preload. No installer, dependency bootstrap, source build, OpenCode repair, cancellation path, packaged-runtime interaction, or clean-Windows install is claimed here.
 
 ## 2026-08-07 CI, release, and Pages workflows added (GitHub-hosted runners)
 

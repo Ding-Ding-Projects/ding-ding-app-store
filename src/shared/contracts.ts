@@ -34,7 +34,7 @@ export interface CatalogSnapshot {
 
 export interface OperationRequest {
   appId: string;
-  confirmation: string;
+  decision: OperationKind;
 }
 
 export interface OperationResult {

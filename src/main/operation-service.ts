@@ -11,6 +11,28 @@ import { readJson, writeJsonAtomic } from './json-store.js';
 
 const MAX_DOWNLOAD_BYTES = 1_500_000_000;
 const REDIRECT_HOSTS = new Set(['github.com', 'release-assets.githubusercontent.com', 'objects.githubusercontent.com']);
+const OPERATION_KINDS = new Set<OperationKind>(['install', 'build', 'uninstall']);
+
+function isOperationRequest(value: unknown): value is OperationRequest {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const request = value as Record<string, unknown>;
+  const keys = Object.keys(request);
+  return keys.length === 2
+    && keys.includes('appId')
+    && keys.includes('decision')
+    && typeof request.appId === 'string'
+    && /^[a-z0-9][a-z0-9-]{0,127}$/.test(request.appId)
+    && typeof request.decision === 'string'
+    && OPERATION_KINDS.has(request.decision as OperationKind);
+}
+
+function invalidRequest(kind: OperationKind): OperationResult {
+  return {
+    ok: false,
+    appId: 'invalid',
+    message: `Invalid ${kind} request. Only a catalog application ID and matching user decision are accepted.`,
+  };
+}
 
 interface InstalledRecord {
   appId: string;
@@ -102,6 +124,7 @@ async function downloadVerified(asset: ReleaseAsset, destination: string): Promi
 export class OperationService {
   private readonly installedPath = path.join(app.getPath('userData'), 'installed-apps.v1.json');
   private readonly stagingRoot = path.join(app.getPath('userData'), 'staging');
+  private readonly activeOperations = new Set<string>();
 
   constructor(
     private readonly catalog: CatalogService,
@@ -109,52 +132,81 @@ export class OperationService {
   ) {}
 
   private async finish(record: CatalogRecord, kind: OperationKind, result: OperationResult): Promise<OperationResult> {
-    await this.history.record({ appId: result.appId, displayName: record.displayName, kind, ok: result.ok, message: result.message });
-    return result;
-  }
-
-  async install(request: OperationRequest): Promise<OperationResult> {
-    const record = await this.catalog.recordFor(request.appId);
-    if (request.confirmation !== `INSTALL ${record.displayName}`) {
-      return this.finish(record, 'install', { ok: false, appId: request.appId, message: `Type INSTALL ${record.displayName} to confirm.` });
-    }
-    if (!['squirrel', 'msi'].includes(record.packageType) || !record.assetPattern) {
-      return this.finish(record, 'install', { ok: false, appId: request.appId, message: 'A reviewed silent-install adapter is not available for this application yet.' });
-    }
-
-    const release = await this.catalog.latestRelease(record.repository);
-    if (!release || release.draft || release.prerelease) {
-      return this.finish(record, 'install', { ok: false, appId: request.appId, message: 'No stable published release is available.' });
-    }
-    const pattern = new RegExp(record.assetPattern, 'i');
-    const matches = release.assets.filter((asset) => pattern.test(asset.name));
-    if (matches.length !== 1) {
-      return this.finish(record, 'install', { ok: false, appId: request.appId, message: `Expected exactly one reviewed installer asset; found ${matches.length}.` });
-    }
-
-    const operationId = randomUUID();
-    const operationDir = path.join(this.stagingRoot, operationId);
-    await mkdir(operationDir, { recursive: true });
-    const installerPath = path.join(operationDir, path.basename(matches[0].name));
     try {
-      await downloadVerified(matches[0], installerPath);
-      const exitCode = record.packageType === 'squirrel'
-        ? await run(installerPath, ['--silent'])
-        : await run(path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'msiexec.exe'), ['/i', installerPath, '/qn', '/norestart']);
-      if (exitCode !== 0) throw new Error(`Installer exited with code ${exitCode}.`);
-      await this.recordInstalled(record, release.tag_name);
-      return this.finish(record, 'install', { ok: true, appId: request.appId, operationId, message: `${record.displayName} ${release.tag_name} installed successfully.` });
-    } catch (error) {
-      return this.finish(record, 'install', { ok: false, appId: request.appId, operationId, message: (error as Error).message });
-    } finally {
-      await rm(operationDir, { recursive: true, force: true });
+      await this.history.record({ appId: result.appId, displayName: record.displayName, kind, ok: result.ok, message: result.message });
+      return result;
+    } catch {
+      return { ...result, message: `${result.message} Activity history could not record this outcome.` };
     }
   }
 
-  async build(request: OperationRequest): Promise<OperationResult> {
+  async install(request: unknown): Promise<OperationResult> {
+    if (!isOperationRequest(request)) return invalidRequest('install');
     const record = await this.catalog.recordFor(request.appId);
-    if (request.confirmation !== `BUILD ${record.displayName}`) {
-      return this.finish(record, 'build', { ok: false, appId: request.appId, message: `Type BUILD ${record.displayName} to confirm.` });
+    if (request.decision !== 'install') {
+      return this.finish(record, 'install', { ok: false, appId: request.appId, message: 'The install request did not carry the matching user decision.' });
+    }
+    const operationKey = `install:${record.id}`;
+    if (this.activeOperations.has(operationKey)) {
+      return this.finish(record, 'install', { ok: false, appId: request.appId, message: `${record.displayName} already has an installation in progress.` });
+    }
+    this.activeOperations.add(operationKey);
+    try {
+      if (!['squirrel', 'msi'].includes(record.packageType) || !record.assetPattern) {
+        return this.finish(record, 'install', { ok: false, appId: request.appId, message: 'A reviewed silent-install adapter is not available for this application yet.' });
+      }
+
+      const release = await this.catalog.latestRelease(record.repository);
+      if (!release || release.draft || release.prerelease) {
+        return this.finish(record, 'install', { ok: false, appId: request.appId, message: 'No stable published release is available.' });
+      }
+      const pattern = new RegExp(record.assetPattern, 'i');
+      const matches = release.assets.filter((asset) => pattern.test(asset.name));
+      if (matches.length !== 1) {
+        return this.finish(record, 'install', { ok: false, appId: request.appId, message: `Expected exactly one reviewed installer asset; found ${matches.length}.` });
+      }
+
+      const operationId = randomUUID();
+      const operationDir = path.join(this.stagingRoot, operationId);
+      await mkdir(operationDir, { recursive: true });
+      const installerPath = path.join(operationDir, path.basename(matches[0].name));
+      let result: OperationResult;
+      try {
+        await downloadVerified(matches[0], installerPath);
+        const exitCode = record.packageType === 'squirrel'
+          ? await run(installerPath, ['--silent'])
+          : await run(path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'msiexec.exe'), ['/i', installerPath, '/qn', '/norestart']);
+        if (exitCode !== 0) throw new Error(`Installer exited with code ${exitCode}.`);
+        try {
+          await this.recordInstalled(record, release.tag_name);
+          result = { ok: true, appId: request.appId, operationId, message: `${record.displayName} ${release.tag_name} installed successfully.` };
+        } catch {
+          result = {
+            ok: false,
+            appId: request.appId,
+            operationId,
+            message: `${record.displayName}'s installer exited successfully, but the App Store could not record installation ownership. The application may be installed; do not retry automatically.`,
+          };
+        }
+      } catch (error) {
+        result = { ok: false, appId: request.appId, operationId, message: (error as Error).message };
+      }
+      try {
+        await rm(operationDir, { recursive: true, force: true });
+      } catch {
+        result = { ...result, message: `${result.message} Temporary staging cleanup failed; the owned staging folder may remain.` };
+      }
+      return this.finish(record, 'install', result);
+    } finally {
+      this.activeOperations.delete(operationKey);
+    }
+  }
+
+  async build(request: unknown): Promise<OperationResult> {
+    if (!isOperationRequest(request)) return invalidRequest('build');
+    const record = await this.catalog.recordFor(request.appId);
+    if (request.decision !== 'build') {
+      return this.finish(record, 'build', { ok: false, appId: request.appId, message: 'The source-install request did not carry the matching user decision.' });
     }
     if (!record.sourceManifest) {
       return this.finish(record, 'build', { ok: false, appId: request.appId, message: 'This application has no reviewed source-build manifest.' });
@@ -166,10 +218,11 @@ export class OperationService {
     });
   }
 
-  async uninstall(request: OperationRequest): Promise<OperationResult> {
+  async uninstall(request: unknown): Promise<OperationResult> {
+    if (!isOperationRequest(request)) return invalidRequest('uninstall');
     const record = await this.catalog.recordFor(request.appId);
-    if (request.confirmation !== `UNINSTALL ${record.displayName}`) {
-      return this.finish(record, 'uninstall', { ok: false, appId: request.appId, message: `Type UNINSTALL ${record.displayName} to confirm.` });
+    if (request.decision !== 'uninstall') {
+      return this.finish(record, 'uninstall', { ok: false, appId: request.appId, message: 'The uninstall request did not carry the matching destructive decision.' });
     }
     const installed = await readJson<InstalledRecord[]>(this.installedPath, []);
     const current = installed.find((item) => item.appId === request.appId);

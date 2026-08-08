@@ -33,7 +33,9 @@ Material Design 3 desktop software center for discovering, documenting, installi
 <details id="security-and-trust">
 <summary><strong>Security and trust</strong></summary>
 
-Installable assets require an allowlisted application, a reviewed asset matcher, an HTTPS GitHub release origin, a bounded declared size, and a GitHub SHA-256 digest. Install results are recorded only after the child process exits successfully. Uninstall uses only the exact entry recorded for that installation and requires the two-key plus full-slider destructive confirmation.
+Install and Reinstall are genuine one-click actions: the catalog button immediately submits only the application ID and a closed install decision, with no phrase-entry dialog. Installable assets still require an allowlisted application, a reviewed asset matcher, an HTTPS GitHub release origin, a bounded declared size, and a GitHub SHA-256 digest. Install results are recorded only after the hidden child process exits successfully. Uninstall uses only the exact entry recorded for that installation and still requires the two-key plus full-slider destructive confirmation.
+
+The common dispatch is implemented, but fully automatic fresh-Windows coverage is not: the current [24-app adapter matrix](docs/features/one-click-installation.md) records every missing release, archive, source-toolchain, dependency-bootstrap, disposable-runner, bounded OpenCode-repair, cancellation, and runtime-proof requirement without treating a guessed command as an adapter.
 
 Source recipes are catalogued but are never executed directly on the host. The product will enable that path only through a disposable, resource-bounded Windows build runner.
 

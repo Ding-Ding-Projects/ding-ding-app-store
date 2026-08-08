@@ -9,6 +9,8 @@
 - [x] Initial Material Design 3 catalog/settings/docs surfaces
 - [ ] Disposable Windows source-build runner
 - [ ] Installed-app discovery and adapter validation across every supported package type
+- [x] One-click install/source-install dispatch with strict catalog-ID and typed-decision boundary; destructive uninstall confirmation unchanged
+- [ ] Fully automatic clean-Windows adapters for all 24 catalog records, including pinned dependency bootstrap, portable archives, disposable source builds, bounded OpenCode repair, cancellation, and runtime proof
 - [ ] Complete offline wiki/repository-doc import for every catalog application
 - [x] Local operation history: every install/build/uninstall outcome recorded, filterable by action/result/date, exported as JSON/CSV/Markdown
 - [x] Persistent tab rail with pinning, grouping, overflow, tab search, and full keyboard control

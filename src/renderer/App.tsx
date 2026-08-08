@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DEFAULT_SCHEDULE, TAB_GROUP_COLORS } from '../shared/contracts';
 import type {
   AppStoreUpdateState,
@@ -14,7 +14,7 @@ import type {
   UserSettings,
 } from '../shared/contracts';
 import { ActionDialog } from './components/ActionDialog';
-import type { ActionKind } from './components/ActionDialog';
+import type { ActionKind, ImmediateActionKind } from './components/ActionDialog';
 import { AppearancePanel } from './components/AppearancePanel';
 import { CommandPalette } from './components/CommandPalette';
 import { TabRail } from './components/TabRail';
@@ -24,6 +24,7 @@ import { Icon } from './icons';
 import { formatAbsolute, label } from './i18n';
 import type { Notice } from './notify';
 import { AppsPage } from './pages/AppsPage';
+import type { RunningAction } from './pages/AppsPage';
 import { ActivityPage } from './pages/ActivityPage';
 import { DocsPage } from './pages/DocsPage';
 import { SettingsPage } from './pages/SettingsPage';
@@ -59,7 +60,9 @@ export function App() {
   const [loading, setLoading] = useState(true);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
-  const [action, setAction] = useState<{ kind: ActionKind; app: CatalogApp } | null>(null);
+  const [action, setAction] = useState<{ kind: 'uninstall'; app: CatalogApp; returnFocus: HTMLButtonElement } | null>(null);
+  const [runningAction, setRunningAction] = useState<RunningAction | null>(null);
+  const operationRunningRef = useRef(false);
   const [updateState, setUpdateState] = useState<AppStoreUpdateState>({ status: 'idle' });
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -85,6 +88,40 @@ export function App() {
     try { setHistory(await window.dingDingStore.history.list()); }
     finally { setHistoryLoading(false); }
   }, []);
+
+  const reportOperation = useCallback((result: { ok: boolean; message: string }) => {
+    notify({ ok: result.ok, message: result.message });
+    announce(result.message);
+    void loadHistory();
+    if (result.ok) void loadCatalog(true);
+  }, [announce, loadCatalog, loadHistory, notify]);
+
+  const closeAction = useCallback(() => {
+    const returnFocus = action?.returnFocus;
+    setAction(null);
+    if (returnFocus) window.setTimeout(() => returnFocus.focus(), 0);
+  }, [action]);
+
+  const startAction = useCallback(async (kind: ActionKind, selectedApp: CatalogApp, trigger: HTMLButtonElement) => {
+    if (kind === 'uninstall') {
+      setAction({ kind, app: selectedApp, returnFocus: trigger });
+      return;
+    }
+    if (operationRunningRef.current) return;
+    operationRunningRef.current = true;
+    const next: RunningAction = { kind: kind as ImmediateActionKind, appId: selectedApp.id };
+    setRunningAction(next);
+    announce(kind === 'install' ? `Installing ${selectedApp.name}` : `Preparing the source install for ${selectedApp.name}`);
+    try {
+      const result = await window.dingDingStore.operations[kind]({ appId: selectedApp.id, decision: kind });
+      reportOperation(result);
+    } catch (error) {
+      reportOperation({ ok: false, message: (error as Error).message });
+    } finally {
+      operationRunningRef.current = false;
+      setRunningAction(null);
+    }
+  }, [announce, reportOperation]);
 
   useEffect(() => {
     void loadCatalog();
@@ -279,7 +316,7 @@ export function App() {
       }
       if (event.key === 'Escape') {
         if (paletteOpen) { setPaletteOpen(false); return; }
-        if (action) { setAction(null); return; }
+        if (action) { closeAction(); return; }
         if (panelOpen) { setPanelOpen(false); return; }
         if (appearance.editMode) { appearance.setEditMode(false); announce('Appearance edit mode off'); return; }
         search.dispatch({ type: 'clear', surface: 'tabs' });
@@ -287,7 +324,7 @@ export function App() {
     };
     window.addEventListener('keydown', listener);
     return () => window.removeEventListener('keydown', listener);
-  }, [activeTab, workspace, runCommand, createGroup, announce, paletteOpen, action, panelOpen, appearance, search]);
+  }, [activeTab, workspace, runCommand, createGroup, announce, paletteOpen, action, closeAction, panelOpen, appearance, search]);
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -424,7 +461,8 @@ export function App() {
               apps={catalog?.apps ?? []}
               settings={settings}
               loading={loading}
-              onAction={(kind, app) => setAction({ kind, app })}
+              onAction={(kind, app, trigger) => void startAction(kind, app, trigger)}
+              runningAction={runningAction}
               openRegex={regexRequest === activeTab}
               onRegexHandled={() => setRegexRequest(null)}
             />
@@ -449,7 +487,7 @@ export function App() {
 
         {panelOpen && appearance.editMode && <AppearancePanel appearance={appearance} settings={settings} notify={notify} onClose={() => setPanelOpen(false)} />}
 
-        {action && <ActionDialog action={action} settings={settings} onClose={() => setAction(null)} onResult={(result) => { notify({ ok: result.ok, message: result.message }); void loadHistory(); if (result.ok) void loadCatalog(true); }} />}
+        {action && <ActionDialog action={action} settings={settings} onClose={closeAction} onResult={reportOperation} />}
 
         {paletteOpen && (
           <CommandPalette
