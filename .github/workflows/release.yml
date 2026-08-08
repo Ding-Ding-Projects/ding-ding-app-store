@@ -2,157 +2,144 @@ name: Release
 
 on:
   push:
-    branches: [main]
   workflow_dispatch: {}
 
 permissions:
   contents: write
 
 concurrency:
-  group: release
+  group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Windows, X64, ding-ding-app-store]
+    timeout-minutes: 45
+    outputs:
+      started_at: ${{ steps.timing.outputs.started_at }}
     steps:
+      - name: Record first-job start time
+        id: timing
+        shell: pwsh
+        run: '"started_at=$((Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"))" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append'
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
-      - run: npm ci
-      - run: npm run check
-      - run: npm run build
+      - name: Verify runner and dependency inventory
+        shell: pwsh
+        run: |
+          "Runner OS: $env:RUNNER_OS"
+          "Runner architecture: $env:RUNNER_ARCH"
+          git --version
+          node --version
+          npm --version
+          if ($env:RUNNER_OS -ne 'Windows' -or $env:RUNNER_ARCH -ne 'X64') { throw 'The selected runner does not match the reviewed Windows X64 label set.' }
+      - name: Install locked dependencies from a cache-miss-safe state
+        run: npm ci
+      - name: Run strict typechecks and all test suites
+        run: npm run check
+      - name: Prove a production build before packaging
+        run: npm run build
 
   windows-build:
     needs: test
-    runs-on: windows-latest
+    runs-on: [self-hosted, Windows, X64, ding-ding-app-store]
+    timeout-minutes: 90
     outputs:
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
-      started_at: ${{ steps.timing.outputs.started_at }}
     steps:
       - uses: actions/checkout@v4
-      - name: Record start time
-        id: timing
-        shell: bash
-        run: echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
-      - run: npm ci
-      - run: npm run build
+      - name: Install locked dependencies from a cache-miss-safe state
+        run: npm ci
+      - name: Build renderer, main process, and preload
+        run: npm run build
       - name: Package unsigned Squirrel.Windows installer
         run: npx electron-builder --win squirrel --publish never
-      - name: Compute release tag
+      - name: Compute unique release tag
         id: version
-        shell: bash
-        run: |
-          version=$(node -p "require('./package.json').version")
-          tag="v${version}-${{ github.run_number }}"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-      - name: Verify the setup executable is unsigned
         shell: pwsh
         run: |
-          $setup = Get-ChildItem -Path release -Recurse -Filter "*Setup.exe" | Select-Object -First 1
-          if (-not $setup) { throw "No Setup.exe was produced by electron-builder." }
-          $releases = Get-ChildItem -Path $setup.DirectoryName -Filter "RELEASES" | Select-Object -First 1
-          if (-not $releases) { throw "No RELEASES file was produced alongside the setup executable." }
-          $nupkg = Get-ChildItem -Path $setup.DirectoryName -Filter "*-full.nupkg" | Select-Object -First 1
-          if (-not $nupkg) { throw "No full .nupkg was produced alongside the setup executable." }
-          $sig = Get-AuthenticodeSignature -FilePath $setup.FullName
-          "Setup executable: $($setup.FullName)"
-          "Signature status: $($sig.Status)"
-          if ($sig.Status -ne 'NotSigned') {
-            throw "Code signing is permanently prohibited for this project, but the setup executable reported signature status '$($sig.Status)' instead of 'NotSigned'."
-          }
-          "NotSigned=true" | Out-File -FilePath notsigned.txt -Encoding ascii
-      - name: Line-count table
-        shell: bash
+          $version = (Get-Content -LiteralPath package.json -Raw | ConvertFrom-Json).version
+          $tag = "v$version-${{ github.run_number }}-${{ github.run_attempt }}"
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+      - name: Verify and stage unsigned Squirrel assets
+        shell: pwsh
         run: |
-          {
-            echo "| Extension | Files | Lines |"
-            echo "| --- | ---: | ---: |"
-            for ext in ts tsx css md json yml; do
-              files=$(git ls-files -- "*.${ext}")
-              count=0
-              lines=0
-              if [ -n "$files" ]; then
-                count=$(echo "$files" | grep -c .)
-                lines=$(echo "$files" | xargs cat | wc -l)
-              fi
-              echo "| .$ext | $count | $lines |"
-            done
-          } > line-count.md
-          cat line-count.md
+          $setup = Get-ChildItem -Path release -Recurse -Filter '*Setup.exe' | Select-Object -First 1
+          if (-not $setup) { throw 'No Setup.exe was produced by electron-builder.' }
+          $releases = Get-ChildItem -Path $setup.DirectoryName -Filter 'RELEASES' | Select-Object -First 1
+          $nupkg = Get-ChildItem -Path $setup.DirectoryName -Filter '*-full.nupkg' | Select-Object -First 1
+          if (-not $releases -or -not $nupkg) { throw 'Squirrel did not produce RELEASES and a full .nupkg beside Setup.exe.' }
+          $signature = Get-AuthenticodeSignature -FilePath $setup.FullName
+          if ($signature.Status -ne 'NotSigned') { throw "Code signing is prohibited, but Setup.exe reported $($signature.Status)." }
+          New-Item -ItemType Directory -Path release-stage -Force | Out-Null
+          Copy-Item -LiteralPath $setup.FullName -Destination 'release-stage/DingDingAppStore-Setup.exe'
+          Copy-Item -LiteralPath $releases.FullName -Destination 'release-stage/RELEASES'
+          Copy-Item -LiteralPath $nupkg.FullName -Destination 'release-stage/DingDingAppStore-full.nupkg'
+      - name: Produce reproducible line-count table
+        shell: pwsh
+        run: npm run count:lines | Out-File -FilePath release-stage/line-count.md -Encoding utf8
       - uses: actions/upload-artifact@v4
         with:
-          name: windows-release
-          path: |
-            release/**/*Setup.exe
-            release/**/RELEASES
-            release/**/*.nupkg
-            line-count.md
+          name: windows-release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: release-stage/*
           if-no-files-found: error
 
   publish:
-    needs: windows-build
-    runs-on: ubuntu-latest
+    needs: [test, windows-build]
+    runs-on: [self-hosted, Windows, X64, ding-ding-app-store]
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: windows-release
-          path: artifacts
-      - name: Compute end-to-end duration
-        id: timing
-        run: |
-          completed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          start_s=$(date -u -d "${{ needs.windows-build.outputs.started_at }}" +%s)
-          end_s=$(date -u -d "$completed_at" +%s)
-          dur=$((end_s - start_s))
-          duration=$(printf '%02d:%02d:%02d' $((dur/3600)) $(((dur%3600)/60)) $((dur%60)))
-          echo "completed_at=$completed_at" >> "$GITHUB_OUTPUT"
-          echo "duration=$duration" >> "$GITHUB_OUTPUT"
-      - name: Locate installer assets
-        id: assets
-        run: |
-          setup=$(find artifacts -iname "*Setup.exe" | head -1)
-          releases=$(find artifacts -iname "RELEASES" | head -1)
-          nupkg=$(find artifacts -iname "*-full.nupkg" | head -1)
-          if [ -z "$setup" ] || [ -z "$releases" ] || [ -z "$nupkg" ]; then
-            echo "One or more required installer assets are missing." >&2
-            find artifacts -type f >&2
-            exit 1
-          fi
-          echo "setup=$setup" >> "$GITHUB_OUTPUT"
-          echo "releases=$releases" >> "$GITHUB_OUTPUT"
-          echo "nupkg=$nupkg" >> "$GITHUB_OUTPUT"
-      - name: Write release notes
-        run: |
-          {
-            echo "Unsigned Squirrel.Windows release. Code signing is permanently prohibited for this project; the setup executable was verified to report Authenticode signature status \`NotSigned\` on the \`windows-latest\` build runner before this release was published."
-            echo
-            echo "- Source commit: \`${{ github.sha }}\`"
-            echo "- Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-            echo "- Verified UTC workflow start: ${{ needs.windows-build.outputs.started_at }}"
-            echo "- Verified UTC workflow completion: ${{ steps.timing.outputs.completed_at }}"
-            echo "- End-to-end duration: ${{ steps.timing.outputs.duration }}"
-            echo
-            cat artifacts/line-count.md
-          } > release-notes.md
-      - name: Publish release
+          name: windows-release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: release-stage
+      - name: Bootstrap pinned GitHub CLI in the job-local tool cache
+        shell: pwsh
+        run: ./scripts/bootstrap-gh-cli.ps1 -ToolsRoot (Join-Path $env:RUNNER_TEMP 'ding-ding-tools')
+      - name: Publish immutable assets and exact workflow timing
+        shell: pwsh
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.ORG_TOKEN || secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.windows-build.outputs.tag }}
+          WORKFLOW_STARTED: ${{ needs.test.outputs.started_at }}
         run: |
-          tag="${{ needs.windows-build.outputs.tag }}"
-          gh release create "$tag" \
-            "${{ steps.assets.outputs.setup }}" \
-            "${{ steps.assets.outputs.releases }}" \
-            "${{ steps.assets.outputs.nupkg }}" \
-            --repo "${{ github.repository }}" \
-            --title "Ding Ding App Store $tag" \
-            --notes-file release-notes.md
+          $setup = Resolve-Path 'release-stage/DingDingAppStore-Setup.exe'
+          $releases = Resolve-Path 'release-stage/RELEASES'
+          $nupkg = Resolve-Path 'release-stage/DingDingAppStore-full.nupkg'
+          $lineCount = Resolve-Path 'release-stage/line-count.md'
+          gh release create $env:RELEASE_TAG $setup $releases $nupkg --repo $env:GITHUB_REPOSITORY --title "Ding Ding App Store $env:RELEASE_TAG" --notes 'Publication timing is being finalized.' --draft
+          gh release edit $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --draft=false
+          $publishedAt = gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/$env:RELEASE_TAG" --jq .published_at
+          if (-not $publishedAt) { throw 'The published release did not report published_at.' }
+          $started = [DateTimeOffset]::Parse($env:WORKFLOW_STARTED)
+          $completed = [DateTimeOffset]::Parse($publishedAt)
+          $elapsed = $completed - $started
+          $duration = '{0:00}:{1:00}:{2:00}' -f [Math]::Floor($elapsed.TotalHours), $elapsed.Minutes, $elapsed.Seconds
+          $notes = @(
+            'Unsigned Squirrel.Windows release. Code signing is permanently prohibited; Setup.exe was verified as NotSigned before publication.'
+            ''
+            "- Source commit: ``$env:GITHUB_SHA``"
+            "- Workflow run: $env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+            "- Workflow started: $($started.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'))"
+            "- Workflow completed: $($completed.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'))"
+            "- Workflow duration: $duration"
+            ''
+            (Get-Content -LiteralPath $lineCount -Raw)
+          ) -join "`n"
+          $notes | Out-File -FilePath release-notes.md -Encoding utf8
+          gh release edit $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --notes-file release-notes.md
+          gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --json isDraft,tagName,targetCommitish,assets --jq '{isDraft,tagName,targetCommitish,assets:[.assets[].name]}'

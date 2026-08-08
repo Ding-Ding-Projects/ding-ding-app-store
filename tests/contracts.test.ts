@@ -267,7 +267,7 @@ describe('activity history and export', () => {
 describe('one-click adapter coverage record', () => {
   it('names every catalog application and the bounded repair-engine contract without claiming the missing adapters are complete', async () => {
     const catalog = JSON.parse(await read('data/catalog.v1.json')) as { apps: Array<{ displayName: string }> };
-    const coverage = await read('docs/features/one-click-installation.md');
+    const coverage = await read('docs/features/installation/one-click-installation.md');
     for (const app of catalog.apps) expect(coverage).toContain(`| ${app.displayName} |`);
     for (const requirement of [
       'build/run terminal simulator',

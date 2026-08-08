@@ -1,25 +1,22 @@
 # Ding Ding App Store documentation
 
-These feature articles describe the proposed Ding Ding App Store desktop experience. They distinguish intended behaviour from verification that has actually been run. The companion local-only site in `site/` renders the same feature inventory as a navigable documentation foundation.
+These articles describe the current application at the exact boundary implemented in source. **Limited** and **pending** labels are intentional: a catalog record is not proof that its installer works, a check is not a download, and a static test is not runtime evidence.
 
-## Feature index
+- [Complete categorized feature index](features/README.md)
+- [Static documentation site](../site/README.md)
+- [Verification and evidence](features/verification/verification.md)
 
-- [Catalog discovery](features/catalog-discovery.md)
-- [Verified installer operations](features/verified-installer-operations.md)
-- [Installed app discovery and history](features/installed-app-discovery.md)
-- [One-click installation and adapter coverage](features/one-click-installation.md)
-- [Source-build security](features/source-build-security.md)
-- [Uninstall](features/uninstall.md)
-- [Activity history and export](features/activity-history.md)
-- [Per-app update checker](features/per-app-update-checker.md)
-- [App Store self-updater](features/app-store-self-updater.md)
-- [Offline documentation browser](features/offline-documentation-browser.md)
-- [Tab navigation](features/tab-navigation.md)
-- [Appearance editor](features/appearance-editor.md)
-- [Update schedule](features/update-schedule.md)
-- [Privacy and security](features/privacy-and-security.md)
-- [Verification](features/verification.md)
+## Feature inventory
+
+- **Discovery and catalog:** Catalog discovery (shipped)
+- **Installation and removal:** Verified installer operations (limited), One-click installation and adapter coverage (limited), Source-build security (limited), Protected uninstall (shipped), Automatic repair and universal adapters (pending)
+- **Installed apps and history:** Installed app discovery (shipped), Activity history and export (shipped)
+- **Updates and schedules:** Per-app update checker (limited), App Store self-updater (limited), Update schedule (shipped)
+- **Workspace and customization:** Tab workspace (shipped), Search and regex builder (shipped), Command palette (shipped), Settings, language, and display name (shipped), Appearance editor (limited), Notifications and operation status (limited)
+- **Documentation:** Offline documentation browser (shipped)
+- **Security and privacy:** Privacy and security (shipped)
+- **Verification:** Verification and evidence (shipped)
 
 ## Documentation contract
 
-Every article records behaviour, configuration, failure modes, security considerations, and verification. “Planned” is not evidence that a runtime operation, installer, update, or visual surface has been verified.
+Every feature article covers behaviour, configuration, failure modes, security considerations, verification, and suggested articles. The generator validates that the canonical articles, category indexes, wiki pages, static-site bundle, and offline in-app bundle remain synchronized. Run `npm run docs:generate` after editing an article and `npm run docs:check` before committing.
