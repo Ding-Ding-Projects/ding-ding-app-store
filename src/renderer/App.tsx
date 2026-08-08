@@ -14,7 +14,9 @@ import type {
   TabRailLayout,
   TokenId,
   UserSettings,
+  DimSumSurprise,
 } from '../shared/contracts';
+import { resolveScheduledSettings } from '../shared/scheduled-settings';
 import { ActionDialog } from './components/ActionDialog';
 import type { ActionKind, ImmediateActionKind } from './components/ActionDialog';
 import { AppearancePanel } from './components/AppearancePanel';
@@ -54,10 +56,11 @@ export function App() {
   const notifications = useNotifications();
   const notify = notifications.notify;
 
-  const { settings, save: saveSettings, patch: patchSetting } = useSettings(notify);
+  const { settings: baseSettings, save: saveSettings, patch: patchSetting } = useSettings(notify);
   const workspace = useWorkspace(notify);
   const appearance = useAppearance(notify);
   const schedule = useSchedule(notify);
+  const settings = useMemo(() => resolveScheduledSettings(baseSettings, schedule.draft), [baseSettings, schedule.draft]);
   const search = useSearchStates();
   useAppearanceVars(appearance.elements);
 
@@ -89,6 +92,24 @@ export function App() {
   const [docRequest, setDocRequest] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState('');
   const [pendingToken, setPendingToken] = useState<{ token: TokenId; value: TokenValue } | null>(null);
+  const [dimSum, setDimSum] = useState<DimSumSurprise | null>(null);
+  const dimSumAttempted = useRef(false);
+
+  useEffect(() => {
+    if (dimSumAttempted.current || loading || !catalog || catalog.warning || ['available', 'downloading', 'ready', 'failed'].includes(updateState.status)) return;
+    let firstRun = false;
+    try {
+      firstRun = window.localStorage.getItem('ding-ding-first-run-complete') !== '1';
+      window.localStorage.setItem('ding-ding-first-run-complete', '1');
+    } catch { firstRun = false; }
+    if (firstRun) { dimSumAttempted.current = true; return; }
+    const timer = window.setTimeout(() => {
+      dimSumAttempted.current = true;
+      if (Math.random() >= 0.1) return;
+      void window.dingDingStore.dimSum.startup().then((result) => { if (result.available) setDimSum(result); });
+    }, 6_000);
+    return () => window.clearTimeout(timer);
+  }, [catalog, loading, updateState.status]);
 
   const activeTab = workspace.workspace.activeTabId;
   const announce = useCallback((message: string) => setAnnouncement(message), []);
@@ -580,7 +601,7 @@ export function App() {
           {activeTab === 'activity' && <ActivityPage entries={history} loading={historyLoading} settings={settings} openRegex={regexRequest === 'activity'} onRegexHandled={() => setRegexRequest(null)} notify={notify} />}
           {activeTab === 'settings' && (
             <SettingsPage
-              settings={settings}
+              settings={baseSettings}
               onSave={(value) => void saveSettings(value)}
               workspace={workspace}
               appearance={appearance}
@@ -622,6 +643,14 @@ export function App() {
         )}
 
         <SnackbarStack notices={notifications.active} onDismiss={notifications.dismiss} />
+
+        {dimSum && (
+          <aside className="dim-sum-surprise" role="status" aria-live="polite">
+            <img src={dimSum.photoUrl} alt={`${dimSum.alt ?? dimSum.nameEn ?? 'Dim sum'} · ${dimSum.nameZhHant ?? ''}`} />
+            <div><strong>{label(settings, 'A little dim sum surprise', '有少少點心驚喜')}</strong><span>{label(settings, `${dimSum.nameEn} · ${dimSum.nameZhHant}`, `${dimSum.nameZhHant} · ${dimSum.nameEn}`)}</span></div>
+            <button className="icon-button" aria-label={label(settings, 'Dismiss dim sum surprise', '關閉點心驚喜')} onClick={() => setDimSum(null)}><Icon>close</Icon></button>
+          </aside>
+        )}
 
         <div className="visually-hidden" role="status" aria-live="polite">{announcement}</div>
       </div>

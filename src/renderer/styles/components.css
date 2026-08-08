@@ -217,6 +217,12 @@
   .snackbar span:nth-child(2) { display: grid; gap: 3px; }
   .snackbar small { color: inherit; opacity: .92; overflow-wrap: anywhere; }
 
+  .dim-sum-surprise { position: fixed; z-index: 75; left: 24px; bottom: 24px; display: flex; align-items: center; gap: 12px; width: min(420px, calc(100vw - 48px)); padding: 10px 12px 10px 10px; color: var(--foreground); background: var(--surface-container-high, var(--surface-container)); border: 1px solid color-mix(in srgb, var(--outline) 32%, transparent); border-radius: 20px; box-shadow: 0 12px 36px #0004; }
+  .dim-sum-surprise img { width: 64px; height: 64px; flex: 0 0 auto; object-fit: cover; border-radius: 14px; background: var(--surface-high); }
+  .dim-sum-surprise > div { display: grid; gap: 4px; min-width: 0; }
+  .dim-sum-surprise span { overflow-wrap: anywhere; color: var(--outline); }
+  .dim-sum-surprise .icon-button { margin-left: auto; flex: 0 0 auto; }
+
   .notification-button { position: relative; display: inline-grid; place-items: center; width: 46px; min-width: 46px; height: 46px; border-radius: 50%; }
   .notification-count { position: absolute; top: 3px; right: 2px; min-width: 18px; height: 18px; padding: 0 4px; display: grid; place-items: center; border: 2px solid var(--surface); border-radius: 999px; color: white; background: var(--error); font-size: 10px; font-weight: 800; }
   .notification-center {

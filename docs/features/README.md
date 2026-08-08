@@ -43,6 +43,7 @@ Tabs, search, command palette, settings, appearance, and notifications.
 - [Settings, language, and display name](./experience/settings-language-and-display-name.md) — **shipped** — Persists language, two independent funny levels, theme, density, accent, and a display-only app name through tabbed searchable settings.
 - [Appearance editor](./experience/appearance-editor.md) — **limited** — Registers shell elements for bounded live CSS-variable overrides with per-element reset, import/export, and main-process validation.
 - [Notifications and operation status](./experience/notifications-and-status.md) — **limited** — Stacks corner snackbars, retains searchable notification history, and keeps destructive decisions behind native super-confirmation.
+- [Dim-sum startup surprise](./experience/dim-sum-surprise.md) — **shipped** — Gives later launches a small non-blocking dim-sum card using only metadata and a published public catalog photo URL.
 
 ## Documentation
 

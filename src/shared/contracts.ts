@@ -515,11 +515,47 @@ export const SCHEDULE_BOUNDS = {
   catalogMinutes: { min: 30, max: 10_080, step: 5 },
   quietMinuteOfDay: { min: 0, max: 1_439 },
   quietMinSpanMinutes: 15,
+  ruleCount: { min: 0, max: 32 },
+  ruleLabelLength: { min: 1, max: 64 },
+  ruleDateLength: 10,
+  ruleTimeZoneLength: 64,
 } as const;
+
+const scheduleDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use an ISO date (YYYY-MM-DD).');
+const scheduleTimeZoneSchema = z.string().trim().min(1).max(SCHEDULE_BOUNDS.ruleTimeZoneLength).regex(/^[A-Za-z0-9_+./-]+$/);
+const scheduledSettingsValuesSchema = z.object({
+  language: z.enum(['en', 'yue', 'bilingual']).optional(),
+  englishFunnyLevel: z.number().int().min(1).max(5).optional(),
+  cantoneseFunnyLevel: z.number().int().min(1).max(5).optional(),
+  theme: z.enum(['system', 'light', 'dark']).optional(),
+  density: z.enum(['comfortable', 'compact', 'spacious']).optional(),
+  accent: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  displayName: z.string().trim().min(1).max(64).optional(),
+}).strict().refine((value) => Object.keys(value).length > 0, 'Choose at least one setting to schedule.');
+
+export const scheduledSettingRuleSchema = z.object({
+  id: z.string().regex(/^rule_[a-z0-9]{8}$/),
+  label: z.string().trim().min(SCHEDULE_BOUNDS.ruleLabelLength.min).max(SCHEDULE_BOUNDS.ruleLabelLength.max),
+  enabled: z.boolean(),
+  startDate: scheduleDateSchema.nullable(),
+  endDate: scheduleDateSchema.nullable(),
+  startMinute: z.number().int().min(SCHEDULE_BOUNDS.quietMinuteOfDay.min).max(SCHEDULE_BOUNDS.quietMinuteOfDay.max),
+  endMinute: z.number().int().min(SCHEDULE_BOUNDS.quietMinuteOfDay.min).max(SCHEDULE_BOUNDS.quietMinuteOfDay.max),
+  weekdays: z.array(z.number().int().min(1).max(7)).min(1).max(7),
+  timeZone: scheduleTimeZoneSchema,
+  priority: z.number().int().min(0).max(100),
+  values: scheduledSettingsValuesSchema,
+}).strict().superRefine((rule, ctx) => {
+  if (rule.startDate && rule.endDate && rule.startDate > rule.endDate) ctx.addIssue({ code: 'custom', path: ['endDate'], message: 'End date must be on or after start date.' });
+  if (rule.startMinute === rule.endMinute) ctx.addIssue({ code: 'custom', path: ['endMinute'], message: 'A scheduled window must not start and end at the same minute.' });
+  if (new Set(rule.weekdays).size !== rule.weekdays.length) ctx.addIssue({ code: 'custom', path: ['weekdays'], message: 'Choose each weekday at most once.' });
+});
+
+export type ScheduledSettingRule = z.infer<typeof scheduledSettingRuleSchema>;
 
 export const scheduleSchema = z
   .object({
-    schemaVersion: z.literal(1),
+    schemaVersion: z.literal(2),
     selfUpdate: z
       .object({
         repeatEnabled: z.boolean(),
@@ -547,16 +583,18 @@ export const scheduleSchema = z
         (quiet) => !quiet.enabled || ((quiet.endMinute - quiet.startMinute + 1440) % 1440) >= SCHEDULE_BOUNDS.quietMinSpanMinutes,
         { path: ['endMinute'], message: `Quiet hours must span at least ${SCHEDULE_BOUNDS.quietMinSpanMinutes} minutes.` },
       ),
+    rules: z.array(scheduledSettingRuleSchema).max(SCHEDULE_BOUNDS.ruleCount.max),
   })
   .strict();
 
 export type ScheduleConfig = z.infer<typeof scheduleSchema>;
 
 export const DEFAULT_SCHEDULE: ScheduleConfig = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   selfUpdate: { repeatEnabled: true, intervalMinutes: 360 },
   catalogRefresh: { enabled: true, intervalMinutes: 360 },
   quietHours: { enabled: false, startMinute: 1320, endMinute: 420 },
+  rules: [],
 };
 
 export type ScheduleTaskId = 'self-update' | 'catalog-refresh';
@@ -604,6 +642,16 @@ export interface ScheduleStatus {
   packagedBuild: boolean;
   now: string;
   notice: ScheduleNotice | null;
+}
+
+export interface DimSumSurprise {
+  available: boolean;
+  id?: string;
+  nameEn?: string;
+  nameZhHant?: string;
+  photoUrl?: string;
+  alt?: string;
+  reason?: string;
 }
 
 export type ScheduleSaveResult =
@@ -671,6 +719,9 @@ export interface DingDingStoreApi {
     save(config: ScheduleConfig): Promise<ScheduleSaveResult>;
     runNow(task: ScheduleTaskId): Promise<ScheduleStatus>;
     subscribe(listener: (status: ScheduleStatus) => void): () => void;
+  };
+  dimSum: {
+    startup(): Promise<DimSumSurprise>;
   };
   window: {
     minimize(): void;

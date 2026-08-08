@@ -21,4 +21,11 @@
   .status-grid-item { display: grid; align-content: start; gap: 6px; padding: 14px; border-radius: 18px; background: var(--surface); }
   .status-grid-item .supporting { margin: 0; overflow-wrap: anywhere; }
   .status-grid-item time { color: var(--outline); }
+  .scheduled-rule { display: grid; gap: 14px; margin: 14px 0; padding: 16px; border: 1px solid color-mix(in srgb, var(--outline) 28%, transparent); border-radius: 18px; background: var(--surface); }
+  .scheduled-rule-heading { display: flex; align-items: center; gap: 10px; }
+  .scheduled-rule-heading input[type="text"] { flex: 1; min-width: 0; }
+  .scheduled-rule-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .scheduled-rule-grid label { display: grid; gap: 6px; min-width: 0; }
+  .scheduled-rule-grid small { color: var(--outline); font-weight: 500; }
+  @media (max-width: 760px) { .scheduled-rule-grid { grid-template-columns: 1fr; } .scheduled-rule-heading { flex-wrap: wrap; } }
 }
