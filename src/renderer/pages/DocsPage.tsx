@@ -25,8 +25,9 @@ export function DocsPage({ settings, notify, openRegex, onRegexHandled, articleR
   const search = useSurfaceSearch('docs');
   const matcher = useMemo(() => makeMatcher(search.state), [search.state]);
   const shown = useMemo(() => docs.filter((article) => matcher(`${article.title}\n${article.titleYue}\n${article.category}\n${article.status}\n${article.summary}\n${article.body}`)), [matcher]);
+  const knownIds = useMemo(() => new Set(docs.map((article) => article.id)), []);
   const [activeId, setActiveId] = useState(docs[0]?.id ?? '');
-  const active = shown.find((article) => article.id === activeId) ?? shown[0] ?? null;
+  const active = shown.find((article) => article.id === activeId) ?? (knownIds.has(activeId) ? shown[0] ?? null : null);
   const exportArticle = async (openInCode: boolean) => {
     if (!active) return;
     const filename = `ding-ding-app-store-doc-${active.id}.md`;
@@ -99,7 +100,7 @@ export function DocsPage({ settings, notify, openRegex, onRegexHandled, articleR
             <h1>{label(settings, active.title, active.titleYue)}</h1>
             <p className="lede">{active.summary}</p>
             <div className="card-actions"><button className="text-button" onClick={() => void exportArticle(false)}><Icon>download</Icon>Export article</button><button className="text-button" disabled={!isExternalEditorBridgeAvailable()} onClick={() => void exportArticle(true)} title={isExternalEditorBridgeAvailable() ? undefined : 'Unavailable: no validated Visual Studio Code adapter.'}><Icon>code</Icon>Open article in VS Code</button></div>
-            <MarkdownArticle article={active} onOpen={activate} />
+            <MarkdownArticle article={active} onOpen={activate} knownIds={knownIds} />
           </article>
         </section>
       ) : (
