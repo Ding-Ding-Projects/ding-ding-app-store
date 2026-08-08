@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { SCHEDULE_BOUNDS } from '../../shared/contracts';
-import type { ScheduleRunRecord, ScheduleTaskId, ScheduleTaskStatus, UserSettings } from '../../shared/contracts';
+import type { ScheduleRunRecord, ScheduleTaskId, ScheduleTaskStatus, ScheduledSettingRule, UserSettings } from '../../shared/contracts';
 import { el } from '../el';
 import { Icon } from '../icons';
 import { clockToMinutes, formatAbsolute, formatClock, formatMinutes, formatRelative, label } from '../i18n';
@@ -55,6 +55,54 @@ function TaskStatusCard({ task, settings, onRun, running }: { task: ScheduleTask
   );
 }
 
+const RULE_KEYS = ['language', 'englishFunnyLevel', 'cantoneseFunnyLevel', 'theme', 'density', 'accent', 'displayName'] as const;
+type RuleKey = (typeof RULE_KEYS)[number];
+const WEEKDAYS = [
+  ['1', 'Mon', '一'], ['2', 'Tue', '二'], ['3', 'Wed', '三'], ['4', 'Thu', '四'], ['5', 'Fri', '五'], ['6', 'Sat', '六'], ['7', 'Sun', '日'],
+] as const;
+
+function newRule(): ScheduledSettingRule {
+  const suffix = (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`).replace(/[^a-z0-9]/gi, '').toLowerCase().slice(-8).padStart(8, '0');
+  return { id: `rule_${suffix}`, label: 'Scheduled appearance', enabled: true, startDate: null, endDate: null, startMinute: 540, endMinute: 1020, weekdays: [1, 2, 3, 4, 5, 6, 7], timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'local', priority: 50, values: { theme: 'dark' } };
+}
+
+function ruleValue(rule: ScheduledSettingRule, key: RuleKey): string {
+  const value = rule.values[key];
+  return value === undefined ? '' : String(value);
+}
+
+function RuleCard({ rule, settings, onChange, onRemove }: { rule: ScheduledSettingRule; settings: UserSettings; onChange(rule: ScheduledSettingRule): void; onRemove(): void }) {
+  const selectedKey = (RULE_KEYS.find((key) => rule.values[key] !== undefined) ?? 'theme') as RuleKey;
+  const setValue = (key: RuleKey, value: string) => {
+    const values = { ...rule.values } as ScheduledSettingRule['values'];
+    for (const candidate of RULE_KEYS) delete values[candidate];
+    if (key === 'englishFunnyLevel' || key === 'cantoneseFunnyLevel') values[key] = Math.max(1, Math.min(5, Number(value) || 1));
+    else if (key === 'language') values[key] = value as ScheduledSettingRule['values']['language'];
+    else if (key === 'theme') values[key] = value as ScheduledSettingRule['values']['theme'];
+    else if (key === 'density') values[key] = value as ScheduledSettingRule['values']['density'];
+    else if (key === 'accent') values[key] = /^#[0-9a-f]{6}$/i.test(value) ? value : '#6750A4';
+    else values[key] = value.trim().slice(0, 64) || 'Ding Ding App Store';
+    onChange({ ...rule, values });
+  };
+  const toggleDay = (day: number) => onChange({ ...rule, weekdays: rule.weekdays.includes(day) ? rule.weekdays.filter((value) => value !== day) : [...rule.weekdays, day].sort((a, b) => a - b) });
+  return (
+    <div className="scheduled-rule" {...el('schedule-card')}>
+      <div className="scheduled-rule-heading"><input aria-label={label(settings, 'Enable rule', '啟用規則')} type="checkbox" checked={rule.enabled} onChange={(event) => onChange({ ...rule, enabled: event.target.checked })} /><input aria-label={label(settings, 'Rule label', '規則名稱')} value={rule.label} maxLength={64} onChange={(event) => onChange({ ...rule, label: event.target.value })} /><button className="text-button" onClick={onRemove}><Icon>delete</Icon>{label(settings, 'Remove', '移除')}</button></div>
+      <div className="scheduled-rule-grid">
+        <label>{label(settings, 'Setting to override', '要覆蓋嘅設定')}<select value={selectedKey} onChange={(event) => setValue(event.target.value as RuleKey, ruleValue(rule, event.target.value as RuleKey))}>{RULE_KEYS.map((key) => <option key={key} value={key}>{key}</option>)}</select></label>
+        <label>{label(settings, 'Scheduled value', '排程值')}{selectedKey === 'language' ? <select value={ruleValue(rule, selectedKey)} onChange={(event) => setValue(selectedKey, event.target.value)}><option value="en">English</option><option value="yue">香港粵語</option><option value="bilingual">English + 香港粵語</option></select> : selectedKey === 'theme' ? <select value={ruleValue(rule, selectedKey)} onChange={(event) => setValue(selectedKey, event.target.value)}><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select> : selectedKey === 'density' ? <select value={ruleValue(rule, selectedKey)} onChange={(event) => setValue(selectedKey, event.target.value)}><option value="comfortable">Comfortable</option><option value="compact">Compact</option><option value="spacious">Spacious</option></select> : <input type={selectedKey.includes('FunnyLevel') ? 'number' : selectedKey === 'accent' ? 'color' : 'text'} min={1} max={5} value={ruleValue(rule, selectedKey)} onChange={(event) => setValue(selectedKey, event.target.value)} />}</label>
+        <label>{label(settings, 'Start date (optional)', '開始日期（可留空）')}<input type="date" value={rule.startDate ?? ''} onChange={(event) => onChange({ ...rule, startDate: event.target.value || null })} /></label>
+        <label>{label(settings, 'End date (optional)', '結束日期（可留空）')}<input type="date" value={rule.endDate ?? ''} onChange={(event) => onChange({ ...rule, endDate: event.target.value || null })} /></label>
+        <label>{label(settings, 'From', '由')}<input type="time" value={formatClock(rule.startMinute)} onChange={(event) => onChange({ ...rule, startMinute: clockToMinutes(event.target.value) })} /></label>
+        <label>{label(settings, 'To', '到')}<input type="time" value={formatClock(rule.endMinute)} onChange={(event) => onChange({ ...rule, endMinute: clockToMinutes(event.target.value) })} /></label>
+        <label>{label(settings, 'Time zone', '時區')}<input value={rule.timeZone} maxLength={64} onChange={(event) => onChange({ ...rule, timeZone: event.target.value || 'local' })} /><small>{label(settings, 'Times use this zone; daylight-saving changes are honoured.', '時間用呢個時區，會跟夏令時間變。')}</small></label>
+      </div>
+      <div className="chip-row" role="group" aria-label={label(settings, 'Weekdays', '星期')}><span className="supporting">{label(settings, 'Days', '日子')}:</span>{WEEKDAYS.map(([value, en, yue]) => { const day = Number(value); return <button key={value} aria-pressed={rule.weekdays.includes(day)} onClick={() => toggleDay(day)}>{label(settings, en, yue)}</button>; })}</div>
+      {rule.startMinute > rule.endMinute && <p className="quiet-badge">{label(settings, 'Cross-midnight window', '跨過凌晨時段')}</p>}
+    </div>
+  );
+}
+
 export function ScheduleEditor({ settings, schedule }: { settings: UserSettings; schedule: ScheduleApi }) {
   useTick();
   const { draft, status, dirty, saving, issues } = schedule;
@@ -63,7 +111,7 @@ export function ScheduleEditor({ settings, schedule }: { settings: UserSettings;
 
   return (
     <section className="schedule-grid">
-      <div className="settings-card schedule-card" {...el('schedule-card')}>
+      <div id="schedule-rules" className="settings-card schedule-card" {...el('schedule-card')}>
         <h2>{label(settings, 'App Store self-update', '商店自我更新')}</h2>
         <p className="supporting" id="schedule-startup-note">
           {label(settings, 'A check runs once at every launch and cannot be turned off. This switch only controls repeat checks while the app stays open.', '每次開機都會檢查一次，關唔到。呢個掣淨係控制開住嗰陣嘅重複檢查。')}
@@ -93,6 +141,14 @@ export function ScheduleEditor({ settings, schedule }: { settings: UserSettings;
         </label>
         <p className="supporting">= {formatMinutes(settings, draft.selfUpdate.intervalMinutes)}</p>
         {issueFor('selfUpdate') && <p className="field-error" role="alert">{issueFor('selfUpdate')}</p>}
+      </div>
+
+      <div className="settings-card schedule-card" {...el('schedule-card')}>
+        <h2>{label(settings, 'Scheduled settings', '排程設定')}</h2>
+        <p className="supporting">{label(settings, 'Temporarily override language, funny levels, theme, density, accent, or display name during a local date/time window. Rules are evaluated in their saved time zone; lower priority numbers win ties. Your base settings remain recoverable when a window ends.', '喺指定本地日期／時間暫時覆蓋語言、幽默程度、主題、密度、主色或者顯示名稱。規則用儲存嘅時區判斷；優先次序數字越細越先。時段完咗之後會返去原本設定。')}</p>
+        {draft.rules.map((rule) => <RuleCard key={rule.id} rule={rule} settings={settings} onChange={(next) => schedule.setRules(draft.rules.map((item) => item.id === next.id ? next : item))} onRemove={() => schedule.setRules(draft.rules.filter((item) => item.id !== rule.id))} />)}
+        <button className="tonal-button" onClick={() => schedule.setRules([...draft.rules, newRule()])}><Icon>add</Icon>{label(settings, 'Add scheduled setting', '加排程設定')}</button>
+        {issueFor('rules') && <p className="field-error" role="alert">{issueFor('rules')}</p>}
       </div>
 
       <div className="settings-card schedule-card" {...el('schedule-card')}>

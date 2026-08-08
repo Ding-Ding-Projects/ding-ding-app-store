@@ -27,11 +27,19 @@ export class ScheduleService {
   async load(): Promise<ScheduleConfig> {
     try {
       const stored = await readJson<unknown>(this.filePath, DEFAULT_SCHEDULE);
-      const parsed = scheduleSchema.safeParse(stored);
+      const migrated = this.migrate(stored);
+      const parsed = scheduleSchema.safeParse(migrated);
       return parsed.success ? parsed.data : DEFAULT_SCHEDULE;
     } catch {
       return DEFAULT_SCHEDULE;
     }
+  }
+
+  private migrate(value: unknown): unknown {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+    const record = value as Record<string, unknown>;
+    if (record.schemaVersion === 1) return { ...record, schemaVersion: 2, rules: [] };
+    return value;
   }
 
   async save(input: unknown): Promise<ScheduleConfigSaveResult> {

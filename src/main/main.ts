@@ -11,6 +11,7 @@ import { InstalledService } from './installed-service.js';
 import { OperationService } from './operation-service.js';
 import { Scheduler } from './scheduler.js';
 import { ScheduleService } from './schedule-service.js';
+import { DimSumService } from './dim-sum-service.js';
 import { SourceJobService } from './source-job-service.js';
 import { SettingsService } from './settings-service.js';
 import { UpdateService } from './update-service.js';
@@ -75,6 +76,7 @@ void app.whenReady().then(async () => {
   const workspace = new WorkspaceService();
   const appearance = new AppearanceService();
   const schedule = new ScheduleService();
+  const dimSum = new DimSumService();
   const scheduler = new Scheduler({
     getWindow: () => mainWindow,
     service: schedule,
@@ -121,6 +123,7 @@ void app.whenReady().then(async () => {
   ipcMain.handle('schedule:load', () => scheduler.status());
   ipcMain.handle('schedule:save', (_event, config: unknown) => scheduler.save(config));
   ipcMain.handle('schedule:run-now', (_event, task: unknown) => scheduler.runNow(scheduleTaskSchema.parse(task)));
+  ipcMain.handle('dim-sum:startup', () => dimSum.startup());
   ipcMain.on('window:minimize', () => mainWindow?.minimize());
   ipcMain.on('window:toggle-maximize', () => {
     if (mainWindow?.isMaximized()) mainWindow.unmaximize(); else mainWindow?.maximize();

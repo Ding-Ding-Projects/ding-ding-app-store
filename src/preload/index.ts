@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type {
   AppStoreUpdateState,
   DingDingStoreApi,
+  DimSumSurprise,
   ElementKey,
   ElementOverride,
   HistoryExportFormat,
@@ -104,6 +105,9 @@ const api: DingDingStoreApi = {
       ipcRenderer.on('schedule:status', handler);
       return () => ipcRenderer.removeListener('schedule:status', handler);
     },
+  },
+  dimSum: {
+    startup: (): Promise<DimSumSurprise> => ipcRenderer.invoke('dim-sum:startup'),
   },
   window: {
     minimize: () => ipcRenderer.send('window:minimize'),

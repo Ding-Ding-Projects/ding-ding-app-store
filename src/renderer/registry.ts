@@ -171,6 +171,7 @@ export const SCHEDULE_FIELDS = [
   { key: 'quietHours.enabled', kind: 'switch', en: 'Quiet hours', yue: '靜音時間', keywords: ['quiet', 'notification'] },
   { key: 'quietHours.startMinute', kind: 'time', en: 'Quiet hours start', yue: '靜音開始', keywords: ['quiet', 'start'] },
   { key: 'quietHours.endMinute', kind: 'time', en: 'Quiet hours end', yue: '靜音結束', keywords: ['quiet', 'end'] },
+  { key: 'rules', kind: 'rules', en: 'Scheduled settings rules', yue: '排程設定規則', keywords: ['date', 'time', 'timezone', 'weekday', 'theme', 'density', 'accent', 'language', 'cross-midnight'] },
 ] as const;
 
 export type ScheduleFieldKey = (typeof SCHEDULE_FIELDS)[number]['key'];

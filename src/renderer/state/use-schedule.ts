@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { DEFAULT_SCHEDULE } from '../../shared/contracts';
-import type { ScheduleConfig, ScheduleStatus, ScheduleTaskId } from '../../shared/contracts';
+import type { ScheduleConfig, ScheduleStatus, ScheduleTaskId, ScheduledSettingRule } from '../../shared/contracts';
 import type { Notify } from '../notify';
 import { writeScheduleField } from '../registry';
 import type { ScheduleFieldKey } from '../registry';
@@ -12,6 +12,7 @@ export interface ScheduleApi {
   saving: boolean;
   issues: Array<{ field: string; message: string }>;
   set(key: ScheduleFieldKey, value: number | boolean): void;
+  setRules(rules: ScheduledSettingRule[]): void;
   /** Applies one or more fields and saves immediately, for palette commands that must take effect. */
   applyNow(entries: Array<[ScheduleFieldKey, number | boolean]>): Promise<boolean>;
   save(): Promise<boolean>;
@@ -49,6 +50,12 @@ export function useSchedule(notify: Notify): ScheduleApi {
     dirtyRef.current = true;
     setDirty(true);
     setDraft((current) => writeScheduleField(current, key, value));
+  }, []);
+
+  const setRules = useCallback((rules: ScheduledSettingRule[]) => {
+    dirtyRef.current = true;
+    setDirty(true);
+    setDraft((current) => ({ ...current, rules }));
   }, []);
 
   const save = useCallback(async () => {
@@ -121,5 +128,5 @@ export function useSchedule(notify: Notify): ScheduleApi {
     }
   }, [receive, notify]);
 
-  return { status, draft, dirty, saving, issues, set, applyNow, save, discard, resetDefaults, runNow, running };
+  return { status, draft, dirty, saving, issues, set, setRules, applyNow, save, discard, resetDefaults, runNow, running };
 }
