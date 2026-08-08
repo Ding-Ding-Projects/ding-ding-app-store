@@ -12,6 +12,19 @@
   .app-shell[data-tab-side="top"] .tab-strip { grid-auto-flow: column; justify-content: start; overflow-x: auto; }
   .app-shell[data-tab-side="top"] .tab-region { display: flex; gap: 5px; }
   .app-shell[data-tab-side="top"] .nav-title, .app-shell[data-tab-side="top"] .palette-hint kbd { display: none; }
+  .app-shell[data-tab-side="right"] { grid-template: 48px 1fr / 1fr var(--rail-width); }
+  .app-shell[data-tab-side="right"] .navigation { grid-column: 2; grid-row: 2; border-right: 0; border-left: 1px solid color-mix(in srgb, var(--outline) 25%, transparent); }
+  .app-shell[data-tab-side="right"] .content { grid-column: 1; grid-row: 2; }
+  .app-shell[data-tab-side="bottom"] { grid-template: 48px 1fr auto / 1fr; }
+  .app-shell[data-tab-side="bottom"] .navigation { grid-row: 3; grid-column: 1; flex-direction: row; align-items: center; border-right: 0; border-top: 1px solid color-mix(in srgb, var(--outline) 25%, transparent); }
+  .app-shell[data-tab-side="bottom"] .tab-strip { grid-auto-flow: column; justify-content: start; overflow-x: auto; }
+  .app-shell[data-tab-side="bottom"] .tab-region { display: flex; gap: 5px; }
+  .app-shell[data-tab-side="bottom"] .nav-title, .app-shell[data-tab-side="bottom"] .palette-hint kbd { display: none; }
+  .app-shell[data-tab-side="top"] .tab-discovery-panel,
+  .app-shell[data-tab-side="top"] .tab-management-panel,
+  .app-shell[data-tab-side="bottom"] .tab-discovery-panel,
+  .app-shell[data-tab-side="bottom"] .tab-management-panel { flex: 0 0 auto; min-width: 170px; max-width: 260px; margin: 0 4px; }
+  .app-shell[data-tab-side="right"] .tab-strip { overflow-y: auto; }
   .app-shell[data-label-mode="icon"] { --rail-width: 82px; }
   .app-shell[data-label-mode="compact"] { --rail-width: 180px; }
 
@@ -62,6 +75,21 @@
   .tab-search { min-height: 44px; margin: 0 0 10px; padding-left: 12px; }
   .tab-search > input { height: 42px; }
   .tab-search .popover { right: auto; left: 0; width: min(560px, calc(100vw - 32px)); }
+
+  .tab-discovery-panel, .tab-management-panel { margin: 0 0 8px; border: 1px solid color-mix(in srgb, var(--outline) 24%, transparent); border-radius: 14px; background: var(--surface); }
+  .tab-discovery-panel > summary, .tab-management-panel > summary { cursor: pointer; min-height: 36px; padding: 8px 10px; color: var(--outline); font-size: 12px; font-weight: 800; }
+  .tab-discovery-panel[open] > summary, .tab-management-panel[open] > summary { color: var(--on-surface); border-bottom: 1px solid color-mix(in srgb, var(--outline) 18%, transparent); }
+  .tab-discovery-panel > .search-wrap, .tab-management-body > .search-wrap { margin: 8px; min-height: 38px; }
+  .tab-discovery-panel > .supporting, .tab-management-body > .supporting { margin: 4px 10px 10px; font-size: 11px; }
+  .tab-management-body { display: grid; gap: 8px; padding-bottom: 10px; }
+  .tab-bulk-actions { display: grid; gap: 6px; padding: 0 10px; }
+  .tab-bulk-actions .tonal-button { min-height: 36px; font-size: 12px; text-align: left; }
+  .tab-bulk-actions .tonal-button.selected { outline: 2px solid var(--primary); outline-offset: -2px; }
+  .tab-management-body > .danger { margin: 0 10px; }
+  .closed-tabs { display: grid; gap: 4px; padding: 6px 10px 0; border-top: 1px dashed color-mix(in srgb, var(--outline) 24%, transparent); }
+  .closed-tabs .text-button { justify-content: flex-start; min-height: 32px; text-align: left; }
+  .tab-group-search { margin: 2px 0 3px 10px; min-height: 32px; }
+  .tab-group-search input { height: 30px; font-size: 12px; }
 
   .tab-strip { flex: 1; display: grid; align-content: start; gap: 5px; min-height: 0; min-width: 0; overflow: hidden; }
   [data-overflow-mode="scroll"] .tab-strip { overflow-y: auto; }
@@ -140,6 +168,8 @@
   .tab-context-menu { display: grid; gap: 4px; }
   .tab-context-menu > button { justify-content: flex-start; width: 100%; min-height: 40px; padding: 0 12px; border-radius: 12px; background: transparent; text-align: left; }
   .tab-context-menu > button:hover { background: var(--surface-container); }
+  .tab-context-menu > button > span { flex: 1; text-align: left; }
+  .tab-context-menu > button > kbd { margin-left: 12px; color: var(--outline); font-size: 11px; white-space: nowrap; }
   .tab-context-menu .chip-row button { min-height: 32px; }
 
   .tab-drop-indicator { height: 3px; border-radius: 3px; background: var(--primary); }

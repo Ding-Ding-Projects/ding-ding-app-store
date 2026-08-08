@@ -185,6 +185,8 @@ export const tabGroupSchema = z
 export const tabStateSchema = z
   .object({
     id: tabIdSchema,
+    /** Closed tabs remain in the persisted workspace so they can be reopened without losing order/group metadata. */
+    open: z.boolean().default(true),
     pinned: z.boolean(),
     groupId: z.string().nullable(),
     previousGroupId: z.string().nullable(),
@@ -194,7 +196,7 @@ export const tabStateSchema = z
 
 export const railSchema = z
   .object({
-    side: z.enum(['left', 'top']),
+    side: z.enum(['left', 'right', 'top', 'bottom']),
     labelMode: z.enum(['full', 'compact', 'icon']),
     tabHeight: z.enum(['compact', 'comfortable', 'tall']),
     overflowMode: z.enum(['menu', 'scroll']),
@@ -243,7 +245,7 @@ export type TabWorkspace = z.infer<typeof tabWorkspaceSchema>;
 export const DEFAULT_TAB_WORKSPACE: TabWorkspace = {
   schemaVersion: 1,
   activeTabId: 'catalog',
-  tabs: TAB_IDS.map((id, index) => ({ id, pinned: false, groupId: null, previousGroupId: null, order: index })),
+  tabs: TAB_IDS.map((id, index) => ({ id, open: true, pinned: false, groupId: null, previousGroupId: null, order: index })),
   groups: [],
   rail: {
     side: 'left',

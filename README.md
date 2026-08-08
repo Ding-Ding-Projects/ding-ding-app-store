@@ -24,7 +24,7 @@ Material Design 3 desktop software center for discovering, documenting, installi
 - Allowlisted Squirrel/MSI/managed-portable discovery, protected removal descriptors, append-only operation history, local Git snapshots, and filtered multi-format export.
 - Installer execution owned by the main process; the renderer cannot provide commands, paths, URLs, or arguments.
 - Offline documentation articles with an in-app browser and full local search/regex builder.
-- Persistent browser-style tab rail with pinning, grouping, overflow, tab search, and complete keyboard control.
+- Persistent browser-style tab rail with left/right/top/bottom docking, pinning, grouping, overflow, four independent regex-backed tab searches, reversible bulk close/reopen, and complete keyboard control.
 - Per-surface search state, a full regex builder everywhere, and a command palette that reaches every page, command, setting, and appearance control.
 - Per-element appearance editor with live preview, reset, and export/import, applied through CSS custom properties only.
 - Main-process update schedule with a launch check that cannot be disabled, bounded repeat intervals, and quiet hours that hold notifications without delaying checks.
@@ -62,6 +62,8 @@ npm run dist
 ```
 
 The application uses Squirrel.Windows. A successful package must contain `Setup.exe`, `RELEASES`, and a full `.nupkg`, and the executable must be verified as unsigned.
+
+The tab rail is a real persisted workspace: it defaults to the left edge but can dock to any edge, keeps pinned tabs protected, gives every strip/group/group-name/master search its own regex builder state, and previews **Close tabs containing text** / **Close tabs not containing text** before a second confirmation click. Closed tabs remain recoverable from the tab-actions panel; the final open tab cannot be closed.
 
 </details>
 

@@ -56,18 +56,21 @@ export class WorkspaceService {
 
     const byId = new Map(input.tabs.map((tab) => [tab.id, tab]));
     const tabs: TabState[] = TAB_IDS.map((id, index) => {
-      const existing = byId.get(id) ?? { id, pinned: false, groupId: null, previousGroupId: null, order: index };
+      const existing = byId.get(id) ?? { id, open: true, pinned: false, groupId: null, previousGroupId: null, order: index };
       const previousGroupId = existing.previousGroupId && groupIds.has(existing.previousGroupId) ? existing.previousGroupId : null;
       let groupId = existing.groupId && groupIds.has(existing.groupId) ? existing.groupId : null;
       const pinnedPrevious = existing.pinned && groupId ? groupId : previousGroupId;
       if (existing.pinned) groupId = null;
-      return { id, pinned: existing.pinned, groupId, previousGroupId: pinnedPrevious, order: existing.order };
+      return { id, open: existing.open !== false, pinned: existing.pinned, groupId, previousGroupId: pinnedPrevious, order: existing.order };
     });
 
+    const safeTabs = tabs.some((tab) => tab.open)
+      ? tabs
+      : tabs.map((tab, index) => (index === 0 ? { ...tab, open: true } : tab));
     const regions: TabState[][] = [
-      tabs.filter((tab) => tab.pinned),
-      ...groups.map((group) => tabs.filter((tab) => !tab.pinned && tab.groupId === group.id)),
-      tabs.filter((tab) => !tab.pinned && tab.groupId === null),
+      safeTabs.filter((tab) => tab.open && tab.pinned),
+      ...groups.map((group) => safeTabs.filter((tab) => tab.open && !tab.pinned && tab.groupId === group.id)),
+      safeTabs.filter((tab) => tab.open && !tab.pinned && tab.groupId === null),
     ];
     let cursor = 0;
     for (const region of regions) {
@@ -77,7 +80,9 @@ export class WorkspaceService {
       }
     }
 
-    const activeTabId = TAB_IDS.includes(input.activeTabId) ? input.activeTabId : 'catalog';
-    return { schemaVersion: 1, activeTabId, tabs, groups, rail: { ...input.rail } };
+    const activeTabId = TAB_IDS.includes(input.activeTabId) && safeTabs.find((tab) => tab.id === input.activeTabId)?.open
+      ? input.activeTabId
+      : (safeTabs.find((tab) => tab.open)?.id ?? 'catalog');
+    return { schemaVersion: 1, activeTabId, tabs: safeTabs, groups, rail: { ...input.rail } };
   }
 }

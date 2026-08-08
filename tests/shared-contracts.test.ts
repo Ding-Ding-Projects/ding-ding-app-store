@@ -79,6 +79,18 @@ describe('tab workspace contract', () => {
     expect(tabWorkspaceSchema.safeParse({ ...clone(DEFAULT_TAB_WORKSPACE), searches: {} }).success).toBe(false);
     expect(tabWorkspaceSchema.safeParse(workspaceWith((draft) => { (draft.rail as Record<string, unknown>).cornerRadius = 8; })).success).toBe(false);
   });
+
+  it('supports every persisted dock edge and recoverable closed tabs', () => {
+    for (const side of ['left', 'right', 'top', 'bottom'] as const) {
+      const parsed = tabWorkspaceSchema.safeParse(workspaceWith((draft) => { draft.rail.side = side; }));
+      expect(parsed.success).toBe(true);
+    }
+    const parsed = tabWorkspaceSchema.parse(workspaceWith((draft) => { draft.tabs[0].open = false; }));
+    expect(parsed.tabs[0].open).toBe(false);
+    const legacy = clone(DEFAULT_TAB_WORKSPACE) as Record<string, unknown>;
+    legacy.tabs = (legacy.tabs as Array<Record<string, unknown>>).map(({ open: _open, ...tab }) => tab);
+    expect(tabWorkspaceSchema.parse(legacy).tabs.every((tab) => tab.open)).toBe(true);
+  });
 });
 
 describe('appearance contract', () => {
@@ -319,7 +331,7 @@ describe('command registry reachability', () => {
     const commands = new Set(registry.filter((entry) => entry.action.type === 'command').map((entry) => (entry.action as { command: string }).command));
     for (const command of [
       'refresh-catalog', 'clear-all-searches', 'focus-tab-search', 'new-group', 'collapse-all-groups',
-      'show-overflow', 'reset-tabs', 'export-tabs', 'import-tabs', 'rail-side:left', 'rail-side:top',
+      'show-overflow', 'reset-tabs', 'export-tabs', 'import-tabs', 'rail-side:left', 'rail-side:right', 'rail-side:top', 'rail-side:bottom',
       'label-mode:icon', 'tab-height:tall', 'overflow-mode:scroll', 'toggle-badges', 'toggle-color-bar',
       'toggle-pinned-icon-only', 'toggle-appearance-edit', 'reset-appearance-all', 'export-appearance',
       'import-appearance', 'open-schedule', 'check-store-update', 'refresh-catalog-now',
