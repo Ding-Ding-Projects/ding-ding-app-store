@@ -46,6 +46,7 @@ import { useSettings } from './state/use-settings';
 import { useNotifications } from './state/use-notifications';
 import { useNarrator } from './state/use-narrator';
 import { newGroupId, orderedTabIds, useWorkspace } from './state/use-workspace';
+import type { Notice, RecoveryAction } from './notify';
 
 const PAGE_SUBTITLE: Partial<Record<TabId, { en: string; yue: string }>> = {
   catalog: { en: 'Trusted apps, their releases, and their complete documentation in one place.', yue: '可信 apps、release 同完整文件，一個位睇晒。' },
@@ -96,6 +97,7 @@ export function App() {
   } | null>(null);
   const operationRunningRef = useRef(false);
   const [updateState, setUpdateState] = useState<AppStoreUpdateState>({ status: 'idle' });
+  const lastStoreFailure = useRef<string | null>(null);
   const [dismissedUpdateVersion, setDismissedUpdateVersion] = useState<string | null>(null);
   const [managedUpdates, setManagedUpdates] = useState<Record<string, ManagedUpdateState>>({});
   const managedChecks = useRef(new Set<string>());
@@ -138,8 +140,21 @@ export function App() {
 
   const loadCatalog = useCallback(async (refresh = false) => {
     setLoading(true);
-    try { setCatalog(refresh ? await window.dingDingStore.catalog.refresh() : await window.dingDingStore.catalog.list()); }
-    catch (error) { notify({ ok: false, message: (error as Error).message }); }
+    try {
+      const snapshot = refresh ? await window.dingDingStore.catalog.refresh() : await window.dingDingStore.catalog.list();
+      setCatalog(snapshot);
+      if (snapshot.warning) notify({
+        ok: false,
+        message: snapshot.warning,
+        recovery: { kind: 'retry-catalog-refresh', run: () => loadCatalog(true) },
+      });
+    } catch (error) {
+      notify({
+        ok: false,
+        message: (error as Error).message,
+        recovery: { kind: 'retry-catalog-refresh', run: () => loadCatalog(true) },
+      });
+    }
     finally { setLoading(false); }
   }, [notify]);
 
@@ -154,14 +169,38 @@ export function App() {
     catch (error) { notify({ ok: false, message: (error as Error).message }); }
   }, [notify]);
 
-  const reportOperation = useCallback((result: { ok: boolean; message: string; messageYue?: string }) => {
+  const reportOperation = useCallback((result: { ok: boolean; message: string; messageYue?: string }, recovery?: RecoveryAction) => {
     const message = result.messageYue ? label(settings, result.message, result.messageYue) : result.message;
-    notify({ ok: result.ok, message });
+    notify({ ok: result.ok, message, recovery: result.ok ? undefined : recovery });
     announce(message);
     void loadHistory();
     void loadInstalled();
     if (result.ok) void loadCatalog(true);
   }, [announce, loadCatalog, loadHistory, loadInstalled, notify, settings]);
+
+  const retryStoreUpdateCheck = useCallback(async () => {
+    try {
+      setUpdateState(await window.dingDingStore.updates.checkStore());
+    } catch (error) {
+      notify({
+        ok: false,
+        message: (error as Error).message,
+        recovery: { kind: 'retry-store-update-check', run: retryStoreUpdateCheck },
+      });
+    }
+  }, [notify]);
+
+  useEffect(() => {
+    if (updateState.status !== 'failed') return;
+    const signature = `${updateState.message}\n${updateState.recoverable}`;
+    if (lastStoreFailure.current === signature) return;
+    lastStoreFailure.current = signature;
+    notify({
+      ok: false,
+      message: updateState.message,
+      recovery: updateState.recoverable ? { kind: 'retry-store-update-check', run: retryStoreUpdateCheck } : undefined,
+    });
+  }, [notify, retryStoreUpdateCheck, updateState]);
 
   const handleManagedUpdate = useCallback(async (kind: 'download' | 'cancel' | 'restart', app: CatalogApp, trigger: HTMLButtonElement) => {
     try {
@@ -185,12 +224,38 @@ export function App() {
       }
     } catch (error) {
       const message = (error as Error).message;
-      notify({ ok: false, message });
+      notify({ ok: false, message, recovery: kind === 'download' ? {
+        kind: 'retry-managed-update',
+        run: () => handleManagedUpdate('download', app, trigger),
+      } : undefined });
       announce(message);
     } finally {
       window.setTimeout(() => trigger.focus(), 0);
     }
   }, [announce, notify, reportOperation]);
+
+  const retrySourceJob = useCallback(async (jobId: string, appId: string, appName: string, returnFocus: HTMLButtonElement) => {
+    if (operationRunningRef.current) return;
+    operationRunningRef.current = true;
+    setRunningAction({ kind: 'build', appId, completed: 0, total: 1 });
+    setSourceTerminal({ appId, appName, jobId, events: [], returnFocus });
+    try {
+      const result = await window.dingDingStore.sourceJobs.retry({ jobId, decision: 'retry' });
+      if (result.ok && result.jobId) {
+        setSourceTerminal((current) => current?.appId === appId ? { ...current, jobId: result.jobId!, events: [], fallbackMessage: undefined } : current);
+        return;
+      }
+      setSourceTerminal((current) => current?.appId === appId ? { ...current, fallbackMessage: result.message } : current);
+      reportOperation(result, { kind: 'retry-source-job', run: () => retrySourceJob(jobId, appId, appName, returnFocus) });
+    } catch (error) {
+      const message = (error as Error).message;
+      setSourceTerminal((current) => current?.appId === appId ? { ...current, fallbackMessage: message } : current);
+      reportOperation({ ok: false, message }, { kind: 'retry-source-job', run: () => retrySourceJob(jobId, appId, appName, returnFocus) });
+    } finally {
+      operationRunningRef.current = false;
+      setRunningAction(null);
+    }
+  }, [reportOperation]);
 
   const cancelInstall = useCallback(async (app: CatalogApp, trigger: HTMLButtonElement) => {
     const fallback = trigger.closest('.app-card')?.querySelector<HTMLElement>(`[data-install-action="${app.id}"]`) ?? trigger;
@@ -257,9 +322,17 @@ export function App() {
     if (event.final) {
       operationRunningRef.current = false;
       setRunningAction(null);
-      reportOperation({ ok: event.state === 'succeeded', message: event.text });
+      reportOperation(
+        { ok: event.state === 'succeeded', message: event.text },
+        event.state === 'failed' || event.state === 'cancelled'
+          ? {
+            kind: 'retry-source-job',
+            run: () => retrySourceJob(event.jobId, event.appId, sourceTerminal?.appName ?? event.appId, sourceTerminal?.returnFocus ?? notificationTriggerRef.current!),
+          }
+          : undefined,
+      );
     }
-  }), [reportOperation]);
+  }), [reportOperation, retrySourceJob, sourceTerminal]);
 
   const closeSourceTerminal = useCallback(() => {
     const target = sourceTerminal?.returnFocus;
@@ -269,15 +342,8 @@ export function App() {
 
   const retrySourceTerminal = useCallback(async () => {
     if (!sourceTerminal?.jobId) return;
-    const previousJobId = sourceTerminal.jobId;
-    setSourceTerminal((current) => current ? { ...current, events: [], fallbackMessage: undefined } : current);
-    const result = await window.dingDingStore.sourceJobs.retry({ jobId: previousJobId, decision: 'retry' });
-    if (result.ok && result.jobId) {
-      setSourceTerminal((current) => current ? { ...current, jobId: result.jobId!, events: [] } : current);
-      return;
-    }
-    setSourceTerminal((current) => current ? { ...current, fallbackMessage: result.message } : current);
-  }, [sourceTerminal]);
+    await retrySourceJob(sourceTerminal.jobId, sourceTerminal.appId, sourceTerminal.appName, sourceTerminal.returnFocus);
+  }, [retrySourceJob, sourceTerminal]);
 
   const closeAction = useCallback(() => {
     const returnFocus = action?.returnFocus;
@@ -324,9 +390,9 @@ export function App() {
         announce(`Installing ${selectedApp.name}`);
         try {
           const result = await window.dingDingStore.operations.install({ appId: selectedApp.id, decision: 'install' });
-          reportOperation(result);
-        } catch (error) {
-          reportOperation({ ok: false, message: (error as Error).message });
+            reportOperation(result, result.ok ? undefined : { kind: 'retry-installer', run: () => runImmediateBatch(kind, [selectedApp], trigger) });
+          } catch (error) {
+            reportOperation({ ok: false, message: (error as Error).message }, { kind: 'retry-installer', run: () => runImmediateBatch(kind, [selectedApp], trigger) });
         }
         setRunningAction({ kind, appId: selectedApp.id, completed: index + 1, total: selectedApps.length });
       }
@@ -367,7 +433,17 @@ export function App() {
       managedChecks.current.add(app.id);
       void window.dingDingStore.updates.checkApp(app.id)
         .then((state) => setManagedUpdates((current) => ({ ...current, [app.id]: state })))
-        .catch((error) => notify({ ok: false, message: (error as Error).message }));
+        .catch((error) => notify({
+          ok: false,
+          message: (error as Error).message,
+          recovery: {
+            kind: 'retry-managed-update',
+            run: async () => {
+              const state = await window.dingDingStore.updates.checkApp(app.id);
+              setManagedUpdates((current) => ({ ...current, [app.id]: state }));
+            },
+          },
+        }));
     }
   }, [activeTab, catalog, loading, notify]);
 
@@ -731,9 +807,9 @@ export function App() {
                 {updateState.status === 'failed' && updateState.rollbackAvailable && <p className="supporting">{label(settings, 'The previous version remains untouched. Squirrel.Windows rollback was detected or may still be available; retry only after reviewing the release notes.', '上一個版本原封不動。偵測到 Squirrel.Windows rollback，或者 rollback 仍然可用；睇完 release notes 先再試。')}</p>}
               </div>
               {(updateState.status === 'available' || updateState.status === 'ready') && <a className="text-button" href={updateState.releaseNotesUrl} onClick={(event) => { event.preventDefault(); void window.dingDingStore.updates.openReleaseNotes(updateState.releaseNotesUrl).then((result) => notify({ ok: result.ok, message: result.message })); }}>{label(settings, 'Release notes', 'Release notes')}</a>}
-              {updateState.status === 'available' && <button className="filled-button" onClick={() => void window.dingDingStore.updates.downloadStore().then(setUpdateState).catch((error) => notify({ ok: false, message: (error as Error).message }))}>{label(settings, 'Download', '下載')}</button>}
+              {updateState.status === 'available' && <button className="filled-button" onClick={() => void window.dingDingStore.updates.downloadStore().then(setUpdateState).catch((error) => notify({ ok: false, message: (error as Error).message, recovery: { kind: 'retry-store-update-check', run: retryStoreUpdateCheck } }))}>{label(settings, 'Download', '下載')}</button>}
               {updateState.status === 'downloading' && <button className="text-button" onClick={() => void window.dingDingStore.updates.cancelStoreDownload().then(setUpdateState)}>{label(settings, 'Cancel download', '取消下載')}</button>}
-              {updateState.status === 'failed' && updateState.recoverable && <button className="filled-button" onClick={() => void window.dingDingStore.updates.checkStore().then(setUpdateState).catch((error) => notify({ ok: false, message: (error as Error).message }))}>{label(settings, 'Retry check', '再檢查')}</button>}
+              {updateState.status === 'failed' && updateState.recoverable && <button className="filled-button" onClick={() => void retryStoreUpdateCheck()}>{label(settings, 'Retry check', '再檢查')}</button>}
               {updateState.status === 'ready' && <><button className="text-button" onClick={() => setDismissedUpdateVersion(updateState.version)}>{label(settings, 'Later', '遲啲先')}</button><button className="filled-button" onClick={() => void restartUpdate()}>{label(settings, 'Restart to install update', '重新啟動安裝更新')}</button></>}
             </section>
           )}
@@ -816,7 +892,7 @@ export function App() {
           />
         )}
 
-        <SnackbarStack notices={notifications.active} onDismiss={notifications.dismiss} />
+        <SnackbarStack notices={notifications.active} settings={settings} onDismiss={notifications.dismiss} />
 
         {dimSum && (
           <aside className="dim-sum-surprise" role="status" aria-live="polite">

@@ -7,6 +7,7 @@ import { HISTORY_EXPORT_FORMATS, historyExportFormat } from '../src/shared/expor
 import { MAX_NOTIFICATION_RECORDS, MAX_NOTIFICATION_STORAGE_BYTES, parseNotificationRecords } from '../src/renderer/state/use-notifications';
 import type { HistoryEntry } from '../src/shared/contracts';
 import type { NotificationRecord } from '../src/renderer/notify';
+import { exportNotificationRecords } from '../src/renderer/components/NotificationCenter';
 import { parseChangelogDate } from '../src/renderer/pages/ChangelogViewer';
 import { compile, makeMatcher, regexSafetyIssue } from '../src/renderer/search';
 
@@ -57,6 +58,23 @@ describe('global renderer UI completion', () => {
     expect(parseNotificationRecords(' '.repeat(MAX_NOTIFICATION_STORAGE_BYTES + 1))).toEqual([]);
   });
 
+  it('keeps typed recovery evidence but never runtime callbacks or private fields in notification history exports', () => {
+    const raw = {
+      id: 'n-recovery', title: 'Catalog unavailable', message: 'Timed out.', ok: false,
+      createdAt: '2026-08-08T12:00:00.000Z', dismissedAt: null,
+      recovery: { kind: 'retry-catalog-refresh', run: () => 'must not persist' },
+      privateToken: 'must not export',
+    };
+    const [record] = parseNotificationRecords(JSON.stringify([raw]));
+    expect(record.recovery).toEqual({ kind: 'retry-catalog-refresh' });
+    const exported = exportNotificationRecords([{ ...record, runtimeOnly: 'must not export' } as NotificationRecord]);
+    expect(JSON.parse(exported).notifications[0].recovery).toEqual({ kind: 'retry-catalog-refresh' });
+    expect(exported).not.toContain('run');
+    expect(exported).not.toContain('privateToken');
+    expect(exported).not.toContain('runtimeOnly');
+    expect(parseNotificationRecords(JSON.stringify([{ ...raw, recovery: { kind: 'retry-everything' } }]))[0]?.recovery).toBeUndefined();
+  });
+
   it('exports exactly the selected activity records in every truthful durable format', () => {
     const entry: HistoryEntry = { id: 'op1', appId: 'desktop-material', displayName: 'Desktop Material', kind: 'install', ok: false, message: 'Installer said "no".', occurredAt: '2026-08-07T12:00:00.000Z' };
     expect(JSON.parse(exportHistoryEntries([entry], 'json'))).toEqual([entry]);
@@ -87,6 +105,8 @@ describe('global renderer UI completion', () => {
       expect(source).toContain('Invert shown');
     }
     expect(notifications).toContain('<DestructiveConfirmDialog');
+    expect(notifications).toContain('No safe recovery action is available for this failure.');
+    expect(notifications).toContain('exportNotificationRecords');
     expect(notifications).toContain('if (deleteButtonRef.current && !deleteButtonRef.current.disabled)');
     expect(notifications).toContain('SearchBox surface="notifications"');
     expect(changelog).toContain('SearchBox surface="changelog"');
