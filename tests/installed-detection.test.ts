@@ -55,6 +55,8 @@ HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Two
   it('matches only exact reviewed registry display names', () => {
     expect(exactDisplayNameMatch('Material Email', ['Material Email'])).toBe(true);
     expect(exactDisplayNameMatch('Material Email Preview', ['Material Email'])).toBe(false);
+    expect(exactDisplayNameMatch('Material Email 0.105.1', ['Material Email', 'Material Email 0.105.1'])).toBe(true);
+    expect(exactDisplayNameMatch('Material Email 0.105.2', ['Material Email', 'Material Email 0.105.1'])).toBe(false);
   });
 
   it('surfaces discovery-only registry identity only when the reviewed match is unique', () => {

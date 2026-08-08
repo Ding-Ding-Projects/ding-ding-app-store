@@ -94,6 +94,15 @@ describe('hand-written universal install adapter coverage', () => {
     }
   });
 
+  it('keeps the observed Material Email registry identity version-exact', () => {
+    const adapter = adapterFor('material-email');
+    expect(adapter.supported).toBe(true);
+    if (!adapter.supported || adapter.family === 'portable-zip') throw new Error('Material Email must use its reviewed NSIS adapter.');
+    expect(adapter.registryDisplayNames).toEqual(['Material Email', 'Material Email 0.105.1']);
+    expect(adapter.registryDisplayNames).not.toContain('Material Email 0.105.2');
+    expect(adapter.uninstallExecutableNames).toEqual(['Uninstall Material Email.exe']);
+  });
+
   it('keeps every unsupported row explicit and evidence-backed', () => {
     for (const appId of ['win-ssh-copy-id', 'ha-bambulab', 'photo-viewer']) {
       const adapter = INSTALL_ADAPTERS[appId as keyof typeof INSTALL_ADAPTERS];
