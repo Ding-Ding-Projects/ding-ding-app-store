@@ -73,7 +73,11 @@ function releaseUrl(repository, tag) {
 
 export function flattenReleasePages(input) {
   if (!Array.isArray(input)) throw new Error('GitHub release inventory must be an array or paginated array.');
-  const pages = input.length > 0 && input.every(Array.isArray) ? input : [input];
+  if (input.length === 0 || !input.every(Array.isArray)) {
+    if (input.length > MAX_RELEASES) throw new Error(`GitHub release inventory exceeded ${MAX_RELEASES} records.`);
+    return input;
+  }
+  const pages = input;
   if (pages.length > MAX_RELEASE_PAGES) throw new Error(`GitHub release inventory exceeded ${MAX_RELEASE_PAGES} pages.`);
   const releases = [];
   for (const page of pages) {

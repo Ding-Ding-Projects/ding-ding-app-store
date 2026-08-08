@@ -43,6 +43,7 @@ describe('release changelog generator', () => {
     expect(flattenReleasePages([[{ tag_name: 'one' }], [{ tag_name: 'two' }]])).toEqual([
       { tag_name: 'one' }, { tag_name: 'two' },
     ]);
+    expect(flattenReleasePages(Array.from({ length: 101 }, (_, index) => ({ tag_name: String(index) })))).toHaveLength(101);
   });
 
   it('adds the prospective entry first with an explicit pending state and exact UI rows', () => {
