@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, ipcMain, session } from 'electron';
 import squirrelStartup from 'electron-squirrel-startup';
 import { z } from 'zod';
-import type { ElementKey, ElementOverride, HistoryExportFormat, OperationRequest, SourceJobCancelRequest, SourceJobRequest, TabWorkspace, UserSettings } from '../shared/contracts.js';
+import type { ElementKey, ElementOverride, HistoryExportFormat, InstallCancelRequest, OperationRequest, SourceJobCancelRequest, SourceJobRequest, TabWorkspace, UserSettings } from '../shared/contracts.js';
 import { AppearanceService } from './appearance-service.js';
 import { CatalogService } from './catalog-service.js';
 import { HistoryService } from './history-service.js';
@@ -59,6 +59,7 @@ void app.whenReady().then(async () => {
   const catalog = new CatalogService();
   const history = new HistoryService();
   const installed = new InstalledService(catalog);
+  catalog.setInstalledProvider(async () => await installed.list(true));
   const operations = new OperationService(catalog, history, installed);
   const settings = new SettingsService();
   const sourceJobs = new SourceJobService(
@@ -86,6 +87,7 @@ void app.whenReady().then(async () => {
   ipcMain.handle('catalog:list', () => catalog.list(false));
   ipcMain.handle('catalog:refresh', () => catalog.list(true));
   ipcMain.handle('operations:install', (_event, request: OperationRequest) => operations.install(request));
+  ipcMain.handle('operations:cancel-install', (_event, request: InstallCancelRequest) => operations.cancelInstall(request));
   ipcMain.handle('operations:build', (_event, request: OperationRequest) => operations.build(request));
   ipcMain.handle('operations:uninstall', (_event, request: OperationRequest) => operations.uninstall(request));
   ipcMain.handle('operations:installed', () => operations.listInstalled());

@@ -3,7 +3,8 @@ import path from 'node:path';
 import { app } from 'electron';
 import semver from 'semver';
 import { z } from 'zod';
-import type { Availability, CatalogApp, CatalogSnapshot, PackageType, ScheduleTaskResult } from '../shared/contracts.js';
+import type { Availability, CatalogApp, CatalogSnapshot, InstalledAppRecord, PackageType, ScheduleTaskResult } from '../shared/contracts.js';
+import { adapterFor, installAdapterIdSchema } from './install-adapters.js';
 import { readJson, writeJsonAtomic } from './json-store.js';
 
 const ORG = 'Ding-Ding-Projects';
@@ -15,12 +16,16 @@ const catalogRecordSchema = z.object({
   repository: z.string().regex(/^[A-Za-z0-9_.-]+$/),
   displayName: z.string().min(1).max(80),
   availability: z.enum(['installable', 'source-build', 'documentation-only', 'unsupported']),
-  packageType: z.enum(['squirrel', 'msi', 'nsis', 'archive', 'source', 'unsupported']),
-  assetPattern: z.string().max(160).nullable(),
-  installerName: z.string().regex(/^[A-Za-z0-9_. -]{1,80}$/).nullable(),
+  packageType: z.enum(['squirrel', 'msi', 'nsis', 'jpackage', 'archive', 'source', 'unsupported']),
+  adapterId: installAdapterIdSchema,
   wiki: z.boolean(),
   sourceManifest: z.string().max(180).nullable(),
-  uninstallStrategy: z.enum(['squirrel', 'msi-registry', 'portable-folder', 'integration', 'unsupported']),
+}).strict().superRefine((record, context) => {
+  const adapter = adapterFor(record.id);
+  if (adapter.id !== record.adapterId) context.addIssue({ code: 'custom', path: ['adapterId'], message: 'Adapter ID does not match the application.' });
+  const expectedAvailability = adapter.supported ? 'installable' : 'unsupported';
+  if (record.availability !== expectedAvailability) context.addIssue({ code: 'custom', path: ['availability'], message: `Adapter requires ${expectedAvailability}.` });
+  if (record.packageType !== adapter.packageType) context.addIssue({ code: 'custom', path: ['packageType'], message: 'Package type does not match the reviewed adapter.' });
 });
 
 const catalogFileSchema = z.object({
@@ -61,11 +66,6 @@ export type CatalogRecord = z.infer<typeof catalogRecordSchema>;
 export type ReleaseAsset = z.infer<typeof assetSchema>;
 export type ReleaseRecord = z.infer<typeof releaseSchema>;
 
-interface InstalledRecord {
-  appId: string;
-  version: string;
-}
-
 interface CachedCatalog extends CatalogSnapshot {
   fetchedAt: string;
 }
@@ -93,9 +93,32 @@ async function fetchJson(url: URL): Promise<unknown> {
   return JSON.parse(text) as unknown;
 }
 
+function compareVersion(installed: string | null, latest: string | null): CatalogApp['updateState'] {
+  if (!installed || !latest) return latest ? 'unknown' : 'unsupported';
+  const left = semver.coerce(installed);
+  const right = semver.coerce(latest);
+  if (!left || !right) return 'failed';
+  return semver.lt(left, right) ? 'available' : 'up-to-date';
+}
+
+export function applyVerifiedInstalledState(
+  apps: readonly CatalogApp[],
+  installed: readonly Pick<InstalledAppRecord, 'appId' | 'version'>[],
+): CatalogApp[] {
+  const versions = new Map(installed.map((record) => [record.appId, record.version]));
+  return apps.map((record) => {
+    const installedVersion = versions.get(record.id) ?? null;
+    return { ...record, installedVersion, updateState: compareVersion(installedVersion, record.latestVersion) };
+  });
+}
+
 export class CatalogService {
   private readonly cachePath = path.join(app.getPath('userData'), 'catalog-cache.v1.json');
-  private readonly installedPath = path.join(app.getPath('userData'), 'installed-apps.v1.json');
+  private installedProvider: () => Promise<InstalledAppRecord[]> = async () => [];
+
+  setInstalledProvider(provider: () => Promise<InstalledAppRecord[]>): void {
+    this.installedProvider = provider;
+  }
 
   async manifest(): Promise<z.infer<typeof catalogFileSchema>> {
     return catalogFileSchema.parse(JSON.parse(await readFile(dataPath(), 'utf8')));
@@ -104,23 +127,38 @@ export class CatalogService {
   async list(force = false): Promise<CatalogSnapshot> {
     const cached = await readJson<CachedCatalog | null>(this.cachePath, null);
     if (!force && cached && Date.now() - Date.parse(cached.fetchedAt) < CACHE_MAX_AGE_MS) {
-      return { ...cached, source: 'cache' };
+      return await this.withVerifiedInstalledState({ ...cached, source: 'cache' });
     }
 
     try {
       const snapshot = await this.fetchCatalog();
       await writeJsonAtomic(this.cachePath, snapshot);
-      return snapshot;
+      return await this.withVerifiedInstalledState(snapshot);
     } catch (error) {
       if (cached) {
-        return {
+        return await this.withVerifiedInstalledState({
           ...cached,
           source: 'cache',
           warning: `Live refresh failed; showing cached catalog. ${(error as Error).message}`,
-        };
+        });
       }
       throw error;
     }
+  }
+
+  private async withVerifiedInstalledState(snapshot: CatalogSnapshot): Promise<CatalogSnapshot> {
+    let installed: InstalledAppRecord[] = [];
+    let warning = snapshot.warning;
+    try {
+      installed = await this.installedProvider();
+    } catch (error) {
+      warning = `${warning ? `${warning} ` : ''}Installed-state verification failed; no installed actions are shown. ${(error as Error).message}`;
+    }
+    return {
+      ...snapshot,
+      warning,
+      apps: applyVerifiedInstalledState(snapshot.apps, installed),
+    };
   }
 
   async runScheduled(): Promise<ScheduleTaskResult> {
@@ -139,9 +177,6 @@ export class CatalogService {
       await fetchJson(new URL(`/orgs/${ORG}/repos?type=public&sort=full_name&per_page=100`, API_ORIGIN)),
     );
     const repoMap = new Map(repositories.filter((repo) => !repo.private && !repo.archived).map((repo) => [repo.name, repo]));
-    const installed = await readJson<InstalledRecord[]>(this.installedPath, []);
-    const installedMap = new Map(installed.map((record) => [record.appId, record.version]));
-
     const apps = await Promise.all(manifest.apps.map(async (record): Promise<CatalogApp> => {
       const repo = repoMap.get(record.repository);
       if (!repo) {
@@ -160,14 +195,14 @@ export class CatalogService {
           latestReleaseUrl: null,
           availability: 'unsupported',
           packageType: 'unsupported',
-          installedVersion: installedMap.get(record.id) ?? null,
+          installedVersion: null,
           updateState: 'failed',
           docsAvailable: record.wiki,
         };
       }
 
       const release = await this.latestRelease(record.repository).catch(() => null);
-      const installedVersion = installedMap.get(record.id) ?? null;
+      const installedVersion = null;
       const latestVersion = release?.tag_name ?? null;
       return {
         id: record.id,
@@ -185,7 +220,7 @@ export class CatalogService {
         availability: record.availability as Availability,
         packageType: record.packageType as PackageType,
         installedVersion,
-        updateState: this.compareVersion(installedVersion, latestVersion),
+        updateState: compareVersion(installedVersion, latestVersion),
         docsAvailable: record.wiki,
       };
     }));
@@ -196,14 +231,6 @@ export class CatalogService {
       source: 'network',
       warning: null,
     };
-  }
-
-  private compareVersion(installed: string | null, latest: string | null): CatalogApp['updateState'] {
-    if (!installed || !latest) return latest ? 'unknown' : 'unsupported';
-    const left = semver.coerce(installed);
-    const right = semver.coerce(latest);
-    if (!left || !right) return 'failed';
-    return semver.lt(left, right) ? 'available' : 'up-to-date';
   }
 
   async latestRelease(repository: string): Promise<ReleaseRecord | null> {

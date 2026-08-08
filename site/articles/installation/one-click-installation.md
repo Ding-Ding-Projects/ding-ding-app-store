@@ -4,62 +4,66 @@ title: One-click installation and adapter coverage
 titleYue: 一按安裝同配接器覆蓋
 category: installation
 status: limited
-summary: Starts install and source-install requests in one click while keeping privileged choices in reviewed per-application adapters.
+summary: Dispatches 21 reviewed release adapters without typed confirmation and reports three current public-release blockers instead of guessing commands.
 ---
 # One-click installation and adapter coverage
 
 ## Behaviour
 
-Selecting **Install**, **Reinstall**, or **Install from source** starts the requested operation immediately. There is no phrase-entry dialog and no second confirmation click. The renderer sends only the catalog application identifier and a closed decision; the main process rejects malformed requests, extra fields, and mismatched decisions before selecting a catalog-owned adapter.
+Selecting **Install** or **Reinstall** immediately submits only the catalog application identifier and the closed `install` decision. The main process selects one of 24 hand-written adapter records; the renderer cannot submit an executable, URL, path, argument, checksum, dependency, or package type. Twenty-one records currently have a reviewed Windows release route. Three are explicitly unavailable and cannot be mislabeled installable.
 
-Uninstall remains behind the native two-key plus full-slider confirmation because it removes user-visible state. One-click installation does not weaken that destructive boundary.
-
-The catalog currently contains 24 records. The shared one-click dispatch is shipped, but fully automatic clean-Windows adapters and runtime proof are still incomplete. Each row states the remaining application-specific boundary instead of treating a button as proof.
-
-| Application | Current route | Remaining adapter and evidence work |
+| Application | Reviewed route | Current public evidence or blocker |
 | --- | --- | --- |
-| Lowlevel Computer Use MCP | Squirrel release | Prove the exact asset, silent install, dependency bootstrap, cancellation, install root, and recorded uninstall on clean Windows. |
-| Material Download Manager | Squirrel release | Prove the exact asset, silent install, dependency bootstrap, cancellation, install root, and recorded uninstall on clean Windows. |
-| Material Designer | Node source | Pin the lockfile and toolchain, isolate the build, package its output, bound repair, and prove installation on clean Windows. |
-| Material BlueMap | Squirrel release | Prove the exact asset, silent install, dependency bootstrap, cancellation, install root, and recorded uninstall on clean Windows. |
-| Desktop Material | Squirrel release | Prove the exact asset, silent install, dependency bootstrap, cancellation, install root, and recorded uninstall on clean Windows. |
-| Home Assistant AC Defender | Squirrel release | Prove the exact asset, silent install, dependency bootstrap, cancellation, install root, and recorded uninstall on clean Windows. |
-| Material Email | Node source | Pin the lockfile and toolchain, isolate the build, package its output, bound repair, and prove installation on clean Windows. |
-| OpenCodex | Node source | Pin the lockfile and toolchain, isolate the build, package its output, bound repair, and prove installation on clean Windows. |
-| qBittorrent Material | Squirrel release | Prove the exact asset, silent install, dependency bootstrap, cancellation, install root, and recorded uninstall on clean Windows. |
-| WinSCP Material | Squirrel release | Prove the exact asset, silent install, dependency bootstrap, cancellation, install root, and recorded uninstall on clean Windows. |
-| Dim Sum Atlas | Portable archive | Verify the archive and layout, prevent traversal, extract to an owned location, create a launcher, support cancellation, and prove owned removal. |
-| Win SSH Copy ID | Visual Studio source | Pin MSBuild and the Windows SDK workloads, isolate the build, package its output, bound repair, and prove installation on clean Windows. |
-| Material Office | Node source | Pin the lockfile and toolchain, isolate the build, package its output, bound repair, and prove installation on clean Windows. |
-| Minecraft World Downloader | Node source | Pin the lockfile and toolchain, isolate the build, package its output, bound repair, and prove installation on clean Windows. |
-| Codex Material | Node source | Pin the lockfile and toolchain, isolate the build, package its output, bound repair, and prove installation on clean Windows. |
-| LibreOffice Material | Autotools source | Pin the compiler, SDK, and declared dependencies, isolate the build, package its output, bound repair, and prove installation on clean Windows. |
-| Material Mail | Node source | Pin the repository's real lockfile and toolchain, isolate the build, package its output, bound repair, and prove installation on clean Windows. |
-| Bambu Studio | CMake source | Pin CMake, compiler, SDK, and third-party dependencies, isolate the build, package its output, bound repair, and prove installation on clean Windows. |
-| KeePassXC | CMake source | Pin CMake, compiler, SDK, and third-party dependencies, isolate the build, package its output, bound repair, and prove installation on clean Windows. |
-| JDownloader Material | Maven source | Pin the JDK, Maven, and declared dependencies, isolate the build, package its output, bound repair, and prove installation on clean Windows. |
-| Home Assistant Bambu Lab | Home Assistant integration | Implement reviewed discovery and credential-safe integration installation, then prove the complete route on a fresh Windows profile. |
-| WinForge | Visual Studio source | Pin MSBuild and the Windows SDK workloads, isolate the build, package its output, bound repair, and prove installation on clean Windows. |
-| WimForge | CMake source | Pin CMake, compiler, SDK, and Windows deployment dependencies, isolate the build, package its output, bound repair, and prove installation on clean Windows. |
-| Photo Viewer | Node source | Pin the lockfile and toolchain, isolate the build, package its output, bound repair, and prove installation on clean Windows. |
+| Lowlevel Computer Use MCP | Squirrel | `lowlevel-computer-use-manual-0.1.0-win-x64.exe`; Squirrel target in `electron/package.json`. |
+| Material Download Manager | Squirrel | `Setup.exe`; Squirrel x64 target in `design/package.json`. |
+| Material Designer | Squirrel | `material-designer-0.16.1-win-x64-setup.exe`; release workflow builds and smoke-tests Squirrel. |
+| Material BlueMap | Squirrel | `Worldlens-0.1.758-Setup.exe`; `electron-builder.config.cjs` fixes the Worldlens Squirrel identity. |
+| Desktop Material | Squirrel | `GitHubDesktopSetup-x64.exe`; release also carries `RELEASES` and full packages. |
+| Home Assistant AC Defender | Squirrel | `AC.Defender.Controller.Setup.0.1.0.exe`; desktop package declares `ACDefenderController`. |
+| Material Email | NSIS | `Material-Email-0.105.1-Windows-x64.exe`; Electron Builder NSIS plus installed/uninstalled workflow proof. |
+| OpenCodex | Squirrel | `opencodex.Setup.2.7.42.exe`; explicit Squirrel lifecycle configuration. |
+| qBittorrent Material | Squirrel | `qBittorrent-Material-5.3.97-windows-x64-Setup.exe`; release workflow smoke-tests Squirrel. |
+| WinSCP Material | Squirrel | `WinSCP.Material.0.1.590.Setup.exe`; Forge maker-squirrel configuration. |
+| Dim Sum Atlas | Managed portable ZIP | `DimSumAtlas-v0.1.13-windows-x64.zip`; expected `DimSumAtlas.exe`. |
+| Win SSH Copy ID | Unavailable | Public repository has no release. There is no immutable installer asset to verify. |
+| Material Office | NSIS | `Material-Office-0.1.0-x64-Setup.exe`; Electron Builder NSIS and silent lifecycle documentation. |
+| Minecraft World Downloader | NSIS | `WorldDownloaderManager-Setup.exe`; reviewed `installer.nsi` fixes identity, root, and uninstaller. |
+| Codex Material | MSI | `Codex.Studio-0.1.0-x64.msi`; Electron Builder MSI x64 target. |
+| LibreOffice Material | MSI | `LibreOfficeMaterial-Windows-x64.msi`; CPack/WiX workflow and companion checksum. |
+| Material Mail | Mozilla NSIS | `thunderbird-155.0a1.en-US.win64.installer.exe`; `mach package` produces the Mozilla NSIS installer. |
+| Bambu Studio | NSIS | `BambuStudioMD3-Setup.exe`; reviewed NSIS script has fixed owned install/uninstall identities. |
+| KeePassXC | MSI | `KeePassXC-2.8.0-snapshot-x64.msi`; CPack/WiX release route. |
+| JDownloader Material | jpackage EXE | `JDownloader-Material-windows-x64.exe`; workflow proves `jpackage --type exe` with bundled Java runtime. |
+| Home Assistant Bambu Lab | External target required | `bambu_lab.zip` is a HACS custom component. Fresh Windows has no canonical local Home Assistant configuration target; selecting a remote instance requires host/account authorization that cannot be inferred. |
+| WinForge | Managed portable ZIP | `WinForge-portable-x64-1.1.326.zip`; workflow validates `WinForge.exe` and archive paths. |
+| WimForge | Managed portable ZIP | `WimForge-portable-x64-0.1.42.zip`; self-contained Qt archive with `WimForge.exe`. |
+| Photo Viewer | Unavailable | Public `v0.1.0` release contains zero assets. Its source declares a future NSIS target but no published installer exists. |
+
+Uninstall remains behind the native two-key plus full-slider confirmation because it removes user-visible state. Installation and source-repair stay separate: ordinary release installation never imports or invokes the disposable/OpenCode runtime.
 
 ## Configuration
 
-A reviewed adapter owns the immutable release or source revision, architecture, runtimes, SDKs, package managers, canonical download sources and hashes, unattended arguments, expected outputs, installed location, ownership, progress, cancellation, retry policy, and uninstall discovery. Users do not type commands, URLs, dependency names, or executable paths.
+Each adapter fixes one application ID, package family, anchored asset-name pattern, install argument vector, exact registry display-name allowlist or owned portable executable, uninstall family, and source evidence. Squirrel uses `--silent`; MSI runs the selected asset through system `msiexec.exe /i ... /qn /norestart`; reviewed NSIS uses `/S`; Mozilla NSIS uses `-ms`; the jpackage route uses its unattended `/quiet /norestart` contract; portable ZIPs extract only beneath the App Store's private managed root.
 
-The source runner exposes a structured build/run terminal simulator rather than a free-form host shell. The automatic OpenCode bootstrap installs a pinned canonical package when OpenCode is absent. OpenCode then performs bounded touchless repair with a finite retry limit only inside a disposable workspace with no arbitrary user paths, user secrets, credential stores, unrelated repositories, or broad host mounts. If that isolation is unavailable, execution fails closed.
+Dependencies are self-contained in the reviewed release packages. MSI uses the Windows inbox service; Squirrel, NSIS, Mozilla NSIS, and jpackage carry their application runtime; the three portable packages carry their own Electron, .NET, or Qt runtime. The user does not choose or install a compiler, SDK, package manager, Java runtime, Node runtime, or archive tool.
 
 ## Failure modes
 
-Invalid or mismatched decisions, duplicate starts, missing or ambiguous assets, absent SHA-256 metadata, disallowed origins, size or hash mismatch, timeouts, non-zero installer exits, unsupported package types, unavailable isolation, retry exhaustion, cancellation, and missing outputs produce factual failed or cancelled results. Missing adapters never become guessed commands, and failed operations never create successful installed records.
+Installation fails closed for malformed or mismatched requests, duplicate starts, unsupported adapters, missing or prerelease-only releases, zero or multiple matching assets, absent integrity evidence, unverified companion checksums, disallowed HTTPS origins, more than three redirects, declared or received sizes beyond the limit, hash mismatch, download/extraction cancellation, timeout, non-zero installer exit, unsafe ZIP names, symbolic links, special files, excessive entry/expanded size, missing portable executable, or missing exact post-install registry ownership. Cancellation is refused after an external installer starts because killing its launcher cannot prove a Windows Installer or elevated child service stopped. ZIP cancellation destroys and drains the active read/write pipeline before staging cleanup. A timed-out installer is unlocked only after `taskkill /T` succeeds and the launcher closes; otherwise staging and the per-app operation lock are retained until restart. An installer exit code of zero is not success when the reviewed installed-app entry cannot be rediscovered.
+
+The three unsupported records return their exact blocker. They do not fall through to source execution or receive guessed installer flags.
 
 ## Security considerations
 
-The main process owns release lookup, allowlists, bounded HTTPS redirects, size enforcement, SHA-256 verification, staging, fixed shell-free arguments, hidden child processes, time limits, cleanup, and installed-record writes. Source and repair code executes only in the disposable boundary. One click removes ceremony; it does not move privileged choices into the renderer or bypass operating-system warnings.
+Downloads accept only HTTPS GitHub release hosts, reject credentials in URLs, cap redirects and bytes, and require either the asset's GitHub `sha256:` metadata or a small companion checksum file whose own bytes have a GitHub digest. Files are created without overwrite. Processes use `shell: false`, hidden windows, fixed arguments, a reduced allowlisted environment, a 15-minute limit, and an abort controller. Portable extraction rejects absolute paths, drive paths, `..`, backslashes, NULs, symlinks, special files, duplicate overwrites, archive bombs, and a missing expected executable.
+
+Installed ownership is captured from exactly one new or changed registry entry between complete, fail-closed pre-install and post-install snapshots of all reviewed hives. Query failure, timeout, non-zero exit, or bounded-output overflow invalidates an ownership snapshot. The stored exact key and full-entry fingerprint must match again before uninstall; display name plus a generic root is never ownership. An unchanged entry is accepted only for an idempotent reinstall whose persisted version already equals the requested release. The Installed list contains only App Store-managed records with valid ownership, so an unrelated upstream application with a shared display name is neither claimed nor offered for removal. A transient list-query failure hides the unresolved record but preserves its private ownership metadata for recovery. Catalog/update state is recomputed only from the verified list, clearing any stale installed version from an older cache. MSI product codes must parse exactly; Squirrel `Update.exe` and reviewed uninstallers must have allowlisted basenames under allowlisted roots; portable removal is restricted to the exact adapter-owned directory.
 
 ## Verification
 
-Focused contracts prove that install and source-install cards bypass the destructive dialog, strict two-field requests reach the main process, duplicate starts are blocked, and uninstall retains both keys, the full slider, emergency exit, keyboard containment, and focus return. **Not complete:** static tests do not prove that every catalog adapter works on a fresh Windows computer, and runtime proof is still pending for each application until its packaged clean-machine evidence exists.
+The hand-written coverage test enumerates all 24 application IDs, asserts 24 unique adapter IDs, proves every installable row maps to a supported adapter with the same package type, rejects unsupported rows labeled installable, and exercises one current asset filename for each of the 21 supported applications. Behavioural tests create real ZIPs to cover empty files, symlinks, Windows case collisions, reserved device aliases, pre-start cancellation, and active-writer cancellation/drain; exercise partial writes; and inject portable commit, cleanup, rollback, and rollback-failure outcomes. Focused registry tests cover incomplete ownership snapshots, fingerprint mutation, exact names, MSI product codes, and safe roots/basenames. Source-contract checks cover bounded redirects/timeouts, hidden shell-free process trees, typed cancellation, exact changed-entry ownership, and separation from the repair runtime.
+
+The adapter audit uses current public release metadata and source/release configuration as of 2026-08-07. Static tests and builds do not prove that every installer completed on a fresh Windows VM; per-application clean-machine execution remains runtime evidence to collect. The three external blockers remain genuine incomplete outcomes, not test failures disguised as support.
 
 ## Suggested articles
 
