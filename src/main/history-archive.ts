@@ -12,8 +12,8 @@ const ARCHIVE_SCHEMA = 'ding-ding-app-store.history-archive.v1' as const;
 
 const archiveHistoryEntrySchema = z.strictObject({
   id: z.string().uuid(),
-  appId: z.string().trim().min(1).max(200),
-  displayName: z.string().trim().min(1).max(200),
+  appId: z.string().min(1).max(200).refine((value) => value.trim().length > 0, 'Application identifier cannot be blank.'),
+  displayName: z.string().min(1).max(200).refine((value) => value.trim().length > 0, 'Display name cannot be blank.'),
   kind: z.enum(['install', 'build', 'uninstall', 'update']),
   ok: z.boolean(),
   message: z.string().max(MAX_HISTORY_ENTRY_MESSAGE),

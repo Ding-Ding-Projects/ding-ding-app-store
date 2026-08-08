@@ -69,4 +69,18 @@ describe('re-importable activity ZIP archive', () => {
     await expect(createHistoryArchive([entry({ id: 'not-a-uuid' })])).rejects.toThrow(/invalid|oversized/i);
     await expect(createHistoryArchive([entry(), entry()])).rejects.toThrow(/duplicate/i);
   });
+
+  it('preserves meaningful leading and trailing whitespace in complete fields', async () => {
+    const archive = await createHistoryArchive([entry({ appId: ' app-with-space ', displayName: ' Display name ' })]);
+    const root = await mkdtemp(path.join(os.tmpdir(), 'ding-ding-history-archive-space-'));
+    try {
+      const zipPath = path.join(root, 'history.zip');
+      const destination = path.join(root, 'expanded');
+      await writeFile(zipPath, Buffer.from(archive.base64, 'base64'));
+      await extractZipSafe(zipPath, destination);
+      expect(JSON.parse(await readFile(path.join(destination, 'history.jsonl'), 'utf8'))).toEqual(entry({ appId: ' app-with-space ', displayName: ' Display name ' }));
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });
