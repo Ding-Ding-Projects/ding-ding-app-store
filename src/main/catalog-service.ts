@@ -3,7 +3,7 @@ import path from 'node:path';
 import { app } from 'electron';
 import semver from 'semver';
 import { z } from 'zod';
-import type { Availability, CatalogApp, CatalogSnapshot, PackageType } from '../shared/contracts.js';
+import type { Availability, CatalogApp, CatalogSnapshot, PackageType, ScheduleTaskResult } from '../shared/contracts.js';
 import { readJson, writeJsonAtomic } from './json-store.js';
 
 const ORG = 'Ding-Ding-Projects';
@@ -120,6 +120,16 @@ export class CatalogService {
         };
       }
       throw error;
+    }
+  }
+
+  async runScheduled(): Promise<ScheduleTaskResult> {
+    try {
+      const snapshot = await this.list(true);
+      if (snapshot.warning !== null) return { outcome: 'failed', message: snapshot.warning };
+      return { outcome: 'ok', message: `Refreshed ${snapshot.apps.length} apps.` };
+    } catch (error) {
+      return { outcome: 'failed', message: (error as Error).message };
     }
   }
 

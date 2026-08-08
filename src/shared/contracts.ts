@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 export type LanguageMode = 'en' | 'yue' | 'bilingual';
 export type ThemeMode = 'system' | 'light' | 'dark';
 export type PackageType = 'squirrel' | 'msi' | 'nsis' | 'archive' | 'source' | 'unsupported';
@@ -71,6 +73,451 @@ export interface UserSettings {
   displayName: string;
 }
 
+export const TAB_IDS = ['catalog', 'installed', 'updates', 'docs', 'activity', 'settings'] as const;
+export type TabId = (typeof TAB_IDS)[number];
+export const tabIdSchema = z.enum(TAB_IDS);
+
+export const SURFACE_IDS = [
+  ...TAB_IDS,
+  'settings.general',
+  'settings.appearance',
+  'settings.schedule',
+  'settings.about',
+] as const;
+export type PersistedSurfaceId = (typeof SURFACE_IDS)[number];
+
+export const TAB_GROUP_COLORS = ['grey', 'blue', 'green', 'yellow', 'red', 'purple', 'teal'] as const;
+export type TabGroupColor = (typeof TAB_GROUP_COLORS)[number];
+
+export const MAX_TAB_GROUPS = 8;
+export const MAX_DOCUMENT_BYTES = 64_000;
+
+export const tabGroupColorSchema = z.enum(TAB_GROUP_COLORS);
+
+export const tabGroupSchema = z
+  .object({
+    id: z.string().regex(/^grp_[a-z0-9]{8}$/),
+    name: z.string().trim().min(1).max(32),
+    color: tabGroupColorSchema,
+    collapsed: z.boolean(),
+  })
+  .strict();
+
+export const tabStateSchema = z
+  .object({
+    id: tabIdSchema,
+    pinned: z.boolean(),
+    groupId: z.string().nullable(),
+    previousGroupId: z.string().nullable(),
+    order: z.number().int().min(0).max(63),
+  })
+  .strict();
+
+export const railSchema = z
+  .object({
+    side: z.enum(['left', 'top']),
+    labelMode: z.enum(['full', 'compact', 'icon']),
+    tabHeight: z.enum(['compact', 'comfortable', 'tall']),
+    overflowMode: z.enum(['menu', 'scroll']),
+    showBadges: z.boolean(),
+    showGroupColorBar: z.boolean(),
+    pinnedIconOnly: z.boolean(),
+    width: z.number().int().min(64).max(420),
+  })
+  .strict();
+
+export const tabWorkspaceSchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    activeTabId: tabIdSchema,
+    tabs: z.array(tabStateSchema).length(TAB_IDS.length),
+    groups: z.array(tabGroupSchema).max(MAX_TAB_GROUPS),
+    rail: railSchema,
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    const ids = value.tabs.map((tab) => tab.id);
+    if (new Set(ids).size !== ids.length) ctx.addIssue({ code: 'custom', path: ['tabs'], message: 'Tab ids must be unique.' });
+    for (const id of TAB_IDS) {
+      if (!ids.includes(id)) ctx.addIssue({ code: 'custom', path: ['tabs'], message: `Missing tab id: ${id}` });
+    }
+    const groupIds = value.groups.map((group) => group.id);
+    if (new Set(groupIds).size !== groupIds.length) ctx.addIssue({ code: 'custom', path: ['groups'], message: 'Group ids must be unique.' });
+    value.tabs.forEach((tab, index) => {
+      if (tab.groupId !== null && !groupIds.includes(tab.groupId)) {
+        ctx.addIssue({ code: 'custom', path: ['tabs', index, 'groupId'], message: 'groupId does not match any group.' });
+      }
+      if (tab.previousGroupId !== null && !groupIds.includes(tab.previousGroupId)) {
+        ctx.addIssue({ code: 'custom', path: ['tabs', index, 'previousGroupId'], message: 'previousGroupId does not match any group.' });
+      }
+      if (tab.pinned && tab.groupId !== null) {
+        ctx.addIssue({ code: 'custom', path: ['tabs', index, 'groupId'], message: 'A pinned tab cannot belong to a group.' });
+      }
+    });
+  });
+
+export type TabGroup = z.infer<typeof tabGroupSchema>;
+export type TabState = z.infer<typeof tabStateSchema>;
+export type TabRailLayout = z.infer<typeof railSchema>;
+export type TabWorkspace = z.infer<typeof tabWorkspaceSchema>;
+
+export const DEFAULT_TAB_WORKSPACE: TabWorkspace = {
+  schemaVersion: 1,
+  activeTabId: 'catalog',
+  tabs: TAB_IDS.map((id, index) => ({ id, pinned: false, groupId: null, previousGroupId: null, order: index })),
+  groups: [],
+  rail: {
+    side: 'left',
+    labelMode: 'full',
+    tabHeight: 'comfortable',
+    overflowMode: 'menu',
+    showBadges: true,
+    showGroupColorBar: true,
+    pinnedIconOnly: true,
+    width: 260,
+  },
+};
+
+export const TOKEN_IDS = ['background', 'foreground', 'radius', 'paddingScale', 'fontScale', 'fontWeight', 'borderWidth', 'elevation'] as const;
+export type TokenId = (typeof TOKEN_IDS)[number];
+
+export const COLOR_ROLES = [
+  'surface',
+  'surface-container',
+  'surface-high',
+  'primary',
+  'on-primary',
+  'primary-container',
+  'outline',
+  'error',
+  'success',
+  'inherit',
+  'transparent',
+] as const;
+export type ColorRole = (typeof COLOR_ROLES)[number];
+
+export const COLOR_ROLE_VAR: Readonly<Record<ColorRole, string>> = Object.freeze({
+  surface: 'var(--surface)',
+  'surface-container': 'var(--surface-container)',
+  'surface-high': 'var(--surface-high)',
+  primary: 'var(--primary)',
+  'on-primary': 'var(--on-primary)',
+  'primary-container': 'var(--primary-container)',
+  outline: 'var(--outline)',
+  error: 'var(--error)',
+  success: 'var(--success)',
+  inherit: 'inherit',
+  transparent: 'transparent',
+});
+
+export const RADII = ['none', 'xs', 'sm', 'md', 'lg', 'xl', 'full'] as const;
+export type RadiusToken = (typeof RADII)[number];
+export const RADIUS_PX: Readonly<Record<RadiusToken, number>> = Object.freeze({ none: 0, xs: 4, sm: 8, md: 12, lg: 16, xl: 24, full: 999 });
+
+export const ELEVATIONS = ['none', '1', '2', '3'] as const;
+export type ElevationToken = (typeof ELEVATIONS)[number];
+export const ELEVATION_SHADOW: Readonly<Record<ElevationToken, string>> = Object.freeze({
+  none: 'none',
+  '1': '0 1px 2px rgba(0, 0, 0, 0.16)',
+  '2': '0 2px 6px rgba(0, 0, 0, 0.18)',
+  '3': '0 6px 16px rgba(0, 0, 0, 0.22)',
+});
+
+export const CSS_SUFFIX: Readonly<Record<TokenId, string>> = Object.freeze({
+  background: 'background',
+  foreground: 'foreground',
+  radius: 'radius',
+  paddingScale: 'pad-scale',
+  fontScale: 'font-scale',
+  fontWeight: 'font-weight',
+  borderWidth: 'border-width',
+  elevation: 'elevation',
+});
+
+export type ElementGroup = 'chrome' | 'navigation' | 'content' | 'controls' | 'feedback';
+
+export interface ElementDefinition {
+  readonly key: string;
+  readonly en: string;
+  readonly yue: string;
+  readonly group: ElementGroup;
+  readonly tokens: readonly TokenId[];
+}
+
+const ALL: readonly TokenId[] = TOKEN_IDS;
+const TEXT: readonly TokenId[] = ['foreground', 'fontScale', 'fontWeight'];
+const BOX: readonly TokenId[] = ['background', 'foreground', 'radius', 'paddingScale', 'fontScale', 'borderWidth'];
+const BOX_RAISED: readonly TokenId[] = [...BOX, 'elevation'];
+const PILL: readonly TokenId[] = ['background', 'foreground', 'radius', 'paddingScale', 'fontScale', 'fontWeight', 'borderWidth'];
+
+const ELEMENT_LIST = [
+  { key: 'app-shell', en: 'Application shell', yue: '應用外殼', group: 'chrome', tokens: ['background', 'foreground', 'fontScale'] },
+  { key: 'titlebar', en: 'Title bar', yue: '標題列', group: 'chrome', tokens: ['background', 'foreground', 'paddingScale', 'fontScale', 'borderWidth', 'elevation'] },
+  { key: 'titlebar-brand', en: 'Title bar brand', yue: '標題列品牌', group: 'chrome', tokens: TEXT },
+  { key: 'titlebar-badge', en: 'Title bar badge', yue: '標題列徽章', group: 'chrome', tokens: PILL },
+  { key: 'nav-rail', en: 'Navigation rail', yue: '導覽列', group: 'navigation', tokens: ['background', 'foreground', 'radius', 'paddingScale', 'borderWidth', 'elevation'] },
+  { key: 'nav-title', en: 'Navigation title', yue: '導覽標題', group: 'navigation', tokens: TEXT },
+  { key: 'nav-tab', en: 'Tab', yue: '分頁', group: 'navigation', tokens: PILL },
+  { key: 'nav-tab-selected', en: 'Selected tab', yue: '選中分頁', group: 'navigation', tokens: ALL },
+  { key: 'tab-group-header', en: 'Tab group header', yue: '分頁組標題', group: 'navigation', tokens: ['background', 'foreground', 'radius', 'paddingScale', 'fontScale', 'fontWeight'] },
+  { key: 'palette-hint', en: 'Command palette hint', yue: '指令面板提示', group: 'navigation', tokens: BOX },
+  { key: 'content-surface', en: 'Content surface', yue: '內容表面', group: 'content', tokens: ['background', 'foreground', 'radius', 'paddingScale', 'fontScale'] },
+  { key: 'page-heading', en: 'Page heading bar', yue: '頁面標題列', group: 'content', tokens: ['background', 'foreground', 'paddingScale', 'fontScale', 'borderWidth'] },
+  { key: 'page-title', en: 'Page title', yue: '頁面標題', group: 'content', tokens: TEXT },
+  { key: 'search-field', en: 'Search field', yue: '搜尋欄', group: 'controls', tokens: BOX_RAISED },
+  { key: 'regex-builder', en: 'Regex builder', yue: '正則產生器', group: 'controls', tokens: BOX_RAISED },
+  { key: 'app-card', en: 'Application card', yue: '應用卡片', group: 'content', tokens: BOX_RAISED },
+  { key: 'app-card-title', en: 'Application card title', yue: '應用卡片標題', group: 'content', tokens: TEXT },
+  { key: 'app-card-description', en: 'Application card description', yue: '應用卡片描述', group: 'content', tokens: TEXT },
+  { key: 'status-pill', en: 'Status pill', yue: '狀態標籤', group: 'feedback', tokens: PILL },
+  { key: 'button-filled', en: 'Filled button', yue: '實心按鈕', group: 'controls', tokens: ['background', 'foreground', 'radius', 'paddingScale', 'fontScale', 'fontWeight', 'elevation'] },
+  { key: 'button-tonal', en: 'Tonal button', yue: '色調按鈕', group: 'controls', tokens: ['background', 'foreground', 'radius', 'paddingScale', 'fontScale', 'fontWeight', 'elevation'] },
+  { key: 'button-text', en: 'Text button', yue: '文字按鈕', group: 'controls', tokens: ['foreground', 'radius', 'paddingScale', 'fontScale', 'fontWeight'] },
+  { key: 'icon-button', en: 'Icon button', yue: '圖示按鈕', group: 'controls', tokens: ['background', 'foreground', 'radius', 'paddingScale', 'borderWidth'] },
+  { key: 'chip', en: 'Chip', yue: '晶片', group: 'controls', tokens: PILL },
+  { key: 'update-banner', en: 'Update banner', yue: '更新橫幅', group: 'feedback', tokens: BOX_RAISED },
+  { key: 'notice', en: 'Corner notification', yue: '角落通知', group: 'feedback', tokens: BOX_RAISED },
+  { key: 'empty-state', en: 'Empty state', yue: '空白狀態', group: 'feedback', tokens: BOX },
+  { key: 'history-row', en: 'Activity row', yue: '活動列', group: 'content', tokens: BOX },
+  { key: 'docs-article', en: 'Documentation article', yue: '說明文章', group: 'content', tokens: BOX },
+  { key: 'settings-card', en: 'Settings card', yue: '設定卡片', group: 'content', tokens: BOX_RAISED },
+  { key: 'schedule-card', en: 'Schedule card', yue: '排程卡片', group: 'content', tokens: BOX_RAISED },
+  { key: 'dialog', en: 'Dialog', yue: '對話框', group: 'feedback', tokens: BOX_RAISED },
+  { key: 'command-palette', en: 'Command palette', yue: '指令面板', group: 'feedback', tokens: BOX_RAISED },
+  { key: 'snackbar', en: 'Snackbar', yue: '訊息條', group: 'feedback', tokens: ['background', 'foreground', 'radius', 'paddingScale', 'fontScale', 'fontWeight', 'borderWidth', 'elevation'] },
+] as const satisfies readonly ElementDefinition[];
+
+export type ElementKey = (typeof ELEMENT_LIST)[number]['key'];
+export const ELEMENTS: readonly ElementDefinition[] = Object.freeze(ELEMENT_LIST.map((element) => Object.freeze({ ...element })));
+export const ELEMENT_KEYS = ELEMENT_LIST.map((element) => element.key) as unknown as [ElementKey, ...ElementKey[]];
+export const ELEMENT_BY_KEY: ReadonlyMap<string, ElementDefinition> = new Map(ELEMENTS.map((element) => [element.key, element]));
+
+export const MAX_TOKENS_PER_ELEMENT = 8;
+export const MAX_IMPORT_BYTES = 64_000;
+
+export const colorValueSchema = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.literal('role'), role: z.enum(COLOR_ROLES) }),
+  z.strictObject({ kind: z.literal('hex'), hex: z.string().regex(/^#[0-9a-fA-F]{6}$/).transform((value) => value.toLowerCase()) }),
+]);
+
+export const elementOverrideSchema = z.strictObject({
+  background: colorValueSchema.optional(),
+  foreground: colorValueSchema.optional(),
+  radius: z.enum(RADII).optional(),
+  paddingScale: z.number().int().min(50).max(200).optional(),
+  fontScale: z.number().int().min(75).max(150).optional(),
+  fontWeight: z.union([z.literal(400), z.literal(500), z.literal(600), z.literal(700), z.literal(800)]).optional(),
+  borderWidth: z.number().int().min(0).max(3).optional(),
+  elevation: z.enum(ELEVATIONS).optional(),
+});
+
+export type ColorValue = z.infer<typeof colorValueSchema>;
+export type ElementOverride = z.infer<typeof elementOverrideSchema>;
+
+const FORBIDDEN_RECORD_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+export const appearanceElementsSchema = z
+  .unknown()
+  .superRefine((value, ctx) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return;
+    for (const key of Object.getOwnPropertyNames(value)) {
+      if (FORBIDDEN_RECORD_KEYS.has(key)) ctx.addIssue({ code: 'custom', path: [key], message: 'Reserved key is not allowed.' });
+    }
+  })
+  .pipe(
+    z.partialRecord(z.enum(ELEMENT_KEYS), elementOverrideSchema).superRefine((value, ctx) => {
+      for (const [key, override] of Object.entries(value)) {
+        if (!override) continue;
+        const definition = ELEMENT_BY_KEY.get(key);
+        if (!definition) continue;
+        const tokens = Object.keys(override) as TokenId[];
+        if (tokens.length > MAX_TOKENS_PER_ELEMENT) {
+          ctx.addIssue({ code: 'custom', path: [key], message: `At most ${MAX_TOKENS_PER_ELEMENT} tokens per element.` });
+        }
+        for (const token of tokens) {
+          if (!definition.tokens.includes(token)) {
+            ctx.addIssue({ code: 'custom', path: [key, token], message: `Token ${token} is not editable on ${key}.` });
+          }
+        }
+      }
+    }),
+  );
+
+export type AppearanceElements = Partial<Record<ElementKey, ElementOverride>>;
+
+export const appearanceDocumentSchema = z.strictObject({
+  schemaVersion: z.literal(1),
+  elements: appearanceElementsSchema,
+});
+
+export const appearanceExportSchema = z.strictObject({
+  kind: z.literal('ding-ding-app-store.appearance'),
+  schemaVersion: z.literal(1),
+  exportedAt: z.iso.datetime(),
+  appVersion: z.string().max(32).optional(),
+  elements: appearanceElementsSchema,
+});
+
+export interface AppearanceDocument {
+  schemaVersion: 1;
+  elements: AppearanceElements;
+  /** Set only when the stored document could not be read; never persisted. */
+  warning?: string;
+}
+
+export interface AppearanceExport extends AppearanceDocument {
+  kind: 'ding-ding-app-store.appearance';
+  exportedAt: string;
+  appVersion?: string;
+}
+
+export type AppearanceImportResult =
+  | { ok: true; document: AppearanceDocument; applied: number }
+  | { ok: false; message: string; issues: string[] };
+
+const UNSAFE_VALUE = /[;{}<>\n\r]|url\(|@import|expression\(|\/\*/i;
+const SAFE_HEX = /^#[0-9a-f]{6}$/;
+
+function tokenValue(token: TokenId, override: ElementOverride): string | null {
+  switch (token) {
+    case 'background':
+    case 'foreground': {
+      const color = override[token];
+      if (!color) return null;
+      if (color.kind === 'role') return COLOR_ROLE_VAR[color.role] ?? null;
+      return SAFE_HEX.test(color.hex) ? color.hex : null;
+    }
+    case 'radius':
+      return override.radius ? `${RADIUS_PX[override.radius]}px` : null;
+    case 'paddingScale':
+      return typeof override.paddingScale === 'number' ? (override.paddingScale / 100).toFixed(2) : null;
+    case 'fontScale':
+      return typeof override.fontScale === 'number' ? (override.fontScale / 100).toFixed(2) : null;
+    case 'fontWeight':
+      return typeof override.fontWeight === 'number' ? String(override.fontWeight) : null;
+    case 'borderWidth':
+      return typeof override.borderWidth === 'number' ? `${override.borderWidth}px` : null;
+    case 'elevation':
+      return override.elevation ? ELEVATION_SHADOW[override.elevation] : null;
+    default:
+      return null;
+  }
+}
+
+export function toCssVariables(elements: AppearanceElements): Array<[string, string]> {
+  const pairs: Array<[string, string]> = [];
+  for (const definition of ELEMENTS) {
+    const override = elements[definition.key as ElementKey];
+    if (!override) continue;
+    for (const token of definition.tokens) {
+      const value = tokenValue(token, override);
+      if (value === null || UNSAFE_VALUE.test(value)) continue;
+      pairs.push([`--elx-${definition.key}-${CSS_SUFFIX[token]}`, value]);
+    }
+  }
+  return pairs;
+}
+
+export const SCHEDULE_BOUNDS = {
+  selfUpdateMinutes: { min: 60, max: 10_080, step: 5 },
+  catalogMinutes: { min: 30, max: 10_080, step: 5 },
+  quietMinuteOfDay: { min: 0, max: 1_439 },
+  quietMinSpanMinutes: 15,
+} as const;
+
+export const scheduleSchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    selfUpdate: z
+      .object({
+        repeatEnabled: z.boolean(),
+        intervalMinutes: z.number().int().min(SCHEDULE_BOUNDS.selfUpdateMinutes.min).max(SCHEDULE_BOUNDS.selfUpdateMinutes.max),
+      })
+      .strict(),
+    catalogRefresh: z
+      .object({
+        enabled: z.boolean(),
+        intervalMinutes: z.number().int().min(SCHEDULE_BOUNDS.catalogMinutes.min).max(SCHEDULE_BOUNDS.catalogMinutes.max),
+      })
+      .strict(),
+    quietHours: z
+      .object({
+        enabled: z.boolean(),
+        startMinute: z.number().int().min(SCHEDULE_BOUNDS.quietMinuteOfDay.min).max(SCHEDULE_BOUNDS.quietMinuteOfDay.max),
+        endMinute: z.number().int().min(SCHEDULE_BOUNDS.quietMinuteOfDay.min).max(SCHEDULE_BOUNDS.quietMinuteOfDay.max),
+      })
+      .strict()
+      .refine((quiet) => !quiet.enabled || quiet.startMinute !== quiet.endMinute, {
+        path: ['endMinute'],
+        message: 'Quiet hours must not start and end at the same minute.',
+      })
+      .refine(
+        (quiet) => !quiet.enabled || ((quiet.endMinute - quiet.startMinute + 1440) % 1440) >= SCHEDULE_BOUNDS.quietMinSpanMinutes,
+        { path: ['endMinute'], message: `Quiet hours must span at least ${SCHEDULE_BOUNDS.quietMinSpanMinutes} minutes.` },
+      ),
+  })
+  .strict();
+
+export type ScheduleConfig = z.infer<typeof scheduleSchema>;
+
+export const DEFAULT_SCHEDULE: ScheduleConfig = {
+  schemaVersion: 1,
+  selfUpdate: { repeatEnabled: true, intervalMinutes: 360 },
+  catalogRefresh: { enabled: true, intervalMinutes: 360 },
+  quietHours: { enabled: false, startMinute: 1320, endMinute: 420 },
+};
+
+export type ScheduleTaskId = 'self-update' | 'catalog-refresh';
+export type ScheduleOutcome = 'ok' | 'failed' | 'skipped';
+export type ScheduleTrigger = 'startup' | 'schedule' | 'catch-up' | 'manual';
+
+export interface ScheduleTaskResult {
+  outcome: ScheduleOutcome;
+  message: string;
+}
+
+export interface ScheduleRunRecord {
+  at: string;
+  outcome: ScheduleOutcome;
+  message: string;
+  trigger: ScheduleTrigger;
+  durationMs: number;
+  fromPreviousSession: boolean;
+}
+
+export interface ScheduleTaskStatus {
+  id: ScheduleTaskId;
+  armed: boolean;
+  running: boolean;
+  intervalMinutes: number;
+  nextRunAt: string | null;
+  nextRunIsBackoff: boolean;
+  consecutiveFailures: number;
+  lastRun: ScheduleRunRecord | null;
+}
+
+export interface ScheduleNotice {
+  id: string;
+  level: 'info' | 'error';
+  en: string;
+  yue: string;
+  silent: boolean;
+}
+
+export interface ScheduleStatus {
+  config: ScheduleConfig;
+  tasks: Record<ScheduleTaskId, ScheduleTaskStatus>;
+  startupCheck: ScheduleRunRecord | null;
+  quietHours: { active: boolean; timeZone: string; nextChangeAt: string | null; heldSinceQuietStart: number };
+  packagedBuild: boolean;
+  now: string;
+  notice: ScheduleNotice | null;
+}
+
+export type ScheduleSaveResult =
+  | { ok: true; status: ScheduleStatus }
+  | { ok: false; message: string; issues: Array<{ field: string; message: string }> };
+
 export interface DingDingStoreApi {
   catalog: {
     list(): Promise<CatalogSnapshot>;
@@ -96,10 +543,30 @@ export interface DingDingStoreApi {
     list(): Promise<HistoryEntry[]>;
     export(format: HistoryExportFormat): Promise<string>;
   };
+  workspace: {
+    load(): Promise<TabWorkspace>;
+    save(value: TabWorkspace): Promise<TabWorkspace>;
+    reset(): Promise<TabWorkspace>;
+    export(): Promise<string>;
+    import(document: string): Promise<TabWorkspace>;
+  };
+  appearance: {
+    load(): Promise<AppearanceDocument>;
+    setElement(key: ElementKey, override: ElementOverride): Promise<AppearanceDocument>;
+    resetElement(key: ElementKey): Promise<AppearanceDocument>;
+    resetAll(): Promise<AppearanceDocument>;
+    export(): Promise<string>;
+    import(payload: string): Promise<AppearanceImportResult>;
+  };
+  schedule: {
+    load(): Promise<ScheduleStatus>;
+    save(config: ScheduleConfig): Promise<ScheduleSaveResult>;
+    runNow(task: ScheduleTaskId): Promise<ScheduleStatus>;
+    subscribe(listener: (status: ScheduleStatus) => void): () => void;
+  };
   window: {
     minimize(): void;
     toggleMaximize(): void;
     close(): void;
   };
 }
-

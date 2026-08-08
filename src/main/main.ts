@@ -2,12 +2,19 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, ipcMain, session } from 'electron';
 import squirrelStartup from 'electron-squirrel-startup';
-import type { HistoryExportFormat, OperationRequest, UserSettings } from '../shared/contracts.js';
+import { z } from 'zod';
+import type { ElementKey, ElementOverride, HistoryExportFormat, OperationRequest, TabWorkspace, UserSettings } from '../shared/contracts.js';
+import { AppearanceService } from './appearance-service.js';
 import { CatalogService } from './catalog-service.js';
 import { HistoryService } from './history-service.js';
 import { OperationService } from './operation-service.js';
+import { Scheduler } from './scheduler.js';
+import { ScheduleService } from './schedule-service.js';
 import { SettingsService } from './settings-service.js';
 import { UpdateService } from './update-service.js';
+import { WorkspaceService } from './workspace-service.js';
+
+const scheduleTaskSchema = z.enum(['self-update', 'catalog-refresh']);
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 let mainWindow: BrowserWindow | null = null;
@@ -52,6 +59,17 @@ void app.whenReady().then(async () => {
   const operations = new OperationService(catalog, history);
   const settings = new SettingsService();
   const updates = new UpdateService(() => mainWindow);
+  const workspace = new WorkspaceService();
+  const appearance = new AppearanceService();
+  const schedule = new ScheduleService();
+  const scheduler = new Scheduler({
+    getWindow: () => mainWindow,
+    service: schedule,
+    tasks: {
+      'self-update': () => updates.runScheduled('schedule'),
+      'catalog-refresh': () => catalog.runScheduled(),
+    },
+  });
 
   ipcMain.handle('catalog:list', () => catalog.list(false));
   ipcMain.handle('catalog:refresh', () => catalog.list(true));
@@ -66,6 +84,20 @@ void app.whenReady().then(async () => {
   ipcMain.handle('settings:save', (_event, value: UserSettings) => settings.save(value));
   ipcMain.handle('history:list', () => history.list());
   ipcMain.handle('history:export', (_event, format: HistoryExportFormat) => history.export(format));
+  ipcMain.handle('workspace:load', () => workspace.load());
+  ipcMain.handle('workspace:save', (_event, value: TabWorkspace) => workspace.save(value));
+  ipcMain.handle('workspace:reset', () => workspace.reset());
+  ipcMain.handle('workspace:export', () => workspace.export());
+  ipcMain.handle('workspace:import', (_event, document: string) => workspace.import(document));
+  ipcMain.handle('appearance:load', () => appearance.load());
+  ipcMain.handle('appearance:set-element', (_event, key: ElementKey, override: ElementOverride) => appearance.setElement(key, override));
+  ipcMain.handle('appearance:reset-element', (_event, key: ElementKey) => appearance.resetElement(key));
+  ipcMain.handle('appearance:reset-all', () => appearance.resetAll());
+  ipcMain.handle('appearance:export', () => appearance.export());
+  ipcMain.handle('appearance:import', (_event, payload: string) => appearance.import(payload));
+  ipcMain.handle('schedule:load', () => scheduler.status());
+  ipcMain.handle('schedule:save', (_event, config: unknown) => scheduler.save(config));
+  ipcMain.handle('schedule:run-now', (_event, task: unknown) => scheduler.runNow(scheduleTaskSchema.parse(task)));
   ipcMain.on('window:minimize', () => mainWindow?.minimize());
   ipcMain.on('window:toggle-maximize', () => {
     if (mainWindow?.isMaximized()) mainWindow.unmaximize(); else mainWindow?.maximize();
@@ -74,11 +106,15 @@ void app.whenReady().then(async () => {
 
   mainWindow = createWindow();
   mainWindow.on('closed', () => { mainWindow = null; });
-  setTimeout(() => void updates.check(), 5_000);
-  setInterval(() => void updates.check(), 6 * 60 * 60 * 1000).unref();
+  await scheduler.start();
+  setTimeout(() => void scheduler.runStartupCheck(), 5_000).unref();
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) mainWindow = createWindow();
+    if (BrowserWindow.getAllWindows().length === 0) {
+      mainWindow = createWindow();
+      mainWindow.on('closed', () => { mainWindow = null; });
+      scheduler.publish();
+    }
   });
 });
 

@@ -22,4 +22,4 @@ Static documentation/site coverage is included in this docs lane. Runtime catalo
 
 ## Suggested articles
 
-Continue with [verified installer operations](verified-installer-operations.md) before installing a discovered application, or review [privacy and security](privacy-and-security.md) for trust boundaries.
+Continue with [verified installer operations](verified-installer-operations.md) before installing a discovered application, read [update schedule](update-schedule.md) for the scheduled refresh whose 30-minute floor matches this cache lifetime, or review [privacy and security](privacy-and-security.md) for trust boundaries.
