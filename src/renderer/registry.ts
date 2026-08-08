@@ -15,6 +15,7 @@ import type {
   TokenId,
   UserSettings,
 } from '../shared/contracts';
+import { GENERATED_DOCS } from './generated-docs';
 import type { SurfaceId } from './search';
 
 /**
@@ -57,6 +58,7 @@ export type CommandId =
   | `edit-element:${string}`
   | `reset-element:${string}`
   | `open-app:${string}`
+  | `open-doc:${string}`
   | `rail-side:${string}`
   | `label-mode:${string}`
   | `tab-height:${string}`
@@ -259,6 +261,17 @@ export function buildRegistry(context: RegistryContext): Entry[] {
       en: `Open ${surface.en}`, yue: `開 ${surface.yue}`, keywords: surface.keywords,
       action: { type: 'open-surface', surface: surface.surface },
     });
+  }
+
+  for (const article of GENERATED_DOCS) {
+    entries.push(command(
+      `open-doc:${article.id}`,
+      `Open article: ${article.title}`,
+      `開文章：${article.titleYue}`,
+      'menu_book',
+      [article.id, article.category, article.status, ...article.related],
+      'Pages',
+    ));
   }
 
   for (const field of SETTING_FIELDS) {

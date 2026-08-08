@@ -1,50 +1,97 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { UserSettings } from '../../shared/contracts';
+import { MarkdownArticle } from '../components/MarkdownArticle';
 import { SearchBox } from '../components/SearchBox';
 import { el } from '../el';
+import { GENERATED_DOCS } from '../generated-docs';
 import { Icon } from '../icons';
 import { label } from '../i18n';
-import { highlight, makeMatcher, useSurfaceSearch } from '../search';
+import { makeMatcher, useSurfaceSearch } from '../search';
 
-export interface DocArticle { id: string; title: string; body: string; related: string }
+export const docs = GENERATED_DOCS;
 
-/** Offline in-app documentation. Every shipped feature has an article here, including the new ones. */
-export const docs: DocArticle[] = [
-  { id: 'catalog', title: 'Catalog discovery · App 目錄', body: 'The catalog is a reviewed allowlist of public Ding Ding Projects applications. Live repository and stable-release metadata refreshes from GitHub; private repositories and infrastructure are excluded.', related: 'Update schedule · Security boundaries · Update checker' },
-  { id: 'install', title: 'Verified silent install · 驗證靜默安裝', body: 'Only a reviewed adapter may install. The main process selects the asset, requires a GitHub SHA-256 digest, enforces size and origin limits, and observes the installer exit code.', related: 'Protected uninstall · Security boundaries · Verification' },
-  { id: 'source', title: 'Build from source · 由 source build', body: 'Source recipes are declared per app. Execution is withheld unless a disposable Windows Sandbox runner is available; repository scripts never run directly on the host.', related: 'Security boundaries · Verified silent install' },
-  { id: 'uninstall', title: 'Protected uninstall · 安全解除安裝', body: 'Removal uses the exact uninstall entry recorded after install. Both key controls and the full confirmation slider are required before the action can run.', related: 'Activity history · Security boundaries' },
-  { id: 'updates', title: 'Update checker · 更新檢查', body: 'Installed versions are compared with trusted stable releases. The store self-updater stages unsigned Squirrel packages but restarts only after the user chooses Restart to install update.', related: 'Update schedule · Catalog discovery' },
-  { id: 'tabs', title: 'Tab navigation · 分頁導覽', body: 'The rail keeps the six pages as persistent browser-style tabs. Tabs can be pinned, grouped, reordered, searched, and reached from the keyboard: Ctrl+1 to Ctrl+6 activate a tab, Ctrl+Tab cycles, Ctrl+Shift+P pins, Ctrl+Shift+G groups, Ctrl+Shift+K focuses tab search, and Alt+Arrow reorders. When the rail runs out of room the remaining tabs move into an overflow menu; the active tab and pinned tabs always stay visible. Layout, side, label mode, height, badges, and colour bars persist in their own workspace document with reset, export, and import.', related: 'Appearance editor · Update schedule · Security boundaries' },
-  { id: 'appearance', title: 'Appearance editor · 外觀編輯', body: 'Every registered element exposes background, text colour, radius, padding, text size, weight, border width, and elevation. Edit mode (Ctrl+Shift+E) selects an element by click or by keyboard focus and the side panel edits it live. Overrides are stored as CSS custom properties, validated in the main process, applied through CSSOM only, and layered above theme, density, and accent. Reset one element, reset everything, export, and import are always available. The super-confirmation, its keys and slider, the emergency exit, and the window controls are never editable or hideable.', related: 'Tab navigation · Security boundaries · Verification' },
-  { id: 'schedule', title: 'Update schedule · 更新排程', body: 'A self-update check runs once at every launch and cannot be turned off; the repeat switch only controls further checks while the app stays open. Catalog refresh has its own interval with a 30-minute floor that matches the catalog cache lifetime. Quiet hours never block a check: they only hold corner notifications and summarise them once the window closes. The editor shows the last run, its exact failure message, and the next run for each task, and saving is the only thing that re-arms the timers.', related: 'Update checker · Catalog discovery · Tab navigation' },
-  { id: 'security', title: 'Security boundaries · 安全邊界', body: 'The renderer is sandboxed with no Node access. It can request only typed app IDs and confirmations; URLs, commands, paths, and installer arguments remain main-process-owned.', related: 'Verified silent install · Appearance editor' },
-];
-
-export function DocsPage({ settings, openRegex, onRegexHandled }: { settings: UserSettings; openRegex: boolean; onRegexHandled(): void }) {
+export function DocsPage({ settings, openRegex, onRegexHandled, articleRequest, onArticleHandled }: {
+  settings: UserSettings;
+  openRegex: boolean;
+  onRegexHandled(): void;
+  articleRequest?: string | null;
+  onArticleHandled?(): void;
+}) {
   const search = useSurfaceSearch('docs');
   const matcher = useMemo(() => makeMatcher(search.state), [search.state]);
-  const shown = useMemo(() => docs.filter((article) => matcher(`${article.title}\n${article.body}`)), [matcher]);
+  const shown = useMemo(() => docs.filter((article) => matcher(`${article.title}\n${article.titleYue}\n${article.category}\n${article.status}\n${article.summary}\n${article.body}`)), [matcher]);
+  const [activeId, setActiveId] = useState(docs[0]?.id ?? '');
+  const active = shown.find((article) => article.id === activeId) ?? shown[0] ?? null;
+
+  useEffect(() => {
+    if (!articleRequest || !docs.some((article) => article.id === articleRequest)) return;
+    search.clear();
+    setActiveId(articleRequest);
+    onArticleHandled?.();
+  }, [articleRequest, onArticleHandled, search]);
+
+  useEffect(() => {
+    if (shown.length && !shown.some((article) => article.id === activeId)) setActiveId(shown[0].id);
+  }, [shown, activeId]);
+
+  const activate = (id: string) => {
+    setActiveId(id);
+    window.setTimeout(() => window.document.getElementById(`docs-panel-${id}`)?.focus(), 0);
+  };
+
+  const onTabKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>, id: string) => {
+    const index = shown.findIndex((article) => article.id === id);
+    let target = index;
+    if (event.key === 'ArrowDown' || event.key === 'ArrowRight') target = (index + 1) % shown.length;
+    else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') target = (index - 1 + shown.length) % shown.length;
+    else if (event.key === 'Home') target = 0;
+    else if (event.key === 'End') target = shown.length - 1;
+    else return;
+    event.preventDefault();
+    const next = shown[target];
+    setActiveId(next.id);
+    window.document.getElementById(`docs-tab-${next.id}`)?.focus();
+  };
 
   return (
     <>
-      <SearchBox surface="docs" placeholder={label(settings, 'Search documentation', '搵文件')} openBuilder={openRegex} onBuilderHandled={onRegexHandled} />
-      {shown.length ? (
+      <SearchBox surface="docs" placeholder={label(settings, 'Search every offline article', '搵晒所有離線文章')} openBuilder={openRegex} onBuilderHandled={onRegexHandled} />
+      {active ? (
         <section className="docs-layout">
-          <nav aria-label="Documentation articles">{shown.map((article) => <a href={`#docs-${article.id}`} key={article.id}>{article.title}</a>)}</nav>
-          <div>
+          <nav className="docs-tabs" role="tablist" aria-orientation="vertical" aria-label={label(settings, 'Documentation articles', '文件文章')}>
             {shown.map((article) => (
-              <article key={article.id} id={`docs-${article.id}`} tabIndex={-1} {...el('docs-article')}>
-                <h2>{highlight(search.state, article.title)}</h2>
-                <p>{highlight(search.state, article.body)}</p>
-                <h3>Suggested articles</h3>
-                <p>{article.related}</p>
-              </article>
+              <button
+                id={`docs-tab-${article.id}`}
+                key={article.id}
+                role="tab"
+                aria-selected={active.id === article.id}
+                aria-controls={`docs-panel-${article.id}`}
+                tabIndex={active.id === article.id ? 0 : -1}
+                className={active.id === article.id ? 'docs-tab active' : 'docs-tab'}
+                onClick={() => activate(article.id)}
+                onKeyDown={(event) => onTabKeyDown(event, article.id)}
+              >
+                <span>{label(settings, article.title, article.titleYue)}</span>
+                <small>{article.category} · {article.status}</small>
+              </button>
             ))}
-          </div>
+          </nav>
+          <article
+            id={`docs-panel-${active.id}`}
+            role="tabpanel"
+            aria-labelledby={`docs-tab-${active.id}`}
+            tabIndex={-1}
+            {...el('docs-article')}
+          >
+            <span className={`status-pill doc-status ${active.status}`}>{active.status}</span>
+            <h1>{label(settings, active.title, active.titleYue)}</h1>
+            <p className="lede">{active.summary}</p>
+            <MarkdownArticle article={active} onOpen={activate} />
+          </article>
         </section>
       ) : (
-        <div className="empty-state" {...el('empty-state')}><Icon>search_off</Icon><h2>{label(settings, 'No matching article', '冇配到嘅文章')}</h2><p>{label(settings, 'Clear the search to browse every offline article again.', '清除搜尋就可以再睇晒所有離線文章。')}</p></div>
+        <div className="empty-state" {...el('empty-state')}><Icon>search_off</Icon><h2>{label(settings, 'No matching article', '冇配到嘅文章')}</h2><p>{label(settings, 'Clear the search or adjust the pattern to browse all offline documentation.', '清除搜尋或者改 pattern，就可以再睇晒離線文件。')}</p></div>
       )}
     </>
   );
