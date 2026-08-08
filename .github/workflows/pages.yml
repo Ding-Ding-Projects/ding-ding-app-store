@@ -19,12 +19,20 @@ concurrency:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Windows, X64, ding-ding-app-store]
+    timeout-minutes: 30
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - name: Verify the isolated runner inventory
+        shell: pwsh
+        run: |
+          "Runner OS: $env:RUNNER_OS"
+          "Runner architecture: $env:RUNNER_ARCH"
+          git --version
+          if ($env:RUNNER_OS -ne 'Windows' -or $env:RUNNER_ARCH -ne 'X64') { throw 'The selected runner does not match the reviewed Windows X64 label set.' }
       - uses: actions/configure-pages@v5
         with:
           enablement: true

@@ -2,26 +2,41 @@ name: CI
 
 on:
   push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+  workflow_dispatch: {}
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Windows, X64, ding-ding-app-store]
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
-      - run: npm ci
-      - run: npm run check
-      - run: npm run build
+      - name: Record runner and dependency inventory
+        shell: pwsh
+        run: |
+          "Runner OS: $env:RUNNER_OS"
+          "Runner architecture: $env:RUNNER_ARCH"
+          git --version
+          node --version
+          npm --version
+          if ($env:RUNNER_OS -ne 'Windows' -or $env:RUNNER_ARCH -ne 'X64') { throw 'The selected runner does not match the reviewed Windows X64 label set.' }
+      - name: Install locked dependencies from a cache-miss-safe state
+        run: npm ci
+      - name: Run strict typechecks and all test suites
+        run: npm run check
+      - name: Build renderer, main process, and preload
+        run: npm run build
+      - name: Reproduce the release line-count table
+        run: npm run count:lines
