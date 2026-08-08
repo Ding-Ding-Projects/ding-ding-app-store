@@ -28,7 +28,7 @@ The renderer exchanges one typed workspace document. Imports are limited to 64 K
 
 ## Verification
 
-Contract tests enumerate all six tabs, validate four dock edges, legacy `open` migration, workspace storage and normalization, and command-registry reachability. Source inspection covers keyboard and pointer routes, all four search surfaces, menu filtering, and bulk-close protection. Packaged captures show the basic rail; a dedicated runtime capture for every dock edge remains a follow-up evidence boundary.
+Contract tests enumerate all six tabs, validate four dock edges, legacy `open` migration, workspace storage and normalization, and command-registry reachability. Source inspection covers keyboard and pointer routes, all four search surfaces, menu filtering, and bulk-close protection. Packaged captures show the left rail and the tab-actions panel at `docs/assets/screenshots/final-tab-actions-runtime.png`; a dedicated runtime capture for every dock edge remains a follow-up evidence boundary.
 
 ## Suggested articles
 

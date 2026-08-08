@@ -22,7 +22,7 @@ Rows contain typed `Action` objects, not executable strings. Command identifiers
 
 ## Verification
 
-Registry tests assert page, settings, appearance, schedule, search, tab, and app reachability. Source inspection proves focus trapping/restoration, keyboard selection, and exact `Ctrl+Shift+F` activation. Packaged runtime proof should still exercise representative teleport targets and focus highlighting.
+Registry tests assert page, settings, appearance, schedule, search, tab, and app reachability. Source inspection proves focus trapping/restoration, keyboard selection, and exact `Ctrl+Shift+F` activation. The hidden-desktop capture at `docs/assets/screenshots/final-command-palette-runtime.png` shows the production command palette with page and tab results. Representative teleport-target and focus-highlight interaction remains a follow-up runtime evidence boundary.
 
 ## Suggested articles
 

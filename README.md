@@ -36,20 +36,26 @@ Material Design 3 desktop software center for discovering, documenting, installi
 <details>
 <summary><strong>Packaged runtime evidence</strong></summary>
 
-The unsigned packaged application was driven on the sanctioned hidden Windows desktop. The real [Installed screen](docs/assets/screenshots/installed-runtime.png) discovered reviewed Squirrel and managed-portable records, and the [Activity screen](docs/assets/screenshots/activity-runtime.png) rendered an append-only settings event with filtered export controls.
+The unsigned packaged application was driven on the sanctioned hidden Windows desktop. Fresh captures from the current production build cover the catalog, install status, updates, documentation browser, activity/export history, settings, appearance controls, command palette, and tab action/search controls.
 
 </details>
 
 <details id="screenshot-gallery">
 <summary><strong>Screenshot gallery — real packaged surfaces</strong></summary>
 
-These captures are from the built application on the hidden Windows desktop; they are evidence of the rendered surfaces, not mockups. The gallery covers discovery, installed-app detection, and activity/history export. Install is one click; only uninstall keeps the native destructive gate.
+These captures are from the built application on the hidden Windows desktop; they are evidence of the rendered surfaces, not mockups. The gallery covers the main workspace, tab controls, command discovery, settings, appearance, and export surfaces. Install is one click; only uninstall keeps the native destructive gate.
 
 | Surface | Runtime capture |
 | --- | --- |
-| Catalog discovery, bilingual navigation, search, one-click install cards, and command-palette hint | ![Catalog discovery runtime capture](docs/assets/screenshots/catalog-runtime.png) |
-| Installed-app detection with Reinstall, Uninstall, and documentation actions | ![Installed-app detection runtime capture](docs/assets/screenshots/installed-runtime.png) |
-| Append-only activity history with JSON, JSONL, CSV, and Markdown export | ![Activity and export runtime capture](docs/assets/screenshots/activity-runtime.png) |
+| Catalog discovery, bilingual navigation, search, one-click install cards, and command-palette hint | ![Catalog discovery runtime capture](docs/assets/screenshots/final-catalog-runtime.png) |
+| Installed tab and empty-state detection when no App Store-managed apps are present | ![Installed-app detection runtime capture](docs/assets/screenshots/final-installed-runtime.png) |
+| Updates tab with the same per-surface search and bulk controls | ![Updates runtime capture](docs/assets/screenshots/final-updates-runtime.png) |
+| Offline documentation browser rendered inside the app | ![Documentation browser runtime capture](docs/assets/screenshots/final-docs-runtime.png) |
+| Append-only activity history and export surface | ![Activity and export runtime capture](docs/assets/screenshots/final-activity-runtime.png) |
+| Settings surface with section tabs, search, language, funny-level, and source-repair consent controls | ![Settings runtime capture](docs/assets/screenshots/final-settings-runtime.png) |
+| Appearance settings with rail layout preview and customization controls | ![Appearance settings runtime capture](docs/assets/screenshots/final-appearance-runtime.png) |
+| Command palette listing pages and tab commands | ![Command palette runtime capture](docs/assets/screenshots/final-command-palette-runtime.png) |
+| Tab action panel with local filter, regex builder affordance, pinned-tab protection, and bulk-close previews | ![Tab actions runtime capture](docs/assets/screenshots/final-tab-actions-runtime.png) |
 
 </details>
 
@@ -58,7 +64,7 @@ These captures are from the built application on the hidden Windows desktop; the
 
 Install and Reinstall are genuine one-click actions: the catalog button immediately submits only the application ID and a closed install decision, with no phrase-entry dialog. Installable assets still require an allowlisted application, one app-specific adapter, an HTTPS GitHub release origin, bounded declared/received size, and either GitHub SHA-256 metadata or a GitHub-digested companion checksum. Install results are recorded only after hidden shell-free execution and exact installed-app rediscovery. Uninstall re-derives its authority from the current reviewed registry/portable identity and still requires the two-key plus full-slider destructive confirmation.
 
-The common dispatch is implemented, but fully automatic fresh-Windows coverage is not: the current [24-app adapter matrix](docs/features/one-click-installation.md) records every missing release, archive, source-toolchain, dependency-bootstrap, disposable-runner, bounded OpenCode-repair, cancellation, and runtime-proof requirement without treating a guessed command as an adapter.
+The common dispatch is implemented, but fully automatic fresh-Windows coverage is not: the current [24-app adapter matrix](docs/features/installation/one-click-installation.md) records every missing release, archive, source-toolchain, dependency-bootstrap, disposable-runner, bounded OpenCode-repair, cancellation, and runtime-proof requirement without treating a guessed command as an adapter.
 
 Source recipes are catalogued but are never executed directly on the host. The product will enable that path only through a disposable, resource-bounded Windows build runner.
 

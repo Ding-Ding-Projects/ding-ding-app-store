@@ -14,7 +14,7 @@ Verification reports a specific revision and labels every evidence class indepen
 
 Each release resolves the first unused bilingual dim-sum code name whose image is already a published `catalog-v1*` asset in the public `Ding-Ding-Projects/dim-sum-photos` catalog. The release title and notes link that public photo; this repository does not copy or attach it. Catalog failure is recorded but does not block the software release.
 
-The repository keeps genuine packaged captures for the catalog, installed, and activity surfaces. The documentation generator supplies a reproducible count and exact synchronized-output check rather than relying on a manual file list.
+The repository keeps genuine hidden-desktop captures for the catalog, installed, updates, documentation, activity, settings, appearance settings, command palette, and tab-action surfaces. The documentation generator supplies a reproducible count and exact synchronized-output check rather than relying on a manual file list.
 
 ## Configuration
 
@@ -30,7 +30,7 @@ Evidence excludes credentials, tokens, private paths, user data, and unredacted 
 
 ## Verification
 
-The prior packaged Windows x64 run rendered the catalog and found/fixed a CommonJS updater import crash, missing preload bridge, and packaged catalog path. It also truthfully observed an update-feed HTTP 404 because no matching `RELEASES` asset existed then. This docs lane will run the documentation guard, focused tests, type check, and production build; it does not claim a new installer, successful self-update, deployment, or destructive removal.
+The current production build was launched on the sanctioned hidden Windows desktop and captured through window-level background screenshots without touching the visible desktop. The fresh gallery under `docs/assets/screenshots/final-*.png` covers Catalog, Installed, Updates, Documentation, Activity, Settings, Appearance, command palette, and tab actions. It proves those rendered surfaces for this build, while still not claiming a new installer, successful self-update, deployment, per-app clean-machine install, or destructive removal.
 
 ## Suggested articles
 
