@@ -17,6 +17,8 @@ import type { WorkspaceApi } from '../state/use-workspace';
 import { AppearanceEditor } from './AppearanceEditor';
 import { ScheduleEditor } from './ScheduleEditor';
 import { ChangelogViewer } from './ChangelogViewer';
+import { downloadText } from '../files';
+import { isExternalEditorBridgeAvailable, openExportInVsCode } from '../external-editor';
 
 const ABOUT_ROWS = [
   { en: 'Version', yue: '版本', body: 'Ding Ding App Store preview 0.1.0.' },
@@ -40,6 +42,12 @@ export function SettingsPage({ settings, onSave, workspace, appearance, schedule
   const [draft, setDraft] = useState(settings);
   useEffect(() => setDraft(settings), [settings]);
   const set = <K extends keyof UserSettings>(key: K, value: UserSettings[K]) => setDraft((current) => ({ ...current, [key]: value }));
+  const settingsExport = () => `${JSON.stringify({ kind: 'ding-ding-app-store.settings', schemaVersion: 1, exportedAt: new Date().toISOString(), settings: draft }, null, 2)}\n`;
+  const downloadSettings = () => { downloadText('ding-ding-app-store-settings.json', settingsExport(), 'application/json'); notify({ ok: true, message: 'Settings export downloaded.' }); };
+  const openSettingsInCode = async () => {
+    const result = await openExportInVsCode({ recordKind: 'settings', suggestedName: 'ding-ding-app-store-settings.json', mime: 'application/json', content: settingsExport() });
+    notify({ ok: result.ok, message: result.ok ? 'Settings opened in Visual Studio Code.' : result.message });
+  };
 
   const general = useSurfaceSearch('settings.general');
   const appearanceSearch = useSurfaceSearch('settings.appearance');
@@ -128,6 +136,8 @@ export function SettingsPage({ settings, onSave, workspace, appearance, schedule
             </div>
             <div className="settings-actions">
               <button className="text-button" onClick={() => setDraft(defaultSettings)}>Reset</button>
+              <button className="text-button" onClick={downloadSettings}><Icon>download</Icon>Export settings</button>
+              <button className="text-button" disabled={!isExternalEditorBridgeAvailable()} onClick={() => void openSettingsInCode()} title={isExternalEditorBridgeAvailable() ? undefined : 'Unavailable: no validated Visual Studio Code adapter.'}><Icon>code</Icon>Open settings in VS Code</button>
               <button className="filled-button" onClick={() => onSave(draft)}>Save settings</button>
             </div>
           </section>
@@ -142,6 +152,8 @@ export function SettingsPage({ settings, onSave, workspace, appearance, schedule
               </div>
               <div className="settings-actions">
                 <button className="text-button" onClick={() => setDraft(defaultSettings)}>Reset</button>
+                <button className="text-button" onClick={downloadSettings}><Icon>download</Icon>Export settings</button>
+                <button className="text-button" disabled={!isExternalEditorBridgeAvailable()} onClick={() => void openSettingsInCode()} title={isExternalEditorBridgeAvailable() ? undefined : 'Unavailable: no validated Visual Studio Code adapter.'}><Icon>code</Icon>Open settings in VS Code</button>
                 <button className="filled-button" onClick={() => onSave(draft)}>Save settings</button>
               </div>
             </section>

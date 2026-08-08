@@ -632,7 +632,7 @@ export function App() {
               onRegexHandled={() => setRegexRequest(null)}
             />
           )}
-          {activeTab === 'docs' && <DocsPage settings={settings} openRegex={regexRequest === 'docs'} onRegexHandled={() => setRegexRequest(null)} articleRequest={docRequest} onArticleHandled={() => setDocRequest(null)} />}
+          {activeTab === 'docs' && <DocsPage settings={settings} notify={notify} openRegex={regexRequest === 'docs'} onRegexHandled={() => setRegexRequest(null)} articleRequest={docRequest} onArticleHandled={() => setDocRequest(null)} />}
           {activeTab === 'activity' && <ActivityPage entries={history} loading={historyLoading} settings={settings} openRegex={regexRequest === 'activity'} onRegexHandled={() => setRegexRequest(null)} notify={notify} />}
           {activeTab === 'settings' && (
             <SettingsPage

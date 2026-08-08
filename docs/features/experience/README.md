@@ -8,6 +8,7 @@ Tabs, search, command palette, settings, appearance, and notifications.
 - [Search and regex builder](./search-and-regex-builder.md) — Gives every current collection/settings surface independent plain-text-first search and the same adjacent guided JavaScript regex builder.
 - [Command palette](./command-palette.md) — Opens with Ctrl+Shift+F and searches page, tab, appearance, schedule, search, setting, and catalog-app registry entries.
 - [Settings, language, and display name](./settings-language-and-display-name.md) — Persists language, two independent funny levels, theme, density, accent, and a display-only app name through tabbed searchable settings.
+- [External editor exports](./external-editor-exports.md) — Exports every exposed record and view to an app-owned VS Code workspace through a validated, shell-free main-process adapter.
 - [Appearance editor](./appearance-editor.md) — Registers shell elements for validated live CSS-variable overrides with continuous HEX/RGB/HSL colour controls, typography controls, reset, import, and export.
 - [Notifications and operation status](./notifications-and-status.md) — Stacks corner snackbars, retains searchable notification history, and keeps destructive decisions behind native super-confirmation.
 - [Dim-sum startup surprise](./dim-sum-surprise.md) — Gives later launches a small non-blocking dim-sum card using only metadata and a published public catalog photo URL.

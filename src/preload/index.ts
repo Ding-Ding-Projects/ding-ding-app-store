@@ -5,6 +5,8 @@ import type {
   DimSumSurprise,
   ElementKey,
   ElementOverride,
+  ExternalEditorOpenRequest,
+  ExternalEditorPreference,
   HistoryExportFormat,
   InstallCancelRequest,
   OperationRequest,
@@ -112,6 +114,13 @@ const api: DingDingStoreApi = {
   },
   dimSum: {
     startup: (): Promise<DimSumSurprise> => ipcRenderer.invoke('dim-sum:startup'),
+  },
+  externalEditor: {
+    detect: () => ipcRenderer.invoke('external-editor:detect'),
+    preference: () => ipcRenderer.invoke('external-editor:preference'),
+    setPreference: (preference: ExternalEditorPreference) => ipcRenderer.invoke('external-editor:set-preference', preference),
+    addValidated: () => ipcRenderer.invoke('external-editor:add-validated'),
+    openExport: (request: ExternalEditorOpenRequest) => ipcRenderer.invoke('external-editor:open-export', request),
   },
   window: {
     minimize: () => ipcRenderer.send('window:minimize'),

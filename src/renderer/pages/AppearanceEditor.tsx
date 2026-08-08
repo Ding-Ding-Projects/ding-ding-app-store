@@ -2,6 +2,7 @@ import { ELEMENT_BY_KEY } from '../../shared/contracts';
 import type { ElementKey, TabRailLayout, UserSettings } from '../../shared/contracts';
 import { el } from '../el';
 import { downloadText, pickTextFile } from '../files';
+import { isExternalEditorBridgeAvailable, openExportInVsCode } from '../external-editor';
 import { Icon } from '../icons';
 import { label } from '../i18n';
 import type { Notify } from '../notify';
@@ -36,6 +37,16 @@ export function AppearanceEditor({ settings, workspace, appearance, notify, matc
     .filter((entry) => entry.tokens.length);
 
   const set = <K extends keyof TabRailLayout>(key: K, value: TabRailLayout[K]) => workspace.dispatch({ type: 'rail', patch: { [key]: value } as Partial<TabRailLayout> });
+  const openLayoutInCode = async () => {
+    const content = await workspace.exportLayout();
+    const result = await openExportInVsCode({ recordKind: 'tabs', suggestedName: 'ding-ding-app-store-tabs.json', mime: 'application/json', content });
+    notify({ ok: result.ok, message: result.ok ? 'Tab layout opened in Visual Studio Code.' : result.message });
+  };
+  const openAppearanceInCode = async () => {
+    const content = await appearance.exportDocument();
+    const result = await openExportInVsCode({ recordKind: 'appearance', suggestedName: 'ding-ding-app-store-appearance.json', mime: 'application/json', content });
+    notify({ ok: result.ok, message: result.ok ? 'Appearance export opened in Visual Studio Code.' : result.message });
+  };
 
   return (
     <section className="settings-grid">
@@ -62,6 +73,7 @@ export function AppearanceEditor({ settings, workspace, appearance, notify, matc
         <div className="card-actions">
           <button className="text-button" onClick={() => void workspace.reset()}><Icon>restart_alt</Icon>{label(settings, 'Reset tab layout', '重設分頁版面')}</button>
           <button className="text-button" onClick={() => void workspace.exportLayout().then((content) => downloadText('ding-ding-app-store-tabs.json', content, 'application/json'))}><Icon>download</Icon>{label(settings, 'Export tab layout', '匯出分頁版面')}</button>
+          <button className="text-button" disabled={!isExternalEditorBridgeAvailable()} onClick={() => void openLayoutInCode()} title={isExternalEditorBridgeAvailable() ? undefined : 'Unavailable: no validated Visual Studio Code adapter.'}><Icon>code</Icon>{label(settings, 'Open tab layout in VS Code', '喺 VS Code 開分頁版面')}</button>
           <button className="text-button" onClick={() => void pickTextFile().then((picked) => {
             if (!picked) return;
             if (!picked.ok) { notify({ ok: false, message: picked.message.slice(0, 200) }); return; }
@@ -97,6 +109,7 @@ export function AppearanceEditor({ settings, workspace, appearance, notify, matc
         <div className="card-actions">
           <button className="text-button danger" onClick={() => appearance.resetAll()}><Icon>restart_alt</Icon>{label(settings, 'Reset all appearance', '全部外觀重設')}</button>
           <button className="text-button" onClick={() => void appearance.exportDocument().then((content) => downloadText('ding-ding-app-store-appearance.json', content, 'application/json'))}><Icon>download</Icon>{label(settings, 'Export appearance', '匯出外觀')}</button>
+          <button className="text-button" disabled={!isExternalEditorBridgeAvailable()} onClick={() => void openAppearanceInCode()} title={isExternalEditorBridgeAvailable() ? undefined : 'Unavailable: no validated Visual Studio Code adapter.'}><Icon>code</Icon>{label(settings, 'Open appearance in VS Code', '喺 VS Code 開外觀')}</button>
           <button className="text-button" onClick={() => void pickTextFile().then((picked) => {
             if (!picked) return;
             if (!picked.ok) { notify({ ok: false, message: picked.message.slice(0, 200) }); return; }

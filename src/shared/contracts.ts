@@ -121,13 +121,19 @@ export type OperationKind = 'install' | 'build' | 'uninstall';
 export type HistoryExportFormat = 'json' | 'jsonl' | 'csv' | 'markdown';
 
 export type ExternalEditorId = 'vscode';
-export type ExportRecordKind = 'catalog' | 'installed' | 'activity' | 'notifications' | 'changelog' | 'settings' | 'appearance' | 'tabs';
+export type ExportRecordKind = 'catalog' | 'installed' | 'activity' | 'notifications' | 'changelog' | 'docs' | 'settings' | 'appearance' | 'tabs';
+export type ExternalEditorEdition = 'stable' | 'insiders' | 'portable' | 'unknown';
+
+export interface ExternalEditorPreference {
+  editor: ExternalEditorId;
+  edition: ExternalEditorEdition;
+}
 
 export interface ExternalEditorCandidate {
   id: ExternalEditorId;
   label: string;
   available: boolean;
-  edition: 'stable' | 'insiders' | 'portable' | 'unknown';
+  edition: ExternalEditorEdition;
 }
 
 export interface ExternalEditorOpenRequest {
@@ -137,6 +143,21 @@ export interface ExternalEditorOpenRequest {
   mime: string;
   content: string;
 }
+
+export const externalEditorPreferenceSchema = z.strictObject({
+  editor: z.literal('vscode'),
+  edition: z.enum(['stable', 'insiders', 'portable', 'unknown']),
+});
+
+export const externalEditorOpenRequestSchema = z.strictObject({
+  editor: z.literal('vscode'),
+  recordKind: z.enum(['catalog', 'installed', 'activity', 'notifications', 'changelog', 'docs', 'settings', 'appearance', 'tabs']),
+  suggestedName: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,96}$/).refine((value) => !value.includes('..'), 'Suggested filename cannot contain repeated dots.'),
+  mime: z.enum(['application/json', 'application/x-ndjson', 'text/csv', 'text/markdown', 'text/plain', 'text/html', 'application/yaml', 'application/xml', 'application/sql']),
+  content: z.string().max(256_000),
+});
+
+export type ExternalEditorOpenRequestInput = z.infer<typeof externalEditorOpenRequestSchema>;
 
 export type ExternalEditorResult =
   | { ok: true; editor: ExternalEditorId }
@@ -706,6 +727,9 @@ export interface DingDingStoreApi {
   /** Optional until the privileged detection/write/open adapter is implemented and reviewed. */
   externalEditor?: {
     detect(): Promise<ExternalEditorCandidate[]>;
+    preference(): Promise<ExternalEditorPreference>;
+    setPreference(preference: ExternalEditorPreference): Promise<ExternalEditorPreference>;
+    addValidated(): Promise<ExternalEditorCandidate | null>;
     openExport(request: ExternalEditorOpenRequest): Promise<ExternalEditorResult>;
   };
   catalog: {
