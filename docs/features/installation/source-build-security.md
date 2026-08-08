@@ -12,7 +12,7 @@ summary: Provides a typed, bounded source-job and repair runtime but deliberatel
 
 Applications without a reviewed binary adapter can be marked `source-build` and show an Install from source action. That action opens the read-only source terminal immediately and asks the main process to start a strict typed source job. The common runtime validates consent, catalog identity, a pinned recipe, one-job capacity, isolation attestation, fixed steps, output bounds, cancellation, and cleanup before a broker can execute anything.
 
-There is no phrase-entry dialog and no interactive terminal prompt. The renderer cannot provide commands, paths, URLs, environment values, dependencies, revisions, or OpenCode arguments. This integrated revision still fails closed because the packaged recipe catalog is empty and the production hard-disposable broker is intentionally unavailable; repository scripts and blanket-approved OpenCode never run on the host.
+There is no phrase-entry dialog and no interactive terminal prompt. The renderer cannot provide commands, paths, URLs, environment values, dependencies, revisions, or OpenCode arguments. Failed or cancelled source jobs offer up to two typed automatic retries, still using the original catalog ID and reviewed recipe. This integrated revision still fails closed because the packaged recipe catalog is empty and the production hard-disposable broker is intentionally unavailable; repository scripts and blanket-approved OpenCode never run on the host.
 
 ## Configuration
 
@@ -28,7 +28,7 @@ Source builds execute repository code and therefore require an attested disposab
 
 ## Verification
 
-Focused source-runtime tests exercise strict contracts, consent, concurrency, fake-broker cancellation and timeout, event bounds/redaction, path/symlink escape, pinned OpenCode metadata, bounded repair and exact rerun, cleanup ownership, and installer separation. The renderer and main process build with the new terminal route. No live guest, dependency installation, OpenCode run, source application, or packaged terminal interaction has been executed, so those runtime claims remain pending.
+Focused source-runtime tests exercise strict contracts, consent, concurrency, fake-broker cancellation and timeout, typed retry, event bounds/redaction, path/symlink escape, pinned OpenCode metadata, guest-only OpenCode bootstrap validation, bounded repair and exact rerun, cleanup ownership, and installer separation. The renderer and main process build with the new terminal route. No live guest, dependency installation, OpenCode run, source application, or packaged terminal interaction has been executed, so those runtime claims remain pending.
 
 ## Suggested articles
 

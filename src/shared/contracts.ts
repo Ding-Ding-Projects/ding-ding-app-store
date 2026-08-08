@@ -64,6 +64,11 @@ export const sourceJobCancelRequestSchema = z.strictObject({
   decision: z.literal('cancel'),
 });
 
+export const sourceJobRetryRequestSchema = z.strictObject({
+  jobId: z.uuid(),
+  decision: z.literal('retry'),
+});
+
 export const sourceTerminalEventSchema = z.strictObject({
   jobId: z.uuid(),
   appId: z.string().regex(/^[a-z0-9][a-z0-9-]{0,127}$/),
@@ -78,6 +83,7 @@ export const sourceTerminalEventSchema = z.strictObject({
 
 export type SourceJobRequest = z.infer<typeof sourceJobRequestSchema>;
 export type SourceJobCancelRequest = z.infer<typeof sourceJobCancelRequestSchema>;
+export type SourceJobRetryRequest = z.infer<typeof sourceJobRetryRequestSchema>;
 export type SourceTerminalEvent = z.infer<typeof sourceTerminalEventSchema>;
 
 export interface SourceJobStartResult {
@@ -682,6 +688,7 @@ export interface DingDingStoreApi {
   sourceJobs: {
     start(request: SourceJobRequest): Promise<SourceJobStartResult>;
     cancel(request: SourceJobCancelRequest): Promise<SourceJobStartResult>;
+    retry(request: SourceJobRetryRequest): Promise<SourceJobStartResult>;
     subscribe(listener: (event: Readonly<SourceTerminalEvent>) => void): () => void;
   };
   updates: {

@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { SourceJobCancelRequest, SourceJobRequest, SourceJobStartResult, SourceTerminalEvent } from '../shared/contracts.js';
-import { sourceJobCancelRequestSchema, sourceJobRequestSchema } from '../shared/contracts.js';
+import type { SourceJobCancelRequest, SourceJobRequest, SourceJobRetryRequest, SourceJobStartResult, SourceTerminalEvent } from '../shared/contracts.js';
+import { sourceJobCancelRequestSchema, sourceJobRequestSchema, sourceJobRetryRequestSchema } from '../shared/contracts.js';
 import { CatalogService } from './catalog-service.js';
 import { HistoryService } from './history-service.js';
 import { SettingsService } from './settings-service.js';
@@ -31,10 +31,17 @@ interface ActiveJob {
   budget: TerminalEventBudget;
 }
 
+interface CompletedJob {
+  request: SourceJobRequest;
+  state: 'succeeded' | 'failed' | 'cancelled';
+  retries: number;
+}
+
 export class SourceJobService {
   private readonly active = new Map<string, ActiveJob>();
   private readonly activeApps = new Map<string, string>();
   private readonly startingApps = new Set<string>();
+  private readonly completed = new Map<string, CompletedJob>();
   private recipes: Map<string, SourceRecipe> | null = null;
 
   constructor(
@@ -126,6 +133,24 @@ export class SourceJobService {
     return { ok: true, appId: job.appId, jobId: request.jobId, state: 'cancelled', message: 'Cancellation requested.' };
   }
 
+  async retry(input: unknown): Promise<SourceJobStartResult> {
+    const parsed = sourceJobRetryRequestSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, appId: 'invalid', state: 'failed', message: 'Invalid source job retry request.' };
+    const request: SourceJobRetryRequest = parsed.data;
+    const previous = this.completed.get(request.jobId);
+    if (!previous || previous.state === 'succeeded') {
+      return { ok: false, appId: 'unknown', jobId: request.jobId, state: 'failed', message: 'That source job cannot be retried. Only a failed or cancelled job may be retried.' };
+    }
+    if (previous.retries >= 2) {
+      return { ok: false, appId: 'unknown', jobId: request.jobId, state: 'failed', message: 'This source job has reached its automatic retry limit.' };
+    }
+    const result = await this.start(previous.request);
+    if (result.ok && result.jobId) {
+      this.completed.set(result.jobId, { request: previous.request, state: 'failed', retries: previous.retries + 1 });
+    }
+    return result;
+  }
+
   private async loadRecipes(): Promise<Map<string, SourceRecipe>> {
     if (this.recipes) return this.recipes;
     const parsed = sourceRecipeCatalogSchema.parse(JSON.parse(await readFile(this.recipeFile, 'utf8')));
@@ -203,6 +228,8 @@ export class SourceJobService {
       this.emit(job, { stream: finalState === 'failed' ? 'stderr' : 'system', state: finalState, text: message, progress: finalState === 'succeeded' ? 100 : null }, true);
       this.active.delete(jobId);
       this.activeApps.delete(job.appId);
+      this.completed.set(jobId, { request, state: finalState, retries: this.completed.get(jobId)?.retries ?? 0 });
+      while (this.completed.size > 32) this.completed.delete(this.completed.keys().next().value!);
     }
   }
 }

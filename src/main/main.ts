@@ -101,6 +101,10 @@ void app.whenReady().then(async () => {
     if (event.sender !== mainWindow?.webContents) return { ok: false, appId: 'invalid', state: 'failed', message: 'Blocked cancellation request from an unknown renderer.' };
     return sourceJobs.cancel(request);
   });
+  ipcMain.handle('source-jobs:retry', (event, request) => {
+    if (event.sender !== mainWindow?.webContents) return { ok: false, appId: 'invalid', state: 'failed', message: 'Blocked retry request from an unknown renderer.' };
+    return sourceJobs.retry(request);
+  });
   ipcMain.handle('updates:catalog', () => catalog.list(true));
   ipcMain.handle('updates:store-check', () => updates.check());
   ipcMain.handle('updates:store-download', () => updates.download());

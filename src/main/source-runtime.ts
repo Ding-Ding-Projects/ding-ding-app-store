@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { lstat, realpath, readdir, readFile, rm, stat } from 'node:fs/promises';
+import { lstat, mkdir, realpath, readdir, readFile, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
 import type { SourceJobDecision, SourceJobState, SourceTerminalEvent, SourceTerminalStream } from '../shared/contracts.js';
+import { extractZipSafe } from './safe-zip.js';
 
 export const SOURCE_RUNTIME_LIMITS = Object.freeze({
   maxEvents: 2_000,
@@ -380,6 +381,60 @@ export async function validateOpenCodeExecutable(filePath: string, runVersion: (
   if (await sha256File(filePath) !== PINNED_OPENCODE.executableSha256) return false;
   const version = (await runVersion(filePath)).trim().replace(/^v/, '');
   return version === PINNED_OPENCODE.version;
+}
+
+export interface OpenCodeBootstrapOptions {
+  workspaceRoot: string;
+  /** The tool directory is always one direct child of the app-owned workspace. */
+  toolDirectory?: string;
+  downloadArchive(url: string, destination: string, signal: AbortSignal): Promise<void>;
+  runVersion(filePath: string, signal: AbortSignal): Promise<string>;
+  signal?: AbortSignal;
+}
+
+/**
+ * Resolve or install the pinned OpenCode executable inside the disposable guest.
+ * No PATH lookup, shell invocation, overwrite of an invalid executable, or host
+ * profile path is allowed. A broker may call this only after attesting isolation.
+ */
+export async function ensurePinnedOpenCode(options: OpenCodeBootstrapOptions): Promise<string> {
+  const signal = options.signal ?? new AbortController().signal;
+  if (signal.aborted) throw new DOMException('Cancelled', 'AbortError');
+  const workspaceRoot = await verifyOwnedRoot(options.workspaceRoot);
+  const toolDirectory = options.toolDirectory ?? '.opencode-tool';
+  if (path.basename(toolDirectory) !== toolDirectory || toolDirectory === '.' || toolDirectory === '..' || toolDirectory.includes('\0')) {
+    throw new Error('OpenCode tool directory must be one bounded workspace child.');
+  }
+  const toolRoot = resolveOwnedPath(workspaceRoot, toolDirectory);
+  await mkdir(toolRoot, { recursive: false }).catch((error: unknown) => {
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+  });
+  const verifiedRoot = await verifyOwnedDirectChild(workspaceRoot, toolDirectory);
+  const executable = resolveOwnedPath(verifiedRoot, PINNED_OPENCODE.executable);
+  try {
+    if ((await lstat(executable)).isSymbolicLink()) throw new Error('OpenCode executable cannot be a symbolic link.');
+    if (await validateOpenCodeExecutable(executable, (file) => options.runVersion(file, signal))) return executable;
+    throw new Error(`Existing OpenCode executable is not the pinned ${PINNED_OPENCODE.version} build.`);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+  }
+  const archive = resolveOwnedPath(verifiedRoot, `${PINNED_OPENCODE.assetName}.download`);
+  try {
+    try {
+      if ((await lstat(archive)).isSymbolicLink()) throw new Error('OpenCode download target cannot be a symbolic link.');
+      await rm(archive, { force: true });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+    await options.downloadArchive(PINNED_OPENCODE.url, archive, signal);
+    if (!(await validateOpenCodeArchive(archive))) throw new Error('Downloaded OpenCode archive failed the pinned SHA-256 check.');
+    await extractZipSafe(archive, verifiedRoot, signal);
+    if (!(await lstat(executable)).isFile()) throw new Error('Pinned OpenCode archive did not contain the expected executable.');
+    if (!(await validateOpenCodeExecutable(executable, (file) => options.runVersion(file, signal)))) throw new Error('Extracted OpenCode executable failed the pinned version or SHA-256 check.');
+    return executable;
+  } finally {
+    await rm(archive, { force: true }).catch(() => undefined);
+  }
 }
 
 export function isolatedEnvironment(workspaceRoot: string, toolRoot: string): NodeJS.ProcessEnv {
