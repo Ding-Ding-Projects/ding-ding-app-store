@@ -18,12 +18,13 @@ import { ActionDialog } from './components/ActionDialog';
 import type { ActionKind, ImmediateActionKind } from './components/ActionDialog';
 import { AppearancePanel } from './components/AppearancePanel';
 import { CommandPalette } from './components/CommandPalette';
+import { NotificationCenter } from './components/NotificationCenter';
+import { SnackbarStack } from './components/SnackbarStack';
 import { TabRail } from './components/TabRail';
 import { el } from './el';
 import { downloadText, pickTextFile } from './files';
 import { Icon } from './icons';
 import { formatAbsolute, label } from './i18n';
-import type { Notice } from './notify';
 import { AppsPage } from './pages/AppsPage';
 import type { RunningAction } from './pages/AppsPage';
 import { ActivityPage } from './pages/ActivityPage';
@@ -36,6 +37,7 @@ import type { SurfaceId } from './search';
 import { useAppearance, useAppearanceVars } from './state/use-appearance';
 import { useSchedule } from './state/use-schedule';
 import { useSettings } from './state/use-settings';
+import { useNotifications } from './state/use-notifications';
 import { newGroupId, orderedTabIds, useWorkspace } from './state/use-workspace';
 
 const PAGE_SUBTITLE: Partial<Record<TabId, { en: string; yue: string }>> = {
@@ -47,8 +49,8 @@ const PAGE_SUBTITLE: Partial<Record<TabId, { en: string; yue: string }>> = {
 };
 
 export function App() {
-  const [toast, setToast] = useState<Notice | null>(null);
-  const notify = useCallback((notice: Notice) => setToast(notice), []);
+  const notifications = useNotifications();
+  const notify = notifications.notify;
 
   const { settings, save: saveSettings, patch: patchSetting } = useSettings(notify);
   const workspace = useWorkspace(notify);
@@ -62,12 +64,13 @@ export function App() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [installed, setInstalled] = useState<InstalledAppRecord[]>([]);
-  const [action, setAction] = useState<{ kind: 'uninstall'; app: CatalogApp; returnFocus: HTMLButtonElement } | null>(null);
+  const [action, setAction] = useState<{ kind: 'uninstall'; apps: CatalogApp[]; returnFocus: HTMLButtonElement } | null>(null);
   const [runningAction, setRunningAction] = useState<RunningAction | null>(null);
   const operationRunningRef = useRef(false);
   const [updateState, setUpdateState] = useState<AppStoreUpdateState>({ status: 'idle' });
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [notificationCenterOpen, setNotificationCenterOpen] = useState(false);
   const [regexRequest, setRegexRequest] = useState<SurfaceId | null>(null);
   const [overflowRequest, setOverflowRequest] = useState(false);
   const [renameRequest, setRenameRequest] = useState<string | null>(null);
@@ -110,26 +113,37 @@ export function App() {
     if (returnFocus) window.setTimeout(() => returnFocus.focus(), 0);
   }, [action]);
 
-  const startAction = useCallback(async (kind: ActionKind, selectedApp: CatalogApp, trigger: HTMLButtonElement) => {
-    if (kind === 'uninstall') {
-      setAction({ kind, app: selectedApp, returnFocus: trigger });
-      return;
-    }
+  const runImmediateBatch = useCallback(async (kind: ImmediateActionKind, selectedApps: CatalogApp[]) => {
     if (operationRunningRef.current) return;
     operationRunningRef.current = true;
-    const next: RunningAction = { kind: kind as ImmediateActionKind, appId: selectedApp.id };
-    setRunningAction(next);
-    announce(kind === 'install' ? `Installing ${selectedApp.name}` : `Preparing the source install for ${selectedApp.name}`);
     try {
-      const result = await window.dingDingStore.operations[kind]({ appId: selectedApp.id, decision: kind });
-      reportOperation(result);
-    } catch (error) {
-      reportOperation({ ok: false, message: (error as Error).message });
+      for (const selectedApp of selectedApps) {
+        const next: RunningAction = { kind, appId: selectedApp.id };
+        setRunningAction(next);
+        announce(kind === 'install' ? `Installing ${selectedApp.name}` : `Preparing the source install for ${selectedApp.name}`);
+        try {
+          const result = await window.dingDingStore.operations[kind]({ appId: selectedApp.id, decision: kind });
+          reportOperation(result);
+        } catch (error) {
+          reportOperation({ ok: false, message: (error as Error).message });
+        }
+      }
     } finally {
       operationRunningRef.current = false;
       setRunningAction(null);
     }
   }, [announce, reportOperation]);
+
+  const startAction = useCallback(async (kind: ActionKind, selectedApp: CatalogApp, trigger: HTMLButtonElement) => {
+    if (kind === 'uninstall') { setAction({ kind, apps: [selectedApp], returnFocus: trigger }); return; }
+    await runImmediateBatch(kind, [selectedApp]);
+  }, [runImmediateBatch]);
+
+  const startBulkAction = useCallback(async (kind: ActionKind, selectedApps: CatalogApp[], trigger: HTMLButtonElement) => {
+    if (!selectedApps.length) return;
+    if (kind === 'uninstall') { setAction({ kind, apps: selectedApps, returnFocus: trigger }); return; }
+    await runImmediateBatch(kind, selectedApps);
+  }, [runImmediateBatch]);
 
   useEffect(() => {
     void loadCatalog();
@@ -210,6 +224,8 @@ export function App() {
     const [first, second] = rest;
     switch (verb) {
       case 'refresh-catalog': case 'refresh-catalog-now': void loadCatalog(true); return;
+      case 'open-notifications': setNotificationCenterOpen(true); return;
+      case 'open-changelog': openSurface('settings.about'); focusLater('changelog-title'); return;
       case 'clear-all-searches': search.dispatch({ type: 'clear-all' }); announce('All searches cleared'); return;
       case 'focus-tab-search': focusLater('search-tabs'); return;
       case 'open-regex': openSurface(arg as SurfaceId); setRegexRequest(arg as SurfaceId); return;
@@ -329,6 +345,7 @@ export function App() {
         return;
       }
       if (event.key === 'Escape') {
+        if (notificationCenterOpen) { setNotificationCenterOpen(false); return; }
         if (paletteOpen) { setPaletteOpen(false); return; }
         if (action) { closeAction(); return; }
         if (panelOpen) { setPanelOpen(false); return; }
@@ -338,7 +355,7 @@ export function App() {
     };
     window.addEventListener('keydown', listener);
     return () => window.removeEventListener('keydown', listener);
-  }, [activeTab, workspace, runCommand, createGroup, announce, paletteOpen, action, closeAction, panelOpen, appearance, search]);
+  }, [activeTab, workspace, runCommand, createGroup, announce, paletteOpen, action, closeAction, panelOpen, notificationCenterOpen, appearance, search]);
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -423,6 +440,7 @@ export function App() {
           <strong {...el('titlebar-brand')}>{settings.displayName}</strong>
           <span className="dev-badge" {...el('titlebar-badge')}>Preview 0.1.0</span>
           <div className="drag-space" />
+          <button className="notification-button" onClick={() => setNotificationCenterOpen(true)} aria-label={`Open notification centre, ${notifications.unreadCount} unread`}><Icon>notifications</Icon>{notifications.unreadCount > 0 && <span className="notification-count" aria-hidden="true">{Math.min(notifications.unreadCount, 99)}</span>}</button>
           <button onClick={() => window.dingDingStore.window.minimize()} aria-label="Minimize"><Icon>remove</Icon></button>
           <button onClick={() => window.dingDingStore.window.toggleMaximize()} aria-label="Maximize or restore"><Icon>crop_square</Icon></button>
           <button className="close-window" onClick={() => window.dingDingStore.window.close()} aria-label="Close"><Icon>close</Icon></button>
@@ -476,13 +494,15 @@ export function App() {
               settings={settings}
               loading={loading}
               onAction={(kind, app, trigger) => void startAction(kind, app, trigger)}
+              onBulkAction={(kind, selectedApps, trigger) => void startBulkAction(kind, selectedApps, trigger)}
               runningAction={runningAction}
+              notify={notify}
               openRegex={regexRequest === activeTab}
               onRegexHandled={() => setRegexRequest(null)}
             />
           )}
           {activeTab === 'docs' && <DocsPage settings={settings} openRegex={regexRequest === 'docs'} onRegexHandled={() => setRegexRequest(null)} />}
-          {activeTab === 'activity' && <ActivityPage entries={history} loading={historyLoading} settings={settings} openRegex={regexRequest === 'activity'} onRegexHandled={() => setRegexRequest(null)} />}
+          {activeTab === 'activity' && <ActivityPage entries={history} loading={historyLoading} settings={settings} openRegex={regexRequest === 'activity'} onRegexHandled={() => setRegexRequest(null)} notify={notify} />}
           {activeTab === 'settings' && (
             <SettingsPage
               settings={settings}
@@ -503,6 +523,8 @@ export function App() {
 
         {action && <ActionDialog action={action} settings={settings} onClose={closeAction} onResult={reportOperation} />}
 
+        {notificationCenterOpen && <NotificationCenter records={notifications.records} settings={settings} onDismissMany={notifications.dismissMany} onDeleteMany={notifications.deleteMany} notify={notify} onClose={() => setNotificationCenterOpen(false)} />}
+
         {paletteOpen && (
           <CommandPalette
             settings={settings}
@@ -514,14 +536,7 @@ export function App() {
           />
         )}
 
-        {toast && (
-          <div className={`snackbar ${toast.ok ? 'success' : 'error'}`} role="status" {...el('snackbar')}>
-            <Icon>{toast.ok ? 'check_circle' : 'error'}</Icon>
-            <span>{toast.message}</span>
-            {toast.undo && <button className="text-button" onClick={() => { toast.undo?.run(); setToast(null); }}>{toast.undo.label}</button>}
-            <button className="icon-button" {...el('icon-button')} onClick={() => setToast(null)} aria-label="Dismiss notification"><Icon>close</Icon></button>
-          </div>
-        )}
+        <SnackbarStack notices={notifications.active} onDismiss={notifications.dismiss} />
 
         <div className="visually-hidden" role="status" aria-live="polite">{announcement}</div>
       </div>

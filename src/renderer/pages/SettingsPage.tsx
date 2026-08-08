@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { UserSettings } from '../../shared/contracts';
 import { SearchBox } from '../components/SearchBox';
+import { ExternalEditorSettings } from '../components/ExternalEditorSettings';
 import { el } from '../el';
 import { Icon } from '../icons';
 import { label } from '../i18n';
@@ -15,6 +16,7 @@ import { defaultSettings } from '../state/use-settings';
 import type { WorkspaceApi } from '../state/use-workspace';
 import { AppearanceEditor } from './AppearanceEditor';
 import { ScheduleEditor } from './ScheduleEditor';
+import { ChangelogViewer } from './ChangelogViewer';
 
 const ABOUT_ROWS = [
   { en: 'Version', yue: '版本', body: 'Ding Ding App Store preview 0.1.0.' },
@@ -52,7 +54,9 @@ export function SettingsPage({ settings, onSave, workspace, appearance, schedule
     'settings.appearance': SETTING_FIELDS.filter((field) => field.section === 'appearance' && matcher(`${field.en}\n${field.yue}\n${field.keywords.join(' ')}`)).length
       + (matcher('rail tabs layout appearance element override') ? 1 : 0),
     'settings.schedule': SCHEDULE_FIELDS.filter((field) => matcher(`${field.en}\n${field.yue}\n${field.keywords.join(' ')}`)).length,
-    'settings.about': ABOUT_ROWS.filter((row) => matcher(`${row.en}\n${row.yue}\n${row.body}`)).length,
+    'settings.about': ABOUT_ROWS.filter((row) => matcher(`${row.en}\n${row.yue}\n${row.body}`)).length
+      + (matcher('external editor Visual Studio Code VS Code exports') ? 1 : 0)
+      + (matcher('changelog releases versions dates commits') ? 1 : 0),
   }), [matcher]);
 
   const fieldsFor = (section: SettingField['section']) => SETTING_FIELDS.filter((field) => field.section === section && matcher(`${field.en}\n${field.yue}\n${field.keywords.join(' ')}`));
@@ -142,14 +146,18 @@ export function SettingsPage({ settings, onSave, workspace, appearance, schedule
         )}
         {subTab === 'settings.schedule' && counts[subTab] > 0 && <ScheduleEditor settings={settings} schedule={schedule} />}
         {subTab === 'settings.about' && counts[subTab] > 0 && (
-          <section className="settings-grid">
-            {ABOUT_ROWS.filter((row) => matcher(`${row.en}\n${row.yue}\n${row.body}`)).map((row) => (
-              <div className="settings-card" key={row.en} {...el('settings-card')}>
-                <h2>{label(settings, row.en, row.yue)}</h2>
-                <p className="supporting">{row.body}</p>
-              </div>
-            ))}
-          </section>
+          <>
+            <section className="settings-grid">
+              {ABOUT_ROWS.filter((row) => matcher(`${row.en}\n${row.yue}\n${row.body}`)).map((row) => (
+                <div className="settings-card" key={row.en} {...el('settings-card')}>
+                  <h2>{label(settings, row.en, row.yue)}</h2>
+                  <p className="supporting">{row.body}</p>
+                </div>
+              ))}
+              {matcher('external editor Visual Studio Code VS Code exports') && <ExternalEditorSettings settings={settings} />}
+            </section>
+            {matcher('changelog releases versions dates commits') && <ChangelogViewer settings={settings} notify={notify} />}
+          </>
         )}
       </div>
     </>

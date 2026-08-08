@@ -3,7 +3,7 @@ import type { Dispatch, ReactNode } from 'react';
 import type { PersistedSurfaceId } from '../shared/contracts';
 
 /** Persisted page surfaces plus the three ephemeral renderer-only search surfaces. */
-export type SurfaceId = PersistedSurfaceId | 'palette' | 'tabs' | 'appearance.elements';
+export type SurfaceId = PersistedSurfaceId | 'palette' | 'tabs' | 'appearance.elements' | 'notifications' | 'changelog';
 
 export interface RegexMode { pattern: string; flags: string }
 export interface SearchState { query: string; regex: RegexMode | null }
