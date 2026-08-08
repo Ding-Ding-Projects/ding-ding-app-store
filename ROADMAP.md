@@ -21,6 +21,7 @@
 - [x] Local operation history: every install/build/uninstall outcome recorded, filterable by action/result/date, exported as 18 truthful formats including re-importable ZIP
 - [x] Local version browser: bounded Git snapshots with diff, labels, and explicit before/after restore revisions for App Store-owned state
 - [x] Persistent tab rail with left/right/top/bottom docking, pinning, grouping, overflow, four independent regex-backed tab searches, searchable Move… into group… picker, reversible bulk close/reopen, and full keyboard control
+- [x] Single-source tab shortcut registry with live pin/group/search/move handlers, searchable context-menu key caps, and semantic `aria-keyshortcuts`
 - [x] Independent search state and a full regex builder on every surface, including the command palette
 - [x] Per-element appearance editor with live preview, reset, export, and import
 - [x] Update schedule editor with last-run/next-run reporting and quiet hours

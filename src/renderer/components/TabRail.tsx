@@ -9,10 +9,43 @@ import { GROUP_COLOR_LABELS, TAB_META } from '../registry';
 import { EMPTY_SEARCH, compile, highlight, makeMatcher, SearchContext, useSurfaceSearch } from '../search';
 import { newGroupId, regionsOf } from '../state/use-workspace';
 import type { RegionKind, WorkspaceAction } from '../state/use-workspace';
-import { SearchBox } from './SearchBox';
+import { SearchBox, searchInputId } from './SearchBox';
 
 const ROW_HEIGHT: Record<TabWorkspace['rail']['tabHeight'], number> = { compact: 36, comfortable: 44, tall: 52 };
 const ROW_GAP = 5;
+
+export interface TabShortcut {
+  readonly display: string;
+  readonly aria: string;
+  readonly key: string;
+  readonly ctrlKey?: true;
+  readonly shiftKey?: true;
+  readonly altKey?: true;
+}
+
+export const TAB_SHORTCUTS = {
+  pin: { display: 'Ctrl+Shift+P', aria: 'Control+Shift+P', key: 'p', ctrlKey: true, shiftKey: true },
+  newGroup: { display: 'Ctrl+Shift+G', aria: 'Control+Shift+G', key: 'g', ctrlKey: true, shiftKey: true },
+  railSearch: { display: 'Ctrl+Shift+K', aria: 'Control+Shift+K', key: 'k', ctrlKey: true, shiftKey: true },
+  moveUp: { display: 'Alt+↑', aria: 'Alt+ArrowUp', key: 'ArrowUp', altKey: true },
+  moveDown: { display: 'Alt+↓', aria: 'Alt+ArrowDown', key: 'ArrowDown', altKey: true },
+} as const satisfies Record<string, TabShortcut>;
+
+export function matchesTabShortcut(
+  event: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'shiftKey' | 'altKey' | 'metaKey'>,
+  shortcut: TabShortcut,
+): boolean {
+  return event.key.toLocaleLowerCase() === shortcut.key.toLocaleLowerCase()
+    && event.ctrlKey === Boolean(shortcut.ctrlKey)
+    && event.shiftKey === Boolean(shortcut.shiftKey)
+    && event.altKey === Boolean(shortcut.altKey)
+    && !event.metaKey;
+}
+
+export function nextTabGroup(workspace: TabWorkspace): TabGroup {
+  const index = workspace.groups.length + 1;
+  return { id: newGroupId(), name: `Group ${index}`, color: TAB_GROUP_COLORS[index % TAB_GROUP_COLORS.length], collapsed: false };
+}
 
 /**
  * Arithmetic capacity only: one ResizeObserver, one rAF guard, no per-node measurement and therefore
@@ -176,21 +209,31 @@ export function TabContextMenu({ target, workspace, settings, dispatch, onClose,
   const tab = workspace.tabs.find((item) => item.id === target.id);
   if (!tab) return null;
   const meta = TAB_META[tab.id];
+  const togglePin = () => { dispatch({ type: 'pin', id: tab.id, pinned: 'toggle' }); close(tab.pinned ? `${meta.en} unpinned` : `${meta.en} pinned`); };
+  const move = (direction: -1 | 1) => { dispatch({ type: 'move', id: tab.id, direction }); close(`${meta.en} moved ${direction < 0 ? 'up' : 'down'}`); };
+  const createGroup = () => {
+    if (tab.pinned || workspace.groups.length >= MAX_TAB_GROUPS) return;
+    const group = nextTabGroup(workspace);
+    dispatch({ type: 'group-create', group, memberId: tab.id });
+    onRename(group.id);
+    onClose();
+  };
+  const onShortcut = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (matchesTabShortcut(event.nativeEvent, TAB_SHORTCUTS.pin)) { event.preventDefault(); togglePin(); return; }
+    if (matchesTabShortcut(event.nativeEvent, TAB_SHORTCUTS.moveUp)) { event.preventDefault(); move(-1); return; }
+    if (matchesTabShortcut(event.nativeEvent, TAB_SHORTCUTS.moveDown)) { event.preventDefault(); move(1); return; }
+    if (!tab.pinned && workspace.groups.length < MAX_TAB_GROUPS && matchesTabShortcut(event.nativeEvent, TAB_SHORTCUTS.newGroup)) { event.preventDefault(); createGroup(); }
+  };
   return (
-    <div className="popover tab-context-menu" role="menu" aria-label={label(settings, `${meta.en} actions`, `${meta.yue} 操作`)}>
+    <div className="popover tab-context-menu" role="menu" aria-label={label(settings, `${meta.en} actions`, `${meta.yue} 操作`)} onKeyDown={onShortcut}>
       <SearchBox surface="tabs.menu" placeholder={label(settings, 'Search menu actions', '搜尋選單操作')} />
-      {item('Pin tab', <button role="menuitem" key="pin" onClick={() => { dispatch({ type: 'pin', id: tab.id, pinned: 'toggle' }); close(tab.pinned ? `${meta.en} unpinned` : `${meta.en} pinned`); }}><span>{tab.pinned ? label(settings, 'Unpin tab', '取消釘住') : label(settings, 'Pin tab', '釘住分頁')}</span><kbd>Ctrl+Shift+P</kbd></button>)}
-      {item('Move up', <button role="menuitem" key="up" onClick={() => { dispatch({ type: 'move', id: tab.id, direction: -1 }); close(`${meta.en} moved up`); }}><span>{label(settings, 'Move up', '上移')}</span><kbd>Alt+↑</kbd></button>)}
-      {item('Move down', <button role="menuitem" key="down" onClick={() => { dispatch({ type: 'move', id: tab.id, direction: 1 }); close(`${meta.en} moved down`); }}><span>{label(settings, 'Move down', '下移')}</span><kbd>Alt+↓</kbd></button>)}
+      {item(`Pin tab ${TAB_SHORTCUTS.pin.display}`, <button role="menuitem" key="pin" aria-keyshortcuts={TAB_SHORTCUTS.pin.aria} onClick={togglePin}><span>{tab.pinned ? label(settings, 'Unpin tab', '取消釘住') : label(settings, 'Pin tab', '釘住分頁')}</span><kbd aria-hidden="true">{TAB_SHORTCUTS.pin.display}</kbd></button>)}
+      {item(`Move up ${TAB_SHORTCUTS.moveUp.display}`, <button role="menuitem" key="up" aria-keyshortcuts={TAB_SHORTCUTS.moveUp.aria} onClick={() => move(-1)}><span>{label(settings, 'Move up', '上移')}</span><kbd aria-hidden="true">{TAB_SHORTCUTS.moveUp.display}</kbd></button>)}
+      {item(`Move down ${TAB_SHORTCUTS.moveDown.display}`, <button role="menuitem" key="down" aria-keyshortcuts={TAB_SHORTCUTS.moveDown.aria} onClick={() => move(1)}><span>{label(settings, 'Move down', '下移')}</span><kbd aria-hidden="true">{TAB_SHORTCUTS.moveDown.display}</kbd></button>)}
       {tab.open && !tab.pinned && item('Close tab', <button role="menuitem" key="close" onClick={() => { dispatch({ type: 'close', id: tab.id }); close(`${meta.en} closed`); }}>{label(settings, 'Close tab', '關閉分頁')}</button>)}
       {!tab.open && item('Reopen tab', <button role="menuitem" key="reopen" onClick={() => { dispatch({ type: 'reopen', id: tab.id }); close(`${meta.en} reopened`); }}>{label(settings, 'Reopen tab', '重新開啟分頁')}</button>)}
-      {!tab.pinned && workspace.groups.length < MAX_TAB_GROUPS && item('New group',
-        <button role="menuitem" onClick={() => {
-          const group: TabGroup = { id: newGroupId(), name: `Group ${workspace.groups.length + 1}`, color: TAB_GROUP_COLORS[(workspace.groups.length + 1) % TAB_GROUP_COLORS.length], collapsed: false };
-          dispatch({ type: 'group-create', group, memberId: tab.id });
-          onRename(group.id);
-          onClose();
-        }}>{label(settings, 'New group with this tab', '用呢個分頁開新組')}</button>
+      {!tab.pinned && workspace.groups.length < MAX_TAB_GROUPS && item(`New group ${TAB_SHORTCUTS.newGroup.display}`,
+        <button role="menuitem" aria-keyshortcuts={TAB_SHORTCUTS.newGroup.aria} onClick={createGroup}><span>{label(settings, 'New group with this tab', '用呢個分頁開新組')}</span><kbd aria-hidden="true">{TAB_SHORTCUTS.newGroup.display}</kbd></button>
       )}
       {!tab.pinned && workspace.groups.some((group) => group.id !== tab.groupId) && item('Move into group', <button role="menuitem" key="move-group" onClick={() => { onMovePicker(tab.id); onClose(); }}>{label(settings, 'Move… into group…', '移動…去分組…')}</button>)}
       {tab.groupId && item('Remove from group', <button role="menuitem" key="remove" onClick={() => { dispatch({ type: 'group-remove', id: tab.id }); close(`${meta.en} removed from its group`); }}>{label(settings, 'Remove from group', '離開分組')}</button>)}
@@ -209,7 +252,7 @@ export function TabMoveGroupPicker({ tabId, workspace, settings, dispatch, onClo
   const groups = workspace.groups.filter((group) => group.id !== tab.groupId && matcher(`${group.name}\n${group.color}`));
   const createGroup = () => {
     if (workspace.groups.length >= MAX_TAB_GROUPS || tab.pinned) return;
-    const group: TabGroup = { id: newGroupId(), name: `Group ${workspace.groups.length + 1}`, color: TAB_GROUP_COLORS[(workspace.groups.length + 1) % TAB_GROUP_COLORS.length], collapsed: false };
+    const group = nextTabGroup(workspace);
     dispatch({ type: 'group-create', group, memberId: tab.id });
     announce(`${TAB_META[tab.id].en} moved into ${group.name}`);
     onClose();
@@ -390,6 +433,18 @@ export function TabRail({ settings, workspace, dispatch, updatesBadge, onOpenPal
     return () => window.removeEventListener('keydown', listener, true);
   }, [menu, overflowOpen, movePickerTabId]);
 
+  useEffect(() => {
+    const listener = (event: KeyboardEvent) => {
+      if (!matchesTabShortcut(event, TAB_SHORTCUTS.railSearch)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      window.document.getElementById(searchInputId('tabs'))?.focus();
+      announce('Tab search focused');
+    };
+    window.addEventListener('keydown', listener, true);
+    return () => window.removeEventListener('keydown', listener, true);
+  }, [announce]);
+
   const focusStop = useCallback((key: string) => {
     setFocusKey(key);
     stopRefs.current.get(key)?.focus();
@@ -407,10 +462,27 @@ export function TabRail({ settings, workspace, dispatch, updatesBadge, onOpenPal
 
   const onRowKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>, index: number, row: TabRow) => {
     const key = event.key;
-    if (event.altKey && (key === 'ArrowUp' || key === 'ArrowDown') && row.kind === 'tab') {
+    if (row.kind === 'tab' && matchesTabShortcut(event.nativeEvent, TAB_SHORTCUTS.pin)) {
       event.preventDefault();
-      dispatch({ type: 'move', id: row.tab.id, direction: key === 'ArrowUp' ? -1 : 1 });
-      announce(`${TAB_META[row.tab.id].en} moved ${key === 'ArrowUp' ? 'up' : 'down'}`);
+      dispatch({ type: 'pin', id: row.tab.id, pinned: 'toggle' });
+      announce(`${TAB_META[row.tab.id].en} ${row.tab.pinned ? 'unpinned' : 'pinned'}`);
+      return;
+    }
+    if (row.kind === 'tab' && matchesTabShortcut(event.nativeEvent, TAB_SHORTCUTS.newGroup)) {
+      event.preventDefault();
+      if (row.tab.pinned) { announce('Pinned tabs must be unpinned before grouping'); return; }
+      if (workspace.groups.length >= MAX_TAB_GROUPS) { announce('The tab group limit has been reached'); return; }
+      const group = nextTabGroup(workspace);
+      dispatch({ type: 'group-create', group, memberId: row.tab.id });
+      setRenamingGroupId(group.id);
+      announce(`${TAB_META[row.tab.id].en} moved into a new group`);
+      return;
+    }
+    if (row.kind === 'tab' && (matchesTabShortcut(event.nativeEvent, TAB_SHORTCUTS.moveUp) || matchesTabShortcut(event.nativeEvent, TAB_SHORTCUTS.moveDown))) {
+      event.preventDefault();
+      const direction = matchesTabShortcut(event.nativeEvent, TAB_SHORTCUTS.moveUp) ? -1 : 1;
+      dispatch({ type: 'move', id: row.tab.id, direction });
+      announce(`${TAB_META[row.tab.id].en} moved ${direction < 0 ? 'up' : 'down'}`);
       return;
     }
     if (key === 'ArrowDown' || (horizontal && key === 'ArrowRight' && row.kind === 'tab')) { event.preventDefault(); moveFocus(index, 1); return; }
@@ -551,7 +623,7 @@ export function TabRail({ settings, workspace, dispatch, updatesBadge, onOpenPal
   return (
     <nav className="navigation" aria-label={label(settings, 'Tabs', '分頁')} {...el('nav-rail')}>
       <div className="nav-title" {...el('nav-title')}>Ding Ding</div>
-      <SearchBox surface="tabs" className="tab-search" placeholder={label(settings, 'Search tabs', '搵分頁')} openBuilder={openTabRegex} onBuilderHandled={onTabRegexHandled} />
+      <SearchBox surface="tabs" className="tab-search" placeholder={label(settings, 'Search tabs', '搵分頁')} ariaKeyShortcuts={TAB_SHORTCUTS.railSearch.aria} openBuilder={openTabRegex} onBuilderHandled={onTabRegexHandled} />
       <details className="tab-discovery-panel">
         <summary>{label(settings, groupNames.state.query || master.state.query ? 'All tab searches · filtered' : 'All tab searches', groupNames.state.query || master.state.query ? '所有分頁搜尋 · 已篩選' : '所有分頁搜尋')}</summary>
         <SearchBox surface="tabs.groups" placeholder={label(settings, 'Search tab groups', '搜尋分頁組')} />

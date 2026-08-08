@@ -16,6 +16,8 @@ Tab actions include **Close tabs containing text** and **Close tabs not containi
 
 Keyboard paths include `Ctrl+1`–`Ctrl+6`, `Ctrl+Tab`, `Ctrl+Shift+Tab`, `Ctrl+Shift+P` for pinning, `Ctrl+Shift+G` for a new group, `Ctrl+Shift+K` for rail search, `Shift+F10`/the context-menu key, `Alt+ArrowUp`/`Alt+ArrowDown`, and roving arrow/Home/End focus. Pointer drag is an additional route, not the only one.
 
+The tab action menu shows a shortcut only when that exact chord is registered for the focused tab. Pin/unpin, move up/down, and new-group rows take both their visible key cap and `aria-keyshortcuts` value from the same typed registry used by the live keyboard handler. The visual `<kbd>` text is hidden from assistive technology so a screen reader announces the semantic shortcut once rather than spelling it twice. Menu search also indexes the displayed chord, and actions without a working chord show no placeholder shortcut.
+
 ## Configuration
 
 `workspace.v1.json` persists the active tab, complete tab set (including each tab’s open/closed state), pinned state, group membership, group color and collapsed state, order, rail side, label mode, tab height, overflow mode, badge/color-bar preferences, icon-only pins, and rail width. Settings → Appearance exposes reset, JSON export, and bounded import. Older workspace files without `open` are migrated to open tabs.
@@ -30,7 +32,7 @@ The renderer exchanges one typed workspace document. Imports are limited to 64 K
 
 ## Verification
 
-Contract tests enumerate all six tabs, validate four dock edges, legacy `open` migration, workspace storage and normalization, and command-registry reachability. Source inspection covers keyboard and pointer routes, all four search surfaces, menu filtering, and bulk-close protection. Packaged captures show the left rail and the tab-actions panel at `docs/assets/screenshots/final-tab-actions-runtime.png`; a dedicated runtime capture for every dock edge remains a follow-up evidence boundary.
+Contract tests enumerate all six tabs, validate four dock edges, legacy `open` migration, workspace storage and normalization, and command-registry reachability. Focused shortcut tests exercise exact modifier matching, reject extra modifiers, verify shared new-group construction, render every semantic `aria-keyshortcuts` value, and prove every displayed chord reaches the shared live matcher. Source inspection covers keyboard and pointer routes, all four search surfaces, menu filtering, and bulk-close protection. Packaged captures show the left rail and the tab-actions panel at `docs/assets/screenshots/final-tab-actions-runtime.png`; a fresh packaged keyboard drive of these shortcuts and a dedicated runtime capture for every dock edge remain follow-up evidence boundaries.
 
 ## Suggested articles
 

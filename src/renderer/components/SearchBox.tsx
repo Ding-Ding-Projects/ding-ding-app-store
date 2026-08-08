@@ -12,7 +12,7 @@ export const searchInputId = (surface: SurfaceId): string => `search-${surface.r
  * One search field per surface, each with its own state and its own full regex builder.
  * `openBuilder` lets a palette command open the builder for a named surface.
  */
-export function SearchBox({ surface, placeholder, openBuilder, onBuilderHandled, className, autoFocusInput, activeDescendant, controls, onInputKeyDown }: {
+export function SearchBox({ surface, placeholder, openBuilder, onBuilderHandled, className, autoFocusInput, activeDescendant, controls, ariaKeyShortcuts, onInputKeyDown }: {
   surface: SurfaceId;
   placeholder: string;
   openBuilder?: boolean;
@@ -21,6 +21,7 @@ export function SearchBox({ surface, placeholder, openBuilder, onBuilderHandled,
   autoFocusInput?: boolean;
   activeDescendant?: string;
   controls?: string;
+  ariaKeyShortcuts?: string;
   onInputKeyDown?: (event: ReactKeyboardEvent<HTMLInputElement>) => void;
 }) {
   const { state, setQuery, setRegex } = useSurfaceSearch(surface);
@@ -52,6 +53,7 @@ export function SearchBox({ surface, placeholder, openBuilder, onBuilderHandled,
         autoFocus={autoFocusInput}
         aria-activedescendant={activeDescendant}
         aria-controls={controls}
+        aria-keyshortcuts={ariaKeyShortcuts}
         onKeyDown={onInputKeyDown}
       />
       {state.regex && <span className="regex-chip">/{state.regex.flags}</span>}
