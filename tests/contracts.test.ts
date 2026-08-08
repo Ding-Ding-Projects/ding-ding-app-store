@@ -66,7 +66,8 @@ describe('desktop security and update contracts', () => {
     expect(preload).toContain("ipcRenderer.invoke('operations:install'");
     expect(preload).toContain("ipcRenderer.invoke('operations:uninstall'");
     expect(preload).toContain("ipcRenderer.invoke('operations:installed'");
-    expect(preload).toContain("ipcRenderer.invoke('operations:history'");
+    expect(preload).toContain("ipcRenderer.invoke('history:list'");
+    expect(preload).toContain("ipcRenderer.invoke('history:export'");
   });
 
   it('discovers only allowlisted install records and keeps append-only local history', async () => {
@@ -123,8 +124,8 @@ describe('visible product contracts', () => {
     for (const primitive of ['Literal', 'Class', 'Anchor', 'Group', 'Alternation', 'Quantifier']) expect(app).toContain(primitive);
     expect(app).toContain('slice(0, 160)');
     expect(app).toContain('slice(0, 10_000)');
-    expect(app).toContain('placeholder="Search operation history"');
-    expect(app).toContain('Export filtered operation history');
+    expect(app).toContain('surface="activity"');
+    expect(app).toContain("runExport('jsonl')");
   });
 
   it('ships all language modes and two independent funny-level controls', async () => {
@@ -206,11 +207,12 @@ describe('activity history and export', () => {
     expect(operations).not.toMatch(/return \{ ok:/);
   });
 
-  it('bounds stored history and exports JSON, CSV, and Markdown', async () => {
+  it('bounds append-only history and exports JSON, JSONL, CSV, and Markdown', async () => {
     const history = await read('src/main/history-service.ts');
-    expect(history).toContain('MAX_ENTRIES = 500');
-    expect(history).toContain(".slice(-MAX_ENTRIES)");
+    expect(history).toContain('MAX_HISTORY_ENTRIES = 10_000');
+    expect(history).toContain(".slice(-MAX_HISTORY_ENTRIES)");
     expect(history).toContain("format === 'json'");
+    expect(history).toContain("format === 'jsonl'");
     expect(history).toContain("format === 'csv'");
     expect(history).toContain('| When | Action | App | Result | Message |');
   });

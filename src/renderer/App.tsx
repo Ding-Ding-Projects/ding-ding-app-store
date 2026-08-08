@@ -6,6 +6,7 @@ import type {
   CatalogSnapshot,
   ElementKey,
   HistoryEntry,
+  InstalledAppRecord,
   TabGroup,
   TabGroupColor,
   TabId,
@@ -59,6 +60,7 @@ export function App() {
   const [loading, setLoading] = useState(true);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
+  const [installed, setInstalled] = useState<InstalledAppRecord[]>([]);
   const [action, setAction] = useState<{ kind: ActionKind; app: CatalogApp } | null>(null);
   const [updateState, setUpdateState] = useState<AppStoreUpdateState>({ status: 'idle' });
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -86,11 +88,22 @@ export function App() {
     finally { setHistoryLoading(false); }
   }, []);
 
+  const loadInstalled = useCallback(async () => {
+    try { setInstalled(await window.dingDingStore.operations.installed()); }
+    catch (error) { notify({ ok: false, message: (error as Error).message }); }
+  }, [notify]);
+
   useEffect(() => {
     void loadCatalog();
     void loadHistory();
+    void loadInstalled();
     return window.dingDingStore.updates.subscribe(setUpdateState);
-  }, [loadCatalog, loadHistory]);
+  }, [loadCatalog, loadHistory, loadInstalled]);
+
+  const apps = useMemo(() => {
+    const versions = new Map(installed.map((record) => [record.appId, record.version]));
+    return (catalog?.apps ?? []).map((item) => ({ ...item, installedVersion: versions.get(item.id) ?? item.installedVersion }));
+  }, [catalog, installed]);
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -421,7 +434,7 @@ export function App() {
           {(activeTab === 'catalog' || activeTab === 'installed' || activeTab === 'updates') && (
             <AppsPage
               mode={activeTab}
-              apps={catalog?.apps ?? []}
+              apps={apps}
               settings={settings}
               loading={loading}
               onAction={(kind, app) => setAction({ kind, app })}
@@ -449,7 +462,7 @@ export function App() {
 
         {panelOpen && appearance.editMode && <AppearancePanel appearance={appearance} settings={settings} notify={notify} onClose={() => setPanelOpen(false)} />}
 
-        {action && <ActionDialog action={action} settings={settings} onClose={() => setAction(null)} onResult={(result) => { notify({ ok: result.ok, message: result.message }); void loadHistory(); if (result.ok) void loadCatalog(true); }} />}
+        {action && <ActionDialog action={action} settings={settings} onClose={() => setAction(null)} onResult={(result) => { notify({ ok: result.ok, message: result.message }); void loadHistory(); void loadInstalled(); if (result.ok) void loadCatalog(true); }} />}
 
         {paletteOpen && (
           <CommandPalette

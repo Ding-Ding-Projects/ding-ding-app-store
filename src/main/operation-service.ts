@@ -4,24 +4,13 @@ import { access, mkdir, open, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { app } from 'electron';
-import type { OperationKind, OperationRequest, OperationResult } from '../shared/contracts.js';
+import type { InstalledAppRecord, OperationKind, OperationRequest, OperationResult } from '../shared/contracts.js';
 import { CatalogService, type CatalogRecord, type ReleaseAsset } from './catalog-service.js';
 import { HistoryService } from './history-service.js';
-import { readJson, writeJsonAtomic } from './json-store.js';
+import { InstalledService } from './installed-service.js';
 
 const MAX_DOWNLOAD_BYTES = 1_500_000_000;
 const REDIRECT_HOSTS = new Set(['github.com', 'release-assets.githubusercontent.com', 'objects.githubusercontent.com']);
-
-interface InstalledRecord {
-  appId: string;
-  displayName: string;
-  version: string;
-  installedAt: string;
-  packageType: string;
-  installRoot: string | null;
-  uninstallExecutable: string | null;
-  uninstallArguments: string[];
-}
 
 async function run(executable: string, args: string[], timeoutMs = 15 * 60_000): Promise<number> {
   return await new Promise<number>((resolve, reject) => {
@@ -100,16 +89,16 @@ async function downloadVerified(asset: ReleaseAsset, destination: string): Promi
 }
 
 export class OperationService {
-  private readonly installedPath = path.join(app.getPath('userData'), 'installed-apps.v1.json');
   private readonly stagingRoot = path.join(app.getPath('userData'), 'staging');
 
   constructor(
     private readonly catalog: CatalogService,
     private readonly history: HistoryService,
+    private readonly installed: InstalledService,
   ) {}
 
   private async finish(record: CatalogRecord, kind: OperationKind, result: OperationResult): Promise<OperationResult> {
-    await this.history.record({ appId: result.appId, displayName: record.displayName, kind, ok: result.ok, message: result.message });
+    await this.history.record({ appId: result.appId, displayName: record.displayName, kind, ok: result.ok, message: result.message }).catch(() => undefined);
     return result;
   }
 
@@ -171,16 +160,27 @@ export class OperationService {
     if (request.confirmation !== `UNINSTALL ${record.displayName}`) {
       return this.finish(record, 'uninstall', { ok: false, appId: request.appId, message: `Type UNINSTALL ${record.displayName} to confirm.` });
     }
-    const installed = await readJson<InstalledRecord[]>(this.installedPath, []);
-    const current = installed.find((item) => item.appId === request.appId);
-    if (!current?.uninstallExecutable) {
+    const current = await this.installed.get(request.appId);
+    if (!current?.uninstall) {
       return this.finish(record, 'uninstall', { ok: false, appId: request.appId, message: 'No verified uninstall entry was recorded for this application.' });
     }
     try {
-      await access(current.uninstallExecutable, constants.X_OK);
-      const exitCode = await run(current.uninstallExecutable, current.uninstallArguments);
-      if (exitCode !== 0) throw new Error(`Uninstaller exited with code ${exitCode}.`);
-      await writeJsonAtomic(this.installedPath, installed.filter((item) => item.appId !== request.appId));
+      if (current.uninstall.kind === 'portable') {
+        const portableRoot = path.resolve(app.getPath('userData'), 'portable');
+        const target = current.installRoot ? path.resolve(current.installRoot) : '';
+        if (!target || path.dirname(target).toLocaleLowerCase() !== portableRoot.toLocaleLowerCase()) {
+          throw new Error('Managed portable uninstall path failed validation.');
+        }
+        await rm(target, { recursive: true, force: true });
+      } else {
+        const executable = current.uninstall.kind === 'msi'
+          ? path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', current.uninstall.executable)
+          : current.uninstall.executable;
+        await access(executable, constants.X_OK);
+        const exitCode = await run(executable, current.uninstall.arguments);
+        if (exitCode !== 0) throw new Error(`Uninstaller exited with code ${exitCode}.`);
+      }
+      await this.installed.remove(request.appId);
       return this.finish(record, 'uninstall', { ok: true, appId: request.appId, message: `${record.displayName} was uninstalled.` });
     } catch (error) {
       return this.finish(record, 'uninstall', { ok: false, appId: request.appId, message: (error as Error).message });
@@ -188,20 +188,24 @@ export class OperationService {
   }
 
   private async recordInstalled(record: CatalogRecord, version: string): Promise<void> {
-    const installed = await readJson<InstalledRecord[]>(this.installedPath, []);
     const installRoot = record.packageType === 'squirrel' && record.installerName
       ? path.join(process.env.LOCALAPPDATA ?? app.getPath('home'), record.installerName)
       : null;
-    const entry: InstalledRecord = {
+    const entry: InstalledAppRecord = {
       appId: record.id,
       displayName: record.displayName,
       version,
-      installedAt: new Date().toISOString(),
       packageType: record.packageType,
+      source: 'store',
       installRoot,
-      uninstallExecutable: installRoot ? path.join(installRoot, 'Update.exe') : null,
-      uninstallArguments: installRoot ? ['--uninstall', '-s'] : [],
+      uninstall: installRoot ? { kind: 'squirrel', executable: path.join(installRoot, 'Update.exe'), arguments: ['--uninstall', '-s'] } : null,
+      installedAt: new Date().toISOString(),
+      detectedAt: new Date().toISOString(),
     };
-    await writeJsonAtomic(this.installedPath, [...installed.filter((item) => item.appId !== record.id), entry]);
+    await this.installed.record(entry);
+  }
+
+  async listInstalled(): Promise<InstalledAppRecord[]> {
+    return await this.installed.list(true);
   }
 }

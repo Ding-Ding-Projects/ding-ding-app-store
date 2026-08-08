@@ -44,8 +44,25 @@ export interface OperationResult {
   operationId?: string;
 }
 
+export type UninstallDescriptor =
+  | { kind: 'squirrel'; executable: string; arguments: ['--uninstall', '-s'] }
+  | { kind: 'msi'; executable: 'msiexec.exe'; arguments: ['/x', string, '/qn', '/norestart'] }
+  | { kind: 'portable'; executable: null; arguments: [] };
+
+export interface InstalledAppRecord {
+  appId: string;
+  displayName: string;
+  version: string;
+  packageType: PackageType;
+  source: 'store' | 'squirrel-discovery' | 'msi-registry' | 'portable-managed';
+  installRoot: string | null;
+  uninstall: UninstallDescriptor | null;
+  installedAt: string | null;
+  detectedAt: string;
+}
+
 export type OperationKind = 'install' | 'build' | 'uninstall';
-export type HistoryExportFormat = 'json' | 'csv' | 'markdown';
+export type HistoryExportFormat = 'json' | 'jsonl' | 'csv' | 'markdown';
 
 export interface HistoryEntry {
   id: string;
@@ -527,6 +544,7 @@ export interface DingDingStoreApi {
     install(request: OperationRequest): Promise<OperationResult>;
     build(request: OperationRequest): Promise<OperationResult>;
     uninstall(request: OperationRequest): Promise<OperationResult>;
+    installed(): Promise<InstalledAppRecord[]>;
   };
   updates: {
     checkCatalog(): Promise<CatalogSnapshot>;

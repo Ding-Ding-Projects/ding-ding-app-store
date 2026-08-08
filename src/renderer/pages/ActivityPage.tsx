@@ -44,8 +44,8 @@ export function ActivityPage({ entries, loading, settings, openRegex, onRegexHan
     setExportBusy(format);
     try {
       const content = await window.dingDingStore.history.export(format);
-      const extension = format === 'json' ? 'json' : format === 'csv' ? 'csv' : 'md';
-      const mime = format === 'json' ? 'application/json' : format === 'csv' ? 'text/csv' : 'text/markdown';
+      const extension = format === 'json' ? 'json' : format === 'jsonl' ? 'jsonl' : format === 'csv' ? 'csv' : 'md';
+      const mime = format === 'json' ? 'application/json' : format === 'jsonl' ? 'application/x-ndjson' : format === 'csv' ? 'text/csv' : 'text/markdown';
       downloadText(`ding-ding-app-store-history.${extension}`, content, mime);
     } finally {
       setExportBusy(null);
@@ -75,6 +75,7 @@ export function ActivityPage({ entries, loading, settings, openRegex, onRegexHan
       <div className="card-actions">
         <button className="text-button" disabled={copyBusy} onClick={() => void copyJson()}><Icon>content_copy</Icon>{copyBusy ? 'Copying…' : 'Copy JSON'}</button>
         <button className="text-button" disabled={exportBusy === 'json'} onClick={() => void runExport('json')}><Icon>download</Icon>JSON</button>
+        <button className="text-button" disabled={exportBusy === 'jsonl'} onClick={() => void runExport('jsonl')}><Icon>download</Icon>JSONL</button>
         <button className="text-button" disabled={exportBusy === 'csv'} onClick={() => void runExport('csv')}><Icon>download</Icon>CSV</button>
         <button className="text-button" disabled={exportBusy === 'markdown'} onClick={() => void runExport('markdown')}><Icon>download</Icon>Markdown</button>
       </div>

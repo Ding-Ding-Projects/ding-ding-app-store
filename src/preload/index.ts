@@ -22,6 +22,7 @@ const api: DingDingStoreApi = {
     install: (request: OperationRequest) => ipcRenderer.invoke('operations:install', request),
     build: (request: OperationRequest) => ipcRenderer.invoke('operations:build', request),
     uninstall: (request: OperationRequest) => ipcRenderer.invoke('operations:uninstall', request),
+    installed: () => ipcRenderer.invoke('operations:installed'),
   },
   updates: {
     checkCatalog: () => ipcRenderer.invoke('updates:catalog'),

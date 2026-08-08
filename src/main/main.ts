@@ -7,6 +7,7 @@ import type { ElementKey, ElementOverride, HistoryExportFormat, OperationRequest
 import { AppearanceService } from './appearance-service.js';
 import { CatalogService } from './catalog-service.js';
 import { HistoryService } from './history-service.js';
+import { InstalledService } from './installed-service.js';
 import { OperationService } from './operation-service.js';
 import { Scheduler } from './scheduler.js';
 import { ScheduleService } from './schedule-service.js';
@@ -56,7 +57,8 @@ void app.whenReady().then(async () => {
 
   const catalog = new CatalogService();
   const history = new HistoryService();
-  const operations = new OperationService(catalog, history);
+  const installed = new InstalledService(catalog);
+  const operations = new OperationService(catalog, history, installed);
   const settings = new SettingsService();
   const updates = new UpdateService(() => mainWindow);
   const workspace = new WorkspaceService();
@@ -76,6 +78,7 @@ void app.whenReady().then(async () => {
   ipcMain.handle('operations:install', (_event, request: OperationRequest) => operations.install(request));
   ipcMain.handle('operations:build', (_event, request: OperationRequest) => operations.build(request));
   ipcMain.handle('operations:uninstall', (_event, request: OperationRequest) => operations.uninstall(request));
+  ipcMain.handle('operations:installed', () => operations.listInstalled());
   ipcMain.handle('updates:catalog', () => catalog.list(true));
   ipcMain.handle('updates:store-check', () => updates.check());
   ipcMain.handle('updates:store-download', () => updates.download());
@@ -105,6 +108,7 @@ void app.whenReady().then(async () => {
   ipcMain.on('window:close', () => mainWindow?.close());
 
   mainWindow = createWindow();
+  void installed.discover().catch(() => undefined);
   mainWindow.on('closed', () => { mainWindow = null; });
   await scheduler.start();
   setTimeout(() => void scheduler.runStartupCheck(), 5_000).unref();
