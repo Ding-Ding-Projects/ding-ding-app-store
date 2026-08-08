@@ -34,6 +34,7 @@ describe('global renderer UI completion', () => {
     expect(app).toContain('`${settings.displayName} ${updateState.version} 準備好喇`');
     expect(viewer).toContain('changelogMarkdown(exportEntries, settings.displayName)');
     expect(settingsPage).toContain('aboutRowBody(row, settings.displayName)');
+    expect(settingsPage).toContain('}), [matcher, settings.displayName]);');
     expect(changelogMarkdown(CHANGELOG_ENTRIES.slice(0, 1), 'My Store')).toContain('# My Store changelog');
   });
 
