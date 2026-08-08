@@ -120,12 +120,13 @@ describe('appearance contract', () => {
     expect(appearanceDocumentSchema.safeParse(documentWith({ 'page-title': { fontWeight: 700 } })).success).toBe(true);
   });
 
-  it('accepts only six-digit hex colours', () => {
+  it('accepts six- or eight-digit hex colours and rejects unsafe values', () => {
     for (const hex of ['#fff', 'red', 'var(--x)', '#fff;color:red', '#12345g']) {
       expect(appearanceDocumentSchema.safeParse(documentWith({ 'app-card': { background: { kind: 'hex', hex } } })).success).toBe(false);
     }
     const parsed = appearanceDocumentSchema.parse(documentWith({ 'app-card': { background: { kind: 'hex', hex: '#ABCDEF' } } }));
     expect(parsed.elements['app-card']?.background).toEqual({ kind: 'hex', hex: '#abcdef' });
+    expect(appearanceDocumentSchema.parse(documentWith({ 'app-card': { background: { kind: 'hex', hex: '#ABCDEF80' } } })).elements['app-card']?.background).toEqual({ kind: 'hex', hex: '#abcdef80' });
   });
 
   it('bounds numeric scale tokens', () => {
@@ -188,6 +189,11 @@ describe('appearance contract', () => {
         if (token === 'paddingScale') override.paddingScale = 50 + index * 5;
         if (token === 'fontScale') override.fontScale = 75 + index * 5;
         if (token === 'fontWeight') override.fontWeight = [400, 500, 600, 700, 800][index % 5];
+        if (token === 'fontFamily') override.fontFamily = 'Segoe UI';
+        if (token === 'fontStyle') override.fontStyle = ['normal', 'italic', 'oblique'][index % 3];
+        if (token === 'textDecoration') override.textDecoration = ['none', 'underline', 'line-through', 'underline line-through'][index % 4];
+        if (token === 'letterSpacing') override.letterSpacing = -4 + (index % 20);
+        if (token === 'lineHeight') override.lineHeight = 80 + (index % 33) * 5;
         if (token === 'borderWidth') override.borderWidth = index % 4;
         const document = appearanceDocumentSchema.parse({ schemaVersion: 1, elements: { [element.key]: override } });
         const pairs = toCssVariables(document.elements as AppearanceElements);
@@ -201,7 +207,11 @@ describe('appearance contract', () => {
             || /^[0-2]\.\d{2}$/.test(value)
             || /^[4-8]00$/.test(value)
             || /^[0-3]px$/.test(value)
-            || /^#[0-9a-f]{6}$/.test(value);
+            || /^#[0-9a-f]{6}([0-9a-f]{2})?$/.test(value)
+            || /^[A-Za-z0-9 _-]{1,96}$/.test(value)
+            || /^(normal|italic|oblique|none|underline|line-through|underline line-through)$/.test(value)
+            || /^-?\d+(\.\d+)?em$/.test(value)
+            || /^\d+(\.\d+)?$/.test(value);
           expect(closed, `${name} = ${value}`).toBe(true);
         }
       }

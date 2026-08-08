@@ -4,7 +4,7 @@ title: Appearance editor
 titleYue: 外觀編輯器
 category: experience
 status: limited
-summary: Registers shell elements for bounded live CSS-variable overrides with per-element reset, import/export, and main-process validation.
+summary: Registers shell elements for validated live CSS-variable overrides with continuous HEX/RGB/HSL colour controls, typography controls, reset, import, and export.
 ---
 # Appearance editor
 
@@ -16,7 +16,7 @@ The shell, title bar, rail, tab/group rows, content, headings, search, regex bui
 
 ## Configuration
 
-The panel has its own search and regex builder plus Colour, Shape, Type, and Layout sub-tabs. Reset one element, reset all, ten-second reset undo, JSON export, and all-or-nothing import are available. `appearance.v1.json` stores only non-empty overrides. The current editor offers a bounded token palette and hex colors; it does not yet implement installed-font selection, Word-depth typography, continuous multi-space color translation, draggable panels, or every pseudo-state, so status is limited.
+The panel has its own search and regex builder plus Colour, Shape, Type, and Layout sub-tabs. Reset one element, reset all, ten-second reset undo, JSON export, and all-or-nothing import are available. `appearance.v1.json` stores only non-empty overrides. Colour editing now includes a continuous native field with hue, saturation, lightness, alpha, HEX/HEX8, RGB/A, and HSL/A entry, an accessible contrast readout, and an explicit note for unsupported HSV/HSB, HWB, Lab/LCH, OKLab/OKLCH, and CMYK spaces. Type editing includes searchable installed/bundled family choices, size, weight, style, underline/strike, letter spacing, and line height. More advanced Word properties (variation axes, underline colour, overline, capitalization, text effects, alignment, and pseudo-state editing) remain visible as future capability rather than silently discarded, so status is limited.
 
 ## Failure modes
 
@@ -24,11 +24,11 @@ Unreadable data falls back to no overrides and is quarantined once. Imports abov
 
 ## Security considerations
 
-The renderer uses closed custom-property names and CSSOM `setProperty`; it never injects a stylesheet, selector, `style` attribute, or HTML. Main-process schemas enforce element/token ownership and reject delimiter, URL, import, expression, comment, tag, and newline syntax. Appearance cannot alter display, position, visibility, commands, IPC, or confirmation behavior.
+The renderer uses closed custom-property names and CSSOM `setProperty`; it never injects a stylesheet, selector rule, or HTML. Typography values are copied only into closed per-element custom properties and the bundled stylesheet consumes those properties. Main-process schemas enforce element/token ownership and reject delimiter, URL, import, expression, comment, tag, and newline syntax. Appearance cannot alter display, position, visibility, commands, IPC, or confirmation behavior.
 
 ## Verification
 
-Tests cover registry completeness, export/import round-trip, unknown/prototype payloads, CSS injection fuzzing, CSSOM-only application, and command-palette reachability. Type check and build pass on the base. Packaged capture of edit mode, keyboard selection, and panel collision behavior remains pending.
+Tests cover registry completeness, export/import round-trip, HEX8 and typography validation, unknown/prototype payloads, CSS injection fuzzing, CSSOM-only application, CSS readers for new typography tokens, and command-palette reachability. Type check and build are run on this branch; packaged capture of edit mode, keyboard selection, and panel collision behavior remains pending.
 
 ## Suggested articles
 

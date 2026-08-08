@@ -210,6 +210,11 @@ export const TOKEN_META: Record<TokenId, { en: string; yue: string; section: Tok
   elevation: { en: 'Elevation', yue: '陰影層級', section: 'shape' },
   fontScale: { en: 'Text size', yue: '字型大細', section: 'type' },
   fontWeight: { en: 'Text weight', yue: '字重', section: 'type' },
+  fontFamily: { en: 'Font family', yue: '字型家族', section: 'type' },
+  fontStyle: { en: 'Font style', yue: '字型樣式', section: 'type' },
+  textDecoration: { en: 'Underline and strike', yue: '底線同刪除線', section: 'type' },
+  letterSpacing: { en: 'Letter spacing', yue: '字距', section: 'type' },
+  lineHeight: { en: 'Line height', yue: '行高', section: 'type' },
   paddingScale: { en: 'Padding', yue: '內距', section: 'layout' },
 };
 

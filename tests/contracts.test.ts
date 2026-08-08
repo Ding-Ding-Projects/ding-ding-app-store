@@ -247,6 +247,16 @@ describe('split renderer keeps every product contract in its own file', () => {
     expect(renderer).not.toContain('dangerouslySetInnerHTML');
     expect(renderer).not.toContain('setInterval');
   });
+
+  it('has real CSS readers for every new typography token', async () => {
+    const css = await read('src/renderer/styles/components.css');
+    const bridge = await read('src/renderer/state/use-appearance.ts');
+    for (const token of ['font-family', 'font-style', 'text-decoration', 'letter-spacing', 'line-height']) {
+      expect(css).toContain(`--appearance-${token}`);
+      expect(bridge).toContain(`--appearance-${token}`);
+    }
+    expect(bridge).toContain('querySelectorAll<HTMLElement>');
+  });
 });
 
 describe('activity history and export', () => {
