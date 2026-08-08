@@ -340,7 +340,7 @@ describe('one-click adapter coverage record', () => {
       'Home Assistant Bambu Lab',
       'Photo Viewer',
       'ordinary release installation never imports or invokes the disposable/OpenCode runtime',
-      'per-application clean-machine execution remains runtime evidence to collect',
+      'each application still needs its own successful cloud proof run',
     ]) expect(coverage).toContain(requirement);
   });
 

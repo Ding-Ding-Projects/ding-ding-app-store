@@ -15,7 +15,7 @@
 - [x] Truthful shared export registry: 18 history formats with UTF-8/LF/schema metadata, including bounded re-importable ZIP archives; nested documents remain complete JSON
 - [x] One-click install/source-install dispatch with strict catalog-ID and typed-decision boundary; destructive uninstall confirmation unchanged
 - [x] Closed release-adapter coverage for all 24 catalog records: 21 source-proven Windows routes and three explicit external blockers
-- [ ] Execute and launch every supported adapter on disposable clean-Windows profiles; resolve the missing WinSshCopyId release, empty Photo Viewer release, and authorized Home Assistant target
+- [ ] Execute and launch every supported adapter on disposable clean-Windows profiles through `.github/workflows/install-adapter-proof.yml`; resolve the missing WinSshCopyId release, empty Photo Viewer release, and authorized Home Assistant target
 - [ ] Complete source-build execution only after a real hard-disposable broker exists; keep bounded OpenCode repair and its current host refusal intact
 - [x] Generated offline catalog metadata for every reviewed catalog application, with stable IDs, public source links, adapter/blocker state, canonical boundary links, wiki/site mirrors, command-palette reachability, and fail-closed completeness coverage
 - [x] Local operation history: every install/build/uninstall outcome recorded, filterable by action/result/date, exported as 18 truthful formats including re-importable ZIP

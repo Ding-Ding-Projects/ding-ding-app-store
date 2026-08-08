@@ -1,0 +1,62 @@
+name: Windows install adapter proof
+
+# This workflow is intentionally dispatch-only: it exercises one reviewed portable
+# archive on a disposable cloud runner and must never run as a side effect of a push.
+on:
+  workflow_dispatch:
+    inputs:
+      app_id:
+        description: 'Reviewed portable proof target (currently dim-sum-atlas only)'
+        required: true
+        type: choice
+        options:
+          - dim-sum-atlas
+
+permissions:
+  contents: read
+
+jobs:
+  proof:
+    runs-on: windows-2022
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Record cloud runner inventory
+        shell: pwsh
+        run: |
+          "Runner OS: $env:RUNNER_OS"
+          "Runner architecture: $env:RUNNER_ARCH"
+          node --version
+          npm --version
+          if ($env:RUNNER_OS -ne 'Windows' -or $env:RUNNER_ARCH -ne 'X64') { throw 'The proof requires a Windows X64 cloud runner.' }
+      - name: Install locked dependencies from a cache-miss-safe state
+        run: npm ci
+      - name: Build the reviewed main process and preload
+        run: npm run build
+      - name: Run one selected adapter proof
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path proof-output -Force | Out-Null
+          npx electron scripts/prove-install-adapter.mjs `
+            --app-id '${{ inputs.app_id }}' `
+            --output (Join-Path $env:GITHUB_WORKSPACE 'proof-output/install-proof.json') `
+            --data-root (Join-Path $env:RUNNER_TEMP 'ding-ding-install-proof-data')
+      - name: Validate proof manifest boundary
+        shell: pwsh
+        run: |
+          $proof = Get-Content -LiteralPath proof-output/install-proof.json -Raw | ConvertFrom-Json
+          if ($proof.schemaVersion -ne 'ding-ding-app-store.install-proof.v1') { throw 'Unexpected proof schema.' }
+          if ($proof.sourceRuntimeInvoked -ne $false) { throw 'The install proof must never invoke source or OpenCode runtime.' }
+          if ($proof.runner.image -ne 'windows-2022') { throw 'The proof did not record the pinned cloud image.' }
+          if ($proof.verdict -ne $true) { throw 'The selected adapter proof did not reach its expected verdict.' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: install-adapter-proof-${{ inputs.app_id }}-${{ github.run_id }}
+          path: proof-output/install-proof.json
+          if-no-files-found: error
