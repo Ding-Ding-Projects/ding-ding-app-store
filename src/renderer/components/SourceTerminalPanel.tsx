@@ -19,7 +19,7 @@ export function SourceTerminalPanel({ appName, events, fallbackMessage, settings
   const followOutput = useRef(true);
   const state = events.at(-1)?.state ?? (fallbackMessage ? 'failed' : 'queued');
   const active = ACTIVE_STATES.has(state);
-  const progress = events.toReversed().find((event) => event.progress !== null)?.progress ?? 0;
+  const progress = [...events].reverse().find((event) => event.progress !== null)?.progress ?? 0;
   const status = useMemo(() => ({
     queued: label(settings, 'Queued', '排緊隊'),
     preparing: label(settings, 'Preparing isolated workspace', '準備隔離工作區'),

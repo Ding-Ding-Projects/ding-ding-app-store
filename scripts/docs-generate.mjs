@@ -25,7 +25,7 @@ const articles = [
   ['one-click-installation', 'One-click installation and adapter coverage', '一按安裝同配接器覆蓋', 'installation', 'One-Click-Installation', 'limited', ['verified-installer-operations', 'source-build-security', 'uninstall']],
   ['source-build-security', 'Source-build security', '原始碼建置安全', 'installation', 'Source-Build-Security', 'limited', ['verified-installer-operations', 'automatic-repair-and-universal-adapters', 'privacy-and-security']],
   ['uninstall', 'Protected uninstall', '安全解除安裝', 'installation', 'Uninstall', 'shipped', ['installed-app-discovery', 'verified-installer-operations', 'activity-history']],
-  ['automatic-repair-and-universal-adapters', 'Automatic repair and universal adapters', '自動修復同通用安裝配接器', 'installation', 'Automatic-Repair-and-Universal-Adapters', 'pending', ['verified-installer-operations', 'source-build-security', 'verification']],
+  ['automatic-repair-and-universal-adapters', 'Automatic repair and universal adapters', '自動修復同通用安裝配接器', 'installation', 'Automatic-Repair-and-Universal-Adapters', 'limited', ['verified-installer-operations', 'source-build-security', 'verification']],
   ['installed-app-discovery', 'Installed app discovery', '已安裝 App 偵測', 'installed', 'Installed-App-Discovery', 'shipped', ['uninstall', 'activity-history', 'privacy-and-security']],
   ['activity-history', 'Activity history and export', '操作記錄同匯出', 'installed', 'Activity-History', 'shipped', ['installed-app-discovery', 'verified-installer-operations', 'privacy-and-security']],
   ['per-app-update-checker', 'Per-app update checker', '每個 App 更新檢查', 'updates', 'Per-App-Update-Checker', 'limited', ['catalog-discovery', 'app-store-self-updater', 'update-schedule']],

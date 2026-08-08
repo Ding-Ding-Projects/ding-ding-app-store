@@ -12,7 +12,7 @@ const settingsSchema = z.object({
   density: z.enum(['comfortable', 'compact', 'spacious']),
   accent: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   displayName: z.string().trim().min(1).max(64),
-  automaticRepairConsent: z.boolean(),
+  automaticRepairConsent: z.boolean().default(false),
 });
 
 const defaults: UserSettings = {

@@ -2,6 +2,7 @@
 
 > **Status: limited.** This wiki page is generated from the canonical categorized article.
 
+
 ## Behaviour
 
 Selecting **Install**, **Reinstall**, or **Install from source** starts the requested operation immediately. There is no phrase-entry dialog and no second confirmation click. The renderer sends only the catalog application identifier and a closed decision; the main process rejects malformed requests, extra fields, and mismatched decisions before selecting a catalog-owned adapter.

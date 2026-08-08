@@ -2,7 +2,7 @@
 
 ## Current state
 
-The repository contains a sandboxed Electron/React/TypeScript shell, reviewed 24-application catalog, stable-release/update comparison, SHA-256-gated installer path, protected uninstall path, App Store self-updater state machine, Material Design 3 navigation, language/funny-level settings, regex builder, command palette, real local operation history with export, and initial in-app documentation.
+The repository contains a sandboxed Electron/React/TypeScript shell, reviewed 24-application catalog, stable-release/update comparison, SHA-256-gated installer path, protected uninstall path, App Store self-updater state machine, Material Design 3 navigation, language/funny-level settings, regex builder, command palette, real local operation history with export, generated offline documentation, and a fail-closed common automatic source-repair runtime.
 
 ## Verified locally
 
@@ -14,17 +14,26 @@ The repository contains a sandboxed Electron/React/TypeScript shell, reviewed 24
 
 ## Remaining
 
-- Source builds are intentionally blocked until the disposable Windows runner is implemented.
+- Source builds remain intentionally blocked from execution until a real hard-disposable Windows broker and reviewed per-app recipes are supplied. The typed job/event contracts, read-only terminal panel, persisted consent, pinned OpenCode identity/configuration, dependency schema, finite repair loop, bounds, cancellation, and ownership cleanup are implemented and tested with fake brokers.
 - Install adapters need real-release verification per application; opaque installers remain unsupported instead of receiving guessed flags.
 - Offline documentation import for every catalog application remains. Tab pinning/grouping with per-surface searches, the per-element appearance editor, and the schedule editor have landed (see the 2026-08-07 entry below); their packaged-runtime capture remains.
 - The self-update failure state is runtime-verified: the repository has no release yet, so `RELEASES` returns HTTP 404. No successful update is claimed.
 - GitHub Pages is not yet live: creating a Pages site for the first time needs an admin-level token, and the Actions `GITHUB_TOKEN` used by `pages.yml` doesn't have it. See the 2026-08-07 CI/release/Pages entry below for the exact one-time manual step needed.
 - A real labelled self-hosted runner has not yet been observed for this repository; no remote CI or release claim is valid.
-- The one-click UI/typed-decision boundary does not make the 24 catalog adapters complete. Clean-Windows dependency bootstrap, archive handling, source recipes, the disposable build/run terminal simulator, automatic OpenCode bootstrap, bounded touchless repair, cancellation, retry exhaustion, and per-app runtime proof remain tracked in `docs/features/one-click-installation.md`.
+- The one-click UI/typed-decision boundary does not make the 24 catalog adapters complete. Live clean-Windows dependency bootstrap, archive handling, 24 source recipes, a real disposable broker, actual OpenCode execution, produced application launch, packaged interaction capture, and per-app runtime proof remain tracked in `docs/features/installation/one-click-installation.md`.
 
 ## Next owner action
 
-Integrate the isolated catalog-domain and documentation branches, run the combined checks, package the unsigned Squirrel application, exercise it on the sanctioned hidden desktop, then continue the remaining roadmap without weakening the execution boundary.
+Implement the hard-disposable broker without host mounts or secrets, add reviewed pinned recipes per application, and prove dependency/bootstrap/build/run/output/cancellation behavior on clean Windows. Until then, preserve the common runtime's deliberate refusal instead of adding a host fallback.
+
+## 2026-08-07 bounded automatic source-repair runtime
+
+- Added strict source-job start/cancel requests and schema-validated, sanitized, frozen terminal events. The renderer can submit only a catalog ID and typed decision; terminal output is display-only.
+- Added a non-interactive Material Design terminal panel with structured progress/stdout/stderr, bounded log output, honest final states, cancellation, keyboard focus return, screen-reader log semantics, narrow layout, and reduced-motion inheritance.
+- Added a versioned recipe/dependency schema for 24 future adapters: immutable source archive and digest, canonical dependency artifacts and digests, direct executable vectors, expected outputs, finite time/output/tree/diff/retry limits, exact rerun, and ownership-marked cleanup.
+- Pinned official OpenCode `1.18.15` archive SHA-256 `a80785874978ccbb93b7bfe4345f5aed41696f5ae76c109cd6dbbb934dbe795d` and extracted executable SHA-256 `fd254474def7ee35f07416cf4674c361f07e7bcd9c7ffb284af21bb011066ee3`. Automatic approval uses `permission: "allow"` and `opencode run --auto` only after persisted consent and hard-disposable attestation; sharing, plugins, MCP, instructions, snapshots, LSP, auto-update, Git metadata, and project OpenCode config are excluded.
+- Ordinary release-asset installation does not import or call the repair runtime. The current production broker is unavailable and `data/source-recipes.v1.json` is empty, so no live source or OpenCode execution is claimed.
+- Focused tests cover request rejection, atomic duplicate blocking, consent, isolation, event redaction/bounds/finalization, cancellation, timeout, path/symlink escape, OpenCode pin separation, finite repair, exact rerun, real-tree diff bounds, cleanup, and ordinary-installer separation. Full post-merge verification is recorded by the integrating commit.
 
 ## 2026-08-07 one-click installation dispatch
 

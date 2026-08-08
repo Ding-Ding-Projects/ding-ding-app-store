@@ -153,13 +153,14 @@ export function App() {
       if (kind === 'build') {
         setSourceTerminal({ appId: selectedApp.id, appName: selectedApp.name, jobId: null, events: [], returnFocus: trigger });
         const result = await window.dingDingStore.sourceJobs.start({ appId: selectedApp.id, decision: 'build' });
-        if (!result.ok || !result.jobId) {
+        const jobId = result.jobId;
+        if (!result.ok || !jobId) {
           setSourceTerminal((current) => current && current.appId === selectedApp.id ? { ...current, fallbackMessage: result.message } : current);
           reportOperation(result);
           operationRunningRef.current = false;
           setRunningAction(null);
         } else {
-          setSourceTerminal((current) => current && current.appId === selectedApp.id ? { ...current, jobId: result.jobId } : current);
+          setSourceTerminal((current) => current && current.appId === selectedApp.id ? { ...current, jobId } : current);
         }
         return;
       }

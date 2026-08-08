@@ -8,6 +8,7 @@
 - [x] Per-app update comparison and App Store self-update state machine
 - [x] Initial Material Design 3 catalog/settings/docs surfaces
 - [ ] Disposable Windows source-build runner
+- [x] Common typed source-job runtime, M3 terminal simulator, consent, pinned OpenCode bootstrap contract, bounded repair loop, cancellation, and fail-closed isolation gate
 - [x] Installed-app discovery for reviewed Squirrel, MSI, and managed-portable records with append-only history/export
 - [x] One-click install/source-install dispatch with strict catalog-ID and typed-decision boundary; destructive uninstall confirmation unchanged
 - [ ] Real install/uninstall adapter validation across every supported package type
