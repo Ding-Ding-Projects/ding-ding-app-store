@@ -5,11 +5,12 @@ Material Design 3 desktop software center for discovering, documenting, installi
 `npm install && npm start`
 
 **Documentation site:** <https://ding-ding-projects.github.io/ding-ding-app-store/><br>
-**Current state:** active development; no verified installer has been published yet.
+**Current state:** active development; the latest verified unsigned Windows release is [`v0.1.0-27-1`](https://github.com/Ding-Ding-Projects/ding-ding-app-store/releases/tag/v0.1.0-27-1), code-named **Classic Har Gow · 蝦餃**.
 
 ## Contents
 
 - [Application architecture](#application-architecture)
+- [Screenshot gallery](#screenshot-gallery)
 - [Security and trust](#security-and-trust)
 - [Development](#development)
 - [Project guidance](#project-guidance)
@@ -21,15 +22,49 @@ Material Design 3 desktop software center for discovering, documenting, installi
 - Sandboxed renderer (`contextIsolation`, no Node integration) and a narrow typed preload bridge.
 - Reviewed, versioned public catalog; private repositories and infrastructure never enter the product catalog.
 - Stable-release comparison for every catalog entry and a separate unsigned Squirrel self-updater.
+- A closed 24-ID install-adapter map: 21 reviewed Squirrel/MSI/NSIS/Mozilla-NSIS/jpackage/portable routes and three explicit public-state blockers.
+- Exact registry/managed-portable discovery, freshly derived protected removal descriptors, append-only operation history, local Git snapshots, and filtered multi-format export.
 - Installer execution owned by the main process; the renderer cannot provide commands, paths, URLs, or arguments.
 - Offline documentation articles with an in-app browser and full local search/regex builder.
+- Persistent browser-style tab rail with left/right/top/bottom docking, pinning, grouping, overflow, four independent regex-backed tab searches, reversible bulk close/reopen, and complete keyboard control.
+- Per-surface search state, a full regex builder everywhere, and a command palette that reaches every page, command, setting, and appearance control.
+- Per-element appearance editor with live preview, reset, and export/import, applied through CSS custom properties only.
+- Main-process update schedule with a launch check that cannot be disabled, bounded repeat intervals, and quiet hours that hold notifications without delaying checks.
+
+</details>
+
+<details>
+<summary><strong>Packaged runtime evidence</strong></summary>
+
+The unsigned packaged application was driven on the sanctioned hidden Windows desktop. Fresh captures from the current production build cover the catalog, install status, updates, documentation browser, activity/export history, settings, appearance controls, command palette, and tab action/search controls.
+
+</details>
+
+<details id="screenshot-gallery">
+<summary><strong>Screenshot gallery — real packaged surfaces</strong></summary>
+
+These captures are from the built application on the hidden Windows desktop; they are evidence of the rendered surfaces, not mockups. The gallery covers the main workspace, tab controls, command discovery, settings, appearance, and export surfaces. Install is one click; only uninstall keeps the native destructive gate.
+
+| Surface | Runtime capture |
+| --- | --- |
+| Catalog discovery, bilingual navigation, search, one-click install cards, and command-palette hint | ![Catalog discovery runtime capture](docs/assets/screenshots/final-catalog-runtime.png) |
+| Installed tab and empty-state detection when no App Store-managed apps are present | ![Installed-app detection runtime capture](docs/assets/screenshots/final-installed-runtime.png) |
+| Updates tab with the same per-surface search and bulk controls | ![Updates runtime capture](docs/assets/screenshots/final-updates-runtime.png) |
+| Offline documentation browser rendered inside the app | ![Documentation browser runtime capture](docs/assets/screenshots/final-docs-runtime.png) |
+| Append-only activity history and export surface | ![Activity and export runtime capture](docs/assets/screenshots/final-activity-runtime.png) |
+| Settings surface with section tabs, search, language, funny-level, and source-repair consent controls | ![Settings runtime capture](docs/assets/screenshots/final-settings-runtime.png) |
+| Appearance settings with rail layout preview and customization controls | ![Appearance settings runtime capture](docs/assets/screenshots/final-appearance-runtime.png) |
+| Command palette listing pages and tab commands | ![Command palette runtime capture](docs/assets/screenshots/final-command-palette-runtime.png) |
+| Tab action panel with local filter, regex builder affordance, pinned-tab protection, and bulk-close previews | ![Tab actions runtime capture](docs/assets/screenshots/final-tab-actions-runtime.png) |
 
 </details>
 
 <details id="security-and-trust">
 <summary><strong>Security and trust</strong></summary>
 
-Installable assets require an allowlisted application, a reviewed asset matcher, an HTTPS GitHub release origin, a bounded declared size, and a GitHub SHA-256 digest. Install results are recorded only after the child process exits successfully. Uninstall uses only the exact entry recorded for that installation and requires the two-key plus full-slider destructive confirmation.
+Install and Reinstall are genuine one-click actions: the catalog button immediately submits only the application ID and a closed install decision, with no phrase-entry dialog. Installable assets still require an allowlisted application, one app-specific adapter, an HTTPS GitHub release origin, bounded declared/received size, and either GitHub SHA-256 metadata or a GitHub-digested companion checksum. Install results are recorded only after hidden shell-free execution and exact installed-app rediscovery. Uninstall re-derives its authority from the current reviewed registry/portable identity and still requires the two-key plus full-slider destructive confirmation.
+
+The common dispatch is implemented, but fully automatic fresh-Windows coverage is not: the current [24-app adapter matrix](docs/features/installation/one-click-installation.md) records every missing release, archive, source-toolchain, dependency-bootstrap, disposable-runner, bounded OpenCode-repair, cancellation, and runtime-proof requirement without treating a guessed command as an adapter.
 
 Source recipes are catalogued but are never executed directly on the host. The product will enable that path only through a disposable, resource-bounded Windows build runner.
 
@@ -48,6 +83,8 @@ npm run dist
 ```
 
 The application uses Squirrel.Windows. A successful package must contain `Setup.exe`, `RELEASES`, and a full `.nupkg`, and the executable must be verified as unsigned.
+
+The tab rail is a real persisted workspace: it defaults to the left edge but can dock to any edge, keeps pinned tabs protected, gives every strip/group/group-name/master search its own regex builder state, and previews **Close tabs containing text** / **Close tabs not containing text** before a second confirmation click. Closed tabs remain recoverable from the tab-actions panel; the final open tab cannot be closed.
 
 </details>
 

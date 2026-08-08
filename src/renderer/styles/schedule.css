@@ -1,0 +1,31 @@
+@layer features {
+  .schedule-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; max-width: 1100px; margin: 0 auto 20px; }
+  .schedule-card {
+    padding: calc(24px * var(--elx-schedule-card-pad-scale, 1));
+    color: var(--elx-schedule-card-foreground, inherit);
+    background: var(--elx-schedule-card-background, var(--surface-container));
+    border-radius: var(--elx-schedule-card-radius, 24px);
+    border: var(--elx-schedule-card-border-width, 0) solid var(--outline);
+    font-size: calc(1rem * var(--elx-schedule-card-font-scale, 1));
+    box-shadow: var(--elx-schedule-card-elevation, none);
+  }
+  .schedule-card h2 { margin-top: 0; }
+  .schedule-card h4 { margin: 0 0 6px; }
+  .switch-row { display: flex; align-items: center; gap: 12px; margin: 12px 0; }
+  .switch-row label { display: flex; align-items: center; gap: 10px; margin: 0; font-weight: 650; }
+  .time-range { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
+  .time-range label { display: grid; gap: 6px; margin: 8px 0; font-weight: 650; }
+  .quiet-badge { display: inline-flex; align-items: center; padding: 6px 12px; border-radius: 999px; background: var(--primary-container); color: color-mix(in srgb, var(--primary) 85%, black); font-size: 12px; font-weight: 800; }
+  .status-grid { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 16px; }
+  .status-grid h2 { grid-column: 1 / -1; }
+  .status-grid-item { display: grid; align-content: start; gap: 6px; padding: 14px; border-radius: 18px; background: var(--surface); }
+  .status-grid-item .supporting { margin: 0; overflow-wrap: anywhere; }
+  .status-grid-item time { color: var(--outline); }
+  .scheduled-rule { display: grid; gap: 14px; margin: 14px 0; padding: 16px; border: 1px solid color-mix(in srgb, var(--outline) 28%, transparent); border-radius: 18px; background: var(--surface); }
+  .scheduled-rule-heading { display: flex; align-items: center; gap: 10px; }
+  .scheduled-rule-heading input[type="text"] { flex: 1; min-width: 0; }
+  .scheduled-rule-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .scheduled-rule-grid label { display: grid; gap: 6px; min-width: 0; }
+  .scheduled-rule-grid small { color: var(--outline); font-weight: 500; }
+  @media (max-width: 760px) { .scheduled-rule-grid { grid-template-columns: 1fr; } .scheduled-rule-heading { flex-wrap: wrap; } }
+}

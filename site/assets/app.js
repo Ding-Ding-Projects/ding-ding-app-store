@@ -1,33 +1,196 @@
 (() => {
-  const articles = [
-    { id: 'catalog', title: 'Catalog discovery', yue: '目錄探索', tags: ['catalog', 'search'], body: 'Discover Ding Ding Projects applications through searchable records with version, platform, source, and installer availability. Plain search is the default; the adjacent regex builder enables bounded validated patterns.', config: 'Choose approved catalog, platform and category filters. View preferences persist locally.', failures: 'Unavailable catalogs, malformed records, invalid patterns, and no matches show explicit recoverable states.', security: 'Allowlist record fields and URL schemes; render descriptions as untrusted text; bound regex evaluation.', proof: 'Static docs/site coverage is present. Catalog runtime and capture are pending.', related: ['installer', 'privacy'] },
-    { id: 'installer', title: 'Verified installer operations', yue: '已驗證安裝操作', tags: ['install', 'integrity'], body: 'Install only from immutable release assets with expected version, platform, and integrity metadata. Stage, validate, show progress, and report success only after installer exit.', config: 'Use a native folder picker or validated path and show unsigned-artifact status.', failures: 'Network, missing asset, hash mismatch, cancellation, disk, permission, and exit errors remain honest operation states.', security: 'HTTPS and exact integrity metadata are required. A hash is never described as code signing.', proof: 'No installer has run in this static documentation lane.', related: ['source', 'uninstall'] },
-    { id: 'source', title: 'Source-build security', yue: '原始碼建置安全', tags: ['build', 'security'], body: 'The source route is an opt-in fallback that identifies approved repository revision, command, toolchain, and expected output in an isolated workspace.', config: 'Choose only approved revision and owned output location.', failures: 'Toolchain, revision, build, cancellation, and output failures do not become installations.', security: 'A source build executes code; constrain paths, commands, environment, output, network, and logs.', proof: 'No build run is claimed here.', related: ['installer', 'privacy'] },
-    { id: 'uninstall', title: 'Uninstall', yue: '解除安裝', tags: ['remove', 'data'], body: 'Removal identifies exact application ownership before touching files and handles application data as a separately explained choice.', config: 'Keep or remove data only where supported, using native destructive confirmation.', failures: 'Locked files, absent uninstallers, permissions, partial removal, cancellation, and unknown ownership are visible.', security: 'Canonicalize and prove owned paths; never delete arbitrary directories.', proof: 'No destructive operation was run for this documentation lane.', related: ['installer', 'privacy'] },
-    { id: 'app-update', title: 'Per-app update checker', yue: '每個 App 更新檢查', tags: ['updates', 'feeds'], body: 'Each installed catalog app compares its installed version to that app’s verified release feed without blocking current work.', config: 'Bounded startup/background/manual checks and persisted notification preferences.', failures: 'Offline, malformed feed, missing release, rate limit, cancellation, and hash mismatch retain last-known state.', security: 'Validate HTTPS feed metadata, allowlist fields, reject unsafe redirects, verify assets.', proof: 'Feed and scheduler runtime proof are pending.', related: ['self-update', 'installer'] },
-    { id: 'self-update', title: 'App Store self-updater', yue: 'App Store 自己更新', tags: ['updates', 'restart'], body: 'The App Store offers a persistent non-blocking ready update state with exact version, notes, unsigned warning, restart, and later choices.', config: 'Automatic bounded checks plus manual check; restart stays user chosen and respects unsaved work.', failures: 'Invalid feed, corrupt asset, cancellation, failed staging, rollback, and blocked restart are named states.', security: 'HTTPS metadata and package hashes protect integrity; artifacts remain honestly unsigned.', proof: 'No feed/package/restart has been exercised.', related: ['app-update', 'verification'] },
-    { id: 'offline-docs', title: 'Offline documentation browser', yue: '離線文件瀏覽器', tags: ['docs', 'offline'], body: 'Every feature article is bundled at build time, rendered through one isolated Markdown surface, and linked within the app.', config: 'Search title/body with plain text by default or full regex builder; language and voice settings persist.', failures: 'Missing article/index, invalid pattern, and no results are explicit. Bundle completeness must fail builds.', security: 'Isolate authored text and bound regular-expression evaluation.', proof: 'This source foundation exists; packaged-browser proof is pending.', related: ['catalog', 'verification'] },
-    { id: 'privacy', title: 'Privacy and security', yue: '私隱同安全', tags: ['privacy', 'trust'], body: 'Retain only app-managed records needed for catalog preferences, installation state, history, and settings; explain paths, network, and privileges.', config: 'Inspect/export app records and adjust local retention/appearance/language settings.', failures: 'Storage, permission, config, network, export, and history errors state facts without leaking secrets.', security: 'Validate privileged inputs, use OS credential storage, redact logs, preserve encryption in history.', proof: 'Integration and threat-model/runtime proof are pending.', related: ['source', 'verification'] },
-    { id: 'verification', title: 'Verification', yue: '驗證', tags: ['tests', 'evidence'], body: 'Evidence identifies its exact revision and distinguishes static checks, tests, build, runtime operation, headless capture, release assets, and remote workflow state.', config: 'Run focused checks, then relevant build/runtime and required headless capture.', failures: 'Missing dependencies, failed checks, unavailable capture, cancelled workflows, and absent artifacts are boundaries, not success.', security: 'Evidence redacts credentials, tokens, private paths, and user data.', proof: 'Only static documentation/site structure is intended evidence for this lane.', related: ['offline-docs', 'self-update'] }
-  ];
-  const $ = id => document.getElementById(id); const storage = 'ding-ding-docs:';
-  const state = { article: localStorage.getItem(storage + 'article') || 'home', mode: localStorage.getItem(storage + 'mode') || 'en', funnyEn: +(localStorage.getItem(storage + 'funnyEn') || 2), funnyYue: +(localStorage.getItem(storage + 'funnyYue') || 3), regex: false };
-  function text(a) { return state.mode === 'en' ? a.title : state.mode === 'yue' ? a.yue : `${a.title} · ${a.yue}`; }
+  'use strict';
+  const bundle = window.DING_DING_DOCS;
+  if (!bundle?.articles?.length) throw new Error('The generated documentation bundle is missing.');
+  const articles = bundle.articles;
+  const categories = bundle.categories;
+  const $ = (id) => document.getElementById(id);
+  const storage = 'ding-ding-docs:';
+  const state = {
+    article: localStorage.getItem(storage + 'article') || 'home',
+    mode: localStorage.getItem(storage + 'mode') || 'en',
+    funnyEn: +(localStorage.getItem(storage + 'funnyEn') || 2),
+    funnyYue: +(localStorage.getItem(storage + 'funnyYue') || 3),
+    theme: localStorage.getItem(storage + 'theme') || 'system',
+    density: localStorage.getItem(storage + 'density') || 'comfortable',
+    accent: localStorage.getItem(storage + 'accent') || '#4f378b',
+    settingsTab: localStorage.getItem(storage + 'settingsTab') || 'general',
+  };
+  const search = { docs: { regex: false, pattern: '', flags: 'iu' }, settings: { regex: false, pattern: '', flags: 'iu' }, palette: { regex: false, pattern: '', flags: 'iu' } };
+
+  const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
+  const articleId = (href) => href.match(/(?:^|\/)([a-z0-9-]+)\.md(?:#.*)?$/i)?.[1] || null;
+  function inline(raw) {
+    const pattern = /(\[[^\]]+\]\([^)]+\)|`[^`]+`|\*\*[^*]+\*\*)/g;
+    let output = ''; let cursor = 0;
+    for (const match of raw.matchAll(pattern)) {
+      output += escapeHtml(raw.slice(cursor, match.index));
+      const token = match[0];
+      if (token.startsWith('[')) {
+        const link = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/); const id = link && articleId(link[2]);
+        output += id ? `<button class="article-link" data-open="${escapeHtml(id)}">${escapeHtml(link[1])}</button>` : escapeHtml(link?.[1] || token);
+      } else if (token.startsWith('`')) output += `<code>${escapeHtml(token.slice(1, -1))}</code>`;
+      else output += `<strong>${escapeHtml(token.slice(2, -2))}</strong>`;
+      cursor = match.index + token.length;
+    }
+    return output + escapeHtml(raw.slice(cursor));
+  }
+
+  function markdown(body) {
+    const output = []; let paragraph = []; let bullets = [];
+    const flushParagraph = () => { if (paragraph.length) output.push(`<p>${inline(paragraph.join(' '))}</p>`); paragraph = []; };
+    const flushBullets = () => { if (bullets.length) output.push(`<ul>${bullets.map((line) => `<li>${inline(line)}</li>`).join('')}</ul>`); bullets = []; };
+    for (const line of body.replace(/\r/g, '').split('\n')) {
+      if (line.startsWith('# ')) continue;
+      if (line.startsWith('## ')) { flushParagraph(); flushBullets(); output.push(`<h2>${escapeHtml(line.slice(3))}</h2>`); }
+      else if (line.startsWith('### ')) { flushParagraph(); flushBullets(); output.push(`<h3>${escapeHtml(line.slice(4))}</h3>`); }
+      else if (line.startsWith('- ')) { flushParagraph(); bullets.push(line.slice(2)); }
+      else if (!line.trim()) { flushParagraph(); flushBullets(); }
+      else paragraph.push(line.trim());
+    }
+    flushParagraph(); flushBullets(); return output.join('');
+  }
+
+  function title(article) { return state.mode === 'en' ? article.title : state.mode === 'yue' ? article.titleYue : `${article.title} · ${article.titleYue}`; }
   function setStatus(message) { $('status').textContent = message; }
-  function tabs() { $('article-tabs').innerHTML = articles.map(a => `<button class="rail-tab ${state.article === a.id ? 'active' : ''}" data-article="${a.id}" role="tab" aria-selected="${state.article === a.id}">${text(a)}</button>`).join(''); document.querySelectorAll('[data-article]').forEach(b => b.addEventListener('click', () => openArticle(b.dataset.article))); }
-  function articleContent(a) { if (!a) return `<h1>Ding Ding App Store documentation</h1><p class="lede">A local-only Material Design 3 documentation foundation for safely discovering, installing, building, updating, documenting, and removing Ding Ding Projects applications.</p><h2>Feature coverage</h2><div class="suggestion-list">${articles.map(x => `<button class="result-card" data-open="${x.id}"><strong>${text(x)}</strong><br>${x.body}</button>`).join('')}</div>`; return `<span class="tag">Feature article</span><h1>${text(a)}</h1><p>${a.body}</p><h2>Configuration</h2><p>${a.config}</p><h2>Failure modes</h2><p>${a.failures}</p><h2>Security considerations</h2><p>${a.security}</p><h2>Verification</h2><p>${a.proof}</p><section class="suggestions"><h2>Suggested articles</h2><div class="suggestion-list">${a.related.map(id => { const r = articles.find(x => x.id === id); return `<button class="result-card" data-open="${r.id}">${text(r)}</button>`; }).join('')}</div></section>`; }
-  function bindOpen() { document.querySelectorAll('[data-open]').forEach(b => b.addEventListener('click', () => openArticle(b.dataset.open))); }
-  function openArticle(id) { state.article = id; localStorage.setItem(storage + 'article', id); $('article').innerHTML = articleContent(articles.find(a => a.id === id)); bindOpen(); tabs(); $('home-tab').classList.toggle('active', id === 'home'); $('home-tab').setAttribute('aria-selected', String(id === 'home')); $('article').focus({ preventScroll: true }); setStatus(id === 'home' ? 'Ready. Browse a feature or search the documentation.' : `Opened ${text(articles.find(a => a.id === id))}.`); }
-  function renderResults() { const query = $('search').value.trim(); const pattern = $('regex-pattern').value; const flags = $('regex-flags').value; const key = state.regex ? pattern : query; if (!key) { $('results').innerHTML = ''; return; } let re; try { re = state.regex ? new RegExp(pattern, flags) : new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'iu'); $('regex-result').textContent = state.regex ? `Valid pattern. Flags: ${flags || '(none)'}.` : 'Plain-text search is active.'; } catch (e) { $('regex-result').textContent = `Invalid regex: ${e.message}`; $('results').innerHTML = '<p class="empty">Search is paused until the pattern is valid.</p>'; return; } const matched = articles.filter(a => re.test([a.title, a.yue, a.tags.join(' '), a.body, a.config, a.failures, a.security, a.proof].join(' '))); $('results').innerHTML = matched.length ? `<h2>Search results (${matched.length})</h2>${matched.map(a => `<button class="result-card" data-open="${a.id}"><strong>${text(a)}</strong><br>${a.body}</button>`).join('')}` : `<p class="empty">No documentation matches “${key}”. Clear the query or adjust filters/pattern.</p>`; bindOpen(); }
-  function paletteResults(value = '') { const q = value.toLocaleLowerCase(); const rows = [...articles.map(a => ({ id: a.id, label: text(a), type: 'Article' })), { id: 'setting-language', label: 'Language mode setting', type: 'Setting' }, { id: 'setting-funny-en', label: 'English funny level setting', type: 'Setting' }, { id: 'setting-funny-yue', label: 'Cantonese funny level setting', type: 'Setting' }].filter(x => `${x.label} ${x.type}`.toLocaleLowerCase().includes(q)); $('palette-results').innerHTML = rows.length ? rows.map(x => `<button class="palette-row" data-command="${x.id}" role="option"><strong>${x.label}</strong><br><small>${x.type}</small></button>`).join('') : '<p class="empty">No command or destination matches.</p>'; document.querySelectorAll('[data-command]').forEach(b => b.addEventListener('click', () => { const id = b.dataset.command; $('palette').close(); if (id.startsWith('setting-')) { $(id.replace('setting-', '')).focus(); setStatus(`Focused ${b.textContent.trim()}.`); } else openArticle(id); })); }
-  function saveControls() { localStorage.setItem(storage + 'mode', state.mode); localStorage.setItem(storage + 'funnyEn', state.funnyEn); localStorage.setItem(storage + 'funnyYue', state.funnyYue); }
-  $('regex-toggle').addEventListener('click', () => { state.regex = !state.regex; $('regex-panel').hidden = !state.regex; $('regex-toggle').setAttribute('aria-expanded', String(state.regex)); if (state.regex) { $('regex-pattern').value = $('search').value; $('regex-pattern').focus(); } renderResults(); });
-  document.querySelectorAll('[data-token]').forEach(b => b.addEventListener('click', () => { const input = $('regex-pattern'); input.setRangeText(b.dataset.token, input.selectionStart, input.selectionEnd, 'end'); input.focus(); renderResults(); }));
-  ['search', 'regex-pattern', 'regex-flags', 'regex-sample'].forEach(id => $(id).addEventListener('input', renderResults));
+  function saveControls() {
+    for (const key of ['mode', 'funnyEn', 'funnyYue', 'theme', 'density', 'accent', 'settingsTab']) localStorage.setItem(storage + key, state[key]);
+  }
+  function applyAppearance() {
+    document.documentElement.dataset.theme = state.theme;
+    document.documentElement.dataset.density = state.density;
+    document.documentElement.style.setProperty('--primary', state.accent);
+    document.documentElement.lang = state.mode === 'yue' ? 'yue-Hant-HK' : 'en';
+  }
+
+  function bindOpen() { document.querySelectorAll('[data-open]').forEach((button) => button.addEventListener('click', () => openArticle(button.dataset.open))); }
+  function homeContent() {
+    return `<h1>Ding Ding App Store complete documentation</h1><p class="lede">Every implemented feature and every explicit limit is documented from one canonical categorized source. Pending work is labelled pending and never presented as shipped.</p>${categories.map((category) => { const rows = articles.filter((article) => article.category === category.id); return `<section class="feature-category"><h2>${escapeHtml(category.title)}</h2><p>${escapeHtml(category.summary)}</p><div class="suggestion-list">${rows.map((article) => `<button class="result-card" data-open="${article.id}"><strong>${escapeHtml(title(article))}</strong><span class="tag ${article.status}">${article.status}</span><br>${escapeHtml(article.summary)}</button>`).join('')}</div></section>`; }).join('')}`;
+  }
+  function articleContent(article) {
+    if (!article) return homeContent();
+    return `<span class="tag ${article.status}">${article.status}</span><h1>${escapeHtml(title(article))}</h1><p class="lede">${escapeHtml(article.summary)}</p>${markdown(article.body)}`;
+  }
+
+  function tabs() {
+    $('article-tabs').innerHTML = categories.map((category) => `<div class="article-tab-group" role="group" aria-label="${escapeHtml(category.title)}"><p>${escapeHtml(category.title)}</p>${articles.filter((article) => article.category === category.id).map((article) => `<button id="site-tab-${article.id}" class="rail-tab ${state.article === article.id ? 'active' : ''}" data-article="${article.id}" role="tab" aria-selected="${state.article === article.id}" aria-controls="article" tabindex="${state.article === article.id ? '0' : '-1'}"><span>${escapeHtml(title(article))}</span><small>${article.status}</small></button>`).join('')}</div>`).join('');
+    const buttons = [...document.querySelectorAll('[data-article]')];
+    buttons.forEach((button, index) => {
+      button.onclick = () => openArticle(button.dataset.article);
+      button.onkeydown = (event) => {
+        let target = index;
+        if (event.key === 'ArrowDown' || event.key === 'ArrowRight') target = (index + 1) % buttons.length;
+        else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') target = (index - 1 + buttons.length) % buttons.length;
+        else if (event.key === 'Home') target = 0;
+        else if (event.key === 'End') target = buttons.length - 1;
+        else return;
+        event.preventDefault(); buttons[target].focus(); openArticle(buttons[target].dataset.article, false);
+      };
+    });
+  }
+
+  function openArticle(id, focus = true) {
+    state.article = articles.some((article) => article.id === id) ? id : 'home';
+    localStorage.setItem(storage + 'article', state.article);
+    const article = articles.find((item) => item.id === state.article);
+    $('article').innerHTML = articleContent(article);
+    bindOpen(); tabs();
+    $('home-tab').classList.toggle('active', state.article === 'home');
+    $('home-tab').setAttribute('aria-selected', String(state.article === 'home'));
+    $('home-tab').tabIndex = state.article === 'home' ? 0 : -1;
+    if (focus) $('article').focus({ preventScroll: true });
+    setStatus(article ? `Opened ${title(article)}. Status: ${article.status}.` : `Ready. ${articles.length} complete feature articles are available.`);
+  }
+
+  function matcher(kind, query) {
+    const mode = search[kind]; const key = mode.regex ? mode.pattern : query;
+    if (!key) return () => true;
+    try {
+      const expression = mode.regex ? new RegExp(mode.pattern.slice(0, 256), mode.flags.replace('g', '')) : null;
+      const needle = key.toLocaleLowerCase();
+      return (text) => expression ? (expression.lastIndex = 0, expression.test(text)) : text.toLocaleLowerCase().includes(needle);
+    } catch { return () => false; }
+  }
+
+  function renderDocsResults() {
+    const query = $('docs-search').value.trim(); const mode = search.docs; const key = mode.regex ? mode.pattern : query;
+    if (!key) { $('results').innerHTML = ''; return; }
+    const match = matcher('docs', query);
+    const rows = articles.filter((article) => match([article.title, article.titleYue, article.category, article.status, article.summary, article.body].join('\n')));
+    $('results').innerHTML = rows.length ? `<h2>Search results (${rows.length})</h2>${rows.map((article) => `<button class="result-card" data-open="${article.id}"><strong>${escapeHtml(title(article))}</strong><br>${escapeHtml(article.summary)}</button>`).join('')}` : `<p class="empty">No documentation matches “${escapeHtml(key)}”. Clear the query or adjust the pattern.</p>`;
+    bindOpen();
+  }
+
+  function buildRegexPanel(kind, onApply) {
+    const panel = $(`${kind}-regex-panel`);
+    panel.innerHTML = `<label>Pattern <input data-regex="pattern" maxlength="256" aria-label="Regex pattern"></label><fieldset><legend>Flags</legend>${['i', 'm', 's', 'u'].map((flag) => `<label class="flag"><input type="checkbox" data-flag="${flag}" ${search[kind].flags.includes(flag) ? 'checked' : ''}>${flag}</label>`).join('')}</fieldset><label>Sample text <textarea data-regex="sample" maxlength="2048">Catalog\nInstaller\nAppearance</textarea></label><p data-regex="result" role="status">Plain-text search is active.</p><div class="regex-actions"><button data-token="literal">Literal</button><button data-token="[A-Za-z]">Class</button><button data-token="^">Anchor</button><button data-token="()">Group</button><button data-token="|">Alternation</button><button data-token="{1,3}">Quantifier</button></div><footer><button data-regex="plain" class="text-button">Use plain text</button><button data-regex="apply" class="text-button">Apply regex to search</button></footer>`;
+    const pattern = panel.querySelector('[data-regex="pattern"]'); const result = panel.querySelector('[data-regex="result"]');
+    pattern.value = search[kind].pattern || $(`${kind}-search`).value;
+    const update = () => {
+      search[kind].pattern = pattern.value; search[kind].flags = [...panel.querySelectorAll('[data-flag]:checked')].map((input) => input.dataset.flag).join('');
+      try { const expression = new RegExp(pattern.value, search[kind].flags.replace('g', '') + 'g'); const matches = [...panel.querySelector('[data-regex="sample"]').value.matchAll(expression)].slice(0, 100); result.textContent = `${matches.length} matches. ${matches.map((item) => item[0] || 'zero-width').join(', ') || 'No match.'}`; }
+      catch (error) { result.textContent = `Invalid regex: ${error.message}`; }
+    };
+    panel.querySelectorAll('input, textarea').forEach((input) => input.addEventListener('input', update));
+    panel.querySelectorAll('[data-token]').forEach((button) => button.addEventListener('click', () => { pattern.setRangeText(button.dataset.token, pattern.selectionStart, pattern.selectionEnd, 'end'); pattern.focus(); update(); }));
+    panel.querySelector('[data-regex="plain"]').addEventListener('click', () => { search[kind].regex = false; search[kind].pattern = ''; panel.hidden = true; $(`${kind}-regex-toggle`).setAttribute('aria-expanded', 'false'); onApply(); });
+    panel.querySelector('[data-regex="apply"]').addEventListener('click', () => { update(); search[kind].regex = true; $(`${kind}-search`).value = pattern.value; panel.hidden = true; $(`${kind}-regex-toggle`).setAttribute('aria-expanded', 'false'); onApply(); });
+    update();
+  }
+
+  function setupBuilder(kind, onApply) {
+    buildRegexPanel(kind, onApply);
+    $(`${kind}-regex-toggle`).addEventListener('click', () => {
+      const panel = $(`${kind}-regex-panel`); panel.hidden = !panel.hidden;
+      $(`${kind}-regex-toggle`).setAttribute('aria-expanded', String(!panel.hidden));
+      if (!panel.hidden) {
+        const pattern = panel.querySelector('[data-regex="pattern"]');
+        if (!search[kind].regex) pattern.value = $(`${kind}-search`).value;
+        pattern.dispatchEvent(new Event('input', { bubbles: true }));
+        pattern.focus();
+      }
+    });
+  }
+
+  function openSettingsTab(id, focus = false) {
+    state.settingsTab = ['general', 'appearance', 'about'].includes(id) ? id : 'general'; saveControls();
+    document.querySelectorAll('[data-settings-tab]').forEach((tab) => { const active = tab.dataset.settingsTab === state.settingsTab; tab.setAttribute('aria-selected', String(active)); tab.tabIndex = active ? 0 : -1; });
+    document.querySelectorAll('[data-settings-panel]').forEach((panel) => { panel.hidden = panel.dataset.settingsPanel !== state.settingsTab; });
+    $('settings-search').value = ''; search.settings.pattern = ''; search.settings.regex = false; filterSettings();
+    if (focus) $(`settings-tab-${state.settingsTab}`).focus();
+  }
+  function filterSettings() {
+    const panel = $(`settings-panel-${state.settingsTab}`); const match = matcher('settings', $('settings-search').value.trim()); let visible = 0;
+    panel.querySelectorAll('[data-settings-text]').forEach((row) => { const show = match(`${row.dataset.settingsText} ${row.textContent}`); row.hidden = !show; if (show) visible += 1; });
+    $('settings-empty').hidden = visible > 0;
+  }
+
+  function paletteResults() {
+    const value = $('palette-search').value.trim(); const match = matcher('palette', value);
+    const rows = [{ id: 'home', label: 'Home', type: 'Destination' }, ...articles.map((article) => ({ id: article.id, label: title(article), type: `${article.category} · ${article.status}` })), ...['general', 'appearance', 'about'].map((id) => ({ id: `setting-${id}`, label: `${id[0].toUpperCase()}${id.slice(1)} settings`, type: 'Setting destination' }))].filter((row) => match(`${row.label} ${row.type}`));
+    $('palette-results').innerHTML = rows.length ? rows.map((row) => `<button class="palette-row" data-command="${row.id}" role="option"><strong>${escapeHtml(row.label)}</strong><br><small>${escapeHtml(row.type)}</small></button>`).join('') : '<p class="empty">No command or destination matches.</p>';
+    document.querySelectorAll('[data-command]').forEach((button) => button.addEventListener('click', () => { $('palette').close(); const id = button.dataset.command; if (id.startsWith('setting-')) { openSettingsTab(id.slice(8)); $('settings-title').scrollIntoView(); } else openArticle(id); }));
+  }
+
+  $('docs-search').addEventListener('input', () => { if (search.docs.regex) search.docs.pattern = $('docs-search').value; renderDocsResults(); });
+  $('settings-search').addEventListener('input', () => { if (search.settings.regex) search.settings.pattern = $('settings-search').value; filterSettings(); });
+  $('palette-search').addEventListener('input', () => { if (search.palette.regex) search.palette.pattern = $('palette-search').value; paletteResults(); });
+  setupBuilder('docs', renderDocsResults); setupBuilder('settings', filterSettings); setupBuilder('palette', paletteResults);
+
+  document.querySelectorAll('[data-settings-tab]').forEach((tab, index, tabs) => {
+    tab.addEventListener('click', () => openSettingsTab(tab.dataset.settingsTab));
+    tab.addEventListener('keydown', (event) => { if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return; event.preventDefault(); const target = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length; openSettingsTab(tabs[target].dataset.settingsTab, true); });
+  });
+
   $('language').value = state.mode; $('funny-en').value = state.funnyEn; $('funny-yue').value = state.funnyYue; $('funny-en-value').textContent = state.funnyEn; $('funny-yue-value').textContent = state.funnyYue;
-  $('language').addEventListener('change', e => { state.mode = e.target.value; saveControls(); openArticle(state.article); });
-  [['funny-en', 'funnyEn', 'funny-en-value'], ['funny-yue', 'funnyYue', 'funny-yue-value']].forEach(([id, key, out]) => $(id).addEventListener('input', e => { state[key] = +e.target.value; $(out).textContent = e.target.value; saveControls(); setStatus(`${id === 'funny-en' ? 'English' : 'Cantonese'} funny level set to ${e.target.value}; factual content stays unchanged.`); }));
-  $('palette-button').addEventListener('click', () => { $('palette').showModal(); $('palette-search').value = ''; paletteResults(); $('palette-search').focus(); }); $('palette-close').addEventListener('click', () => $('palette').close()); $('palette-search').addEventListener('input', e => paletteResults(e.target.value));
-  window.addEventListener('keydown', e => { if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'f') { e.preventDefault(); $('palette-button').click(); } });
-  openArticle(state.article); tabs();
+  $('theme').value = state.theme; $('density').value = state.density; $('accent').value = state.accent;
+  $('language').addEventListener('change', (event) => { state.mode = event.target.value; saveControls(); applyAppearance(); openArticle(state.article, false); });
+  [['funny-en', 'funnyEn', 'funny-en-value'], ['funny-yue', 'funnyYue', 'funny-yue-value']].forEach(([id, key, output]) => $(id).addEventListener('input', (event) => { state[key] = +event.target.value; $(output).textContent = event.target.value; saveControls(); setStatus(`${id === 'funny-en' ? 'English' : 'Cantonese'} funny level set to ${event.target.value}; factual article content is unchanged.`); }));
+  [['theme', 'theme'], ['density', 'density'], ['accent', 'accent']].forEach(([id, key]) => $(id).addEventListener('input', (event) => { state[key] = event.target.value; saveControls(); applyAppearance(); }));
+
+  $('palette-button').addEventListener('click', () => { $('palette').showModal(); $('palette-search').value = ''; search.palette.pattern = ''; search.palette.regex = false; paletteResults(); $('palette-search').focus(); });
+  $('palette-close').addEventListener('click', () => $('palette').close());
+  window.addEventListener('keydown', (event) => { if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'f') { event.preventDefault(); $('palette-button').click(); } });
+
+  applyAppearance(); openSettingsTab(state.settingsTab); openArticle(state.article, false);
 })();
