@@ -1,5 +1,12 @@
 # Handoff
 
+## 2026-08-08 first non-portable clean-Windows adapter proof lane
+
+- Branch `codex/nonportable-squirrel-proof` adds exactly one non-portable cloud target: `qbittorrent-material` through the existing reviewed `qbittorrent-material-squirrel` adapter. The three portable proof targets remain unchanged, and the workflow remains manual-dispatch only on `windows-2022`.
+- `src/main/install-proof-targets.ts` is the typed execution allowlist. The qBittorrent Material contract requires a direct GitHub SHA-256 digest, refuses any non-empty initial target state, and expects an App Store-owned registry record plus Squirrel uninstall descriptor.
+- `scripts/prove-install-adapter.mjs` records bounded public integrity metadata and proves install, exact rediscovery, reviewed uninstall, post-cleanup discovery absence, and persisted ownership removal. It still records `sourceRuntimeInvoked:false` and never invokes source jobs or OpenCode.
+- Focused verification is green: `tests/install-adapter-proof-contract.test.ts` plus `tests/install-adapters.test.ts` passed 18/18 tests, the main-process typecheck passed, and `git diff --check` passed. A cloud dispatch has not run yet, so this section does not claim clean-Windows lifecycle success.
+
 ## Current state
 
 The repository contains a sandboxed Electron/React/TypeScript shell, reviewed 24-application catalog, stable-release/update comparison, SHA-256-gated installer path, protected uninstall path, App Store self-updater state machine, Material Design 3 navigation, language/funny-level settings, regex builder, command palette, real local operation history with export, generated offline documentation, and a fail-closed common automatic source-repair runtime.
