@@ -80,7 +80,7 @@ function assertReleaseUrl(url: string): URL {
 
 function assertReleaseNotesUrl(url: string): string {
   const parsed = new URL(url);
-  if (parsed.protocol !== 'https:' || parsed.hostname !== 'github.com' || !/^\/Ding-Ding-Projects\/[A-Za-z0-9_.-]+\/releases\/tag\/v[0-9A-Za-z.+-]+$/.test(parsed.pathname)) {
+  if (parsed.protocol !== 'https:' || parsed.hostname !== 'github.com' || !/^\/Ding-Ding-Projects\/[A-Za-z0-9_.-]+\/releases\/tag\/[0-9A-Za-z.+-]+$/.test(parsed.pathname)) {
     throw new Error('Release notes URL is outside the reviewed public release route.');
   }
   return parsed.toString();
