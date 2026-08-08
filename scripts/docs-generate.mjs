@@ -31,6 +31,7 @@ const articles = [
   ['automatic-repair-and-universal-adapters', 'Automatic repair and universal adapters', '自動修復同通用安裝配接器', 'installation', 'Automatic-Repair-and-Universal-Adapters', 'limited', ['verified-installer-operations', 'source-build-security', 'verification']],
   ['installed-app-discovery', 'Installed app discovery', '已安裝 App 偵測', 'installed', 'Installed-App-Discovery', 'shipped', ['uninstall', 'activity-history', 'privacy-and-security']],
   ['activity-history', 'Activity history and export', '操作記錄同匯出', 'installed', 'Activity-History', 'shipped', ['installed-app-discovery', 'verified-installer-operations', 'privacy-and-security']],
+  ['history-versioning', 'Local history and version restore', '本機歷史同版本還原', 'installed', 'History-Versioning', 'limited', ['activity-history', 'installed-app-discovery', 'privacy-and-security']],
   ['per-app-update-checker', 'Per-app update checker', '每個 App 更新檢查', 'updates', 'Per-App-Update-Checker', 'limited', ['catalog-discovery', 'app-store-self-updater', 'update-schedule']],
   ['app-store-self-updater', 'App Store self-updater', 'App Store 自己更新', 'updates', 'App-Store-Self-Updater', 'limited', ['update-schedule', 'notifications-and-status', 'verification']],
   ['update-schedule', 'Update schedule', '更新排程', 'updates', 'Update-Schedule', 'shipped', ['app-store-self-updater', 'catalog-discovery', 'notifications-and-status', 'dim-sum-surprise']],

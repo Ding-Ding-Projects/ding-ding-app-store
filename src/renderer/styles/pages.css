@@ -74,6 +74,17 @@
   .history-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
   .history-heading time { margin-left: auto; color: var(--outline); font-size: 12px; }
   .history-row p { margin: 6px 0 0; color: var(--outline); overflow-wrap: anywhere; }
+  .history-revisions { margin: 18px 0; padding: 14px; border: 1px solid color-mix(in srgb, var(--outline) 32%, transparent); border-radius: 18px; background: var(--surface-container-low); }
+  .history-revisions > summary { cursor: pointer; font-weight: 750; }
+  .revision-list { display: grid; gap: 10px; margin: 14px 0 0; padding: 0; list-style: none; }
+  .revision-row { display: grid; gap: 8px; padding: 12px; border: 1px solid color-mix(in srgb, var(--outline) 24%, transparent); border-radius: 14px; background: var(--surface-container); }
+  .revision-copy { display: grid; gap: 4px; min-width: 0; }
+  .revision-copy span, .revision-copy small { color: var(--outline); overflow-wrap: anywhere; }
+  .revision-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .revision-diff { max-height: 280px; overflow: auto; margin: 0; padding: 12px; border-radius: 10px; background: var(--surface-container-highest); white-space: pre-wrap; overflow-wrap: anywhere; font: 0.78rem/1.45 ui-monospace, SFMono-Regular, Consolas, monospace; }
+  .revision-label-form { display: flex; align-items: end; flex-wrap: wrap; gap: 8px; }
+  .revision-label-form label { display: grid; gap: 4px; min-width: min(100%, 280px); }
+  .revision-label-form input { min-height: 42px; }
 
   .docs-layout { display: grid; grid-template-columns: minmax(190px, 280px) minmax(0, 860px); gap: 28px; max-width: 1200px; margin: auto; }
   .docs-layout nav { position: sticky; top: 0; align-self: start; display: grid; gap: 4px; max-height: calc(100vh - 190px); overflow: auto; padding: 10px; border-radius: 20px; background: var(--surface-container); }

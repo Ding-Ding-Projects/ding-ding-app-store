@@ -6,6 +6,7 @@ import type {
   CatalogSnapshot,
   ElementKey,
   HistoryEntry,
+  HistoryRevision,
   InstalledAppRecord,
   ManagedUpdateState,
   OperationProgressEvent,
@@ -80,6 +81,7 @@ export function App() {
   const [catalog, setCatalog] = useState<CatalogSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [historyRevisions, setHistoryRevisions] = useState<HistoryRevision[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [installed, setInstalled] = useState<InstalledAppRecord[]>([]);
   const [action, setAction] = useState<{ kind: 'uninstall'; apps: CatalogApp[]; returnFocus: HTMLButtonElement } | null>(null);
@@ -160,7 +162,11 @@ export function App() {
 
   const loadHistory = useCallback(async () => {
     setHistoryLoading(true);
-    try { setHistory(await window.dingDingStore.history.list()); }
+    try {
+      const [entries, revisions] = await Promise.all([window.dingDingStore.history.list(), window.dingDingStore.history.revisions()]);
+      setHistory(entries);
+      setHistoryRevisions(revisions);
+    }
     finally { setHistoryLoading(false); }
   }, []);
 
@@ -846,7 +852,7 @@ export function App() {
             />
           )}
           {activeTab === 'docs' && <DocsPage settings={settings} notify={notify} openRegex={regexRequest === 'docs'} onRegexHandled={() => setRegexRequest(null)} articleRequest={docRequest} onArticleHandled={() => setDocRequest(null)} />}
-          {activeTab === 'activity' && <ActivityPage entries={history} loading={historyLoading} settings={settings} openRegex={regexRequest === 'activity'} onRegexHandled={() => setRegexRequest(null)} notify={notify} />}
+          {activeTab === 'activity' && <ActivityPage entries={history} revisions={historyRevisions} loading={historyLoading} settings={settings} openRegex={regexRequest === 'activity'} onRegexHandled={() => setRegexRequest(null)} notify={notify} onHistoryChanged={loadHistory} />}
           {activeTab === 'settings' && (
             <SettingsPage
               settings={baseSettings}

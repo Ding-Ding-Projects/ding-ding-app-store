@@ -19,6 +19,7 @@
 - [ ] Complete source-build execution only after a real hard-disposable broker exists; keep bounded OpenCode repair and its current host refusal intact
 - [x] Generated offline catalog metadata for every reviewed catalog application, with stable IDs, public source links, adapter/blocker state, canonical boundary links, wiki/site mirrors, command-palette reachability, and fail-closed completeness coverage
 - [x] Local operation history: every install/build/uninstall outcome recorded, filterable by action/result/date, exported as JSON/CSV/Markdown
+- [x] Local version browser: bounded Git snapshots with diff, labels, and explicit before/after restore revisions for App Store-owned state
 - [x] Persistent tab rail with left/right/top/bottom docking, pinning, grouping, overflow, four independent regex-backed tab searches, reversible bulk close/reopen, and full keyboard control
 - [x] Independent search state and a full regex builder on every surface, including the command palette
 - [x] Per-element appearance editor with live preview, reset, export, and import

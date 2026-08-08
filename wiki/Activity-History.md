@@ -12,24 +12,27 @@ Rows support checkbox selection, Shift-range selection, select-all for the curre
 
 Successful operations also attempt a local Git snapshot of the installed-app and settings documents in an isolated repository under the App Store's history directory. Snapshots are append-only commits; no repository is created inside a user's project.
 
+The adjacent **Local versions** browser lists those snapshots, loads a bounded diff, accepts one-line labels, and offers an explicit two-key/full-slider restore. Restore preserves the current state first and records a new revision after applying only the App Store-owned files; it never rewrites history.
+
 ## Configuration
 
 The activity search is plain text by default and has its own adjacent full regex builder. Action filters cover install, update, build, and uninstall; result filters cover succeeded or failed; date filtering composes with all of them. Exports serialize only the explicit selection or current filtered rows. The picker states UTF-8 encoding, LF line endings, and the schema for the chosen format. JSON is the durable machine record; JSON Lines remains stream-friendly; schema and proto exports describe `HistoryEntry` rather than pretending to include live history data.
 
 ## Failure modes
 
-An absent log is an honest empty state. Reads reject logs above 10 MB and bound the parsed view to the newest 10,000 entries. A history append or local Git failure is swallowed by the operation path so it never reverses the primary install or removal. Invalid and partial date input keeps the typed value visible, reports the exact field problem, and shows no rows until corrected. The present renderer does not surface a separate warning when recording failed, which is a known evidence gap rather than proof that history exists.
+An absent log or local repository is an honest empty state. Reads reject logs above 10 MB and bound the parsed view to the newest 10,000 entries; version browsing is bounded to 200 commits and 120 KB per diff. A history append or local Git failure is swallowed by the operation path so it never reverses the primary install or removal. Invalid and partial date input keeps the typed value visible, reports the exact field problem, and shows no rows until corrected. Invalid revision IDs, incomplete snapshots, malformed JSON, and failed preservation/restore commits fail closed without claiming a restore.
 
 ## Security considerations
 
-Entries contain operation results already shown to the user, not credentials, tokens, release bytes, or arbitrary file contents. Snapshots copy only the app-owned installed and settings documents. Child Git processes run hidden with a local application identity and never fetch or push. Delimited values quote commas, tabs, quotes, and line breaks; XML/HTML escape markup; SQL quotes values; and every generated data module embeds the same complete record fields. Nested documents such as settings, layout, and appearance remain JSON-only so their importer does not receive a lossy conversion.
+Entries contain operation results already shown to the user, not credentials, tokens, release bytes, or arbitrary file contents. Snapshots copy only the app-owned installed and settings documents. Child Git processes run hidden with a local application identity, fixed full-hex revisions, no system Git configuration, and never fetch or push. Restore never accepts a path or command from the renderer. Delimited values quote commas, tabs, quotes, and line breaks; XML/HTML escape markup; SQL quotes values; and every generated data module embeds the same complete record fields. Nested documents such as settings, layout, and appearance remain JSON-only so their importer does not receive a lossy conversion.
 
 ## Verification
 
-Contract tests prove operations route through the recording helper, every registered activity format keeps the test record, the format metadata stays UTF-8/LF, and the date parser/range matcher handles ISO, local dates, invalid/partial input, inclusive bounds, and presets. Source inspection proves bounded reads, JSONL append, snapshot isolation, and non-blocking snapshot failure. Runtime capture at `docs/assets/screenshots/activity-runtime.png` predates the picker and does not prove every future operation or calendar interaction was recorded.
+Contract tests prove operations route through the recording helper, every registered activity format keeps the test record, the format metadata stays UTF-8/LF, and the date parser/range matcher handles ISO, local dates, invalid/partial input, inclusive bounds, and presets. Versioning contracts prove the fixed state allowlist, bounded diff, label metadata commit, full-ID validation, before/after restore snapshots, and typed IPC/UI controls. Source inspection proves bounded reads, JSONL append, snapshot isolation, and non-blocking snapshot failure. Runtime capture at `docs/assets/screenshots/activity-runtime.png` predates the picker and version browser and does not prove every future operation or calendar interaction was recorded.
 
 ## Suggested articles
 
 - [Installed app discovery](Installed-App-Discovery)
 - [Verified installer operations](Verified-Installer-Operations)
 - [Privacy and security](Privacy-and-Security)
+- [Local history and version restore](History-Versioning)
