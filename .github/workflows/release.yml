@@ -179,6 +179,9 @@ jobs:
           $tagSha = if ($tagRef.object.type -eq 'tag') { gh api "repos/$env:GITHUB_REPOSITORY/git/tags/$($tagRef.object.sha)" --jq .object.sha } else { $tagRef.object.sha }
           if ($tagSha -ne $env:GITHUB_SHA) { throw "Release tag $env:RELEASE_TAG resolves to $tagSha, expected workflow SHA $env:GITHUB_SHA." }
           gh release edit $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --draft=false
+          $publishedRef = gh api "repos/$env:GITHUB_REPOSITORY/git/ref/tags/$env:RELEASE_TAG" | ConvertFrom-Json
+          $publishedSha = if ($publishedRef.object.type -eq 'tag') { gh api "repos/$env:GITHUB_REPOSITORY/git/tags/$($publishedRef.object.sha)" --jq .object.sha } else { $publishedRef.object.sha }
+          if ($publishedSha -ne $env:GITHUB_SHA) { throw "Published release tag $env:RELEASE_TAG resolves to $publishedSha, expected workflow SHA $env:GITHUB_SHA." }
           $publishedAt = gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/$env:RELEASE_TAG" --jq .published_at
           if (-not $publishedAt) { throw 'The published release did not report published_at.' }
           node scripts/generate-release-changelog.mjs `
