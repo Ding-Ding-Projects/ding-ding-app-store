@@ -28,6 +28,13 @@ describe('GitHub-hosted workflow and bootstrap contract', () => {
     expect(workflow).toContain('cancel-in-progress: true');
   });
 
+  it('runs releases for ordinary branch pushes and manual dispatch, never generated release tags', async () => {
+    const workflow = await read('.github/workflows/release.yml');
+    expect(workflow).toMatch(/^on:\s*\n\s+push:\s*\n\s+branches:\s*\n\s+- '\*\*'\s*$/m);
+    expect(workflow).toMatch(/^\s*workflow_dispatch:\s*\{\}\s*$/m);
+    expect(workflow).not.toMatch(/^\s+tags(?:-ignore)?:/m);
+  });
+
   it('bootstraps release tooling from a pinned canonical archive with SHA-256 verification', async () => {
     const bootstrap = await read('scripts/bootstrap-gh-cli.ps1');
     expect(bootstrap).toContain("$version = '2.97.0'");
