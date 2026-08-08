@@ -143,9 +143,9 @@ export function TabOverflowSheet({ rows, settings, onActivate, onClose }: {
   );
 }
 
-export function TabContextMenu({ target, workspace, settings, dispatch, onClose, onRename, announce }: {
+export function TabContextMenu({ target, workspace, settings, dispatch, onClose, onRename, onMovePicker, announce }: {
   target: MenuTarget; workspace: TabWorkspace; settings: UserSettings;
-  dispatch(action: WorkspaceAction): void; onClose(): void; onRename(groupId: string): void; announce(message: string): void;
+  dispatch(action: WorkspaceAction): void; onClose(): void; onRename(groupId: string): void; onMovePicker(tabId: TabId): void; announce(message: string): void;
 }) {
   const menuSearch = useSurfaceSearch('tabs.menu');
   const menuMatcher = useMemo(() => makeMatcher(menuSearch.state), [menuSearch.state]);
@@ -192,8 +192,40 @@ export function TabContextMenu({ target, workspace, settings, dispatch, onClose,
           onClose();
         }}>{label(settings, 'New group with this tab', '用呢個分頁開新組')}</button>
       )}
-      {!tab.pinned && workspace.groups.filter((group) => group.id !== tab.groupId).map((group) => item(`Add to ${group.name}`, <button key={group.id} role="menuitem" onClick={() => { dispatch({ type: 'group-assign', id: tab.id, groupId: group.id }); close(`${meta.en} added to ${group.name}`); }}>{label(settings, `Add to ${group.name}`, `加入 ${group.name}`)}</button>))}
+      {!tab.pinned && workspace.groups.some((group) => group.id !== tab.groupId) && item('Move into group', <button role="menuitem" key="move-group" onClick={() => { onMovePicker(tab.id); onClose(); }}>{label(settings, 'Move… into group…', '移動…去分組…')}</button>)}
       {tab.groupId && item('Remove from group', <button role="menuitem" key="remove" onClick={() => { dispatch({ type: 'group-remove', id: tab.id }); close(`${meta.en} removed from its group`); }}>{label(settings, 'Remove from group', '離開分組')}</button>)}
+    </div>
+  );
+}
+
+export function TabMoveGroupPicker({ tabId, workspace, settings, dispatch, onClose, announce }: {
+  tabId: TabId; workspace: TabWorkspace; settings: UserSettings;
+  dispatch(action: WorkspaceAction): void; onClose(): void; announce(message: string): void;
+}) {
+  const search = useSurfaceSearch('tabs.move-group');
+  const matcher = useMemo(() => makeMatcher(search.state), [search.state]);
+  const tab = workspace.tabs.find((candidate) => candidate.id === tabId);
+  if (!tab) return null;
+  const groups = workspace.groups.filter((group) => group.id !== tab.groupId && matcher(`${group.name}\n${group.color}`));
+  const createGroup = () => {
+    if (workspace.groups.length >= MAX_TAB_GROUPS || tab.pinned) return;
+    const group: TabGroup = { id: newGroupId(), name: `Group ${workspace.groups.length + 1}`, color: TAB_GROUP_COLORS[(workspace.groups.length + 1) % TAB_GROUP_COLORS.length], collapsed: false };
+    dispatch({ type: 'group-create', group, memberId: tab.id });
+    announce(`${TAB_META[tab.id].en} moved into ${group.name}`);
+    onClose();
+  };
+  return (
+    <div className="popover tab-group-picker" role="dialog" aria-label={label(settings, 'Move tab into group', '將分頁移動到分組')}>
+      <header><strong>{label(settings, 'Move tab into group', '將分頁移動到分組')}</strong><button className="icon-button" aria-label={label(settings, 'Close group picker', '關閉分組選擇器')} onClick={onClose}><Icon>close</Icon></button></header>
+      <SearchBox surface="tabs.move-group" placeholder={label(settings, 'Search groups', '搜尋分組')} />
+      <div className="command-list" role="listbox" aria-label={label(settings, 'Available groups', '可用分組')}>
+        {groups.map((group) => {
+          const count = workspace.tabs.filter((candidate) => candidate.groupId === group.id).length;
+          return <button key={group.id} role="option" onClick={() => { dispatch({ type: 'group-assign', id: tab.id, groupId: group.id }); announce(`${TAB_META[tab.id].en} moved to ${group.name}`); onClose(); }}><span className="tab-group-dot" data-color={group.color} aria-hidden="true" /><span><strong>{group.name}</strong><small>{label(settings, `${count} member${count === 1 ? '' : 's'}`, `${count} 個成員`)}</small></span><Icon>arrow_forward</Icon></button>;
+        })}
+        {!groups.length && <p className="supporting">{label(settings, 'No other groups match this search.', '冇其他分組符合呢個搜尋。')}</p>}
+      </div>
+      {!tab.pinned && workspace.groups.length < MAX_TAB_GROUPS && <button type="button" className="tonal-button" onClick={createGroup}><Icon>add</Icon>{label(settings, 'Create new group', '建立新分組')}</button>}
     </div>
   );
 }
@@ -280,6 +312,7 @@ export function TabRail({ settings, workspace, dispatch, updatesBadge, onOpenPal
   const stopRefs = useRef(new Map<string, HTMLButtonElement>());
   const [focusKey, setFocusKey] = useState<string>(`t:${workspace.activeTabId}`);
   const [menu, setMenu] = useState<MenuTarget | null>(null);
+  const [movePickerTabId, setMovePickerTabId] = useState<TabId | null>(null);
   const [renamingGroupId, setRenamingGroupId] = useState<string | null>(null);
   const [overflowOpen, setOverflowOpen] = useState(false);
   const [dragId, setDragId] = useState<TabId | null>(null);
@@ -345,16 +378,17 @@ export function TabRail({ settings, workspace, dispatch, updatesBadge, onOpenPal
   useEffect(() => { if (renameRequest) { setRenamingGroupId(renameRequest); onRenameHandled(); } }, [renameRequest, onRenameHandled]);
 
   useEffect(() => {
-    if (!menu && !overflowOpen) return;
+    if (!menu && !overflowOpen && !movePickerTabId) return;
     const listener = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       event.stopPropagation();
       setMenu(null);
+      setMovePickerTabId(null);
       setOverflowOpen(false);
     };
     window.addEventListener('keydown', listener, true);
     return () => window.removeEventListener('keydown', listener, true);
-  }, [menu, overflowOpen]);
+  }, [menu, overflowOpen, movePickerTabId]);
 
   const focusStop = useCallback((key: string) => {
     setFocusKey(key);
@@ -541,8 +575,9 @@ export function TabRail({ settings, workspace, dispatch, updatesBadge, onOpenPal
       )}
       {overflowOpen && <TabOverflowSheet rows={overflowRows} settings={settings} onActivate={activate} onClose={() => setOverflowOpen(false)} />}
       {menu && (
-        <TabContextMenu target={menu} workspace={workspace} settings={settings} dispatch={dispatch} announce={announce} onRename={(groupId) => setRenamingGroupId(groupId)} onClose={() => setMenu(null)} />
+        <TabContextMenu target={menu} workspace={workspace} settings={settings} dispatch={dispatch} announce={announce} onRename={(groupId) => setRenamingGroupId(groupId)} onMovePicker={(tabId) => setMovePickerTabId(tabId)} onClose={() => setMenu(null)} />
       )}
+      {movePickerTabId && <TabMoveGroupPicker tabId={movePickerTabId} workspace={workspace} settings={settings} dispatch={dispatch} announce={announce} onClose={() => setMovePickerTabId(null)} />}
       <button className="palette-hint" onClick={onOpenPalette} {...el('palette-hint')}>
         <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd><span>Commands</span>
       </button>

@@ -162,7 +162,7 @@ describe('visible product contracts', () => {
   it('ships four independent tab searches, safe bulk close, and all four dock edges', async () => {
     const tabRail = await read('src/renderer/components/TabRail.tsx');
     const contracts = await read('src/shared/contracts.ts');
-    for (const surface of ['tabs', 'tabs.groups', 'tabs.master', 'tabs.bulk-close', 'tabs.menu']) {
+    for (const surface of ['tabs', 'tabs.groups', 'tabs.master', 'tabs.bulk-close', 'tabs.menu', 'tabs.move-group']) {
       expect(tabRail).toContain(`surface="${surface}"`);
     }
     expect(tabRail).toContain('surface={`tabs.group.${row.group.id}`}');
@@ -171,6 +171,9 @@ describe('visible product contracts', () => {
     expect(tabRail).toContain('Include pinned tabs');
     expect(tabRail).toContain('close-many');
     expect(tabRail).toContain('aria-live="polite"');
+    expect(tabRail).toContain('Move… into group…');
+    expect(tabRail).toContain('Create new group');
+    expect(tabRail).toContain('role="listbox"');
     expect(contracts).toContain("z.enum(['left', 'right', 'top', 'bottom'])");
     expect(contracts).toContain('open: z.boolean().default(true)');
   });

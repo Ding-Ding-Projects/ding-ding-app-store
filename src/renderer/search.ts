@@ -20,6 +20,7 @@ export type SurfaceId = PersistedSurfaceId
   | 'tabs.master'
   | 'tabs.menu'
   | 'tabs.bulk-close'
+  | 'tabs.move-group'
   | `tabs.group.${string}`
   | 'appearance.elements'
   | 'notifications'
