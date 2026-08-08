@@ -6,11 +6,6 @@ import { app } from 'electron';
 const APP_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,127}$/;
 const PROOF_SCHEMA = 'ding-ding-app-store.install-proof.v1';
 const DEFAULT_TIMEOUT_MS = 20 * 60_000;
-const CLOUD_PROOF_TARGETS = Object.freeze({
-  'dim-sum-atlas': Object.freeze({ adapterId: 'dim-sum-atlas-portable-zip', family: 'portable-zip' }),
-  winforge: Object.freeze({ adapterId: 'winforge-portable-zip', family: 'portable-zip' }),
-  wimforge: Object.freeze({ adapterId: 'wimforge-portable-zip', family: 'portable-zip' }),
-});
 
 function option(name, fallback = null) {
   const index = process.argv.indexOf(name);
@@ -34,7 +29,6 @@ const configuredTimeout = Number(process.env.DING_DING_INSTALL_PROOF_TIMEOUT_MS 
 const proofTimeoutMs = Number.isFinite(configuredTimeout) ? Math.min(Math.max(configuredTimeout, 60_000), 30 * 60_000) : DEFAULT_TIMEOUT_MS;
 
 if (!appId || !APP_ID_PATTERN.test(appId)) fail('The proof requires one valid catalog application ID.');
-else if (!Object.hasOwn(CLOUD_PROOF_TARGETS, appId)) fail('The cloud proof accepts only the reviewed portable ZIP targets.');
 
 if (process.exitCode) process.exit();
 
@@ -121,7 +115,8 @@ try {
   const { HistoryService } = await import('../dist/main/history-service.js');
   const { InstalledService } = await import('../dist/main/installed-service.js');
   const { OperationService } = await import('../dist/main/operation-service.js');
-  const { adapterFor } = await import('../dist/main/install-adapters.js');
+  const { adapterFor, selectInstallerAsset } = await import('../dist/main/install-adapters.js');
+  const { cloudInstallProofTargetFor } = await import('../dist/main/install-proof-targets.js');
 
   const catalog = new CatalogService();
   const installed = new InstalledService(catalog);
@@ -130,20 +125,60 @@ try {
   operationService = new OperationService(catalog, history, installed, progressEvent);
   logMilestone('services-loaded');
   const adapter = adapterFor(appId);
-  const target = CLOUD_PROOF_TARGETS[appId];
-  if (!target || !adapter.supported || adapter.id !== target.adapterId || adapter.family !== target.family) {
+  const target = cloudInstallProofTargetFor(appId);
+  if (!target) throw new Error('The cloud proof accepts only explicitly reviewed install targets.');
+  if (!adapter.supported || adapter.id !== target.adapterId || adapter.family !== target.family) {
     throw new Error(`Cloud proof adapter boundary mismatch for ${appId}.`);
   }
+  const release = await withProofTimeout(catalog.latestRelease((await catalog.recordFor(appId)).repository), 'release integrity');
+  if (!release || release.draft || release.prerelease) throw new Error('The proof target has no stable published release.');
+  const selectedAsset = selectInstallerAsset(adapter, release.assets);
+  const directSha256 = typeof selectedAsset.digest === 'string' && /^sha256:[0-9a-f]{64}$/.test(selectedAsset.digest)
+    ? selectedAsset.digest.slice('sha256:'.length)
+    : null;
+  if (target.requiresDirectSha256 && !directSha256) {
+    throw new Error('The proof target requires a direct GitHub SHA-256 digest for the selected installer.');
+  }
+  const resolvedIntegrity = {
+    releaseTag: release.tag_name,
+    assetName: selectedAsset.name,
+    assetBytes: selectedAsset.size,
+    expectedSha256: directSha256,
+    downloadVerification: 'operation-service-sha256',
+  };
+  logMilestone('integrity-resolved', `release=${release.tag_name} asset=${selectedAsset.name} bytes=${selectedAsset.size}`);
   const before = (await withProofTimeout(installed.list(true), 'initial discovery')).filter((record) => record.appId === appId).map((record) => ({
     appId: record.appId, version: record.version, source: record.source, hasUninstall: Boolean(record.uninstall),
+    ownershipKind: record.ownership?.kind ?? null, adapterId: record.ownership?.adapterId ?? null,
   }));
   logMilestone('before-discovery', `records=${before.length}`);
+  const cleanStart = before.length === 0;
+  if (target.requiresCleanStart && !cleanStart) {
+    throw new Error('The non-portable proof target was already present; refusing to adopt or uninstall a pre-existing application.');
+  }
   const result = await withProofTimeout(operationService.install({ appId, decision: 'install' }), 'install');
   logMilestone('install-finished', `ok=${result.ok}`);
+  const completedDownload = [...events].reverse().find((event) => event.phase === 'downloading' && event.progress === 100) ?? null;
+  const downloadCompleted = completedDownload?.bytesReceived === selectedAsset.size
+    && completedDownload?.bytesTotal === selectedAsset.size;
+  const releaseMatchedResult = result.ok && result.message.includes(` ${release.tag_name} installed successfully.`);
+  const integrity = {
+    ...resolvedIntegrity,
+    downloadCompleted,
+    releaseMatchedResult,
+    sha256Verified: result.ok && downloadCompleted && releaseMatchedResult,
+  };
   const afterInstall = (await withProofTimeout(installed.list(true), 'post-install discovery')).filter((record) => record.appId === appId).map((record) => ({
     appId: record.appId, version: record.version, source: record.source, hasUninstall: Boolean(record.uninstall),
+    uninstallKind: record.uninstall?.kind ?? null, ownershipKind: record.ownership?.kind ?? null,
+    adapterId: record.ownership?.adapterId ?? null,
   }));
-  const matchedAfterInstall = afterInstall.length === 1 && afterInstall[0].hasUninstall;
+  const matchedAfterInstall = afterInstall.length === 1
+    && afterInstall[0].source === (target.ownershipKind === 'portable' ? 'portable-managed' : 'store')
+    && afterInstall[0].hasUninstall
+    && afterInstall[0].uninstallKind === target.uninstallKind
+    && afterInstall[0].ownershipKind === target.ownershipKind
+    && afterInstall[0].adapterId === target.adapterId;
   let cleanup = { attempted: false, ok: true, message: null };
   if (result.ok && matchedAfterInstall) {
     cleanup = { attempted: true, ok: false, message: null };
@@ -154,13 +189,28 @@ try {
   const afterCleanup = (await withProofTimeout(installed.list(true), 'post-cleanup discovery')).filter((record) => record.appId === appId).map((record) => ({
     appId: record.appId, version: record.version, source: record.source, hasUninstall: Boolean(record.uninstall),
   }));
-  const supportedSuccess = adapter.supported && result.ok && matchedAfterInstall && cleanup.attempted && cleanup.ok && afterCleanup.length === 0;
+  const persistedAfterCleanup = (await withProofTimeout(installed.list(false), 'persisted cleanup verification')).filter((record) => record.appId === appId).map((record) => ({
+    appId: record.appId, version: record.version, source: record.source,
+  }));
+  const digestVerified = !target.requiresDirectSha256 || Boolean(directSha256);
+  const supportedSuccess = adapter.supported
+    && (!target.requiresCleanStart || cleanStart)
+    && digestVerified
+    && integrity.sha256Verified
+    && result.ok
+    && matchedAfterInstall
+    && cleanup.attempted
+    && cleanup.ok
+    && afterCleanup.length === 0
+    && persistedAfterCleanup.length === 0;
   proof = {
     schemaVersion: PROOF_SCHEMA,
     appId,
     adapterId: adapter.id,
     supported: adapter.supported,
     family: adapter.family,
+    target,
+    integrity,
     runner: { os: process.platform, architecture: process.arch, image: 'windows-2022' },
     sourceRuntimeInvoked: false,
     startedAt,
@@ -168,11 +218,13 @@ try {
     timedOut,
     milestones,
     before,
+    cleanStart,
     result: { ok: result.ok, message: result.message },
     afterInstall,
     matchedAfterInstall,
     cleanup,
     afterCleanup,
+    persistedAfterCleanup,
     progress: events,
     verdict: supportedSuccess,
   };
