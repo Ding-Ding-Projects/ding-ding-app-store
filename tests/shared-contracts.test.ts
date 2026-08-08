@@ -192,6 +192,16 @@ describe('appearance contract', () => {
         if (token === 'fontFamily') override.fontFamily = 'Segoe UI';
         if (token === 'fontStyle') override.fontStyle = ['normal', 'italic', 'oblique'][index % 3];
         if (token === 'textDecoration') override.textDecoration = ['none', 'underline', 'line-through', 'underline line-through'][index % 4];
+        if (token === 'fontVariationAxes') override.fontVariationAxes = { wght: 600, wdth: 90 };
+        if (token === 'underlineStyle') override.underlineStyle = 'wavy';
+        if (token === 'underlineColor') override.underlineColor = { kind: 'hex', hex: '#ff0000' };
+        if (token === 'underlineThickness') override.underlineThickness = 2;
+        if (token === 'textTransform') override.textTransform = 'uppercase';
+        if (token === 'fontVariantCaps') override.fontVariantCaps = 'small-caps';
+        if (token === 'baselineOffset') override.baselineOffset = -25;
+        if (token === 'textDirection') override.textDirection = 'rtl';
+        if (token === 'textAlign') override.textAlign = 'justify';
+        if (token === 'textShadow') override.textShadow = { x: 2, y: 3, blur: 4, color: { kind: 'hex', hex: '#00000080' } };
         if (token === 'letterSpacing') override.letterSpacing = -4 + (index % 20);
         if (token === 'lineHeight') override.lineHeight = 80 + (index % 33) * 5;
         if (token === 'borderWidth') override.borderWidth = index % 4;
@@ -209,7 +219,10 @@ describe('appearance contract', () => {
             || /^[0-3]px$/.test(value)
             || /^#[0-9a-f]{6}([0-9a-f]{2})?$/.test(value)
             || /^[A-Za-z0-9 _-]{1,96}$/.test(value)
-            || /^(normal|italic|oblique|none|underline|line-through|underline line-through)$/.test(value)
+            || /^(normal|italic|oblique|none|underline|overline|line-through|underline overline|underline line-through|overline line-through|underline overline line-through|solid|double|dotted|dashed|wavy|uppercase|lowercase|capitalize|small-caps|all-small-caps|petite-caps|all-petite-caps|unicase|titling-caps|ltr|rtl|auto|start|center|end|justify)$/.test(value)
+            || /^"[A-Za-z0-9]{4}" -?\d+(, "[A-Za-z0-9]{4}" -?\d+)*$/.test(value)
+            || /^-?\d+(\.\d+)?em -?\d+(\.\d+)?em -?\d+(\.\d+)?em (var\(--[a-z-]+\)|#[0-9a-f]{6}([0-9a-f]{2})?)$/.test(value)
+            || /^-?\d+px$/.test(value)
             || /^-?\d+(\.\d+)?em$/.test(value)
             || /^\d+(\.\d+)?$/.test(value);
           expect(closed, `${name} = ${value}`).toBe(true);

@@ -221,6 +221,8 @@ export const SCHEDULE_EXPLANATION_KEYS = [
 export const APPEARANCE_EXPLANATION_KEYS = [
   'background', 'foreground', 'radius', 'borderWidth', 'elevation', 'fontScale', 'fontWeight',
   'fontFamily', 'fontStyle', 'textDecoration', 'letterSpacing', 'lineHeight', 'paddingScale',
+  'fontVariationAxes', 'underlineStyle', 'underlineColor', 'underlineThickness', 'textTransform',
+  'fontVariantCaps', 'baselineOffset', 'textDirection', 'textAlign', 'textShadow',
 ] as const satisfies readonly TokenId[];
 
 export type ScheduleFieldKey = (typeof SCHEDULE_FIELDS)[number]['key'];
@@ -261,7 +263,17 @@ export const TOKEN_META: Record<TokenId, { en: string; yue: string; section: Tok
   fontWeight: { en: 'Text weight', yue: '字重', section: 'type', explanation: { en: 'Selects the supported font weight used by this element.', yue: '揀呢個元素支援嘅字重。' }, defaultValue: '400' },
   fontFamily: { en: 'Font family', yue: '字型家族', section: 'type', explanation: { en: 'Selects an installed or bundled family; unsupported names are rejected rather than silently saved.', yue: '揀已安裝或者內置字型；唔支援嘅名稱會拒絕，唔會靜默儲存。' }, defaultValue: 'system-ui' },
   fontStyle: { en: 'Font style', yue: '字型樣式', section: 'type', explanation: { en: 'Chooses normal, italic, or oblique style for this element.', yue: '揀呢個元素用正常、斜體或者傾斜樣式。' }, defaultValue: 'normal' },
-  textDecoration: { en: 'Underline and strike', yue: '底線同刪除線', section: 'type', explanation: { en: 'Applies the supported underline and/or line-through decoration without changing text content.', yue: '套用支援嘅底線／刪除線，唔會改文字內容。' }, defaultValue: 'none' },
+  textDecoration: { en: 'Decoration lines', yue: '裝飾線', section: 'type', explanation: { en: 'Chooses underline, overline, and line-through combinations without changing text content.', yue: '揀底線、上劃線同刪除線組合，唔會改文字內容。' }, defaultValue: 'none' },
+  fontVariationAxes: { en: 'Font variation axes', yue: '字型變體軸', section: 'type', explanation: { en: 'Stores bounded four-character OpenType axis values such as wght or wdth; unsupported axes remain harmless.', yue: '儲存有限制嘅四字 OpenType 軸值，例如 wght 或 wdth；唔支援嘅軸都唔會造成危險。' }, defaultValue: 'none' },
+  underlineStyle: { en: 'Underline style', yue: '底線樣式', section: 'type', explanation: { en: 'Selects the underline stroke style, including wavy.', yue: '揀底線筆劃樣式，包括波浪線。' }, defaultValue: 'solid' },
+  underlineColor: { en: 'Underline colour', yue: '底線顏色', section: 'type', explanation: { en: 'Sets a separate validated colour for decoration lines.', yue: '為裝飾線設定另一個已驗證顏色。' }, defaultValue: 'current text colour' },
+  underlineThickness: { en: 'Underline thickness', yue: '底線粗幼', section: 'type', explanation: { en: 'Sets a bounded decoration thickness in pixels.', yue: '以有限制嘅像素設定裝飾線粗幼。' }, defaultValue: 'auto' },
+  textTransform: { en: 'Capitalization', yue: '大小寫', section: 'type', explanation: { en: 'Changes presentation capitalization only; the stored text remains unchanged.', yue: '只改顯示大小寫，儲存嘅文字保持不變。' }, defaultValue: 'none' },
+  fontVariantCaps: { en: 'Small caps', yue: '小型大寫', section: 'type', explanation: { en: 'Chooses OpenType capitalization variants supported by the selected font.', yue: '揀所選字型支援嘅 OpenType 大小寫變體。' }, defaultValue: 'normal' },
+  baselineOffset: { en: 'Baseline offset', yue: '基線偏移', section: 'type', explanation: { en: 'Moves the visual baseline within a bounded range without changing layout boxes.', yue: '喺有限範圍移動視覺基線，唔會改版面盒。' }, defaultValue: '0em' },
+  textDirection: { en: 'Text direction', yue: '文字方向', section: 'type', explanation: { en: 'Sets left-to-right, right-to-left, or automatic direction for this element.', yue: '為元素設定左至右、右至左或者自動方向。' }, defaultValue: 'inherit' },
+  textAlign: { en: 'Text alignment', yue: '文字對齊', section: 'type', explanation: { en: 'Aligns text within the element without changing its content.', yue: '對齊元素入面嘅文字，唔會改內容。' }, defaultValue: 'inherit' },
+  textShadow: { en: 'Text shadow', yue: '文字陰影', section: 'type', explanation: { en: 'Adds one bounded shadow with validated offsets, blur, and colour.', yue: '加一層有限制陰影，偏移、模糊同顏色全部驗證。' }, defaultValue: 'none' },
   letterSpacing: { en: 'Letter spacing', yue: '字距', section: 'type', explanation: { en: 'Adjusts tracking in tenths of an em, bounded to keep layouts readable.', yue: '以十分之一 em 調整字距，有限制避免版面失控。' }, defaultValue: '0/10em' },
   lineHeight: { en: 'Line height', yue: '行高', section: 'type', explanation: { en: 'Sets line height from 80% to 240% for this element’s text.', yue: '設定呢個元素文字行高 80% 至 240%。' }, defaultValue: '140%' },
   paddingScale: { en: 'Padding', yue: '內距', section: 'layout', explanation: { en: 'Scales the element’s internal spacing from 50% to 200% while retaining its content.', yue: '將元素內距縮放 50% 至 200%，保留入面內容。' }, defaultValue: '100%' },
@@ -364,8 +376,21 @@ const appearanceControl = (token: TokenId, override: ElementOverride | undefined
   }
   if (token === 'textDecoration') {
     const value = override?.textDecoration ?? 'none';
-    return { kind: 'select', value, options: ['none', 'underline', 'line-through', 'underline line-through'].map((item) => ({ value: item, en: item, yue: item })) };
+    return { kind: 'select', value, options: ['none', 'underline', 'overline', 'line-through', 'underline overline', 'underline line-through', 'overline line-through', 'underline overline line-through'].map((item) => ({ value: item, en: item, yue: item })) };
   }
+  if (token === 'fontVariationAxes') return { kind: 'text', value: Object.entries(override?.fontVariationAxes ?? {}).map(([axis, value]) => `${axis}=${value}`).join(', '), maxLength: 96 };
+  if (token === 'underlineColor') {
+    const color = override?.underlineColor;
+    return { kind: 'color', value: color?.kind === 'hex' ? color.hex : '#6750a4' };
+  }
+  if (token === 'underlineStyle') return { kind: 'select', value: override?.underlineStyle ?? 'solid', options: ['solid', 'double', 'dotted', 'dashed', 'wavy'].map((item) => ({ value: item, en: item, yue: item })) };
+  if (token === 'underlineThickness') return { kind: 'range', value: Number(override?.underlineThickness ?? 0), min: 0, max: 10, step: 1 };
+  if (token === 'textTransform') return { kind: 'select', value: override?.textTransform ?? 'none', options: ['none', 'uppercase', 'lowercase', 'capitalize'].map((item) => ({ value: item, en: item, yue: item })) };
+  if (token === 'fontVariantCaps') return { kind: 'select', value: override?.fontVariantCaps ?? 'normal', options: ['normal', 'small-caps', 'all-small-caps', 'petite-caps', 'all-petite-caps', 'unicase', 'titling-caps'].map((item) => ({ value: item, en: item, yue: item })) };
+  if (token === 'baselineOffset') return { kind: 'range', value: Number(override?.baselineOffset ?? 0), min: -200, max: 200, step: 5 };
+  if (token === 'textDirection') return { kind: 'select', value: override?.textDirection ?? 'auto', options: ['auto', 'ltr', 'rtl'].map((item) => ({ value: item, en: item, yue: item })) };
+  if (token === 'textAlign') return { kind: 'select', value: override?.textAlign ?? 'start', options: ['start', 'center', 'end', 'justify'].map((item) => ({ value: item, en: item, yue: item })) };
+  if (token === 'textShadow') return { kind: 'text', value: override?.textShadow ? `${override.textShadow.x},${override.textShadow.y},${override.textShadow.blur}` : '', maxLength: 32 };
   if (token === 'letterSpacing') return { kind: 'range', value: Number(override?.letterSpacing ?? 0), min: -4, max: 16, step: 1 };
   if (token === 'lineHeight') return { kind: 'range', value: Number(override?.lineHeight ?? 140), min: 80, max: 240, step: 5 };
   if (token === 'borderWidth') return { kind: 'range', value: Number(override?.borderWidth ?? 0), min: 0, max: 3, step: 1 };

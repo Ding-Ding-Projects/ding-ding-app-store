@@ -11,6 +11,7 @@ import type { TokenSection } from '../registry';
 import { makeMatcher, useSurfaceSearch } from '../search';
 import type { AppearanceApi } from '../state/use-appearance';
 import { SearchBox } from './SearchBox';
+import { COLOR_SPACES, parseColor, toHex, translate, type ColorSpace } from '../color-translator';
 
 const ON_LIGHT = '#1d1b20';
 const ON_DARK = '#ffffff';
@@ -139,17 +140,22 @@ function SettingExplanation({ settings, explanation, persisted, fallback }: { se
 function ColorField({ token, value, settings, onChange }: { token: TokenId; value: ColorValue | undefined; settings: UserSettings; onChange(next: ColorValue | undefined): void }) {
   const hex = value?.kind === 'hex' ? value.hex : '#6750a4';
   const [hexText, setHexText] = useState(hex);
-  const [rgbText, setRgbText] = useState('');
-  const [hslText, setHslText] = useState('');
-  const [hue, saturation, lightness, alpha] = hexToHsl(hex);
-  const alphaPercent = Math.round(alpha * 100);
-  useEffect(() => {
-    const [red, green, blue] = hexToRgb(hex);
-    setHexText(hex);
-    setRgbText(alpha < 1 ? `rgba(${red}, ${green}, ${blue}, ${alpha.toFixed(2)})` : `rgb(${red}, ${green}, ${blue})`);
-    setHslText(alpha < 1 ? `hsla(${hue} ${saturation}% ${lightness}% / ${alpha.toFixed(2)})` : `hsl(${hue} ${saturation}% ${lightness}%)`);
-  }, [hex, hue, saturation, lightness, alpha]);
-  const emitHex = (next: string) => { if (/^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/.test(next)) onChange({ kind: 'hex', hex: next.toLowerCase() }); };
+  const [invalid, setInvalid] = useState<string | null>(null);
+  const [clipped, setClipped] = useState(false);
+  const current = parseColor(hex, 'hex') ?? { r: 0.4, g: 0.31, b: 0.64, a: 1 };
+  const hslParts = translate(current, 'hsl').text.match(/hsl\(([-\d.]+) ([-\d.]+)% ([-\d.]+)%/);
+  const hue = Number(hslParts?.[1] ?? 0); const saturation = Number(hslParts?.[2] ?? 0); const lightness = Number(hslParts?.[3] ?? 0);
+  const values = useMemo(() => Object.fromEntries(COLOR_SPACES.map((space) => [space, translate(current, space).text])) as Record<ColorSpace, string>, [current.r, current.g, current.b, current.a]);
+  useEffect(() => setHexText(hex), [hex]);
+  const emit = (space: ColorSpace, text: string) => {
+    const parsed = parseColor(text, space);
+    if (!parsed) { setInvalid(space); return; }
+    setInvalid(null);
+    const wasClipped = parsed.r < 0 || parsed.r > 1 || parsed.g < 0 || parsed.g > 1 || parsed.b < 0 || parsed.b > 1;
+    setClipped(wasClipped);
+    onChange({ kind: 'hex', hex: toHex({ r: Math.min(1, Math.max(0, parsed.r)), g: Math.min(1, Math.max(0, parsed.g)), b: Math.min(1, Math.max(0, parsed.b)), a: parsed.a }) });
+  };
+  const copy = (text: string) => void navigator.clipboard?.writeText(text);
   return (
     <div className="appearance-token-row">
       <span className="token-name">{label(settings, TOKEN_META[token].en, TOKEN_META[token].yue)}</span>
@@ -172,18 +178,18 @@ function ColorField({ token, value, settings, onChange }: { token: TokenId; valu
       </label>
       {value?.kind === 'hex' && (
         <>
-          <label>{label(settings, 'Continuous colour field', '連續色彩場')}<input type="color" value={hex.slice(0, 7)} aria-label={label(settings, 'Continuous colour field', '連續色彩場')} onChange={(event) => emitHex(`${event.target.value}${alpha < 1 ? Math.round(alpha * 255).toString(16).padStart(2, '0') : ''}`)} /></label>
-          <div className="color-spectrum" style={{ background: `linear-gradient(90deg, hsl(${hue} 100% 50%), hsl(${hue} 0% 50%))` }} aria-label={label(settings, 'Saturation and lightness field', '飽和度同亮度色場')}>
-            <label>{label(settings, 'Hue', '色相')}<input type="range" min="0" max="360" value={hue} onChange={(event) => emitHex(hslToHex(Number(event.target.value), saturation, lightness, alpha))} /></label>
-            <label>{label(settings, 'Saturation', '飽和度')}<input type="range" min="0" max="100" value={saturation} onChange={(event) => emitHex(hslToHex(hue, Number(event.target.value), lightness, alpha))} /></label>
-            <label>{label(settings, 'Lightness', '亮度')}<input type="range" min="0" max="100" value={lightness} onChange={(event) => emitHex(hslToHex(hue, saturation, Number(event.target.value), alpha))} /></label>
+          <label>{label(settings, 'Continuous colour field', '連續色彩場')}<input type="color" value={hex.slice(0, 7)} aria-label={label(settings, 'Continuous colour field', '連續色彩場')} onChange={(event) => emit('hex', `${event.target.value}${hex.length === 9 ? hex.slice(7) : ''}`)} /></label>
+          <div className="color-spectrum" role="group" aria-label={label(settings, 'Continuous colour controls', '連續色彩控制')}>
+            <label>{label(settings, 'Hue', '色相')}<input type="range" min="0" max="360" value={hue} onChange={(event) => emit('hsl', `hsl(${event.target.value} ${saturation}% ${lightness}% / ${Math.round(current.a * 100)}%)`)} /></label>
+            <label>{label(settings, 'Saturation', '飽和度')}<input type="range" min="0" max="100" value={saturation} onChange={(event) => emit('hsl', `hsl(${hue} ${event.target.value}% ${lightness}% / ${Math.round(current.a * 100)}%)`)} /></label>
+            <label>{label(settings, 'Lightness', '亮度')}<input type="range" min="0" max="100" value={lightness} onChange={(event) => emit('hsl', `hsl(${hue} ${saturation}% ${event.target.value}% / ${Math.round(current.a * 100)}%)`)} /></label>
+            <label>{label(settings, 'Alpha', '透明度')}<input type="range" min="0" max="100" value={Math.round(current.a * 100)} aria-valuetext={`${Math.round(current.a * 100)}%`} onChange={(event) => emit('rgb', `rgb(${current.r * 255} ${current.g * 255} ${current.b * 255} / ${event.target.value}%)`)} /></label>
           </div>
-          <label>{label(settings, 'Alpha', '透明度')}<input type="range" min="0" max="100" value={alphaPercent} aria-valuetext={`${alphaPercent}%`} onChange={(event) => emitHex(hslToHex(hue, saturation, lightness, Number(event.target.value) / 100))} /><span>{alphaPercent}%</span></label>
-          <label>{label(settings, 'HEX / HEX8', 'HEX / HEX8')}<input value={hexText} maxLength={9} onChange={(event) => { setHexText(event.target.value); emitHex(event.target.value); }} /></label>
-          <label>{label(settings, 'RGB / RGBA', 'RGB / RGBA')}<input value={rgbText} onChange={(event) => { setRgbText(event.target.value); const parsed = parseRgb(event.target.value, alpha); if (parsed) emitHex(parsed); }} /></label>
-          <label>{label(settings, 'HSL / HSLA', 'HSL / HSLA')}<input value={hslText} onChange={(event) => { setHslText(event.target.value); const parsed = parseHsl(event.target.value, alpha); if (parsed) emitHex(parsed); }} /></label>
-          <p className="supporting">{label(settings, 'The picker persists HEX/HEX8, RGB/A, and HSL/A. HSV/HSB, HWB, Lab/LCH, OKLab/OKLCH, and CMYK are shown as unsupported and are not silently converted.', '色板會儲存 HEX/HEX8、RGB/A 同 HSL/A。HSV/HSB、HWB、Lab/LCH、OKLab/OKLCH 同 CMYK 目前標示未支援，唔會靜默轉換。')}</p>
-          <p className="supporting">{label(settings, 'A fixed colour will not follow the dark theme.', '固定顏色唔會跟深色主題變。')}</p>
+          <label>{label(settings, 'HEX / HEX8', 'HEX / HEX8')}<input value={hexText} maxLength={9} aria-invalid={invalid === 'hex'} onChange={(event) => { setHexText(event.target.value); emit('hex', event.target.value); }} /><button type="button" className="text-button" onClick={() => copy(hexText)}>{label(settings, 'Copy', '複製')}</button></label>
+          {COLOR_SPACES.filter((space) => space !== 'hex').map((space) => <label key={space}>{space.toUpperCase()}<input value={values[space]} aria-invalid={invalid === space} onChange={(event) => emit(space, event.target.value)} /><button type="button" className="text-button" aria-label={label(settings, `Copy ${space} value`, `複製 ${space} 數值`)} onClick={() => copy(values[space])}>{label(settings, 'Copy', '複製')}</button></label>)}
+          {invalid && <p className="notice warning" role="alert">{label(settings, `Invalid ${invalid} colour; enter a bounded value.`, `${invalid} 顏色無效；請輸入有限制嘅值。`)}</p>}
+          {clipped && <p className="notice warning" role="status">{label(settings, 'The colour was outside the sRGB gamut and was clipped before saving.', '顏色超出 sRGB 色域，儲存前已裁切。')}</p>}
+          <p className="supporting">{label(settings, 'All representations round-trip through canonical HEX/HEX8 with alpha. Named input uses the bounded CSS-name set shown by this editor. The CSS sink accepts only validated HEX/HEX8 or theme roles.', '所有表示都會連同透明度雙向轉換成標準 HEX/HEX8。名稱輸入只用呢個編輯器列出嘅有限 CSS 顏色名。CSS 只接受已驗證 HEX/HEX8 或主題角色。')}</p>
         </>
       )}
     </div>
@@ -266,6 +272,32 @@ function ScaleField({ token, value, min, max, settings, onChange, onCommit }: {
       <button className="text-button" onClick={() => onChange(undefined)}>{label(settings, 'Use default', '用預設')}</button>
     </div>
   );
+}
+
+function VariationAxesField({ value, settings, onChange }: { value: Record<string, number> | undefined; settings: UserSettings; onChange(next: Record<string, number> | undefined): void }) {
+  const [text, setText] = useState(Object.entries(value ?? {}).map(([axis, amount]) => `${axis}=${amount}`).join(', '));
+  const [invalid, setInvalid] = useState(false);
+  useEffect(() => setText(Object.entries(value ?? {}).map(([axis, amount]) => `${axis}=${amount}`).join(', ')), [value]);
+  const apply = (next: string) => {
+    setText(next);
+    if (!next.trim()) { setInvalid(false); onChange(undefined); return; }
+    const axes: Record<string, number> = {};
+    for (const part of next.split(',')) {
+      const [axis, raw] = part.trim().split('=');
+      if (!/^[A-Za-z0-9]{4}$/.test(axis ?? '')) { setInvalid(true); return; }
+      const amount = Number(raw);
+      if (!Number.isFinite(amount) || amount < -1000 || amount > 2000) { setInvalid(true); return; }
+      axes[axis] = amount;
+    }
+    if (Object.keys(axes).length <= 8) { setInvalid(false); onChange(axes); } else setInvalid(true);
+  };
+  return <div className="appearance-token-row"><span className="token-name">{label(settings, TOKEN_META.fontVariationAxes.en, TOKEN_META.fontVariationAxes.yue)}</span><SettingExplanation settings={settings} explanation={TOKEN_META.fontVariationAxes.explanation} persisted={value !== undefined} fallback={TOKEN_META.fontVariationAxes.defaultValue} /><label>{label(settings, 'Axes (four letters=value)', '變體軸（四個字母=數值）')}<input value={text} maxLength={96} placeholder="wght=650,wdth=90" aria-invalid={invalid} aria-describedby="appearance-axes-error" onChange={(event) => apply(event.target.value)} /></label>{invalid && <p id="appearance-axes-error" className="notice warning" role="alert">{label(settings, 'Use up to eight four-letter axes with values from -1000 to 2000.', '最多八個四字母變體軸，數值由 -1000 至 2000。')}</p>}<p className="supporting">{label(settings, 'Up to eight axes; values are bounded before CSS output.', '最多八個軸；輸出 CSS 前會限制數值。')}</p></div>;
+}
+
+function TextShadowField({ value, settings, onChange }: { value: { x: number; y: number; blur: number; color: ColorValue } | undefined; settings: UserSettings; onChange(next: { x: number; y: number; blur: number; color: ColorValue } | undefined): void }) {
+  const current = value ?? { x: 0, y: 0, blur: 0, color: { kind: 'hex' as const, hex: '#00000080' } };
+  const shadowHex = current.color.kind === 'hex' ? current.color.hex : '#000000';
+  return <div className="appearance-token-row"><span className="token-name">{label(settings, TOKEN_META.textShadow.en, TOKEN_META.textShadow.yue)}</span><SettingExplanation settings={settings} explanation={TOKEN_META.textShadow.explanation} persisted={value !== undefined} fallback={TOKEN_META.textShadow.defaultValue} /><div className="chip-row"><label>{label(settings, 'X', 'X')}<input type="number" min={-20} max={20} value={current.x} onChange={(event) => onChange({ ...current, x: Number(event.target.value) })} /></label><label>{label(settings, 'Y', 'Y')}<input type="number" min={-20} max={20} value={current.y} onChange={(event) => onChange({ ...current, y: Number(event.target.value) })} /></label><label>{label(settings, 'Blur', '模糊')}<input type="number" min={0} max={40} value={current.blur} onChange={(event) => onChange({ ...current, blur: Number(event.target.value) })} /></label><label>{label(settings, 'Shadow colour', '陰影顏色')}<input type="color" value={shadowHex.slice(0, 7)} onChange={(event) => onChange({ ...current, color: { kind: 'hex', hex: event.target.value } })} /></label></div><button className="text-button" type="button" onClick={() => onChange(undefined)}>{label(settings, 'Use default', '用預設')}</button></div>;
 }
 
 export function AppearancePanel({ appearance, settings, notify, onClose }: {
@@ -354,8 +386,18 @@ export function AppearancePanel({ appearance, settings, notify, onClose }: {
             return <ChipField key={token} token={token} settings={settings} options={['normal', 'italic', 'oblique'] as const} value={override.fontStyle} onChange={(next) => { appearance.setToken(token, next); appearance.commit(); }} />;
           }
           if (token === 'textDecoration') {
-            return <ChipField key={token} token={token} settings={settings} options={['none', 'underline', 'line-through', 'underline line-through'] as const} value={override.textDecoration} onChange={(next) => { appearance.setToken(token, next); appearance.commit(); }} />;
+            return <ChipField key={token} token={token} settings={settings} options={['none', 'underline', 'overline', 'line-through', 'underline overline', 'underline line-through', 'overline line-through', 'underline overline line-through'] as const} value={override.textDecoration} onChange={(next) => { appearance.setToken(token, next); appearance.commit(); }} />;
           }
+          if (token === 'underlineColor') return <ColorField key={token} token={token} settings={settings} value={override.underlineColor} onChange={(next) => { appearance.setToken(token, next); appearance.commit(); }} />;
+          if (token === 'fontVariationAxes') return <VariationAxesField key={token} settings={settings} value={override.fontVariationAxes} onChange={(next) => { appearance.setToken(token, next); appearance.commit(); }} />;
+          if (token === 'underlineStyle') return <ChipField key={token} token={token} settings={settings} options={['solid', 'double', 'dotted', 'dashed', 'wavy'] as const} value={override.underlineStyle} onChange={(next) => { appearance.setToken(token, next); appearance.commit(); }} />;
+          if (token === 'textTransform') return <ChipField key={token} token={token} settings={settings} options={['none', 'uppercase', 'lowercase', 'capitalize'] as const} value={override.textTransform} onChange={(next) => { appearance.setToken(token, next); appearance.commit(); }} />;
+          if (token === 'fontVariantCaps') return <ChipField key={token} token={token} settings={settings} options={['normal', 'small-caps', 'all-small-caps', 'petite-caps', 'all-petite-caps', 'unicase', 'titling-caps'] as const} value={override.fontVariantCaps} onChange={(next) => { appearance.setToken(token, next); appearance.commit(); }} />;
+          if (token === 'textDirection') return <ChipField key={token} token={token} settings={settings} options={['auto', 'ltr', 'rtl'] as const} value={override.textDirection} onChange={(next) => { appearance.setToken(token, next); appearance.commit(); }} />;
+          if (token === 'textAlign') return <ChipField key={token} token={token} settings={settings} options={['start', 'center', 'end', 'justify'] as const} value={override.textAlign} onChange={(next) => { appearance.setToken(token, next); appearance.commit(); }} />;
+          if (token === 'textShadow') return <TextShadowField key={token} settings={settings} value={override.textShadow} onChange={(next) => { appearance.setToken(token, next); appearance.commit(); }} />;
+          if (token === 'underlineThickness') return <NumberField key={token} token={token} settings={settings} value={override.underlineThickness} min={0} max={10} step={1} unit="px" onChange={(next) => { appearance.setToken(token, next); appearance.commit(); }} />;
+          if (token === 'baselineOffset') return <NumberField key={token} token={token} settings={settings} value={override.baselineOffset} min={-200} max={200} step={5} unit="%em" onChange={(next) => { appearance.setToken(token, next); appearance.commit(); }} />;
           if (token === 'letterSpacing') {
             return <NumberField key={token} token={token} settings={settings} value={override.letterSpacing} min={-4} max={16} step={1} unit="/10em" onChange={(next) => { appearance.setToken(token, next); appearance.commit(); }} />;
           }
@@ -369,7 +411,6 @@ export function AppearancePanel({ appearance, settings, notify, onClose }: {
           return <ScaleField key={token} token={token} settings={settings} value={token === 'fontScale' ? override.fontScale : override.paddingScale} min={bounds.min} max={bounds.max} onChange={(next) => appearance.setToken(token, next)} onCommit={appearance.commit} />;
         }) : <p className="supporting">{label(settings, 'No control in this section matches the search.', '呢個分類冇設定配到搜尋。')}</p>}
       </div>
-      {section === 'type' && <p className="supporting capability-note" role="note">{label(settings, 'Advanced typography such as variation axes, underline colour/style, overline, capitalization, small caps, baseline, direction, alignment, and text effects is not supported by this editor yet; these values are shown here as a capability note and are never silently persisted.', '字型變體軸、底線顏色／樣式、上劃線、大小寫、小型大寫、基線、方向、對齊同文字效果等進階字體功能，呢個編輯器暫時未支援；呢段係能力提示，唔會靜默儲存。')}</p>}
       {ratio !== null && <p className={ratio < threshold ? 'notice warning' : 'supporting'} role="status">
         <Icon>contrast</Icon>
         {label(settings, `Contrast readout: ${ratio.toFixed(2)}:1${ratio < threshold ? ` (below ${threshold}:1 guideline)` : ''}.`, `對比度讀數：${ratio.toFixed(2)}:1${ratio < threshold ? `（低過 ${threshold}:1 建議值）` : ''}。`)}

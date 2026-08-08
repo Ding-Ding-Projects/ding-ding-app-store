@@ -117,6 +117,16 @@
     font-family: var(--appearance-font-family, inherit);
     font-style: var(--appearance-font-style, inherit);
     text-decoration: var(--appearance-text-decoration, inherit);
+    font-variation-settings: var(--appearance-font-variation-settings, normal);
+    text-decoration-style: var(--appearance-text-decoration-style, solid);
+    text-decoration-color: var(--appearance-text-decoration-color, currentColor);
+    text-decoration-thickness: var(--appearance-text-decoration-thickness, auto);
+    text-transform: var(--appearance-text-transform, none);
+    font-variant-caps: var(--appearance-font-variant-caps, normal);
+    vertical-align: var(--appearance-vertical-align, baseline);
+    direction: var(--appearance-direction, inherit);
+    text-align: var(--appearance-text-align, inherit);
+    text-shadow: var(--appearance-text-shadow, none);
     letter-spacing: var(--appearance-letter-spacing, inherit);
     line-height: var(--appearance-line-height, inherit);
   }

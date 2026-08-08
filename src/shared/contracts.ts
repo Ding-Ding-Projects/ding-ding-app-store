@@ -408,7 +408,9 @@ export const DEFAULT_TAB_WORKSPACE: TabWorkspace = {
 export const TOKEN_IDS = [
   'background', 'foreground', 'radius', 'paddingScale', 'fontScale', 'fontWeight',
   'fontFamily', 'fontStyle', 'textDecoration', 'letterSpacing', 'lineHeight',
-  'borderWidth', 'elevation',
+  'borderWidth', 'elevation', 'fontVariationAxes', 'underlineStyle', 'underlineColor',
+  'underlineThickness', 'textTransform', 'fontVariantCaps', 'baselineOffset',
+  'textDirection', 'textAlign', 'textShadow',
 ] as const;
 export type TokenId = (typeof TOKEN_IDS)[number];
 
@@ -464,6 +466,16 @@ export const CSS_SUFFIX: Readonly<Record<TokenId, string>> = Object.freeze({
   fontFamily: 'font-family',
   fontStyle: 'font-style',
   textDecoration: 'text-decoration',
+  fontVariationAxes: 'font-variation-settings',
+  underlineStyle: 'text-decoration-style',
+  underlineColor: 'text-decoration-color',
+  underlineThickness: 'text-decoration-thickness',
+  textTransform: 'text-transform',
+  fontVariantCaps: 'font-variant-caps',
+  baselineOffset: 'vertical-align',
+  textDirection: 'direction',
+  textAlign: 'text-align',
+  textShadow: 'text-shadow',
   letterSpacing: 'letter-spacing',
   lineHeight: 'line-height',
   borderWidth: 'border-width',
@@ -481,7 +493,7 @@ export interface ElementDefinition {
 }
 
 const ALL: readonly TokenId[] = TOKEN_IDS;
-const TEXT: readonly TokenId[] = ['foreground', 'fontScale', 'fontWeight', 'fontFamily', 'fontStyle', 'textDecoration', 'letterSpacing', 'lineHeight'];
+const TEXT: readonly TokenId[] = ['foreground', 'fontScale', 'fontWeight', 'fontFamily', 'fontStyle', 'textDecoration', 'letterSpacing', 'lineHeight', 'fontVariationAxes', 'underlineStyle', 'underlineColor', 'underlineThickness', 'textTransform', 'fontVariantCaps', 'baselineOffset', 'textDirection', 'textAlign', 'textShadow'];
 const BOX: readonly TokenId[] = ['background', 'foreground', 'radius', 'paddingScale', 'fontScale', 'borderWidth'];
 const BOX_RAISED: readonly TokenId[] = [...BOX, 'elevation'];
 const PILL: readonly TokenId[] = ['background', 'foreground', 'radius', 'paddingScale', 'fontScale', 'fontWeight', 'borderWidth'];
@@ -528,7 +540,7 @@ export const ELEMENTS: readonly ElementDefinition[] = Object.freeze(ELEMENT_LIST
 export const ELEMENT_KEYS = ELEMENT_LIST.map((element) => element.key) as unknown as [ElementKey, ...ElementKey[]];
 export const ELEMENT_BY_KEY: ReadonlyMap<string, ElementDefinition> = new Map(ELEMENTS.map((element) => [element.key, element]));
 
-export const MAX_TOKENS_PER_ELEMENT = 16;
+export const MAX_TOKENS_PER_ELEMENT = 32;
 export const MAX_IMPORT_BYTES = 64_000;
 
 export const colorValueSchema = z.discriminatedUnion('kind', [
@@ -545,7 +557,19 @@ export const elementOverrideSchema = z.strictObject({
   fontWeight: z.union([z.literal(400), z.literal(500), z.literal(600), z.literal(700), z.literal(800)]).optional(),
   fontFamily: z.string().trim().min(1).max(96).regex(/^[A-Za-z0-9 _-]+$/, 'Use an installed font family name.').optional(),
   fontStyle: z.enum(['normal', 'italic', 'oblique']).optional(),
-  textDecoration: z.enum(['none', 'underline', 'line-through', 'underline line-through']).optional(),
+  textDecoration: z.enum(['none', 'underline', 'overline', 'line-through', 'underline overline', 'underline line-through', 'overline line-through', 'underline overline line-through']).optional(),
+  fontVariationAxes: z.record(z.string().regex(/^[A-Za-z0-9]{4}$/), z.number().min(-1000).max(2000)).superRefine((value, ctx) => {
+    if (Object.keys(value).length > 8) ctx.addIssue({ code: 'custom', message: 'At most eight font variation axes are supported.' });
+  }).optional(),
+  underlineStyle: z.enum(['solid', 'double', 'dotted', 'dashed', 'wavy']).optional(),
+  underlineColor: colorValueSchema.optional(),
+  underlineThickness: z.number().int().min(0).max(10).optional(),
+  textTransform: z.enum(['none', 'uppercase', 'lowercase', 'capitalize']).optional(),
+  fontVariantCaps: z.enum(['normal', 'small-caps', 'all-small-caps', 'petite-caps', 'all-petite-caps', 'unicase', 'titling-caps']).optional(),
+  baselineOffset: z.number().int().min(-200).max(200).optional(),
+  textDirection: z.enum(['ltr', 'rtl', 'auto']).optional(),
+  textAlign: z.enum(['start', 'center', 'end', 'justify']).optional(),
+  textShadow: z.strictObject({ x: z.number().int().min(-20).max(20), y: z.number().int().min(-20).max(20), blur: z.number().int().min(0).max(40), color: colorValueSchema }).optional(),
   letterSpacing: z.number().int().min(-4).max(16).optional(),
   lineHeight: z.number().int().min(80).max(240).optional(),
   borderWidth: z.number().int().min(0).max(3).optional(),
@@ -620,14 +644,17 @@ const UNSAFE_VALUE = /[;{}<>\n\r]|url\(|@import|expression\(|\/\*/i;
 const SAFE_HEX = /^#[0-9a-f]{6}([0-9a-f]{2})?$/;
 const SAFE_FONT = /^[A-Za-z0-9 _-]{1,96}$/;
 
+function safeColorCss(color: ColorValue | undefined): string | null {
+  if (!color) return null;
+  if (color.kind === 'role') return COLOR_ROLE_VAR[color.role] ?? null;
+  return SAFE_HEX.test(color.hex) ? color.hex : null;
+}
+
 function tokenValue(token: TokenId, override: ElementOverride): string | null {
   switch (token) {
     case 'background':
     case 'foreground': {
-      const color = override[token];
-      if (!color) return null;
-      if (color.kind === 'role') return COLOR_ROLE_VAR[color.role] ?? null;
-      return SAFE_HEX.test(color.hex) ? color.hex : null;
+      return safeColorCss(override[token]);
     }
     case 'radius':
       return override.radius ? `${RADIUS_PX[override.radius]}px` : null;
@@ -643,6 +670,33 @@ function tokenValue(token: TokenId, override: ElementOverride): string | null {
       return override.fontStyle ?? null;
     case 'textDecoration':
       return override.textDecoration ?? null;
+    case 'fontVariationAxes': {
+      const axes = override.fontVariationAxes;
+      if (!axes) return null;
+      const pairs = Object.entries(axes).filter(([axis, value]) => /^[A-Za-z0-9]{4}$/.test(axis) && Number.isFinite(value) && value >= -1000 && value <= 2000);
+      return pairs.length ? pairs.map(([axis, value]) => `"${axis}" ${value}`).join(', ') : null;
+    }
+    case 'underlineStyle':
+      return override.underlineStyle ?? null;
+    case 'underlineColor':
+      return safeColorCss(override.underlineColor);
+    case 'underlineThickness':
+      return typeof override.underlineThickness === 'number' ? `${override.underlineThickness}px` : null;
+    case 'textTransform':
+      return override.textTransform ?? null;
+    case 'fontVariantCaps':
+      return override.fontVariantCaps ?? null;
+    case 'baselineOffset':
+      return typeof override.baselineOffset === 'number' ? `${override.baselineOffset / 100}em` : null;
+    case 'textDirection':
+      return override.textDirection ?? null;
+    case 'textAlign':
+      return override.textAlign ?? null;
+    case 'textShadow': {
+      const shadow = override.textShadow;
+      const color = safeColorCss(shadow?.color);
+      return shadow && color ? `${shadow.x / 10}em ${shadow.y / 10}em ${shadow.blur / 10}em ${color}` : null;
+    }
     case 'letterSpacing':
       return typeof override.letterSpacing === 'number' ? `${override.letterSpacing / 10}em` : null;
     case 'lineHeight':
