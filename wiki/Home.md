@@ -10,9 +10,9 @@ The wiki mirrors the same canonical feature articles bundled into the applicatio
 
 - [Verified installer operations](Verified-Installer-Operations) — **limited** — Downloads one app-specific Squirrel, MSI, NSIS, jpackage, or portable-ZIP asset, verifies its bytes, and applies only a fixed reviewed adapter.
 - [One-click installation and adapter coverage](One-Click-Installation) — **limited** — Dispatches 21 reviewed release adapters without typed confirmation and reports three current public-release blockers instead of guessing commands.
-- [Source-build security](Source-Build-Security) — **limited** — Provides a typed, bounded source-job and repair runtime but deliberately withholds execution until an attested hard-disposable Windows broker and reviewed recipe exist.
+- [Source-build security](Source-Build-Security) — **limited** — Provides a typed, bounded source-job and repair runtime with a truthful Windows Sandbox capability probe, but deliberately withholds execution until an attested hard-disposable guest transport and reviewed recipe exist.
 - [Protected uninstall](Uninstall) — **shipped** — Removes only an installation whose Squirrel, MSI, or managed-portable ownership route was recorded or safely rediscovered.
-- [Automatic repair and universal adapters](Automatic-Repair-and-Universal-Adapters) — **limited** — Keeps the typed terminal, pinned OpenCode, bounded repair, consent, and hard-isolation refusal separate from the 24 reviewed release-adapter records.
+- [Automatic repair and universal adapters](Automatic-Repair-and-Universal-Adapters) — **limited** — Keeps the typed terminal, pinned OpenCode, bounded repair, consent, and truthful Windows Sandbox capability refusal separate from the 24 reviewed release-adapter records.
 
 ## Installed apps and history
 

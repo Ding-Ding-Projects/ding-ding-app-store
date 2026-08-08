@@ -54,6 +54,23 @@ export type SourceJobDecision = (typeof SOURCE_JOB_DECISIONS)[number];
 export type SourceJobState = 'queued' | 'preparing' | 'running' | 'repairing' | 'cancelling' | 'succeeded' | 'failed' | 'cancelled';
 export type SourceTerminalStream = 'system' | 'progress' | 'stdout' | 'stderr';
 
+export const SOURCE_ISOLATION_REASONS = [
+  'unsupported-platform',
+  'sandbox-executable-missing',
+  'sandbox-feature-unverified',
+  'guest-transport-not-connected',
+] as const;
+export type SourceIsolationReason = (typeof SOURCE_ISOLATION_REASONS)[number];
+export const sourceIsolationStatusSchema = z.strictObject({
+  available: z.boolean(),
+  provider: z.literal('windows-sandbox'),
+  reason: z.enum(SOURCE_ISOLATION_REASONS),
+  checkedAt: z.iso.datetime(),
+  evidence: z.array(z.string().max(240)).max(8),
+  remediation: z.string().max(600),
+});
+export type SourceIsolationStatus = z.infer<typeof sourceIsolationStatusSchema>;
+
 export const sourceJobRequestSchema = z.strictObject({
   appId: z.string().regex(/^[a-z0-9][a-z0-9-]{0,127}$/),
   decision: z.enum(SOURCE_JOB_DECISIONS),
@@ -791,6 +808,7 @@ export interface DingDingStoreApi {
     start(request: SourceJobRequest): Promise<SourceJobStartResult>;
     cancel(request: SourceJobCancelRequest): Promise<SourceJobStartResult>;
     retry(request: SourceJobRetryRequest): Promise<SourceJobStartResult>;
+    status(): Promise<SourceIsolationStatus>;
     subscribe(listener: (event: Readonly<SourceTerminalEvent>) => void): () => void;
   };
   updates: {

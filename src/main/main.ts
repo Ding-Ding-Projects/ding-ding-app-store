@@ -119,6 +119,9 @@ void app.whenReady().then(async () => {
     if (event.sender !== mainWindow?.webContents) return { ok: false, appId: 'invalid', state: 'failed', message: 'Blocked retry request from an unknown renderer.' };
     return sourceJobs.retry(request);
   });
+  ipcMain.handle('source-jobs:status', (event) => event.sender === mainWindow?.webContents
+    ? sourceJobs.isolationStatus()
+    : { available: false, provider: 'windows-sandbox', reason: 'guest-transport-not-connected', checkedAt: new Date().toISOString(), evidence: ['Blocked source status request from an unknown renderer.'], remediation: 'Keep source execution disabled until a reviewed disposable guest transport is connected.' });
   ipcMain.handle('updates:catalog', () => catalog.list(true));
   ipcMain.handle('updates:store-check', () => updates.check());
   ipcMain.handle('updates:store-download', () => updates.download());

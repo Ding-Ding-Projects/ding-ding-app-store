@@ -8,7 +8,7 @@ import { HistoryService } from './history-service.js';
 import { SettingsService } from './settings-service.js';
 import {
   TerminalEventBudget,
-  UnavailableIsolationBroker,
+  WindowsSandboxIsolationBroker,
   cleanupOwnedWorkspace,
   createSourceExecutionPlan,
   isolationMatches,
@@ -50,10 +50,22 @@ export class SourceJobService {
     private readonly settings: SettingsService,
     private readonly ownedRoot: string,
     private readonly recipeFile: string,
-    private readonly broker: IsolationBroker = new UnavailableIsolationBroker(),
+    private readonly broker: IsolationBroker = new WindowsSandboxIsolationBroker(),
     private readonly publish: (event: Readonly<SourceTerminalEvent>) => void = () => undefined,
     private readonly jobTimeoutMs = SOURCE_RUNTIME_LIMITS.maxJobMs,
   ) {}
+
+  async isolationStatus() {
+    if (this.broker.diagnose) return this.broker.diagnose();
+    return {
+      available: false as const,
+      provider: 'windows-sandbox' as const,
+      reason: 'guest-transport-not-connected' as const,
+      checkedAt: new Date().toISOString(),
+      evidence: ['The configured source broker does not expose a guest capability report.'],
+      remediation: 'Keep source execution disabled until a reviewed disposable guest transport is connected.',
+    };
+  }
 
   async start(input: unknown): Promise<SourceJobStartResult> {
     const parsed = sourceJobRequestSchema.safeParse(input);
@@ -191,7 +203,11 @@ export class SourceJobService {
     try {
       this.emit(job, { stream: 'progress', state: 'preparing', text: 'Checking the hard-disposable isolation boundary before any source or OpenCode execution.', progress: 5 });
       const attestation = await withinDeadline(this.broker.attest());
-      if (!isolationMatches(attestation)) throw new Error('The hard-disposable runner is unavailable or failed isolation attestation. No source code or blanket-approved OpenCode ran on the host.');
+      if (!isolationMatches(attestation)) {
+        const status = await withinDeadline(this.isolationStatus());
+        this.emit(job, { stream: 'stderr', state: 'failed', text: `Source execution withheld: ${status.reason}. ${status.evidence.join(' ')}`, progress: null });
+        throw new Error(`The hard-disposable runner is unavailable (${status.reason}). No source code or blanket-approved OpenCode ran on the host.`);
+      }
       if (job.controller.signal.aborted) throw new DOMException('Cancelled', 'AbortError');
       const plan = createSourceExecutionPlan(jobId, request.decision, recipe);
       this.emit(job, { stream: 'progress', state: 'preparing', text: `Pinned revision ${recipe.revision.slice(0, 12)} and reviewed command vectors accepted.`, progress: 10 });

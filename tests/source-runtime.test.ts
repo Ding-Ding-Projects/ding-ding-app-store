@@ -6,6 +6,7 @@ import { sourceJobCancelRequestSchema, sourceJobRequestSchema, sourceJobRetryReq
 import { SourceJobService } from '../src/main/source-job-service.js';
 import {
   PINNED_OPENCODE,
+  WindowsSandboxIsolationBroker,
   REQUIRED_ISOLATION,
   SOURCE_RUNTIME_LIMITS,
   TerminalEventBudget,
@@ -22,6 +23,7 @@ import {
   validateOpenCodeArchive,
   validateOpenCodeExecutable,
   ensurePinnedOpenCode,
+  probeWindowsDisposableGuest,
   verifyOwnedRoot,
   type IsolationAttestation,
   type IsolationBroker,
@@ -90,6 +92,22 @@ describe('source job contracts', () => {
     expect(plan.steps.map((entry) => entry.id)).toEqual(['validate-app', 'build-app']);
     expect(plan.openCodeArguments).toEqual(['run', '--auto']);
     expect(plan.forbiddenRepairEntries).toContain('.opencode');
+  });
+
+  it('reports Windows Sandbox capability without launching a host process', async () => {
+    const missing = await probeWindowsDisposableGuest({
+      platform: 'win32',
+      systemRoot: 'C:\\Windows',
+      fileExists: async () => false,
+      checkedAt: () => '2026-08-08T00:00:00.000Z',
+    });
+    expect(missing).toMatchObject({ available: false, provider: 'windows-sandbox', reason: 'sandbox-executable-missing', checkedAt: '2026-08-08T00:00:00.000Z' });
+
+    const present = await probeWindowsDisposableGuest({ platform: 'win32', fileExists: async () => true });
+    expect(present).toMatchObject({ available: false, reason: 'guest-transport-not-connected' });
+    expect(present.evidence.join(' ')).toMatch(/not connected/i);
+    const broker = new WindowsSandboxIsolationBroker(async () => present);
+    await expect(broker.execute(createSourceExecutionPlan(crypto.randomUUID(), 'build', recipe), () => undefined, new AbortController().signal)).rejects.toThrow(/guest-transport-not-connected/);
   });
 });
 

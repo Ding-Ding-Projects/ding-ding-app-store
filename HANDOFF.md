@@ -14,7 +14,7 @@ The repository contains a sandboxed Electron/React/TypeScript shell, reviewed 24
 
 ## Remaining
 
-- Source builds remain intentionally blocked from execution until a real hard-disposable Windows broker and reviewed per-app recipes are supplied. The typed job/event contracts, read-only terminal panel, persisted consent, pinned OpenCode identity/configuration, dependency schema, finite repair loop, bounds, cancellation, and ownership cleanup are implemented and tested with fake brokers.
+- Source builds remain intentionally blocked from execution until a real hard-disposable Windows broker and reviewed per-app recipes are supplied. The typed job/event contracts, read-only terminal panel, persisted consent, pinned OpenCode identity/configuration, dependency schema, finite repair loop, bounds, cancellation, ownership cleanup, and a non-launching Windows Sandbox capability probe are implemented and tested with fake brokers. The probe reports `WindowsSandbox.exe` presence separately from feature-state, elevation, and guest-transport evidence; it never treats a host binary as permission to execute source.
 - The 24-ID release-adapter audit is implemented: 21 source-proven release routes and three explicit blockers. Clean-Windows execution evidence remains to be collected per supported app; `WinSshCopyId` needs a release, `Photo-Viewer` needs a non-empty release, and `ha-bambulab` needs an explicitly authorized Home Assistant target.
 - Offline documentation import for every catalog application remains. Tab pinning/grouping with per-surface searches, the per-element appearance editor, and the schedule editor have landed (see the 2026-08-07 entry below); their packaged-runtime capture remains.
 - The self-update failure state is runtime-verified: the repository has no release yet, so `RELEASES` returns HTTP 404. No successful update is claimed.
@@ -24,7 +24,7 @@ The repository contains a sandboxed Electron/React/TypeScript shell, reviewed 24
 
 ## Next owner action
 
-Implement the hard-disposable broker without host mounts or secrets, add reviewed pinned recipes per application, and prove dependency/bootstrap/build/run/output/cancellation behavior on clean Windows. Until then, preserve the common runtime's deliberate refusal instead of adding a host fallback.
+Implement the hard-disposable broker without host mounts or secrets, add reviewed pinned recipes per application, and prove dependency/bootstrap/build/run/output/cancellation behavior on clean Windows. The current adapter exposes its exact missing guest-transport status and preserves the deliberate refusal; it must not grow a host fallback.
 
 ## 2026-08-07 universal reviewed release adapters
 

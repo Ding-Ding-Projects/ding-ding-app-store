@@ -67,7 +67,7 @@ Install and Reinstall are genuine one-click actions: the catalog button immediat
 
 The common dispatch is implemented, but fully automatic fresh-Windows coverage is not: the current [24-app adapter matrix](docs/features/installation/one-click-installation.md) records every missing release, archive, source-toolchain, dependency-bootstrap, disposable-runner, bounded OpenCode-repair, cancellation, and runtime-proof requirement without treating a guessed command as an adapter.
 
-Source recipes are catalogued but are never executed directly on the host. The product will enable that path only through a disposable, resource-bounded Windows build runner.
+Source recipes are catalogued but are never executed directly on the host. The app reports Windows Sandbox binary presence separately from feature-state and guest-transport evidence, and enables that path only through a disposable, resource-bounded Windows build runner with a reviewed transport.
 
 Code signing is intentionally prohibited. Published Windows packages are unsigned and may trigger Windows SmartScreen or an unknown-publisher warning.
 

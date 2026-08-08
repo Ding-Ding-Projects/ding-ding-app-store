@@ -10,6 +10,7 @@
 - [ ] Disposable Windows source-build runner
 - [x] Common typed source-job runtime, M3 terminal simulator, consent, pinned OpenCode bootstrap contract, bounded repair loop, cancellation, and fail-closed isolation gate
 - [x] Typed terminal retry path and guest-only pinned OpenCode bootstrap (reuses or downloads the exact archive without host PATH access)
+- [x] Windows Sandbox capability probe and typed source-runner status (reports binary presence without launching a host process; fails closed while guest transport is absent)
 - [x] Installed-app discovery for reviewed Squirrel, MSI, and managed-portable records with append-only history/export
 - [x] One-click install/source-install dispatch with strict catalog-ID and typed-decision boundary; destructive uninstall confirmation unchanged
 - [x] Closed release-adapter coverage for all 24 catalog records: 21 source-proven Windows routes and three explicit external blockers
