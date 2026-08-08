@@ -1,11 +1,32 @@
 # Update schedule
 
-Two scheduled tasks run: the App Store self-update check and the catalog refresh. A self-update check runs once at every launch and cannot be turned off; the repeat switch only controls further checks while the app stays open. No scheduled path ever starts a download or an installer.
+> **Status: shipped.** This wiki page is generated from the canonical categorized article.
 
-- Configuration: `schedule.v1.json` with run records in `schedule-runs.v1.json`. Self-update intervals 60 minutes to 7 days; catalog refresh floored at 30 minutes to match the catalog cache lifetime; quiet hours are minute-of-day values that may wrap midnight. Saving is the only thing that re-arms the timers.
-- Honesty: quiet hours never block a check — only corner notifications are held, the update banner stays live, and held notices are summarised when the window closes. A cache-fallback refresh is reported as failed, and a development build says no update feed request was made.
-- Failure: last run, exact failure message, next run, backoff, and the empty states "Not scheduled", "Running now", and "Retrying after N failed checks" are all shown as they are.
-- Security: timers live in one main-process scheduler with a single unref'd timeout per task, a generation guard, one catch-up after sleep, and power-resume re-evaluation without polling. The renderer sends only the typed document and a task id.
-- Verification: renderer typecheck, `npm run build`, and 54 tests pass. Packaged-runtime capture of a real scheduled run is pending.
 
-Detailed source: `docs/features/update-schedule.md`.
+## Behaviour
+
+The scheduler owns two independent tasks: App Store self-update checks and catalog refresh. A self-check runs once after every launch and cannot be turned off; its repeat switch controls only later checks in that session. Catalog refresh can be enabled separately and is floored at the 30-minute catalog cache lifetime. Each task shows last run, trigger, outcome, exact message, next run, running state, and backoff state. Manual `Check now` and `Refresh now` use the same task functions.
+
+Quiet hours never delay work. They hold corner notifications, keep the update banner live, count held notices, and emit one summary after quiet hours end. Timers are drift-safe single timeouts rather than polling intervals.
+
+## Configuration
+
+Settings → Schedule is a browser-style sub-tab with its own search and full regex builder. Self-update intervals range from 60 to 10,080 minutes; catalog intervals range from 30 to 10,080. Quiet hours use local minute-of-day values, may wrap midnight, and must span at least 15 minutes. The editor shows the resolved time zone and daylight-saving behavior. Save is the only operation that validates, persists, and re-arms timers; discard and reset are explicit.
+
+## Failure modes
+
+Invalid bounds or quiet-hour spans are rejected per field by the main process. Failed tasks retain their exact message and use capped exponential backoff. A catalog cache fallback is recorded as failed. Clock jumps, resume from sleep, concurrent manual clicks, and stale timer generations are guarded. When a task is already running, another run returns that state instead of duplicating work.
+
+## Security considerations
+
+The renderer sends only a typed schedule document or task identifier. It never supplies update URLs, commands, paths, or installer arguments. Scheduled self-checks can discover an update but cannot download or restart it. Configuration and run records live in separate versioned app-owned JSON files.
+
+## Verification
+
+Focused tests cover schema bounds, quiet-hour spans, the absence of polling timers, startup routing, updater separation, and cache-fallback failure. Type check and build cover renderer/main integration. A long-duration wall-clock soak and successful packaged self-update remain outside this article's proof.
+
+## Suggested articles
+
+- [App Store self-updater](App-Store-Self-Updater)
+- [Catalog discovery](Catalog-Discovery)
+- [Notifications and operation status](Notifications-and-Status)

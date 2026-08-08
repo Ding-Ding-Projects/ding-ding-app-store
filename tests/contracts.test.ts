@@ -155,7 +155,8 @@ describe('visible product contracts', () => {
     expect(apps).toContain("onAction('install', app, event.currentTarget)");
     expect(apps).toContain("onAction('build', app, event.currentTarget)");
     expect(apps).toContain('Install from source');
-    expect(dialog).toContain("operations.uninstall({ appId: action.app.id, decision: 'uninstall' })");
+    expect(dialog).toContain("operations.uninstall({ appId: app.id, decision: 'uninstall' })");
+    expect(dialog).toContain('for (const [index, app] of action.apps.entries())');
     expect(dialog).not.toContain('const [confirmation');
     expect(dialog).not.toContain('value={confirmation}');
     expect(dialog).not.toContain('Type <strong>');
@@ -182,10 +183,11 @@ describe('split renderer keeps every product contract in its own file', () => {
 
   it('keeps the two-key plus full-slider super-confirmation and the emergency exit in the action dialog', async () => {
     const dialog = await read('src/renderer/components/ActionDialog.tsx');
+    const superConfirm = await read('src/renderer/components/SuperConfirm.tsx');
     expect(dialog).toContain('firstKey && secondKey && slider === 100');
     expect(dialog).toContain('Emergency exit · 緊急離開');
-    expect(dialog).toContain('export function SuperConfirm(');
-    expect(dialog).toContain('autoFocus');
+    expect(superConfirm).toContain('export function SuperConfirm(');
+    expect(superConfirm).toContain('autoFocus');
     expect(dialog).toContain('aria-describedby="action-description"');
     expect(dialog).toContain("if (event.key === 'Tab')");
     expect(await read('src/renderer/App.tsx')).toContain('returnFocus.focus()');
@@ -267,7 +269,7 @@ describe('activity history and export', () => {
 describe('one-click adapter coverage record', () => {
   it('names every catalog application and the bounded repair-engine contract without claiming the missing adapters are complete', async () => {
     const catalog = JSON.parse(await read('data/catalog.v1.json')) as { apps: Array<{ displayName: string }> };
-    const coverage = await read('docs/features/one-click-installation.md');
+    const coverage = await read('docs/features/installation/one-click-installation.md');
     for (const app of catalog.apps) expect(coverage).toContain(`| ${app.displayName} |`);
     for (const requirement of [
       'build/run terminal simulator',

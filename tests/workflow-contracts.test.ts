@@ -43,4 +43,13 @@ describe('self-hosted workflow and bootstrap contract', () => {
     expect(config).toContain('self-hosted-runner:');
     expect(config).toContain('- ding-ding-app-store');
   });
+
+  it('resolves an unused public dim-sum code name without attaching a copied photo', async () => {
+    const release = await read('.github/workflows/release.yml');
+    expect(release).toContain('scripts/select-dim-sum-release.mjs');
+    expect(release).toContain('Dim sum code name:');
+    expect(release).toContain('Public dish photo:');
+    expect(release).toContain('$dish.photoUrl');
+    expect(release).not.toMatch(/gh release create[^\n]*\$dish\.(?:assetName|photoUrl)/);
+  });
 });

@@ -121,7 +121,14 @@ jobs:
           $releases = Resolve-Path 'release-stage/RELEASES'
           $nupkg = Resolve-Path 'release-stage/DingDingAppStore-full.nupkg'
           $lineCount = Resolve-Path 'release-stage/line-count.md'
-          gh release create $env:RELEASE_TAG $setup $releases $nupkg --repo $env:GITHUB_REPOSITORY --title "Ding Ding App Store $env:RELEASE_TAG" --notes 'Publication timing is being finalized.' --draft
+          $dish = node scripts/select-dim-sum-release.mjs --repository $env:GITHUB_REPOSITORY | ConvertFrom-Json
+          $title = "Ding Ding App Store $env:RELEASE_TAG"
+          $initialNotes = 'Publication timing is being finalized.'
+          if ($dish.available) {
+            $title = "$title — $($dish.codeName)"
+            $initialNotes = "Dim sum code name: $($dish.codeName)`n`n[Public dish photo]($($dish.photoUrl))"
+          }
+          gh release create $env:RELEASE_TAG $setup $releases $nupkg --repo $env:GITHUB_REPOSITORY --title $title --notes $initialNotes --draft
           gh release edit $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --draft=false
           $publishedAt = gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/$env:RELEASE_TAG" --jq .published_at
           if (-not $publishedAt) { throw 'The published release did not report published_at.' }
@@ -132,6 +139,8 @@ jobs:
           $notes = @(
             'Unsigned Squirrel.Windows release. Code signing is permanently prohibited; Setup.exe was verified as NotSigned before publication.'
             ''
+            $(if ($dish.available) { "- Dim sum code name: $($dish.codeName)" } else { '- Dim sum code name: unavailable; the release was not blocked.' })
+            $(if ($dish.available) { "- Public dish photo: [$($dish.assetName)]($($dish.photoUrl))" } else { "- Public dish photo: unavailable ($($dish.reason))" })
             "- Source commit: ``$env:GITHUB_SHA``"
             "- Workflow run: $env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
             "- Workflow started: $($started.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'))"

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <title>Ding Ding App Store — documentation</title>
+  <title>Ding Ding App Store — complete documentation</title>
   <link rel="stylesheet" href="assets/app.css">
 </head>
 <body>
@@ -12,42 +12,69 @@
   <div class="app-shell">
     <aside class="rail" aria-label="Documentation navigation">
       <div class="brand"><span aria-hidden="true">🥟</span><span>Ding Ding App Store</span></div>
-      <button id="home-tab" class="rail-tab active" data-article="home" role="tab" aria-selected="true">Home</button>
-      <div id="article-tabs" class="tab-list" role="tablist" aria-label="Feature articles"></div>
-      <p class="rail-note">Local-only documentation foundation</p>
+      <div class="tab-list" role="tablist" aria-orientation="vertical" aria-label="Feature articles">
+        <button id="home-tab" class="rail-tab active" data-article="home" role="tab" aria-selected="true" aria-controls="article">Home</button>
+        <div id="article-tabs"></div>
+      </div>
+      <p class="rail-note">Complete local documentation · no analytics</p>
     </aside>
     <main>
       <header class="topbar">
         <div class="search-wrap">
-          <label class="sr-only" for="search">Search documentation</label>
-          <input id="search" type="search" maxlength="256" placeholder="Search features and documentation">
-          <button id="regex-toggle" class="icon-button" aria-expanded="false" aria-controls="regex-panel" title="Open regex builder">.*</button>
-          <div id="regex-panel" class="regex-panel" hidden>
-            <label>Pattern <input id="regex-pattern" maxlength="256" aria-label="Regex pattern"></label>
-            <label>Flags <input id="regex-flags" maxlength="12" value="iu" aria-label="Regex flags"></label>
-            <label>Sample text <textarea id="regex-sample" maxlength="2048" aria-label="Regex sample text"></textarea></label>
-            <p id="regex-result" role="status">Plain-text search is active.</p>
-            <div class="regex-actions"><button data-token="^">Anchor</button><button data-token="[A-Za-z]">Class</button><button data-token="()">Group</button><button data-token="|">Alternation</button><button data-token="+">Quantifier</button></div>
-          </div>
+          <label class="sr-only" for="docs-search">Search every feature article</label>
+          <input id="docs-search" type="search" maxlength="256" placeholder="Search every feature article">
+          <button id="docs-regex-toggle" class="icon-button" aria-expanded="false" aria-controls="docs-regex-panel" title="Open full regex builder">.*</button>
+          <div id="docs-regex-panel" class="regex-panel" hidden></div>
         </div>
         <button id="palette-button" class="text-button" aria-haspopup="dialog">Command palette <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>F</kbd></button>
       </header>
-      <section class="settings-card" aria-label="Documentation settings">
-        <label>Language <select id="language"><option value="en">English</option><option value="yue">香港粵語</option><option value="both">Bilingual</option></select></label>
-        <label>English funny level <input id="funny-en" type="range" min="1" max="5" value="2"><output id="funny-en-value">2</output></label>
-        <label>Cantonese funny level <input id="funny-yue" type="range" min="1" max="5" value="3"><output id="funny-yue-value">3</output></label>
+
+      <section class="settings-card settings-surface" aria-labelledby="settings-title">
+        <h2 id="settings-title">Documentation settings</h2>
+        <div id="settings-tabs" class="settings-tabs" role="tablist" aria-label="Documentation settings sections">
+          <button role="tab" id="settings-tab-general" aria-controls="settings-panel-general" aria-selected="true" data-settings-tab="general">General</button>
+          <button role="tab" id="settings-tab-appearance" aria-controls="settings-panel-appearance" aria-selected="false" data-settings-tab="appearance" tabindex="-1">Appearance</button>
+          <button role="tab" id="settings-tab-about" aria-controls="settings-panel-about" aria-selected="false" data-settings-tab="about" tabindex="-1">About</button>
+        </div>
+        <div class="search-wrap settings-search-wrap">
+          <label class="sr-only" for="settings-search">Search this settings tab</label>
+          <input id="settings-search" type="search" maxlength="256" placeholder="Search this settings tab">
+          <button id="settings-regex-toggle" class="icon-button" aria-expanded="false" aria-controls="settings-regex-panel" title="Open full regex builder">.*</button>
+          <div id="settings-regex-panel" class="regex-panel" hidden></div>
+        </div>
+        <div id="settings-panel-general" role="tabpanel" aria-labelledby="settings-tab-general" data-settings-panel="general">
+          <label data-settings-text="language english cantonese bilingual">Language <select id="language"><option value="en">English</option><option value="yue">香港粵語</option><option value="both">Bilingual</option></select></label>
+          <label data-settings-text="english funny level voice">English funny level <input id="funny-en" type="range" min="1" max="5" value="2"><output id="funny-en-value">2</output></label>
+          <label data-settings-text="cantonese funny level voice">Cantonese funny level <input id="funny-yue" type="range" min="1" max="5" value="3"><output id="funny-yue-value">3</output></label>
+        </div>
+        <div id="settings-panel-appearance" role="tabpanel" aria-labelledby="settings-tab-appearance" data-settings-panel="appearance" hidden>
+          <label data-settings-text="theme light dark system">Theme <select id="theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+          <label data-settings-text="density comfortable compact spacious">Density <select id="density"><option value="comfortable">Comfortable</option><option value="compact">Compact</option><option value="spacious">Spacious</option></select></label>
+          <label data-settings-text="accent seed colour color">Accent <input id="accent" type="color" value="#4f378b"></label>
+        </div>
+        <div id="settings-panel-about" role="tabpanel" aria-labelledby="settings-tab-about" data-settings-panel="about" hidden>
+          <p data-settings-text="offline generated canonical wiki site bundle">All articles are generated from the canonical categorized Markdown and bundled locally. No analytics, remote fonts, or CDN assets are used.</p>
+        </div>
+        <p id="settings-empty" class="empty" hidden>No setting in this tab matches the current query.</p>
       </section>
+
       <section id="status" class="status-card" role="status">Ready. Browse a feature or search the documentation.</section>
-      <article id="article" tabindex="-1"></article>
+      <article id="article" tabindex="-1" role="tabpanel"></article>
       <section id="results" aria-live="polite"></section>
     </main>
   </div>
+
   <dialog id="palette" aria-labelledby="palette-title">
     <div class="dialog-head"><h2 id="palette-title">Command palette</h2><button id="palette-close" class="icon-button" aria-label="Close command palette">×</button></div>
-    <label class="sr-only" for="palette-search">Find a command, article, or setting</label>
-    <input id="palette-search" type="search" placeholder="Find a command, article, or setting" maxlength="256">
+    <div class="search-wrap">
+      <label class="sr-only" for="palette-search">Find a command, article, or setting</label>
+      <input id="palette-search" type="search" placeholder="Find a command, article, or setting" maxlength="256">
+      <button id="palette-regex-toggle" class="icon-button" aria-expanded="false" aria-controls="palette-regex-panel" title="Open full regex builder">.*</button>
+      <div id="palette-regex-panel" class="regex-panel" hidden></div>
+    </div>
     <div id="palette-results" role="listbox" aria-label="Command palette results"></div>
   </dialog>
+  <script src="assets/articles.js"></script>
   <script src="assets/app.js"></script>
 </body>
 </html>
