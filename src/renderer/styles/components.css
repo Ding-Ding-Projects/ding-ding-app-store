@@ -200,7 +200,7 @@
     70% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 16%, transparent); }
   }
   @media (prefers-reduced-motion: reduce) { [data-palette-highlight="true"] { animation: none; } }
-  .command-list button span:nth-child(2) { display: grid; flex: 1; gap: 3px; min-width: 0; }
+  .command-list button span:nth-child(2), .command-list .command-row > span:nth-child(2) { display: grid; flex: 1; gap: 3px; min-width: 0; }
   .command-list small { color: var(--outline); overflow-wrap: anywhere; }
   .command-inline-control { flex: 0 0 auto; min-width: 92px; }
   .command-inline-range { width: 120px; }
