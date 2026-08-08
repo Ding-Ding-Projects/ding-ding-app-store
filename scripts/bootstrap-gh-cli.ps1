@@ -1,9 +1,31 @@
 param(
-  [Parameter(Mandatory = $true)]
-  [string]$ToolsRoot
+  [string]$ToolsRoot,
+  [switch]$FunctionsOnly
 )
 
 $ErrorActionPreference = 'Stop'
+
+function Assert-GitHubCliVersion {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$Executable,
+    [Parameter(Mandatory = $true)]
+    [string]$ExpectedVersion
+  )
+
+  $reportedLines = @(& $Executable version 2>&1)
+  $exitCode = $LASTEXITCODE
+  $reportedText = ($reportedLines | ForEach-Object { [string]$_ }) -join "`n"
+  $expectedPattern = "^gh version $([regex]::Escape($ExpectedVersion))(?:\s|$)"
+  if ($exitCode -ne 0 -or $reportedLines.Count -lt 1 -or [string]$reportedLines[0] -notmatch $expectedPattern) {
+    throw "The job-local GitHub CLI did not report pinned version $ExpectedVersion."
+  }
+  return $reportedText
+}
+
+if ($FunctionsOnly) { return }
+if (-not $ToolsRoot) { throw 'ToolsRoot is required unless FunctionsOnly is used.' }
+
 $version = '2.97.0'
 $archiveName = "gh_${version}_windows_amd64.zip"
 $releaseBase = "https://github.com/cli/cli/releases/download/v${version}"
@@ -23,16 +45,18 @@ if (-not (Test-Path -LiteralPath $executable)) {
   if ($actual -ne $expected) { throw "GitHub CLI archive SHA-256 mismatch: expected $expected, received $actual." }
   $extractRoot = Join-Path $ToolsRoot "gh-$version-extracted"
   Expand-Archive -LiteralPath $archivePath -DestinationPath $extractRoot -Force
-  $source = Get-ChildItem -LiteralPath $extractRoot -Recurse -Filter gh.exe | Select-Object -First 1
-  if (-not $source) { throw 'The verified GitHub CLI archive did not contain gh.exe.' }
+  $expectedMember = Join-Path $extractRoot 'bin\gh.exe'
+  if (-not (Test-Path -LiteralPath $expectedMember -PathType Leaf)) { throw 'The verified GitHub CLI archive did not contain its exact expected gh.exe member.' }
+  $resolvedExtractRoot = (Resolve-Path -LiteralPath $extractRoot).Path.TrimEnd('\') + '\'
+  $resolvedSource = (Resolve-Path -LiteralPath $expectedMember).Path
+  if (-not $resolvedSource.StartsWith($resolvedExtractRoot, [StringComparison]::OrdinalIgnoreCase)) { throw 'The GitHub CLI archive member resolved outside the extraction root.' }
   New-Item -ItemType Directory -Path (Split-Path -Parent $executable) -Force | Out-Null
-  Copy-Item -LiteralPath $source.FullName -Destination $executable
+  Copy-Item -LiteralPath $resolvedSource -Destination $executable
 }
 
-$reported = & $executable version 2>&1
-if ($LASTEXITCODE -ne 0 -or $reported -notmatch "gh version $([regex]::Escape($version))") {
-  throw "The job-local GitHub CLI did not report pinned version $version."
-}
+$resolvedExecutable = (Resolve-Path -LiteralPath $executable).Path
+if ($resolvedExecutable -ne [IO.Path]::GetFullPath($executable)) { throw 'The job-local GitHub CLI resolved to an unexpected executable path.' }
+$reported = Assert-GitHubCliVersion -Executable $resolvedExecutable -ExpectedVersion $version
 
-if ($env:GITHUB_PATH) { Split-Path -Parent $executable | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append }
-Write-Output "GitHub CLI $version ready at $executable"
+if ($env:GITHUB_PATH) { Split-Path -Parent $resolvedExecutable | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append }
+Write-Output "GitHub CLI $version ready at $resolvedExecutable"

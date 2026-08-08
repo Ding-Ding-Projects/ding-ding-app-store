@@ -17,6 +17,8 @@ jobs:
     timeout-minutes: 45
     outputs:
       started_at: ${{ steps.timing.outputs.started_at }}
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
     steps:
       - name: Record first-job start time
         id: timing
@@ -42,16 +44,53 @@ jobs:
         run: npm ci
       - name: Run strict typechecks and all test suites
         run: npm run check
+      - name: Compute unique release tag
+        id: version
+        shell: pwsh
+        run: |
+          $version = (Get-Content -LiteralPath package.json -Raw | ConvertFrom-Json).version
+          $tag = "v$version-${{ github.run_number }}-${{ github.run_attempt }}"
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+      - name: Bootstrap pinned GitHub CLI in the job-local tool cache
+        shell: pwsh
+        run: ./scripts/bootstrap-gh-cli.ps1 -ToolsRoot (Join-Path $env:RUNNER_TEMP 'ding-ding-tools')
+      - name: Generate bounded in-app release manifest
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.ORG_TOKEN || secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+          WORKFLOW_STARTED: ${{ steps.timing.outputs.started_at }}
+        run: |
+          gh api --paginate --slurp "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" | Out-File -FilePath release-inventory.json -Encoding utf8
+          node scripts/select-dim-sum-release.mjs --repository $env:GITHUB_REPOSITORY | Out-File -FilePath release-dish.json -Encoding utf8
+          node scripts/generate-release-changelog.mjs `
+            --inventory release-inventory.json `
+            --repository $env:GITHUB_REPOSITORY `
+            --tag $env:RELEASE_TAG `
+            --commit $env:GITHUB_SHA `
+            --released-at $env:WORKFLOW_STARTED `
+            --dish release-dish.json `
+            --output-ts src/renderer/generated-changelog.ts `
+            --output-json release-changelog.pending.json
       - name: Prove a production build before packaging
         run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-metadata-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            src/renderer/generated-changelog.ts
+            release-changelog.pending.json
+            release-dish.json
+          if-no-files-found: error
 
   windows-build:
     needs: test
     runs-on: windows-2022
     timeout-minutes: 90
     outputs:
-      version: ${{ steps.version.outputs.version }}
-      tag: ${{ steps.version.outputs.tag }}
+      version: ${{ needs.test.outputs.version }}
+      tag: ${{ needs.test.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -62,18 +101,14 @@ jobs:
           cache: npm
       - name: Install locked dependencies from a cache-miss-safe state
         run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-metadata-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .
       - name: Build renderer, main process, and preload
         run: npm run build
       - name: Package unsigned Squirrel.Windows installer
         run: npx electron-builder --win squirrel --publish never
-      - name: Compute unique release tag
-        id: version
-        shell: pwsh
-        run: |
-          $version = (Get-Content -LiteralPath package.json -Raw | ConvertFrom-Json).version
-          $tag = "v$version-${{ github.run_number }}-${{ github.run_attempt }}"
-          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
       - name: Verify and stage unsigned Squirrel assets
         shell: pwsh
         run: |
@@ -88,6 +123,8 @@ jobs:
           Copy-Item -LiteralPath $setup.FullName -Destination 'release-stage/DingDingAppStore-Setup.exe'
           Copy-Item -LiteralPath $releases.FullName -Destination 'release-stage/RELEASES'
           Copy-Item -LiteralPath $nupkg.FullName -Destination 'release-stage/DingDingAppStore-full.nupkg'
+          Copy-Item -LiteralPath 'release-changelog.pending.json' -Destination 'release-stage/release-changelog.pending.json'
+          Copy-Item -LiteralPath 'release-dish.json' -Destination 'release-stage/release-dish.json'
       - name: Produce reproducible line-count table
         shell: pwsh
         run: npm run count:lines | Out-File -FilePath release-stage/line-count.md -Encoding utf8
@@ -121,17 +158,31 @@ jobs:
           $releases = Resolve-Path 'release-stage/RELEASES'
           $nupkg = Resolve-Path 'release-stage/DingDingAppStore-full.nupkg'
           $lineCount = Resolve-Path 'release-stage/line-count.md'
-          $dish = node scripts/select-dim-sum-release.mjs --repository $env:GITHUB_REPOSITORY | ConvertFrom-Json
+          $dish = Get-Content -LiteralPath 'release-stage/release-dish.json' -Raw | ConvertFrom-Json
           $title = "Ding Ding App Store $env:RELEASE_TAG"
-          $initialNotes = 'Publication timing is being finalized.'
+          $initialNotes = @(
+            'Publication timing is being finalized.'
+            ''
+            "- Source commit: ``$env:GITHUB_SHA``"
+            '- Packaged changelog state: pending publication at the verified workflow start.'
+          )
           if ($dish.available) {
             $title = "$title — $($dish.codeName)"
-            $initialNotes = "Dim sum code name: $($dish.codeName)`n`n[Public dish photo]($($dish.photoUrl))"
+            $initialNotes += @(
+              "- Dim sum code name: $($dish.codeName)"
+              "- Public dish photo: [$($dish.assetName)]($($dish.photoUrl))"
+            )
           }
-          gh release create $env:RELEASE_TAG $setup $releases $nupkg --repo $env:GITHUB_REPOSITORY --title $title --notes $initialNotes --draft
+          gh release create $env:RELEASE_TAG $setup $releases $nupkg --repo $env:GITHUB_REPOSITORY --title $title --notes ($initialNotes -join "`n") --draft
           gh release edit $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --draft=false
           $publishedAt = gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/$env:RELEASE_TAG" --jq .published_at
           if (-not $publishedAt) { throw 'The published release did not report published_at.' }
+          node scripts/generate-release-changelog.mjs `
+            --reconcile release-stage/release-changelog.pending.json `
+            --published-at $publishedAt `
+            --output-json release-stage/release-changelog.json
+          $manifestHash = (Get-FileHash -LiteralPath 'release-stage/release-changelog.json' -Algorithm SHA256).Hash.ToLowerInvariant()
+          gh release upload $env:RELEASE_TAG 'release-stage/release-changelog.json' --repo $env:GITHUB_REPOSITORY
           $started = [DateTimeOffset]::Parse($env:WORKFLOW_STARTED)
           $completed = [DateTimeOffset]::Parse($publishedAt)
           $elapsed = $completed - $started
@@ -142,6 +193,8 @@ jobs:
             $(if ($dish.available) { "- Dim sum code name: $($dish.codeName)" } else { '- Dim sum code name: unavailable; the release was not blocked.' })
             $(if ($dish.available) { "- Public dish photo: [$($dish.assetName)]($($dish.photoUrl))" } else { "- Public dish photo: unavailable ($($dish.reason))" })
             "- Source commit: ``$env:GITHUB_SHA``"
+            "- Packaged changelog state: pending publication at the verified workflow start; version, source commit, and release URL are final."
+            "- Reconciled release manifest: [release-changelog.json]($env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/releases/download/$env:RELEASE_TAG/release-changelog.json) (SHA-256 ``$manifestHash``)"
             "- Workflow run: $env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
             "- Workflow started: $($started.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'))"
             "- Workflow completed: $($completed.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'))"

@@ -12,9 +12,12 @@ import { compile, makeMatcher, regexSafetyIssue } from '../src/renderer/search';
 const read = (path: string) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
 describe('global renderer UI completion', () => {
-  it('keeps every real baseline release traceable to a full commit SHA', () => {
+  it('keeps every committed fallback release traceable to a real tag and full commit SHA', () => {
     const localTags = execFileSync('git', ['tag', '--list', 'v*'], { encoding: 'utf8' }).trim().split(/\r?\n/).filter(Boolean);
-    if (localTags.length) expect(new Set(CHANGELOG_ENTRIES.map((entry) => entry.version))).toEqual(new Set(localTags));
+    if (localTags.length) {
+      const tagSet = new Set(localTags);
+      for (const entry of CHANGELOG_ENTRIES) expect(tagSet.has(entry.version)).toBe(true);
+    }
     expect(validateChangelog(CHANGELOG_ENTRIES)).toEqual([]);
     const markdown = changelogMarkdown(CHANGELOG_ENTRIES);
     for (const entry of CHANGELOG_ENTRIES) expect(markdown).toContain(entry.commit);

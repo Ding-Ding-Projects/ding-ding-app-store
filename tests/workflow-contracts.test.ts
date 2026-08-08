@@ -34,6 +34,10 @@ describe('GitHub-hosted workflow and bootstrap contract', () => {
     expect(bootstrap).toContain('https://github.com/cli/cli/releases/download/');
     expect(bootstrap).toContain('Get-FileHash');
     expect(bootstrap).toContain('SHA-256 mismatch');
+    expect(bootstrap).toContain('$reportedText = ($reportedLines');
+    expect(bootstrap).toContain('[string]$reportedLines[0] -notmatch $expectedPattern');
+    expect(bootstrap).toContain("Join-Path $extractRoot 'bin\\gh.exe'");
+    expect(bootstrap).not.toContain('Get-ChildItem -LiteralPath $extractRoot -Recurse');
     expect(bootstrap).not.toMatch(/winget|choco|scoop|Start-Process|Invoke-Expression/i);
   });
 
@@ -44,6 +48,25 @@ describe('GitHub-hosted workflow and bootstrap contract', () => {
     expect(release).toContain('Public dish photo:');
     expect(release).toContain('$dish.photoUrl');
     expect(release).not.toMatch(/gh release create[^\n]*\$dish\.(?:assetName|photoUrl)/);
+  });
+
+  it('generates and reconciles the bounded current-release changelog without a repository loop', async () => {
+    const release = await read('.github/workflows/release.yml');
+    const tag = release.indexOf('- name: Compute unique release tag');
+    const generate = release.indexOf('- name: Generate bounded in-app release manifest');
+    const build = release.indexOf('- name: Build renderer, main process, and preload');
+    expect(tag).toBeGreaterThan(-1);
+    expect(generate).toBeGreaterThan(tag);
+    expect(build).toBeGreaterThan(generate);
+    expect(release).toContain("gh api --paginate --slurp \"repos/$env:GITHUB_REPOSITORY/releases?per_page=100\"");
+    expect(release).toContain('scripts/generate-release-changelog.mjs');
+    expect(release).toContain('--reconcile');
+    expect(release).toContain('release-changelog.json');
+    expect(release).not.toMatch(/git\s+(?:add|commit|push)\b/);
+    const initialSource = release.indexOf('"- Source commit: ``$env:GITHUB_SHA``"');
+    const publish = release.indexOf('gh release edit $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --draft=false');
+    expect(initialSource).toBeGreaterThan(-1);
+    expect(initialSource).toBeLessThan(publish);
   });
 
   it('compares generated documentation independently of checkout line endings', async () => {
