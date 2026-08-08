@@ -138,7 +138,8 @@ describe('release changelog generator', () => {
 
   it('enforces page, release-count, and emitted-text bounds', () => {
     expect(() => flattenReleasePages([Array.from({ length: 101 }, () => ({}))])).toThrow(/page exceeded 100/);
-    const pages = [Array.from({ length: 100 }, () => ({})), Array.from({ length: 100 }, () => ({})), [{}]];
+    const pages = Array.from({ length: 20 }, () => Array.from({ length: 100 }, () => ({})));
+    pages.push([{}]);
     expect(() => flattenReleasePages(pages)).toThrow(new RegExp(`exceeded ${MAX_RELEASES} records`));
     expect(() => generateReleaseManifest(input({
       commitMetadata: { ...metadata, [currentSha]: { subject: 'x'.repeat(181), files: [] } },

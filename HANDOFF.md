@@ -6,7 +6,7 @@ The repository contains a sandboxed Electron/React/TypeScript shell, reviewed 24
 
 ## 2026-08-08 bounded release inventory compaction
 
-- The release workflow now saves the paginated GitHui release response as a bounded raw file, then runs `scripts/compact-release-inventory.mjs` before generating the in-app changelog. The compactor enforces 20 pages, 200 records, 16 MiB raw input, 64 KiB per release body, and emits only the tag, draft state, publication time, trusted URL candidate, and exact source/dim-sum evidence lines needed by the manifest generator.
+- The release workflow now saves the paginated GitHui release response as a bounded raw file, then runs `scripts/compact-release-inventory.mjs` before generating the in-app changelog. The compactor and generator enforce 32 pages, 2,000 records, 16 MiB raw input, 64 KiB per release body, and emit only the tag, draft state, publication time, trusted URL candidate, and exact source/dim-sum evidence lines needed by the manifest generator.
 - This keeps generated release metadata below its 2 MiB bound even when release notes contain CI line-count tables and uploaded asset inventories. Unknown GitHui release fields never enter generated files, and sensitive text is rejected before compaction.
 - Verification: `npm run check` passed with 23 root test files and 185 tests, catalog 11/11, domain 20/20; `npm run build` passed for renderer/main/preload; `git diff --check` passed. Cloud release rerun remains the final external verification after this workflow change.
 

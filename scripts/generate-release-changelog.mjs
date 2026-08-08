@@ -6,8 +6,8 @@ import { pathToFileURL } from 'node:url';
 
 export const CHANGELOG_SCHEMA_VERSION = 1;
 export const MAX_INVENTORY_BYTES = 2 * 1024 * 1024;
-export const MAX_RELEASE_PAGES = 20;
-export const MAX_RELEASES = 200;
+export const MAX_RELEASE_PAGES = 32;
+export const MAX_RELEASES = 2000;
 export const MAX_RELEASE_BODY_BYTES = 64 * 1024;
 export const MAX_CHANGE_LENGTH = 240;
 
