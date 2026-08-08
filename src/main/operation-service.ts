@@ -4,7 +4,7 @@ import { access, mkdir, open, readFile, rename, rm, stat } from 'node:fs/promise
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { app } from 'electron';
-import type { InstallCancelRequest, InstalledAppRecord, OperationKind, OperationRequest, OperationResult } from '../shared/contracts.js';
+import type { InstallCancelRequest, InstalledAppRecord, OperationKind, OperationProgressEvent, OperationProgressPhase, OperationRequest, OperationResult } from '../shared/contracts.js';
 import { CatalogService, type CatalogRecord, type ReleaseAsset, type ReleaseRecord } from './catalog-service.js';
 import { HistoryService } from './history-service.js';
 import { adapterFor, selectInstallerAsset, type ExecutableInstallAdapter, type InstallAdapter, type PortableZipInstallAdapter } from './install-adapters.js';
@@ -44,7 +44,19 @@ function invalidRequest(kind: OperationKind): OperationResult {
     ok: false,
     appId: 'invalid',
     message: `Invalid ${kind} request. Only a catalog application ID and matching user decision are accepted.`,
+    messageYue: `無效嘅 ${kind} 請求。只接受目錄 app ID 同相符嘅操作決定。`,
   };
+}
+
+function operationMessageYue(message: string): string {
+  if (message.startsWith('Installation cancelled.')) return '安裝已取消。下載或解壓嘅檔案會清理，完成後先解鎖。';
+  if (message.startsWith('Cancellation requested;')) return '已請求取消；清理完成後，安裝結果會再通知你。';
+  if (message.startsWith('Cancellation is already in progress')) return '取消已經進行緊；清理完成前，安裝會保持鎖定。';
+  if (message.startsWith('The reviewed installer has already started.')) return '已審核安裝程式已經啟動；因為子程序可能仍然運行，暫時唔可以安全取消。';
+  if (message.startsWith('The verified portable package is being applied.')) return '已驗證 portable package 正套用緊；替換完成前唔可以安全取消。';
+  if (message.includes('installed successfully.')) return `${message.replace(' installed successfully.', ' 已成功安裝。')}`;
+  if (message.includes('remains locked until restart')) return `操作結果未能確認；app 會鎖住直到重啟。詳情：${message}`;
+  return '安裝操作失敗；請開啟活動記錄查看完整結果。';
 }
 
 function childEnvironment(): NodeJS.ProcessEnv {
@@ -63,6 +75,10 @@ export class TerminationUnprovenError extends Error {}
 
 export function operationMustRetainLock(error: unknown): boolean {
   return error instanceof TerminationUnprovenError;
+}
+
+function throwIfInstallationCancelled(signal: AbortSignal): void {
+  if (signal.aborted) throw new Error('Installation cancelled. Downloaded or extracted bytes will be removed before the install lock is released.');
 }
 
 async function waitForChildClose(child: ReturnType<typeof spawn>, timeoutMs: number): Promise<boolean> {
@@ -100,7 +116,7 @@ async function terminateProcessTree(child: ReturnType<typeof spawn>): Promise<bo
   return taskkillResult.code === 0 && !taskkillResult.timedOut && launcherClosed;
 }
 
-export async function run(executable: string, args: readonly string[], signal?: AbortSignal, timeoutMs = 15 * 60_000, operationLabel = 'installer'): Promise<number> {
+export async function run(executable: string, args: readonly string[], signal?: AbortSignal, timeoutMs = 15 * 60_000, operationLabel = 'installer', onStarted?: () => void): Promise<number> {
   if (signal?.aborted) throw new Error('Installation cancelled before the installer started.');
   return await new Promise<number>((resolve, reject) => {
     const child = spawn(executable, [...args], {
@@ -111,6 +127,7 @@ export async function run(executable: string, args: readonly string[], signal?: 
     });
     let settled = false;
     let stopping = false;
+    child.once('spawn', () => { try { onStarted?.(); } catch { /* status publication is best effort */ } });
     const finish = (callback: () => void) => {
       if (settled) return;
       settled = true;
@@ -205,6 +222,7 @@ async function downloadWithDigest(
   expectedDigest: string,
   signal: AbortSignal,
   maximumBytes = MAX_DOWNLOAD_BYTES,
+  onProgress?: (received: number, total: number) => void,
 ): Promise<void> {
   if (!/^[a-f0-9]{64}$/.test(expectedDigest)) throw new Error('The expected SHA-256 digest is invalid.');
   if (asset.size <= 0 || asset.size > maximumBytes) throw new Error('The release asset size is outside the allowed range.');
@@ -241,6 +259,7 @@ async function downloadWithDigest(
       if (received > asset.size || received > maximumBytes) throw new Error('Release download exceeded its declared size.');
       hash.update(value);
       await writeComplete(handle, value);
+      onProgress?.(received, asset.size);
     }
   } finally {
     await handle.close();
@@ -286,34 +305,81 @@ async function resolveExpectedDigest(
   return expected;
 }
 
+type ActiveOperation = {
+  kind: 'install' | 'uninstall';
+  appId: string;
+  controller: AbortController;
+  operationId: string;
+  phase: 'queued' | 'resolving' | 'downloading' | 'extracting' | 'launching' | 'committing' | 'installer-running' | 'cancelling';
+  bytesReceived: number;
+  bytesTotal: number | null;
+};
+
 export class OperationService {
   private readonly stagingRoot = path.join(app.getPath('userData'), 'staging');
-  private readonly activeOperations = new Map<string, { kind: 'install' | 'uninstall'; controller: AbortController; phase: 'download' | 'extracting' | 'installer-running' }>();
+  private readonly activeOperations = new Map<string, ActiveOperation>();
 
   constructor(
     private readonly catalog: CatalogService,
     private readonly history: HistoryService,
     private readonly installed: InstalledService,
+    private readonly publishProgress: (event: Readonly<OperationProgressEvent>) => void = () => undefined,
   ) {}
 
+  private progressEvent(active: ActiveOperation, phase: OperationProgressPhase, message: string, final = false, locked = false, cancellable = false, progress: number | null = null): OperationProgressEvent {
+    return Object.freeze({
+      operationId: active.operationId, appId: active.appId, kind: active.kind, phase, progress,
+      bytesReceived: active.bytesReceived, bytesTotal: active.bytesTotal, cancellable, locked, message, final,
+    });
+  }
+
+  private emitProgress(active: ActiveOperation, phase: OperationProgressPhase, message: string, final = false, locked = false, cancellable = false, progress: number | null = null): void {
+    try { this.publishProgress(this.progressEvent(active, phase, message, final, locked, cancellable, progress)); } catch { /* renderer teardown must not change the privileged operation */ }
+  }
+
+  listActive(): OperationProgressEvent[] {
+    return [...this.activeOperations.values()].map((active) => {
+      const cancellable = ['queued', 'resolving', 'downloading', 'extracting', 'launching'].includes(active.phase);
+      const locked = ['committing', 'installer-running', 'cancelling'].includes(active.phase);
+      return this.progressEvent(active, active.phase, active.phase === 'installer-running'
+        ? 'The reviewed installer is running; cancellation is unavailable until it exits.'
+        : active.phase === 'committing'
+          ? 'Applying the verified portable package; cancellation is no longer safe.'
+          : 'An installation is in progress.', false, locked, cancellable,
+        active.bytesTotal && active.bytesTotal > 0 ? Math.min(100, Math.floor((active.bytesReceived / active.bytesTotal) * 100)) : null);
+    });
+  }
+
   private async finish(record: CatalogRecord, kind: OperationKind, result: OperationResult): Promise<OperationResult> {
+    const localized = result.messageYue ? result : { ...result, messageYue: operationMessageYue(result.message) };
     try {
-      await this.history.record({ appId: result.appId, displayName: record.displayName, kind, ok: result.ok, message: result.message });
-      return result;
+      await this.history.record({ appId: localized.appId, displayName: record.displayName, kind, ok: localized.ok, message: localized.message });
+      return localized;
     } catch {
-      return { ...result, message: `${result.message} Activity history could not record this outcome.` };
+      const message = `${localized.message} Activity history could not record this outcome.`;
+      return { ...localized, message, messageYue: operationMessageYue(message) };
     }
   }
 
   async cancelInstall(request: unknown): Promise<OperationResult> {
     if (!isCancelRequest(request)) return invalidRequest('install');
     const active = this.activeOperations.get(request.appId);
-    if (!active || active.kind !== 'install') return { ok: false, appId: request.appId, message: 'No cancellable installation exists for this application.' };
-    if (active.phase === 'installer-running') {
-      return { ok: false, appId: request.appId, message: 'The reviewed installer has already started. Cancellation is unavailable because Windows Installer or a child service could continue after its launcher exits.' };
+    if (!active || active.kind !== 'install') return { ok: false, appId: request.appId, message: 'No cancellable installation exists for this application.', messageYue: '呢個 app 而家冇可以取消嘅安裝操作。' };
+    if (active.phase === 'installer-running' || active.phase === 'committing') {
+      const message = active.phase === 'committing'
+        ? 'The verified portable package is being applied. Cancellation is unavailable until this replacement finishes.'
+        : 'The reviewed installer has already started. Cancellation is unavailable because Windows Installer or a child service could continue after its launcher exits.';
+      return { ok: false, appId: request.appId, message, messageYue: operationMessageYue(message) };
     }
+    if (active.phase === 'cancelling') {
+      const message = 'Cancellation is already in progress; the install remains locked until cleanup finishes.';
+      return { ok: false, appId: request.appId, message, messageYue: operationMessageYue(message) };
+    }
+    active.phase = 'cancelling';
+    this.emitProgress(active, 'cancelling', 'Cancellation requested. Cleaning up the downloaded or extracted bytes before releasing the install lock.');
     active.controller.abort();
-    return { ok: true, appId: request.appId, message: `Cancellation was requested during ${active.phase}; the active install result will report when cleanup finishes.` };
+    const message = 'Cancellation requested; the active install result will report when cleanup finishes.';
+    return { ok: true, appId: request.appId, message, messageYue: operationMessageYue(message) };
   }
 
   async install(request: unknown): Promise<OperationResult> {
@@ -330,34 +396,71 @@ export class OperationService {
       return this.finish(record, 'install', { ok: false, appId: request.appId, message: `${record.displayName} already has an install or uninstall operation in progress.` });
     }
     const controller = new AbortController();
-    const active = { kind: 'install' as const, controller, phase: 'download' as const } as { kind: 'install'; controller: AbortController; phase: 'download' | 'extracting' | 'installer-running' };
-    this.activeOperations.set(operationKey, active);
     const operationId = randomUUID();
+    const active: ActiveOperation = {
+      kind: 'install',
+      appId: record.id,
+      controller,
+      operationId,
+      phase: 'queued',
+      bytesReceived: 0,
+      bytesTotal: null,
+    };
+    this.activeOperations.set(operationKey, active);
     const operationDir = path.join(this.stagingRoot, operationId);
     let result: OperationResult;
     let retainOperationLock = false;
     try {
+      this.emitProgress(active, 'queued', `Preparing ${record.displayName} installation.`, false, false, true, 0);
       await mkdir(operationDir, { recursive: true });
+      throwIfInstallationCancelled(controller.signal);
+      active.phase = 'resolving';
+      this.emitProgress(active, 'resolving', 'Resolving the reviewed stable release and checksum evidence.', false, false, true);
       const release = await this.catalog.latestRelease(record.repository);
+      throwIfInstallationCancelled(controller.signal);
       if (!release || release.draft || release.prerelease) throw new Error('No stable published release is available.');
       const asset = selectInstallerAsset(adapter, release.assets);
       const installerPath = path.join(operationDir, path.basename(asset.name));
       const digest = await resolveExpectedDigest(release, asset, adapter, operationDir, controller.signal);
-      await downloadWithDigest(asset, installerPath, digest, controller.signal);
+      throwIfInstallationCancelled(controller.signal);
+      active.phase = 'downloading';
+      active.bytesReceived = 0;
+      active.bytesTotal = asset.size;
+      this.emitProgress(active, 'downloading', `Downloading and verifying ${asset.name}.`, false, false, true, 0);
+      await downloadWithDigest(asset, installerPath, digest, controller.signal, MAX_DOWNLOAD_BYTES, (received, total) => {
+        active.bytesReceived = received;
+        active.bytesTotal = total;
+        this.emitProgress(active, 'downloading', `Downloading and verifying ${asset.name}.`, false, false, true, Math.min(100, Math.floor((received / total) * 100)));
+      });
+      throwIfInstallationCancelled(controller.signal);
       let warning: string | null = null;
       if (adapter.family === 'portable-zip') {
         active.phase = 'extracting';
-        warning = await this.installPortable(record, adapter, installerPath, release.tag_name, controller.signal);
+        this.emitProgress(active, 'extracting', 'Extracting the verified portable package. Cancellation remains available until replacement begins.', false, false, true);
+        warning = await this.installPortable(record, adapter, installerPath, release.tag_name, controller.signal, () => {
+          active.phase = 'committing';
+          this.emitProgress(active, 'committing', 'Applying the verified portable package. Cancellation is no longer safe while replacement is in progress.', false, true, false, 100);
+        });
       } else {
         const beforeRegistry = await this.installed.registrySnapshot();
-        active.phase = 'installer-running';
-        await this.runInstaller(adapter, installerPath, controller.signal);
+        throwIfInstallationCancelled(controller.signal);
+        active.phase = 'launching';
+        this.emitProgress(active, 'launching', 'Starting the reviewed installer. Cancellation remains available until Windows confirms the process has launched.', false, false, true, 100);
+        await this.runInstaller(adapter, installerPath, controller.signal, () => {
+          if (active.phase === 'launching') {
+            active.phase = 'installer-running';
+            this.emitProgress(active, 'installer-running', 'The reviewed installer has launched. Cancellation is unavailable while external installer processes may continue.', false, true, false, 100);
+          }
+        });
         await this.recordDiscoveredInstall(record, release.tag_name, beforeRegistry);
       }
       result = { ok: true, appId: request.appId, operationId, message: `${record.displayName} ${release.tag_name} installed successfully.${warning ? ` ${warning}` : ''}` };
     } catch (error) {
       retainOperationLock = operationMustRetainLock(error);
-      result = { ok: false, appId: request.appId, operationId, message: `${(error as Error).message}${retainOperationLock ? ' Staging is retained and this application remains locked until restart.' : ''}` };
+      const message = controller.signal.aborted && !retainOperationLock
+        ? 'Installation cancelled. Downloaded or extracted bytes will be removed before the install lock is released.'
+        : (error as Error).message;
+      result = { ok: false, appId: request.appId, operationId, message: `${message}${retainOperationLock ? ' Staging is retained and this application remains locked until restart.' : ''}` };
     }
     if (!retainOperationLock) {
       try {
@@ -368,16 +471,20 @@ export class OperationService {
         this.activeOperations.delete(operationKey);
       }
     }
+    const finalPhase: OperationProgressPhase = retainOperationLock
+      ? 'unknown'
+      : result.ok ? 'succeeded' : controller.signal.aborted ? 'cancelled' : 'failed';
+    this.emitProgress(active, finalPhase, result.message, true, retainOperationLock, false, result.ok ? 100 : null);
     return this.finish(record, 'install', result);
   }
 
-  private async runInstaller(adapter: ExecutableInstallAdapter, installerPath: string, signal: AbortSignal): Promise<void> {
+  private async runInstaller(adapter: ExecutableInstallAdapter, installerPath: string, signal: AbortSignal, onStarted?: () => void): Promise<void> {
     const windows = process.env.SystemRoot ?? 'C:\\Windows';
     const executable = adapter.family === 'msi' ? path.join(windows, 'System32', 'msiexec.exe') : installerPath;
     const arguments_ = adapter.family === 'msi'
       ? ['/i', installerPath, ...adapter.installArguments]
       : adapter.installArguments;
-    const exitCode = await run(executable, arguments_, signal);
+    const exitCode = await run(executable, arguments_, signal, 15 * 60_000, 'installer', onStarted);
     if (exitCode !== 0) throw new Error(`Installer exited with code ${exitCode}.`);
   }
 
@@ -395,6 +502,7 @@ export class OperationService {
     archivePath: string,
     version: string,
     signal: AbortSignal,
+    beforeCommit?: () => void,
   ): Promise<string | null> {
     if (signal.aborted) throw new Error('Installation cancelled before archive extraction.');
     const extracted = path.join(path.dirname(archivePath), 'expanded');
@@ -403,6 +511,9 @@ export class OperationService {
     const executable = path.join(extracted, adapter.executableRelativePath);
     const executableStat = await stat(executable).catch(() => null);
     if (!executableStat?.isFile() || executableStat.size <= 0) throw new Error(`Portable archive is missing ${adapter.executableRelativePath}.`);
+
+    if (signal.aborted) throw new Error('Installation cancelled before portable replacement.');
+    beforeCommit?.();
 
     await mkdir(this.installed.managedPortableRoot, { recursive: true });
     const target = path.join(this.installed.managedPortableRoot, record.id);
@@ -443,7 +554,15 @@ export class OperationService {
     if (this.activeOperations.has(operationKey)) {
       return this.finish(record, 'uninstall', { ok: false, appId: request.appId, message: `${record.displayName} already has an install or uninstall operation in progress.` });
     }
-    this.activeOperations.set(operationKey, { kind: 'uninstall', controller: new AbortController(), phase: 'installer-running' });
+    this.activeOperations.set(operationKey, {
+      kind: 'uninstall',
+      appId: record.id,
+      operationId: randomUUID(),
+      controller: new AbortController(),
+      phase: 'installer-running',
+      bytesReceived: 0,
+      bytesTotal: null,
+    });
     let retainOperationLock = false;
     let result: OperationResult;
     try {

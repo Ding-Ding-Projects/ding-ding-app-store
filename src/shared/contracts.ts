@@ -46,8 +46,48 @@ export interface OperationResult {
   ok: boolean;
   appId: string;
   message: string;
+  messageYue?: string;
   operationId?: string;
 }
+
+/**
+ * Progress emitted by the main-process installer boundary.  The renderer
+ * receives facts about the reviewed operation only; it never receives an
+ * executable, URL, path, argument vector, or process handle.
+ */
+export const OPERATION_PROGRESS_PHASES = [
+  'queued', 'resolving', 'downloading', 'extracting', 'launching', 'committing', 'installer-running',
+  'cancelling', 'succeeded', 'failed', 'cancelled', 'unknown',
+] as const;
+export type OperationProgressPhase = (typeof OPERATION_PROGRESS_PHASES)[number];
+
+export interface OperationProgressEvent {
+  operationId: string;
+  appId: string;
+  kind: 'install' | 'uninstall';
+  phase: OperationProgressPhase;
+  progress: number | null;
+  bytesReceived: number;
+  bytesTotal: number | null;
+  cancellable: boolean;
+  locked: boolean;
+  message: string;
+  final: boolean;
+}
+
+export const operationProgressEventSchema = z.strictObject({
+  operationId: z.uuid(),
+  appId: z.string().regex(/^[a-z0-9][a-z0-9-]{0,127}$/),
+  kind: z.enum(['install', 'uninstall']),
+  phase: z.enum(OPERATION_PROGRESS_PHASES),
+  progress: z.number().int().min(0).max(100).nullable(),
+  bytesReceived: z.number().int().min(0).max(1_500_000_000),
+  bytesTotal: z.number().int().min(0).max(1_500_000_000).nullable(),
+  cancellable: z.boolean(),
+  locked: z.boolean(),
+  message: z.string().max(512),
+  final: z.boolean(),
+});
 
 export const SOURCE_JOB_DECISIONS = ['build', 'run'] as const;
 export type SourceJobDecision = (typeof SOURCE_JOB_DECISIONS)[number];
@@ -800,6 +840,8 @@ export interface DingDingStoreApi {
   operations: {
     install(request: OperationRequest): Promise<OperationResult>;
     cancelInstall(request: InstallCancelRequest): Promise<OperationResult>;
+    status(): Promise<OperationProgressEvent[]>;
+    subscribe(listener: (event: Readonly<OperationProgressEvent>) => void): () => void;
     build(request: OperationRequest): Promise<OperationResult>;
     uninstall(request: OperationRequest): Promise<OperationResult>;
     installed(): Promise<InstalledAppRecord[]>;
