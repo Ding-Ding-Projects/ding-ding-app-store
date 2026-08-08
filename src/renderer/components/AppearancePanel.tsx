@@ -349,6 +349,7 @@ export function AppearancePanel({ appearance, settings, notify, onClose }: {
           return <ScaleField key={token} token={token} settings={settings} value={token === 'fontScale' ? override.fontScale : override.paddingScale} min={bounds.min} max={bounds.max} onChange={(next) => appearance.setToken(token, next)} onCommit={appearance.commit} />;
         }) : <p className="supporting">{label(settings, 'No control in this section matches the search.', '呢個分類冇設定配到搜尋。')}</p>}
       </div>
+      {section === 'type' && <p className="supporting capability-note" role="note">{label(settings, 'Advanced typography such as variation axes, underline colour/style, overline, capitalization, small caps, baseline, direction, alignment, and text effects is not supported by this editor yet; these values are shown here as a capability note and are never silently persisted.', '字型變體軸、底線顏色／樣式、上劃線、大小寫、小型大寫、基線、方向、對齊同文字效果等進階字體功能，呢個編輯器暫時未支援；呢段係能力提示，唔會靜默儲存。')}</p>}
       {ratio !== null && <p className={ratio < threshold ? 'notice warning' : 'supporting'} role="status">
         <Icon>contrast</Icon>
         {label(settings, `Contrast readout: ${ratio.toFixed(2)}:1${ratio < threshold ? ` (below ${threshold}:1 guideline)` : ''}.`, `對比度讀數：${ratio.toFixed(2)}:1${ratio < threshold ? `（低過 ${threshold}:1 建議值）` : ''}。`)}
