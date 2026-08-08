@@ -1,9 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-import { VERIFIED_CACHE_ENTRY } from "./internal.mjs";
-import { resolveInside } from "./policy.mjs";
-
 const TRANSIENT_REASONS = new Set([
   "repository-unavailable",
   "repository-clone-failed",
@@ -35,29 +32,11 @@ export async function createBundleResumeProvider({ bundleDir, delegate }) {
         files: [],
       };
     }
-    const articles = manifest.articles.filter(
-      (article) => article.appId === app.id && article.source === sourceKind,
-    );
-    const files = [];
-    for (const article of articles) {
-      const content = await readFile(resolveInside(bundleDir, article.contentPath), "utf8");
-      files.push({
-        path: article.sourcePath,
-        size: Buffer.byteLength(content, "utf8"),
-        content,
-        sourceUrl: article.sourceUrl,
-        cachedArticle: article,
-        blobSha: article.sourceBlobSha,
-        [VERIFIED_CACHE_ENTRY]: true,
-      });
-    }
-    return {
-      status: "available",
-      sourceUrl: sourceRecord.sourceUrl,
-      commitSha: sourceRecord.commitSha,
-      reasonCode: null,
-      files,
-    };
+    // A manifest is not an authenticated provenance root. Reusing its sourceBlobSha
+    // would let a modified cache relabel transformed bytes as a different upstream
+    // blob. Re-fetch imported sources through the delegate so GitHub/provider checks
+    // independently establish the original blob OID before any cache is reused.
+    return delegate[sourceKind](app, limits);
   }
 
   return {

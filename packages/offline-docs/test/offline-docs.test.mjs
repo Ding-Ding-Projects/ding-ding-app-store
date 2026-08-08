@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, readdir, rm, unlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -36,6 +37,10 @@ function available(repository, kind, files) {
     files: files.map((file) => ({
       ...file,
       size: Buffer.byteLength(file.content, "utf8"),
+      blobSha: createHash("sha1")
+        .update(Buffer.from(`blob ${Buffer.byteLength(file.content, "utf8")}\u0000`, "utf8"))
+        .update(Buffer.from(file.content, "utf8"))
+        .digest("hex"),
       sourceUrl: kind === "wiki"
         ? `${sourceUrl(repository, kind)}/${encodeURIComponent(file.path)}`
         : `https://github.com/Ding-Ding-Projects/${repository}/blob/${commitSha}/${file.path.split("/").map(encodeURIComponent).join("/")}`,
@@ -172,7 +177,7 @@ test("fails the transaction on a provider-wide outage instead of publishing a ho
   assert.equal(await readFile(path.join(outputDir, "sentinel.txt"), "utf8"), "preserve me\n");
 });
 
-test("resume mode reuses verified pinned sources and retries only transient failures", async (t) => {
+test("resume mode revalidates imported sources and retries only transient failures", async (t) => {
   const firstApp = app();
   const secondApp = app("second-app", "second-app", "Second App");
   const repositories = new Map([
@@ -189,12 +194,32 @@ test("resume mode reuses verified pinned sources and retries only transient fail
   t.after(() => rm(initial.root, { recursive: true, force: true }));
   assert.equal(initial.manifest.counts.importedApps, 1);
 
+  const manifestPath = path.join(initial.outputDir, "manifest.json");
+  const originalManifestText = await readFile(manifestPath, "utf8");
+  const tamperedManifest = JSON.parse(originalManifestText);
+  tamperedManifest.articles[0].sourceBlobSha = "0".repeat(40);
+  await writeFile(manifestPath, `${JSON.stringify(tamperedManifest, null, 2)}\n`, "utf8");
+  const tampered = await importOfflineDocs({
+    catalogPath: initial.catalogPath,
+    outputDir: initial.outputDir,
+    sourceProvider: await createBundleResumeProvider({
+      bundleDir: initial.outputDir,
+      delegate: {
+        repository: async () => available(firstApp.repository, "repository", [{ path: "README.md", content: "# Revalidated\n" }]),
+        wiki: async () => empty(firstApp.repository, "wiki"),
+      },
+    }),
+  });
+  assert.equal(tampered.apps[0].sources.repository.status, "imported");
+  assert.notEqual(tampered.articles[0].sourceBlobSha, "0".repeat(40));
+  await writeFile(manifestPath, originalManifestText, "utf8");
+
   let firstRepositoryCalls = 0;
   const delegate = {
     async repository(catalogApp) {
       if (catalogApp.id === firstApp.id) {
         firstRepositoryCalls += 1;
-        throw new Error("verified source should not be fetched again");
+        return available(firstApp.repository, "repository", [{ path: "README.md", content: "# First\n\nRevalidated content.\n" }]);
       }
       return available(secondApp.repository, "repository", [{ path: "README.md", content: "# Second\n\nRecovered content.\n" }]);
     },
@@ -208,7 +233,7 @@ test("resume mode reuses verified pinned sources and retries only transient fail
     outputDir: initial.outputDir,
     sourceProvider: resumeProvider,
   });
-  assert.equal(firstRepositoryCalls, 0);
+  assert.equal(firstRepositoryCalls, 1);
   assert.equal(resumed.counts.importedApps, 2);
   assert.equal(resumed.counts.articles, 2);
   assert.deepEqual(await verifyOfflineDocsBundle(verificationInput(initial)), { appCount: 2, articleCount: 2, markdownFileCount: 2 });

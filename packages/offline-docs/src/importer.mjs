@@ -117,7 +117,10 @@ function validateSourceSnapshot(snapshot, sourceKind, limits, app, organization)
       if (typeof file.content !== "string" || file.content.includes("\u0000")) {
         throw new OfflineDocsPolicyError("invalid-markdown-content", `${sourceKind} returned invalid Markdown content: ${sourcePath}`);
       }
-      const blobSha = /^[0-9a-f]{40,64}$/u.test(file.blobSha ?? "") ? file.blobSha : gitBlobOid(file.content, 40);
+      if (!/^[0-9a-f]{40,64}$/u.test(file.blobSha ?? "")) {
+        throw new OfflineDocsPolicyError("invalid-blob-sha", `${sourceKind} file lacks a valid Git blob OID: ${sourcePath}`);
+      }
+      const blobSha = file.blobSha;
       if (file[VERIFIED_CACHE_ENTRY] === true) {
         if (
           !file.cachedArticle ||
