@@ -146,6 +146,9 @@ void app.whenReady().then(async () => {
   ipcMain.handle('settings:save', (_event, value: UserSettings) => settings.save(value));
   ipcMain.handle('history:list', () => history.list());
   ipcMain.handle('history:export', (_event, format: HistoryExportFormat) => history.export(format));
+  ipcMain.handle('history:archive', (event, request: unknown) => event.sender === mainWindow?.webContents
+    ? history.archive(request as Parameters<HistoryService['archive']>[0])
+    : Promise.reject(new Error('Blocked history archive request from an unknown renderer.')));
   ipcMain.handle('history:revisions', (event) => event.sender === mainWindow?.webContents ? history.revisions() : []);
   ipcMain.handle('history:diff', (event, revisionId: unknown) => event.sender === mainWindow?.webContents && typeof revisionId === 'string' ? history.diff(revisionId) : '');
   ipcMain.handle('history:label', (event, revisionId: unknown, requestedLabel: unknown) => event.sender === mainWindow?.webContents && typeof revisionId === 'string' && typeof requestedLabel === 'string'

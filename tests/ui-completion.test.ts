@@ -99,11 +99,15 @@ describe('global renderer UI completion', () => {
     expect(exportHistoryEntries([entry], 'jsonl')).toContain('"appId":"desktop-material"');
     expect(exportHistoryEntries([entry], 'csv')).toContain('"Installer said ""no""."');
     expect(exportHistoryEntries([entry], 'markdown')).toContain('## Desktop Material — install');
-    expect(HISTORY_EXPORT_FORMATS).toHaveLength(17);
+    expect(HISTORY_EXPORT_FORMATS).toHaveLength(18);
     for (const format of HISTORY_EXPORT_FORMATS) {
-      const content = exportHistoryEntries([entry], format.id);
-      if (format.id !== 'json-schema' && format.id !== 'protobuf') expect(content).toContain('desktop-material');
-      expect(content).not.toContain('\r\n');
+      if (format.id === 'zip') {
+        expect(() => exportHistoryEntries([entry], format.id)).toThrow(/typed main-process archive bridge/);
+      } else {
+        const content = exportHistoryEntries([entry], format.id);
+        if (format.id !== 'json-schema' && format.id !== 'protobuf') expect(content).toContain('desktop-material');
+        expect(content).not.toContain('\r\n');
+      }
       expect(historyExportFormat(format.id)).toMatchObject({ encoding: 'UTF-8', lineEndings: 'LF' });
     }
     expect(exportHistoryEntries([entry], 'json-schema')).toContain('HistoryEntry');

@@ -7,6 +7,8 @@ import type {
   ElementOverride,
   ExternalEditorOpenRequest,
   ExternalEditorPreference,
+  HistoryArchiveExport,
+  HistoryArchiveRequest,
   HistoryExportFormat,
   HistoryMutationResult,
   HistoryRevision,
@@ -150,6 +152,7 @@ const api: DingDingStoreApi = {
   history: {
     list: () => ipcRenderer.invoke('history:list'),
     export: (format: HistoryExportFormat) => ipcRenderer.invoke('history:export', format),
+    archive: (request: HistoryArchiveRequest) => ipcRenderer.invoke('history:archive', request) as Promise<HistoryArchiveExport>,
     revisions: () => ipcRenderer.invoke('history:revisions') as Promise<HistoryRevision[]>,
     diff: (revisionId: string) => ipcRenderer.invoke('history:diff', revisionId) as Promise<string>,
     label: (revisionId: string, label: string) => ipcRenderer.invoke('history:label', revisionId, label) as Promise<HistoryMutationResult>,
