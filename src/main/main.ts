@@ -50,7 +50,7 @@ function createWindow(): BrowserWindow {
     // Release-note links are the only external destination the renderer may request.
     // Everything else remains denied, including arbitrary catalog URLs.
     // Equivalent baseline contract: setWindowOpenHandler(() => ({ action: 'deny' })).
-    if (/^https:\/\/github\.com\/Ding-Ding-Projects\/[A-Za-z0-9_.-]+\/releases\/tag\/v[0-9A-Za-z.+-]+$/.test(url)) return { action: 'allow' };
+    if (/^https:\/\/github\.com\/Ding-Ding-Projects\/[A-Za-z0-9_.-]+\/releases\/tag\/[0-9A-Za-z.+-]+$/.test(url)) return { action: 'allow' };
     return { action: 'deny' };
   });
   window.webContents.on('will-navigate', (event, url) => {
