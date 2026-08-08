@@ -71,6 +71,7 @@ export function App() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   const [notificationCenterOpen, setNotificationCenterOpen] = useState(false);
+  const notificationTriggerRef = useRef<HTMLButtonElement>(null);
   const [regexRequest, setRegexRequest] = useState<SurfaceId | null>(null);
   const [overflowRequest, setOverflowRequest] = useState(false);
   const [renameRequest, setRenameRequest] = useState<string | null>(null);
@@ -81,6 +82,10 @@ export function App() {
 
   const activeTab = workspace.workspace.activeTabId;
   const announce = useCallback((message: string) => setAnnouncement(message), []);
+  const closeNotificationCenter = useCallback(() => {
+    setNotificationCenterOpen(false);
+    window.setTimeout(() => notificationTriggerRef.current?.focus(), 0);
+  }, []);
 
   const loadCatalog = useCallback(async (refresh = false) => {
     setLoading(true);
@@ -118,8 +123,8 @@ export function App() {
     if (operationRunningRef.current) return;
     operationRunningRef.current = true;
     try {
-      for (const selectedApp of selectedApps) {
-        const next: RunningAction = { kind, appId: selectedApp.id };
+      for (const [index, selectedApp] of selectedApps.entries()) {
+        const next: RunningAction = { kind, appId: selectedApp.id, completed: index, total: selectedApps.length };
         setRunningAction(next);
         announce(kind === 'install' ? `Installing ${selectedApp.name}` : `Preparing the source install for ${selectedApp.name}`);
         try {
@@ -128,6 +133,7 @@ export function App() {
         } catch (error) {
           reportOperation({ ok: false, message: (error as Error).message });
         }
+        setRunningAction({ kind, appId: selectedApp.id, completed: index + 1, total: selectedApps.length });
       }
     } finally {
       operationRunningRef.current = false;
@@ -170,6 +176,12 @@ export function App() {
   }, [workspace.workspace.rail.width]);
 
   const openSurface = useCallback((surface: SurfaceId) => {
+    if (surface === 'notifications') { setNotificationCenterOpen(true); return; }
+    if (surface === 'changelog') {
+      workspace.dispatch({ type: 'activate', id: 'settings' });
+      setSubTab('settings.about');
+      return;
+    }
     if (surface.startsWith('settings.')) {
       workspace.dispatch({ type: 'activate', id: 'settings' });
       setSubTab(surface as SettingsSubTabId);
@@ -351,7 +363,7 @@ export function App() {
         return;
       }
       if (event.key === 'Escape') {
-        if (notificationCenterOpen) { setNotificationCenterOpen(false); return; }
+        if (notificationCenterOpen) { closeNotificationCenter(); return; }
         if (paletteOpen) { setPaletteOpen(false); return; }
         if (action) { closeAction(); return; }
         if (panelOpen) { setPanelOpen(false); return; }
@@ -361,7 +373,7 @@ export function App() {
     };
     window.addEventListener('keydown', listener);
     return () => window.removeEventListener('keydown', listener);
-  }, [activeTab, workspace, runCommand, createGroup, announce, paletteOpen, action, closeAction, panelOpen, notificationCenterOpen, appearance, search]);
+  }, [activeTab, workspace, runCommand, createGroup, announce, paletteOpen, action, closeAction, panelOpen, notificationCenterOpen, closeNotificationCenter, appearance, search]);
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -446,7 +458,7 @@ export function App() {
           <strong {...el('titlebar-brand')}>{settings.displayName}</strong>
           <span className="dev-badge" {...el('titlebar-badge')}>Preview 0.1.0</span>
           <div className="drag-space" />
-          <button className="notification-button" onClick={() => setNotificationCenterOpen(true)} aria-label={`Open notification centre, ${notifications.unreadCount} unread`}><Icon>notifications</Icon>{notifications.unreadCount > 0 && <span className="notification-count" aria-hidden="true">{Math.min(notifications.unreadCount, 99)}</span>}</button>
+          <button ref={notificationTriggerRef} className="notification-button" onClick={() => setNotificationCenterOpen(true)} aria-label={`Open notification centre, ${notifications.unreadCount} unread`}><Icon>notifications</Icon>{notifications.unreadCount > 0 && <span className="notification-count" aria-hidden="true">{Math.min(notifications.unreadCount, 99)}</span>}</button>
           <button onClick={() => window.dingDingStore.window.minimize()} aria-label="Minimize"><Icon>remove</Icon></button>
           <button onClick={() => window.dingDingStore.window.toggleMaximize()} aria-label="Maximize or restore"><Icon>crop_square</Icon></button>
           <button className="close-window" onClick={() => window.dingDingStore.window.close()} aria-label="Close"><Icon>close</Icon></button>
@@ -529,7 +541,7 @@ export function App() {
 
         {action && <ActionDialog action={action} settings={settings} onClose={closeAction} onResult={reportOperation} />}
 
-        {notificationCenterOpen && <NotificationCenter records={notifications.records} settings={settings} onDismissMany={notifications.dismissMany} onDeleteMany={notifications.deleteMany} notify={notify} onClose={() => setNotificationCenterOpen(false)} />}
+        {notificationCenterOpen && <NotificationCenter records={notifications.records} settings={settings} persistenceAvailable={notifications.persistenceAvailable} onDismissMany={notifications.dismissMany} onDeleteMany={notifications.deleteMany} notify={notify} onClose={closeNotificationCenter} openRegex={regexRequest === 'notifications'} onRegexHandled={() => setRegexRequest(null)} />}
 
         {paletteOpen && (
           <CommandPalette

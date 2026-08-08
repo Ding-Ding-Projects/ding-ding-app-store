@@ -47,7 +47,7 @@
     .snackbar { width: 100%; }
     .notification-center { top: 48px; padding: 18px 14px 92px; }
     .date-range { grid-template-columns: 1fr; }
-    .calendar-field { display: none; }
+    .calendar-field input { min-height: 44px; }
     .bulk-toolbar > strong { flex-basis: 100%; }
     .bulk-toolbar button { flex: 1 1 145px; }
     .changelog-viewer { padding: 16px; }

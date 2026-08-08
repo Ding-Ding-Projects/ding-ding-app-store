@@ -13,8 +13,19 @@ export const EMPTY_SEARCH: SearchState = Object.freeze({ query: '', regex: null 
 
 const MAX_PATTERN = 160;
 
+/** Conservative rejection before any pattern reaches synchronous collection filtering. */
+export function regexSafetyIssue(pattern: string): string | null {
+  if (pattern.length > MAX_PATTERN) return `Patterns are limited to ${MAX_PATTERN} characters.`;
+  if (/\\[1-9]/.test(pattern)) return 'Backreferences are disabled because they can make evaluation time unpredictable.';
+  if (/(?:\.\*){2,}|(?:\.\+){2,}/.test(pattern.replace(/\\\./g, ''))) return 'Repeated unbounded wildcards are disabled.';
+  if (/\((?:\?:)?[^()]*(?:[*+]|\{\d+,?\d*\})[^()]*\)(?:[*+]|\{\d+,?\d*\})/.test(pattern)) return 'Nested quantifiers are disabled to prevent excessive backtracking.';
+  if (/\((?:\?:)?[^()]*\|[^()]*\)(?:[*+]|\{\d+,?\d*\})/.test(pattern)) return 'Quantified alternation is disabled to prevent ambiguous backtracking.';
+  return null;
+}
+
 export function compile(regex: RegexMode | null, extraFlags = ''): RegExp | null {
   if (!regex) return null;
+  if (regexSafetyIssue(regex.pattern)) return null;
   try {
     return new RegExp(regex.pattern.slice(0, MAX_PATTERN), regex.flags.replace('g', '') + extraFlags);
   } catch {

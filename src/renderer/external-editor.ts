@@ -2,6 +2,10 @@ import type { ExternalEditorCandidate, ExternalEditorOpenRequest, ExternalEditor
 
 export const EXTERNAL_EDITOR_PREFERENCE_KEY = 'ding-ding-app-store.external-editor.v1';
 
+export function isExternalEditorBridgeAvailable(): boolean {
+  return Boolean(window.dingDingStore.externalEditor);
+}
+
 export async function detectExternalEditors(): Promise<ExternalEditorCandidate[]> {
   const bridge = window.dingDingStore.externalEditor;
   if (!bridge) return [{ id: 'vscode', label: 'Visual Studio Code', available: false, edition: 'unknown' }];

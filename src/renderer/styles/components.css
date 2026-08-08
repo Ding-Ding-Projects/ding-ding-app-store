@@ -234,6 +234,8 @@
 
   .bulk-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; max-width: 1480px; margin: 12px auto; padding: 10px; border: 1px solid color-mix(in srgb, var(--outline) 28%, transparent); border-radius: 18px; background: var(--surface-container); }
   .bulk-toolbar > strong { margin-right: auto; padding: 0 8px; }
+  .bulk-progress { display: inline-flex; align-items: center; gap: 6px; min-width: 180px; }
+  .bulk-progress progress { width: 90px; accent-color: var(--primary); }
   .selection-check { display: inline-grid; place-items: center; min-width: 44px; min-height: 44px; margin: -8px; }
   .app-card { position: relative; }
   .app-selection { position: absolute; z-index: 2; top: 12px; right: 12px; margin: 0; }
@@ -248,6 +250,8 @@
   .changelog-list h3 { margin: 0; }
   .changelog-list time { color: var(--outline); }
   .changelog-list a { display: inline-flex; align-items: center; gap: 5px; color: var(--primary); overflow-wrap: anywhere; }
+  .commit-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .commit-actions code { flex: 1 1 280px; overflow-wrap: anywhere; }
   .editor-status { display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 14px; background: var(--surface); }
   .editor-status.available { color: var(--success); }
   .editor-status.unavailable { color: var(--outline); }

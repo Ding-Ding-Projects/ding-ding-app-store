@@ -154,9 +154,9 @@ export function SettingsPage({ settings, onSave, workspace, appearance, schedule
                   <p className="supporting">{row.body}</p>
                 </div>
               ))}
-              {matcher('external editor Visual Studio Code VS Code exports') && <ExternalEditorSettings settings={settings} />}
+              {matcher('external editor Visual Studio Code VS Code exports') && <ExternalEditorSettings settings={settings} notify={notify} />}
             </section>
-            {matcher('changelog releases versions dates commits') && <ChangelogViewer settings={settings} notify={notify} />}
+            {matcher('changelog releases versions dates commits') && <ChangelogViewer settings={settings} notify={notify} openRegex={regexRequest === 'changelog'} onRegexHandled={onRegexHandled} />}
           </>
         )}
       </div>

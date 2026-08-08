@@ -8,7 +8,7 @@ import { highlight, makeMatcher, useSurfaceSearch } from '../search';
 import type { ActionKind, ImmediateActionKind } from '../components/ActionDialog';
 import { SearchBox } from '../components/SearchBox';
 import { downloadText } from '../files';
-import { openExportInVsCode } from '../external-editor';
+import { isExternalEditorBridgeAvailable, openExportInVsCode } from '../external-editor';
 import type { Notify } from '../notify';
 
 export type AppsMode = 'catalog' | 'installed' | 'updates';
@@ -16,6 +16,8 @@ export type AppsMode = 'catalog' | 'installed' | 'updates';
 export interface RunningAction {
   kind: ImmediateActionKind;
   appId: string;
+  completed: number;
+  total: number;
 }
 
 export function AppCard({ app, settings, onAction, searchLabel, runningAction, selected, onSelect }: { app: CatalogApp; settings: UserSettings; onAction: (kind: ActionKind, app: CatalogApp, trigger: HTMLButtonElement) => void; searchLabel: ReactNode; runningAction: RunningAction | null; selected: boolean; onSelect(checked: boolean, shiftKey: boolean): void }) {
@@ -58,10 +60,8 @@ export function AppsPage({ mode, apps, settings, loading, onAction, onBulkAction
   const matcher = useMemo(() => makeMatcher(search.state), [search.state]);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const lastSelected = useRef<number | null>(null);
-  const shown = useMemo(() => {
-    const scoped = mode === 'installed' ? apps.filter((app) => app.installedVersion) : mode === 'updates' ? apps.filter((app) => app.updateState === 'available') : apps;
-    return scoped.filter((app) => matcher(`${app.name}\n${app.description}\n${app.repository}`));
-  }, [apps, mode, matcher]);
+  const scoped = useMemo(() => mode === 'installed' ? apps.filter((app) => app.installedVersion) : mode === 'updates' ? apps.filter((app) => app.updateState === 'available') : apps, [apps, mode]);
+  const shown = useMemo(() => scoped.filter((app) => matcher(`${app.name}\n${app.description}\n${app.repository}`)), [scoped, matcher]);
   useEffect(() => {
     const ids = new Set(apps.map((app) => app.id));
     setSelected((current) => new Set([...current].filter((id) => ids.has(id))));
@@ -88,7 +88,7 @@ export function AppsPage({ mode, apps, settings, loading, onAction, onBulkAction
     const records = selectedApps.length ? selectedApps : shown;
     const content = JSON.stringify({ schemaVersion: 1, scope: mode, exportedAt: new Date().toISOString(), apps: records }, null, 2);
     if (!openInCode) { downloadText(`ding-ding-app-store-${mode}.json`, content, 'application/json'); notify({ ok: true, message: `Exported ${records.length} ${mode} records.` }); return; }
-    const result = await openExportInVsCode({ recordKind: mode === 'catalog' ? 'catalog' : 'installed', suggestedName: `ding-ding-app-store-${mode}.json`, mime: 'application/json', content });
+    const result = await openExportInVsCode({ recordKind: mode === 'installed' ? 'installed' : 'catalog', suggestedName: `ding-ding-app-store-${mode}.json`, mime: 'application/json', content });
     notify({ ok: result.ok, message: result.ok ? `Opened ${records.length} ${mode} records in Visual Studio Code.` : result.message });
   };
 
@@ -96,7 +96,8 @@ export function AppsPage({ mode, apps, settings, loading, onAction, onBulkAction
     <>
       <SearchBox surface={mode} placeholder={label(settings, 'Search apps, descriptions, and repositories', '搵 app、描述同 repository')} openBuilder={openRegex} onBuilderHandled={onRegexHandled} />
       <div className="bulk-toolbar" aria-label={`${mode} bulk actions`}>
-        <strong aria-live="polite">{selectedApps.length} selected · {shown.length} shown · {apps.length} total</strong>
+        <strong aria-live="polite">{selectedApps.length} selected · {shown.length} shown · {scoped.length} total</strong>
+        {runningAction && <span className="bulk-progress" role="status"><progress max={runningAction.total} value={runningAction.completed} /> {runningAction.completed} of {runningAction.total} finished</span>}
         <button className="text-button" disabled={!shown.length} onClick={() => setSelected(new Set(shown.map((app) => app.id)))}>Select all shown</button>
         <button className="text-button" disabled={!shown.length} onClick={() => setSelected((current) => new Set(shown.filter((app) => !current.has(app.id)).map((app) => app.id)))}>Invert shown</button>
         <button className="text-button" disabled={!selected.size} onClick={() => setSelected(new Set())}>Clear</button>
@@ -104,7 +105,7 @@ export function AppsPage({ mode, apps, settings, loading, onAction, onBulkAction
         <button className="tonal-button" disabled={!sourceBuilds.length || runningAction !== null} onClick={(event) => onBulkAction('build', sourceBuilds, event.currentTarget)}>Build {sourceBuilds.length}</button>
         <button className="text-button danger" disabled={!installedApps.length || runningAction !== null} onClick={(event) => onBulkAction('uninstall', installedApps, event.currentTarget)}>Uninstall {installedApps.length}</button>
         <button className="text-button" disabled={!shown.length} onClick={() => void exportSelection(false)}><Icon>download</Icon>Export {selectedApps.length || shown.length}</button>
-        <button className="text-button" disabled={!shown.length} onClick={() => void exportSelection(true)}><Icon>code</Icon>Open in VS Code</button>
+        <button className="text-button" disabled={!shown.length || !isExternalEditorBridgeAvailable()} title={isExternalEditorBridgeAvailable() ? undefined : 'Unavailable: this build has no reviewed Visual Studio Code adapter.'} onClick={() => void exportSelection(true)}><Icon>code</Icon>{isExternalEditorBridgeAvailable() ? 'Open in VS Code' : 'VS Code unavailable'}</button>
       </div>
       {loading && <div className="loading-grid" aria-label="Loading catalog">{Array.from({ length: 6 }, (_, index) => <div className="skeleton" key={index} />)}</div>}
       {!loading && (shown.length
