@@ -3,6 +3,7 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { validateArticleLinks } from './docs-link-graph.mjs';
+import { catalogAdapterDocumentation, catalogArticleId } from './catalog-doc-metadata.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const check = process.argv.includes('--check');
@@ -47,6 +48,74 @@ const articles = [
   ['verification', 'Verification and evidence', '驗證同證據', 'verification', 'Verification', 'shipped', ['catalog-discovery', 'offline-documentation-browser', 'app-store-self-updater']],
 ].map(([id, title, titleYue, category, wiki, status, related]) => ({ id, title, titleYue, category, wiki, status, related }));
 
+function articlePath(row) {
+  return row.source === 'catalog-metadata'
+    ? `docs/catalog-apps/${row.id}.md`
+    : `docs/features/${row.category}/${row.id}.md`;
+}
+
+function relativeArticleHref(from, row) {
+  const relative = path.posix.relative(path.posix.dirname(from), articlePath(row));
+  return relative.startsWith('.') ? relative : `./${relative}`;
+}
+
+function catalogMetadataArticle(record) {
+  const adapter = catalogAdapterDocumentation(record);
+  const articleId = catalogArticleId(record.id);
+  const availability = record.availability === 'installable' ? 'Installable through a reviewed adapter' : 'Unavailable through this catalog';
+  const adapterStatus = adapter.status === 'reviewed'
+    ? `Reviewed ${adapter.family} adapter. The adapter has a fixed, application-specific release contract; this article deliberately does not reproduce executable names, arguments, download URLs, or filesystem locations.`
+    : `Blocked. ${adapter.blocker}`;
+  const body = `# ${record.displayName} catalog record
+
+> **Generated catalog metadata.** This article is assembled from the reviewed local catalog and adapter inventory. It is not provider-authored documentation and does not scrape repository text, copy external assets, or expose installer commands.
+
+## Behaviour
+
+This record describes the reviewed catalog entry \`${record.id}\`. Its public source repository is [${record.repository}](https://github.com/Ding-Ding-Projects/${record.repository}). The current availability is **${availability}** and the declared package type is **${record.packageType}**. The closed adapter identifier is \`${record.adapterId}\`.
+
+The current adapter state is: ${adapterStatus}
+
+## Configuration
+
+The catalog record is source-controlled. The renderer may request this application by its typed identifier and a user decision, but it cannot alter the repository, source manifest, package type, adapter, download, command, argument, or local destination. The source manifest marker is \`${record.sourceManifest ?? 'not declared'}\`; it is metadata only and is not a source-build recipe.
+
+## Failure modes
+
+Catalog metadata does not prove that a public repository, release, asset, installer, update, or source build is currently usable. A missing release, ambiguous asset, digest failure, network failure, unsupported adapter, or unavailable source-build boundary fails closed and reports its typed outcome. ${adapter.status === 'blocked' ? 'This record remains unavailable until a reviewed public route exists; the application does not guess a target or fallback command.' : 'A reviewed adapter can still reject a release that does not meet its immutable validation contract.'}
+
+## Security considerations
+
+This generated record contains only reviewed identifiers and public repository links. It intentionally excludes provider README content, release-body text, external images, download URLs, executable paths, command lines, installer arguments, credentials, and private infrastructure. Privileged install, update, uninstall, and source-build decisions remain in the main-process adapters.
+
+## Verification
+
+The documentation generator checks this article against the hand-written 24-ID catalog and adapter metadata inventories, then includes it in the offline TypeScript bundle, static-site article bundle, wiki mirror, documentation search, and command palette. That proves generated metadata coverage only. It does not claim a clean-Windows installation, update, source build, application launch, or published release verification for this application.
+
+## Suggested articles
+
+- [Catalog discovery](../features/discovery/catalog-discovery.md)
+- [Verified installer operations](../features/installation/verified-installer-operations.md)
+- [Per-app update checker](../features/updates/per-app-update-checker.md)
+- [Source-build security](../features/installation/source-build-security.md)
+- [Privacy and security](../features/security/privacy-and-security.md)
+- [Verification and evidence](../features/verification/verification.md)
+`;
+  return {
+    id: articleId,
+    title: `${record.displayName} catalog record`,
+    titleYue: `${record.displayName} · 目錄資料`,
+    category: 'discovery',
+    wiki: `Catalog-App-${record.id}`,
+    status: 'limited',
+    related: ['catalog-discovery', 'verified-installer-operations', 'per-app-update-checker', 'source-build-security', 'privacy-and-security', 'verification'],
+    summary: `Generated reviewed metadata for ${record.displayName}: ${record.availability}, ${record.packageType}, and adapter ${record.adapterId}.`,
+    body,
+    source: 'catalog-metadata',
+    catalogAppId: record.id,
+  };
+}
+
 const requiredSections = ['Behaviour', 'Configuration', 'Failure modes', 'Security considerations', 'Verification', 'Suggested articles'];
 function parseArticle(raw, expected) {
   raw = normalizeNewlines(raw);
@@ -73,11 +142,13 @@ function parseArticle(raw, expected) {
 }
 
 function categoryReadme(category, rows) {
-  return `# ${category.title}\n\n${category.summary}\n\n## Articles\n\n${rows.map((row) => `- [${row.title}](./${row.id}.md) — ${row.summary}`).join('\n')}\n`;
+  const destination = `docs/features/${category.id}/README.md`;
+  return `# ${category.title}\n\n${category.summary}\n\n## Articles\n\n${rows.map((row) => `- [${row.title}](${relativeArticleHref(destination, row)}) — ${row.summary}${row.source === 'catalog-metadata' ? ' *(generated catalog metadata)*' : ''}`).join('\n')}\n`;
 }
 
 function docsIndex(rows) {
-  return `# Feature documentation\n\nThis hand-written category inventory is the canonical map for the public site, wiki mirror, and offline in-app bundle. Status labels mean **shipped**, **limited** (implemented with explicit boundaries), or **pending** (not implemented and never presented as available).\n\n${categories.map((category) => { const items = rows.filter((row) => row.category === category.id); return `## ${category.title}\n\n${category.summary}\n\n${items.map((row) => `- [${row.title}](./${category.id}/${row.id}.md) — **${row.status}** — ${row.summary}`).join('\n')}`; }).join('\n\n')}\n`;
+  const destination = 'docs/features/README.md';
+  return `# Feature documentation\n\nThis hand-written category inventory is the canonical map for feature articles. It also indexes generated catalog metadata that is built only from reviewed local catalog and adapter records. Status labels mean **shipped**, **limited** (implemented with explicit boundaries), or **pending** (not implemented and never presented as available).\n\n${categories.map((category) => { const items = rows.filter((row) => row.category === category.id); return `## ${category.title}\n\n${category.summary}\n\n${items.map((row) => `- [${row.title}](${relativeArticleHref(destination, row)}) — **${row.status}**${row.source === 'catalog-metadata' ? ' — *(generated catalog metadata)*' : ''} — ${row.summary}`).join('\n')}`; }).join('\n\n')}\n`;
 }
 
 function rootReadme(rows) {
@@ -86,7 +157,15 @@ function rootReadme(rows) {
 
 function rewriteWikiLinks(body, rows) {
   const byId = new Map(rows.map((row) => [row.id, row.wiki]));
-  return body.replace(/\((?:\.\.\/)?(?:[a-z-]+\/)?([a-z0-9-]+)\.md\)/g, (_all, id) => `(${byId.get(id) ?? id})`);
+  return body.replace(/\(([^)]+)\)/g, (all, href) => {
+    if (/^(?:[a-z]+:|#|\/)/i.test(href)) return all;
+    const id = path.posix.basename(href).replace(/\.md$/i, '');
+    return byId.has(id) ? `(${byId.get(id)})` : all;
+  });
+}
+
+function catalogMetadataIndex(rows) {
+  return `# Generated catalog application metadata\n\nThese records are generated from the reviewed local catalog allowlist and adapter documentation inventory. They are **metadata only**: they are not provider README imports, installer instructions, release proof, or source-build recipes.\n\n## Application records\n\n${rows.map((row) => `- [${row.title}](./${row.id}.md) — ${row.summary}`).join('\n')}\n\n## Boundaries\n\nEach record links to the canonical catalog, installation, update, source-build, security, and verification articles. Those canonical articles remain authoritative for application behaviour; a generated record only reports the current catalog fields and reviewed adapter/blocker state.\n`;
 }
 
 function wikiHome(rows) {
@@ -94,26 +173,30 @@ function wikiHome(rows) {
 }
 
 function generatedTypeScript(rows) {
-  const payload = rows.map(({ raw: _raw, ...row }) => row);
-  return `// Generated by scripts/docs-generate.mjs. Edit docs/features instead.\nexport interface GeneratedDocArticle { id: string; title: string; titleYue: string; category: string; wiki: string; status: 'shipped' | 'limited' | 'pending'; related: string[]; summary: string; body: string }\nexport const GENERATED_DOCS: readonly GeneratedDocArticle[] = ${JSON.stringify(payload, null, 2)} as const;\n`;
+  const payload = rows.map(({ raw: _raw, sourcePath: _sourcePath, ...row }) => row);
+  return `// Generated by scripts/docs-generate.mjs. Edit docs/features for canonical articles; catalog metadata is derived from reviewed local records.\nexport interface GeneratedDocArticle { id: string; title: string; titleYue: string; category: string; wiki: string; status: 'shipped' | 'limited' | 'pending'; related: string[]; summary: string; body: string; source?: 'canonical' | 'catalog-metadata'; catalogAppId?: string }\nexport const GENERATED_DOCS: readonly GeneratedDocArticle[] = ${JSON.stringify(payload, null, 2)} as const;\n`;
 }
 
 function generatedSite(rows) {
-  const payload = rows.map(({ raw: _raw, ...row }) => row);
+  const payload = rows.map(({ raw: _raw, sourcePath: _sourcePath, ...row }) => row);
   return `// Generated by scripts/docs-generate.mjs. Edit docs/features instead.\nwindow.DING_DING_DOCS = ${JSON.stringify({ categories, articles: payload })};\n`;
 }
 
 async function expectedOutputs(rows) {
   const outputs = new Map();
+  const catalogMetadataRows = rows.filter((row) => row.source === 'catalog-metadata');
   outputs.set('docs/README.md', rootReadme(rows));
   outputs.set('docs/features/README.md', docsIndex(rows));
+  outputs.set('docs/catalog-apps/README.md', catalogMetadataIndex(catalogMetadataRows));
   for (const category of categories) outputs.set(`docs/features/${category.id}/README.md`, categoryReadme(category, rows.filter((row) => row.category === category.id)));
   outputs.set('src/renderer/generated-docs.ts', generatedTypeScript(rows));
   outputs.set('site/assets/articles.js', generatedSite(rows));
   outputs.set('wiki/Home.md', wikiHome(rows));
   for (const row of rows) {
-    outputs.set(`site/articles/${row.category}/${row.id}.md`, row.raw);
-    outputs.set(`wiki/${row.wiki}.md`, `# ${row.title}\n\n> **Status: ${row.status}.** This wiki page is generated from the canonical categorized article.\n\n${rewriteWikiLinks(row.body.replace(/^# .+\r?\n+/, ''), rows)}`);
+    if (row.source === 'catalog-metadata') outputs.set(articlePath(row), row.body);
+    outputs.set(`site/articles/${row.category}/${row.id}.md`, row.raw ?? row.body);
+    const origin = row.source === 'catalog-metadata' ? 'reviewed local catalog metadata' : 'the canonical categorized article';
+    outputs.set(`wiki/${row.wiki}.md`, `# ${row.title}\n\n> **Status: ${row.status}.** This wiki page is generated from ${origin}.\n\n${rewriteWikiLinks(row.body.replace(/^# .+\r?\n+/, ''), rows)}`);
   }
   return outputs;
 }
@@ -135,7 +218,14 @@ async function listMarkdown(relative) {
 const rows = [];
 for (const expected of articles) {
   const relative = `docs/features/${expected.category}/${expected.id}.md`;
-  rows.push(parseArticle(await readFile(path.join(root, relative), 'utf8'), expected));
+  rows.push({ ...parseArticle(await readFile(path.join(root, relative), 'utf8'), expected), source: 'canonical', sourcePath: relative });
+}
+const catalog = JSON.parse(await readFile(path.join(root, 'data/catalog.v1.json'), 'utf8'));
+if (!Array.isArray(catalog.apps)) throw new Error('data/catalog.v1.json: apps must be an array');
+for (const record of catalog.apps) {
+  if (!record || typeof record !== 'object' || typeof record.id !== 'string') throw new Error('data/catalog.v1.json: every app must have an ID');
+  const row = catalogMetadataArticle(record);
+  rows.push({ ...row, raw: row.body, sourcePath: articlePath(row) });
 }
 const linkFailures = validateArticleLinks(rows);
 if (linkFailures.length) throw new Error(`Documentation link graph failed:\n${linkFailures.map((item) => `- ${item}`).join('\n')}`);
@@ -144,7 +234,11 @@ const outputs = await expectedOutputs(rows);
 const expectedCanonical = new Set(['docs/features/README.md', ...categories.map((row) => `docs/features/${row.id}/README.md`), ...articles.map((row) => `docs/features/${row.category}/${row.id}.md`)]);
 for (const actual of await listMarkdown('docs/features')) if (!expectedCanonical.has(actual)) throw new Error(`Uninventoried canonical article or index: ${actual}`);
 
-const expectedWiki = new Set(['wiki/Home.md', ...articles.map((row) => `wiki/${row.wiki}.md`)]);
+const catalogMetadataRows = rows.filter((row) => row.source === 'catalog-metadata');
+const expectedCatalogMetadata = new Set(['docs/catalog-apps/README.md', ...catalogMetadataRows.map(articlePath)]);
+if (check) for (const actual of await listMarkdown('docs/catalog-apps')) if (!expectedCatalogMetadata.has(actual)) throw new Error(`Stale or uninventoried generated catalog article: ${actual}`);
+
+const expectedWiki = new Set(['wiki/Home.md', ...rows.map((row) => `wiki/${row.wiki}.md`)]);
 for (const actual of await listMarkdown('wiki')) if (!expectedWiki.has(actual)) throw new Error(`Stale or uninventoried wiki page: ${actual}`);
 
 const failures = [];
@@ -172,4 +266,4 @@ if (failures.length) {
   console.error(`Documentation completeness check failed (${failures.length}):\n${failures.map((item) => `- ${item}`).join('\n')}`);
   process.exit(1);
 }
-console.log(check ? `Documentation complete: ${categories.length} categories, ${rows.length} articles, offline/site/wiki bundles synchronized.` : `Generated ${outputs.size} documentation outputs from ${rows.length} canonical articles.`);
+console.log(check ? `Documentation complete: ${categories.length} categories, ${articles.length} canonical articles, ${catalogMetadataRows.length} generated catalog records, offline/site/wiki bundles synchronized.` : `Generated ${outputs.size} documentation outputs from ${articles.length} canonical articles and ${catalogMetadataRows.length} generated catalog records.`);

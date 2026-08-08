@@ -1,12 +1,36 @@
 # Feature documentation
 
-This hand-written category inventory is the canonical map for the public site, wiki mirror, and offline in-app bundle. Status labels mean **shipped**, **limited** (implemented with explicit boundaries), or **pending** (not implemented and never presented as available).
+This hand-written category inventory is the canonical map for feature articles. It also indexes generated catalog metadata that is built only from reviewed local catalog and adapter records. Status labels mean **shipped**, **limited** (implemented with explicit boundaries), or **pending** (not implemented and never presented as available).
 
 ## Discovery and catalog
 
 Finding reviewed public applications and understanding their release state.
 
 - [Catalog discovery](./discovery/catalog-discovery.md) — **shipped** — Loads a reviewed public-app allowlist, enriches it with live repository and stable-release metadata, and falls back honestly to a bounded cache.
+- [Lowlevel Computer Use MCP catalog record](../catalog-apps/catalog-app-lowlevel-computer-use-mcp.md) — **limited** — *(generated catalog metadata)* — Generated reviewed metadata for Lowlevel Computer Use MCP: installable, squirrel, and adapter lowlevel-computer-use-mcp-squirrel.
+- [Material Download Manager catalog record](../catalog-apps/catalog-app-material-download-manager.md) — **limited** — *(generated catalog metadata)* — Generated reviewed metadata for Material Download Manager: installable, squirrel, and adapter material-download-manager-squirrel.
+- [Material Designer catalog record](../catalog-apps/catalog-app-material-designer.md) — **limited** — *(generated catalog metadata)* — Generated reviewed metadata for Material Designer: installable, squirrel, and adapter material-designer-squirrel.
+- [Material BlueMap catalog record](../catalog-apps/catalog-app-material-bluemap.md) — **limited** — *(generated catalog metadata)* — Generated reviewed metadata for Material BlueMap: installable, squirrel, and adapter material-bluemap-squirrel.
+- [Desktop Material catalog record](../catalog-apps/catalog-app-desktop-material.md) — **limited** — *(generated catalog metadata)* — Generated reviewed metadata for Desktop Material: installable, squirrel, and adapter desktop-material-squirrel.
+- [Home Assistant AC Defender catalog record](../catalog-apps/catalog-app-home-assistant-ac-defender.md) — **limited** — *(generated catalog metadata)* — Generated reviewed metadata for Home Assistant AC Defender: installable, squirrel, and adapter home-assistant-ac-defender-squirrel.
+- [Material Email catalog record](../catalog-apps/catalog-app-material-email.md) — **limited** — *(generated catalog metadata)* — Generated reviewed metadata for Material Email: installable, nsis, and adapter material-email-nsis.
+- [OpenCodex catalog record](../catalog-apps/catalog-app-opencodex.md) — **limited** — *(generated catalog metadata)* — Generated reviewed metadata for OpenCodex: installable, squirrel, and adapter opencodex-squirrel.
+- [qBittorrent Material catalog record](../catalog-apps/catalog-app-qbittorrent-material.md) — **limited** — *(generated catalog metadata)* — Generated reviewed metadata for qBittorrent Material: installable, squirrel, and adapter qbittorrent-material-squirrel.
+- [WinSCP Material catalog record](../catalog-apps/catalog-app-material-winscp.md) — **limited** — *(generated catalog metadata)* — Generated reviewed metadata for WinSCP Material: installable, squirrel, and adapter material-winscp-squirrel.
+- [Dim Sum Atlas catalog record](../catalog-apps/catalog-app-dim-sum-atlas.md) — **limited** — *(generated catalog metadata)* — Generated reviewed metadata for Dim Sum Atlas: installable, archive, and adapter dim-sum-atlas-portable-zip.
+- [Win SSH Copy ID catalog record](../catalog-apps/catalog-app-win-ssh-copy-id.md) — **limited** — *(generated catalog metadata)* — Generated reviewed metadata for Win SSH Copy ID: unsupported, unsupported, and adapter win-ssh-copy-id-no-release.
+- [Material Office catalog record](../catalog-apps/catalog-app-material-office.md) — **limited** — *(generated catalog metadata)* — Generated reviewed metadata for Material Office: installable, nsis, and adapter material-office-nsis.
+- [Minecraft World Downloader catalog record](../catalog-apps/catalog-app-minecraft-world-downloader.md) — **limited** — *(generated catalog metadata)* — Generated reviewed metadata for Minecraft World Downloader: installable, nsis, and adapter minecraft-world-downloader-nsis.
+- [Codex Material catalog record](../catalog-apps/catalog-app-codex-material.md) — **limited** — *(generated catalog metadata)* — Generated reviewed metadata for Codex Material: installable, msi, and adapter codex-material-msi.
+- [LibreOffice Material catalog record](../catalog-apps/catalog-app-libreoffice-material.md) — **limited** — *(generated catalog metadata)* — Generated reviewed metadata for LibreOffice Material: installable, msi, and adapter libreoffice-material-msi.
+- [Material Mail catalog record](../catalog-apps/catalog-app-thunderbird-desktop.md) — **limited** — *(generated catalog metadata)* — Generated reviewed metadata for Material Mail: installable, nsis, and adapter thunderbird-desktop-mozilla-nsis.
+- [Bambu Studio catalog record](../catalog-apps/catalog-app-bambu-studio.md) — **limited** — *(generated catalog metadata)* — Generated reviewed metadata for Bambu Studio: installable, nsis, and adapter bambu-studio-nsis.
+- [KeePassXC catalog record](../catalog-apps/catalog-app-keepassxc.md) — **limited** — *(generated catalog metadata)* — Generated reviewed metadata for KeePassXC: installable, msi, and adapter keepassxc-msi.
+- [JDownloader Material catalog record](../catalog-apps/catalog-app-jdownloader-material.md) — **limited** — *(generated catalog metadata)* — Generated reviewed metadata for JDownloader Material: installable, jpackage, and adapter jdownloader-material-jpackage.
+- [Home Assistant Bambu Lab catalog record](../catalog-apps/catalog-app-ha-bambulab.md) — **limited** — *(generated catalog metadata)* — Generated reviewed metadata for Home Assistant Bambu Lab: unsupported, unsupported, and adapter ha-bambulab-external-home-assistant.
+- [WinForge catalog record](../catalog-apps/catalog-app-winforge.md) — **limited** — *(generated catalog metadata)* — Generated reviewed metadata for WinForge: installable, archive, and adapter winforge-portable-zip.
+- [WimForge catalog record](../catalog-apps/catalog-app-wimforge.md) — **limited** — *(generated catalog metadata)* — Generated reviewed metadata for WimForge: installable, archive, and adapter wimforge-portable-zip.
+- [Photo Viewer catalog record](../catalog-apps/catalog-app-photo-viewer.md) — **limited** — *(generated catalog metadata)* — Generated reviewed metadata for Photo Viewer: unsupported, unsupported, and adapter photo-viewer-empty-release.
 
 ## Installation and removal
 
@@ -51,7 +75,7 @@ Tabs, search, command palette, settings, appearance, and notifications.
 
 The complete offline in-app browser and its generated public mirrors.
 
-- [Offline documentation browser](./documentation/offline-documentation-browser.md) — **shipped** — Bundles every canonical feature article into the desktop build, renders one article at a time through safe React Markdown, and keeps links inside the browser.
+- [Offline documentation browser](./documentation/offline-documentation-browser.md) — **shipped** — Bundles canonical feature articles plus generated reviewed catalog metadata into the desktop build, renders one article at a time through safe React Markdown, and keeps links inside the browser.
 
 ## Security and privacy
 

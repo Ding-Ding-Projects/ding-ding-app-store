@@ -28,6 +28,6 @@ Speech is created only in the renderer from already-visible notification text. T
 
 ## Suggested articles
 
-- [Settings, language, and display name](./settings-language-and-display-name.md)
-- [Notifications and operation status](./notifications-and-status.md)
+- [Settings, language, and display name](Settings-Language-and-Display-Name)
+- [Notifications and operation status](Notifications-and-Status)
 - [Update schedule](Update-Schedule)

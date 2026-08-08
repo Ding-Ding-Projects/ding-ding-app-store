@@ -85,7 +85,7 @@ export function DocsPage({ settings, notify, openRegex, onRegexHandled, articleR
                 onKeyDown={(event) => onTabKeyDown(event, article.id)}
               >
                 <span>{label(settings, article.title, article.titleYue)}</span>
-                <small>{article.category} · {article.status}</small>
+                <small>{article.category} · {article.status}{article.source === 'catalog-metadata' ? ' · generated catalog metadata' : ''}</small>
               </button>
             ))}
           </nav>
@@ -97,6 +97,7 @@ export function DocsPage({ settings, notify, openRegex, onRegexHandled, articleR
             {...el('docs-article')}
           >
             <span className={`status-pill doc-status ${active.status}`}>{active.status}</span>
+            {active.source === 'catalog-metadata' ? <p className="lede" aria-label="Article source">Generated catalog metadata</p> : null}
             <h1>{label(settings, active.title, active.titleYue)}</h1>
             <p className="lede">{active.summary}</p>
             <div className="card-actions"><button className="text-button" onClick={() => void exportArticle(false)}><Icon>download</Icon>Export article</button><button className="text-button" disabled={!isExternalEditorBridgeAvailable()} onClick={() => void exportArticle(true)} title={isExternalEditorBridgeAvailable() ? undefined : 'Unavailable: no validated Visual Studio Code adapter.'}><Icon>code</Icon>Open article in VS Code</button></div>
