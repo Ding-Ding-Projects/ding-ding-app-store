@@ -224,7 +224,7 @@ const SECRET_PATTERNS = [
   /https?:\/\/[^\s/@:]+:[^\s/@]+@/gi,
 ];
 
-export function sanitizeTerminalText(input: string, workspaceRoot: string): string {
+function redactTerminalText(input: string, workspaceRoot: string): string {
   let value = input
     .replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, '')
     .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '')
@@ -234,20 +234,43 @@ export function sanitizeTerminalText(input: string, workspaceRoot: string): stri
   value = value.replace(/[A-Za-z]:\\Users\\[^\\\s]+/gi, '[user-profile]');
   value = value.replace(/\b(authorization\s*:\s*(?:bearer|basic)\s+)\S+/gi, '$1[redacted]');
   for (const pattern of SECRET_PATTERNS) value = value.replace(pattern, '[redacted]');
-  return Buffer.from(value, 'utf8').subarray(0, SOURCE_RUNTIME_LIMITS.maxEventBytes).toString('utf8');
+  return value;
+}
+
+export function sanitizeTerminalText(input: string, workspaceRoot: string): string {
+  return Buffer.from(redactTerminalText(input, workspaceRoot), 'utf8').subarray(0, SOURCE_RUNTIME_LIMITS.maxEventBytes).toString('utf8');
 }
 
 export class TerminalEventBudget {
   private sequence = 0;
   private bytes = 0;
   private finalEmitted = false;
+  private carry = '';
 
   constructor(private readonly jobId: string, private readonly appId: string, private readonly workspaceRoot: string) {}
 
   next(line: RuntimeLine, final = false): SourceTerminalEvent | null {
     if (this.finalEmitted) return null;
     if (!final && (this.sequence >= SOURCE_RUNTIME_LIMITS.maxEvents || this.bytes >= SOURCE_RUNTIME_LIMITS.maxOutputBytes)) return null;
-    const text = sanitizeTerminalText(line.text, this.workspaceRoot);
+    const combined = this.carry + line.text;
+    let framed: string;
+    if (final) {
+      framed = combined;
+      this.carry = '';
+    } else {
+      const boundary = combined.lastIndexOf('\n');
+      if (boundary >= 0) {
+        framed = combined.slice(0, boundary + 1);
+        this.carry = combined.slice(boundary + 1);
+      } else if (combined.length > SOURCE_RUNTIME_LIMITS.maxEventBytes * 2) {
+        framed = redactTerminalText(combined, this.workspaceRoot);
+        this.carry = '';
+      } else {
+        this.carry = combined;
+        return null;
+      }
+    }
+    const text = sanitizeTerminalText(framed, this.workspaceRoot);
     if (!final) {
       this.bytes += Buffer.byteLength(text, 'utf8');
       if (this.bytes > SOURCE_RUNTIME_LIMITS.maxOutputBytes) return null;
@@ -275,6 +298,31 @@ export function resolveOwnedPath(root: string, candidate: string): string {
   if (!relative || relative === '.') return resolved;
   if (relative.startsWith(`..${path.sep}`) || relative === '..' || path.isAbsolute(relative)) throw new Error('Path escaped the app-owned disposable workspace.');
   return resolved;
+}
+
+function samePath(left: string, right: string): boolean {
+  return path.resolve(left).toLocaleLowerCase() === path.resolve(right).toLocaleLowerCase();
+}
+
+export async function verifyOwnedRoot(root: string): Promise<string> {
+  const parentReal = await realpath(path.dirname(root));
+  const metadata = await lstat(root);
+  if (metadata.isSymbolicLink()) throw new Error('The app-owned source root cannot be a symbolic link or junction.');
+  const rootReal = await realpath(root);
+  const expected = path.join(parentReal, path.basename(root));
+  if (!samePath(rootReal, expected)) throw new Error('The app-owned source root escaped its canonical application-data parent.');
+  return rootReal;
+}
+
+export async function verifyOwnedDirectChild(root: string, childName: string): Promise<string> {
+  if (path.basename(childName) !== childName || childName === '.' || childName === '..') throw new Error('Owned child name must be one direct path segment.');
+  const rootReal = await verifyOwnedRoot(root);
+  const target = path.join(rootReal, childName);
+  const metadata = await lstat(target);
+  if (metadata.isSymbolicLink()) throw new Error('The app-owned job directory cannot be a symbolic link or junction.');
+  const targetReal = await realpath(target);
+  if (!samePath(path.dirname(targetReal), rootReal)) throw new Error('The app-owned job directory escaped its canonical root.');
+  return targetReal;
 }
 
 export async function rejectSymlinkEscape(root: string, candidate: string): Promise<string> {
@@ -417,10 +465,11 @@ export async function runFiniteRepairLoop(options: {
 }
 
 export async function cleanupOwnedWorkspace(root: string, workspace: string, expectedMarker: string): Promise<void> {
-  const target = resolveOwnedPath(root, workspace);
-  if (path.dirname(target).toLocaleLowerCase() !== path.resolve(root).toLocaleLowerCase()) throw new Error('Cleanup target is not a direct app-owned workspace.');
+  const target = await verifyOwnedDirectChild(root, workspace);
   const marker = await readFile(path.join(target, '.ding-ding-source-job'), 'utf8');
   if (marker !== expectedMarker) throw new Error('Source job cleanup ownership marker did not match.');
   await validateWorkspaceTree(target);
-  await rm(target, { recursive: true, force: true });
+  const rechecked = await verifyOwnedDirectChild(root, workspace);
+  if (!samePath(rechecked, target)) throw new Error('Source job directory changed identity before cleanup.');
+  await rm(rechecked, { recursive: true, force: true });
 }

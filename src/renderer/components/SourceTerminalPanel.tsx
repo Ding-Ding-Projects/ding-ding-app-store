@@ -20,6 +20,7 @@ export function SourceTerminalPanel({ appName, events, fallbackMessage, settings
   const state = events.at(-1)?.state ?? (fallbackMessage ? 'failed' : 'queued');
   const active = ACTIVE_STATES.has(state);
   const progress = [...events].reverse().find((event) => event.progress !== null)?.progress ?? 0;
+  const lastEvent = events.at(-1);
   const status = useMemo(() => ({
     queued: label(settings, 'Queued', '排緊隊'),
     preparing: label(settings, 'Preparing isolated workspace', '準備隔離工作區'),
@@ -37,6 +38,8 @@ export function SourceTerminalPanel({ appName, events, fallbackMessage, settings
   }, [events]);
 
   useEffect(() => { panel.current?.focus(); }, []);
+  const liveProgress = Math.floor(progress / 10) * 10;
+  const liveSummary = active ? `${status}. ${liveProgress}%` : `${status}${lastEvent?.text ? `: ${lastEvent.text}` : ''}`;
 
   return (
     <aside ref={panel} className="source-terminal-panel" role="region" tabIndex={-1} aria-busy={active} aria-labelledby="source-terminal-title" {...el('dialog')}>
@@ -53,7 +56,8 @@ export function SourceTerminalPanel({ appName, events, fallbackMessage, settings
         <progress max={100} value={progress} aria-label={label(settings, 'Source job progress', 'Source 工作進度')} />
         <span>{progress}%</span>
       </div>
-      <div ref={output} onScroll={(event) => { const element = event.currentTarget; followOutput.current = element.scrollHeight - element.scrollTop - element.clientHeight < 24; }} className="terminal-output" role="log" aria-live="polite" aria-relevant="additions text" tabIndex={0} aria-label={label(settings, 'Source build and repair output', 'Source 建置同修正輸出')}>
+      <div className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">{liveSummary}</div>
+      <div ref={output} onScroll={(event) => { const element = event.currentTarget; followOutput.current = element.scrollHeight - element.scrollTop - element.clientHeight < 24; }} className="terminal-output" role="log" aria-live="off" tabIndex={0} aria-label={label(settings, 'Source build and repair output', 'Source 建置同修正輸出')}>
         {events.length === 0 && fallbackMessage && <div className="terminal-line terminal-stderr"><span aria-hidden="true">0001</span><span aria-hidden="true">system</span><span>{fallbackMessage}</span></div>}
         {events.map((event) => (
           <div key={`${event.jobId}-${event.sequence}`} className={`terminal-line terminal-${event.stream}`}>

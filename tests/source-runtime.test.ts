@@ -21,6 +21,7 @@ import {
   sourceRecipeCatalogSchema,
   validateOpenCodeArchive,
   validateOpenCodeExecutable,
+  verifyOwnedRoot,
   type IsolationAttestation,
   type IsolationBroker,
   type RuntimeLine,
@@ -104,13 +105,33 @@ describe('terminal bounds and redaction', () => {
     const budget = new TerminalEventBudget(jobId, 'reviewed-app', 'C:\\owned');
     let emitted = 0;
     for (let index = 0; index < SOURCE_RUNTIME_LIMITS.maxEvents + 20; index += 1) {
-      if (budget.next({ stream: 'stdout', state: 'running', text: 'x' })) emitted += 1;
+      if (budget.next({ stream: 'stdout', state: 'running', text: 'x\n' })) emitted += 1;
     }
     expect(emitted).toBe(SOURCE_RUNTIME_LIMITS.maxEvents);
     const final = budget.next({ stream: 'system', state: 'failed', text: 'bounded failure' }, true);
     expect(sourceTerminalEventSchema.safeParse(final).success).toBe(true);
     expect(final?.final).toBe(true);
     expect(budget.next({ stream: 'system', state: 'failed', text: 'second final' }, true)).toBeNull();
+  });
+
+  it('redacts credentials split across event boundaries before any event is emitted', () => {
+    const budget = new TerminalEventBudget(crypto.randomUUID(), 'reviewed-app', 'C:\\owned');
+    expect(budget.next({ stream: 'stderr', state: 'running', text: 'Authorization: Bea' })).toBeNull();
+    expect(budget.next({ stream: 'stderr', state: 'running', text: 'rer topsecret' })).toBeNull();
+    const final = budget.next({ stream: 'system', state: 'failed', text: '\nfailed' }, true);
+    expect(final?.text).not.toContain('topsecret');
+    expect(final?.text).toContain('[redacted]');
+  });
+
+  it('holds split ANSI, URL credentials, and token prefixes until framing can redact them', () => {
+    const budget = new TerminalEventBudget(crypto.randomUUID(), 'reviewed-app', 'C:\\owned');
+    expect(budget.next({ stream: 'stdout', state: 'running', text: '\u001b]0;title\u001b\\https://user:' })).toBeNull();
+    expect(budget.next({ stream: 'stdout', state: 'running', text: 'password@example.test gh' })).toBeNull();
+    const event = budget.next({ stream: 'stdout', state: 'running', text: 'p_123456789abcdef\n' });
+    expect(event?.text).not.toContain('password');
+    expect(event?.text).not.toContain('ghp_');
+    expect(event?.text).not.toContain('\u001b');
+    expect(event?.text).toContain('[redacted]');
   });
 });
 
@@ -148,6 +169,23 @@ describe('owned workspace and repair bounds', () => {
     await expect(cleanupOwnedWorkspace(root, 'job-one', 'wrong')).rejects.toThrow(/marker/);
     await cleanupOwnedWorkspace(root, 'job-one', 'nonce-one');
     await expect(readFile(workspace)).rejects.toThrow();
+  });
+
+  it('rejects a configured owned root that is a Windows junction', async () => {
+    const parent = await tempRoot('source-junction-parent');
+    const outside = await tempRoot('source-junction-target');
+    const root = path.join(parent, 'source-jobs');
+    try {
+      await symlink(outside, root, 'junction');
+      await expect(verifyOwnedRoot(root)).rejects.toThrow(/junction|symbolic link/i);
+      const job = path.join(outside, 'job-one');
+      await mkdir(job);
+      await writeFile(path.join(job, '.ding-ding-source-job'), 'nonce-one');
+      await expect(cleanupOwnedWorkspace(root, 'job-one', 'nonce-one')).rejects.toThrow(/junction|symbolic link/i);
+      expect(await readFile(path.join(job, '.ding-ding-source-job'), 'utf8')).toBe('nonce-one');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EPERM') throw error;
+    }
   });
 
   it('limits repairs, validates real changed files, reruns the exact step, and honors cancellation', async () => {

@@ -19,6 +19,8 @@ import {
   type SourceRecipe,
   runtimeLineSchema,
   SOURCE_RUNTIME_LIMITS,
+  verifyOwnedDirectChild,
+  verifyOwnedRoot,
 } from './source-runtime.js';
 
 interface ActiveJob {
@@ -83,10 +85,13 @@ export class SourceJobService {
 
     const jobId = randomUUID();
     const workspaceName = `job-${jobId}`;
-    const workspace = resolveOwnedPath(this.ownedRoot, workspaceName);
+    let workspace = resolveOwnedPath(this.ownedRoot, workspaceName);
     try {
       await mkdir(this.ownedRoot, { recursive: true });
+      const ownedRoot = await verifyOwnedRoot(this.ownedRoot);
+      workspace = resolveOwnedPath(ownedRoot, workspaceName);
       await mkdir(workspace, { recursive: false });
+      workspace = await verifyOwnedDirectChild(ownedRoot, workspaceName);
       await writeFile(path.join(workspace, '.ding-ding-source-job'), jobId, { encoding: 'utf8', flag: 'wx' });
     } catch (error) {
       return { ok: false, appId: request.appId, state: 'failed', message: `The app-owned disposable workspace could not be created: ${(error as Error).message}` };
