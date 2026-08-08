@@ -8,6 +8,7 @@ export const defaultSettings: UserSettings = { ...DEFAULT_USER_SETTINGS };
 export interface SettingsApi {
   settings: UserSettings;
   provenance: SettingsProvenance;
+  reload(): Promise<void>;
   save(next: UserSettings): Promise<void>;
   patch<K extends keyof UserSettings>(key: K, value: UserSettings[K]): Promise<void>;
 }
@@ -16,11 +17,19 @@ export function useSettings(notify: Notify): SettingsApi {
   const [settings, setSettings] = useState<UserSettings>(defaultSettings);
   const [provenance, setProvenance] = useState<SettingsProvenance>({ source: 'fallback', fallback: { ...defaultSettings } });
 
-  useEffect(() => {
-    void window.dingDingStore.settings.load()
-      .then(async (next) => { setSettings(next); setProvenance(await window.dingDingStore.settings.provenance()); })
-      .catch(() => { setSettings({ ...defaultSettings }); setProvenance({ source: 'fallback', fallback: { ...defaultSettings } }); });
-  }, []);
+  const reload = useCallback(async () => {
+    try {
+      const next = await window.dingDingStore.settings.load();
+      setSettings(next);
+      setProvenance(await window.dingDingStore.settings.provenance());
+    } catch (error) {
+      setSettings({ ...defaultSettings });
+      setProvenance({ source: 'fallback', fallback: { ...defaultSettings } });
+      notify({ ok: false, message: `Settings could not be reloaded after the local history change: ${(error as Error).message}` });
+    }
+  }, [notify]);
+
+  useEffect(() => { void reload(); }, [reload]);
 
   const save = useCallback(async (next: UserSettings) => {
     try {
@@ -36,5 +45,5 @@ export function useSettings(notify: Notify): SettingsApi {
     await save({ ...settings, [key]: value });
   }, [save, settings]);
 
-  return { settings, provenance, save, patch };
+  return { settings, provenance, reload, save, patch };
 }

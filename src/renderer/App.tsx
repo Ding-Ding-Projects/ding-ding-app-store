@@ -61,7 +61,7 @@ export function App() {
   const notifications = useNotifications();
   const notify = notifications.notify;
 
-  const { settings: baseSettings, provenance: settingsProvenance, save: saveSettings, patch: patchSetting } = useSettings(notify);
+  const { settings: baseSettings, provenance: settingsProvenance, reload: reloadSettings, save: saveSettings, patch: patchSetting } = useSettings(notify);
   const workspace = useWorkspace(notify);
   const appearance = useAppearance(notify);
   const schedule = useSchedule(notify);
@@ -169,6 +169,11 @@ export function App() {
     }
     finally { setHistoryLoading(false); }
   }, []);
+
+  const reloadHistoryAndSettings = useCallback(async () => {
+    await loadHistory();
+    await reloadSettings();
+  }, [loadHistory, reloadSettings]);
 
   const loadInstalled = useCallback(async () => {
     try { setInstalled(await window.dingDingStore.operations.installed()); }
@@ -852,7 +857,7 @@ export function App() {
             />
           )}
           {activeTab === 'docs' && <DocsPage settings={settings} notify={notify} openRegex={regexRequest === 'docs'} onRegexHandled={() => setRegexRequest(null)} articleRequest={docRequest} onArticleHandled={() => setDocRequest(null)} />}
-          {activeTab === 'activity' && <ActivityPage entries={history} revisions={historyRevisions} loading={historyLoading} settings={settings} openRegex={regexRequest === 'activity'} onRegexHandled={() => setRegexRequest(null)} notify={notify} onHistoryChanged={loadHistory} />}
+          {activeTab === 'activity' && <ActivityPage entries={history} revisions={historyRevisions} loading={historyLoading} settings={settings} openRegex={regexRequest === 'activity'} onRegexHandled={() => setRegexRequest(null)} notify={notify} onHistoryChanged={reloadHistoryAndSettings} />}
           {activeTab === 'settings' && (
             <SettingsPage
               settings={baseSettings}

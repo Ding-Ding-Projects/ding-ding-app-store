@@ -30,9 +30,14 @@ describe('local history/version browser contract', () => {
     const preload = await read('src/preload/index.ts');
     const main = await read('src/main/main.ts');
     const activity = await read('src/renderer/pages/ActivityPage.tsx');
+    const settings = await read('src/renderer/state/use-settings.ts');
+    const app = await read('src/renderer/App.tsx');
     expect(contracts).toContain('HistoryRevision');
     for (const method of ['history:revisions', 'history:diff', 'history:label', 'history:restore']) expect(preload).toContain(method);
     for (const method of ['history:revisions', 'history:diff', 'history:label', 'history:restore']) expect(main).toContain(method);
     for (const control of ['Local versions', 'View diff', 'Save label', 'Restore local version', 'DestructiveConfirmDialog']) expect(activity.toLowerCase()).toContain(control.toLowerCase());
+    expect(settings).toContain('reload(): Promise<void>');
+    expect(settings).toContain('Settings could not be reloaded after the local history change');
+    expect(app).toContain('reloadHistoryAndSettings');
   });
 });
