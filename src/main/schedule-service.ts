@@ -29,7 +29,9 @@ export class ScheduleService {
       const stored = await readJson<unknown>(this.filePath, DEFAULT_SCHEDULE);
       const migrated = this.migrate(stored);
       const parsed = scheduleSchema.safeParse(migrated);
-      return parsed.success ? parsed.data : DEFAULT_SCHEDULE;
+      if (!parsed.success) return DEFAULT_SCHEDULE;
+      if (migrated !== stored) await writeJsonAtomic(this.filePath, parsed.data).catch(() => undefined);
+      return parsed.data;
     } catch {
       return DEFAULT_SCHEDULE;
     }
