@@ -22,6 +22,7 @@
 - [x] Independent search state and a full regex builder on every surface, including the command palette
 - [x] Per-element appearance editor with live preview, reset, export, and import
 - [x] Update schedule editor with last-run/next-run reporting and quiet hours
+- [x] Optional renderer-only notification narrator: persisted opt-in, English/Hong Kong Cantonese/both serialized delivery, stale queue replacement, category cooldowns, and quiet/reduced-sound accessibility yielding
 - [ ] Packaged-artifact hidden-desktop interaction and accessibility proof
 - [x] CI and release automation on pinned GitHub-hosted cloud runners (`windows-2022` for checks, packaging, and publication; `ubuntu-24.04` for Pages)
 - [x] Unsigned Squirrel.Windows release, verified end to end: [`v0.1.0-284-1`](https://github.com/Ding-Ding-Projects/ding-ding-app-store/releases/tag/v0.1.0-284-1) targets `c3d9a0d`, is non-draft, `Setup.exe` is confirmed `NotSigned`, and the release includes `RELEASES`, a full `.nupkg`, and `release-changelog.json`

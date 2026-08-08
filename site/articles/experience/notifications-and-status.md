@@ -4,13 +4,15 @@ title: Notifications and operation status
 titleYue: 通知同操作狀態
 category: experience
 status: limited
-summary: Stacks corner snackbars, retains searchable notification history, and keeps destructive decisions behind native super-confirmation.
+summary: Stacks corner snackbars, retains searchable notification history, optionally narrates new notices, and keeps destructive decisions behind native super-confirmation.
 ---
 # Notifications and operation status
 
 ## Behaviour
 
 Catalog, persistence, appearance, workspace, schedule, and operation results surface through a bottom-corner snackbar stack. Success and informational notices auto-dismiss after five seconds; errors persist until dismissed. Undo-capable operations attach an action. Every notice is also retained in the profile's bounded notification history, including its creation time and dismissed state. The App Store updater keeps its separate persistent banner so a restart decision is never lost to a short toast.
+
+The optional spoken narrator observes new notifications only after the user enables it in Settings. It uses a renderer-only serialized queue, keeps the factual notification text intact at every funny level, replaces stale waiting status lines, and leaves errors outside ordinary cooldowns. Quiet hours, reduced-sound mode, absent speech support, and an explicit screen-reader integration marker keep the visual notification path intact while suppressing speech.
 
 The title-bar bell opens a non-blocking notification centre. Its own search field carries the adjacent full regex builder. Status filters compose with text search, and selection supports visible-scope select-all, inversion, clear, bulk dismiss, JSON export, and bulk delete. Delete states the exact review count and requires both independent keys plus the full confirmation slider.
 

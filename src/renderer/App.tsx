@@ -44,6 +44,7 @@ import { useAppearance, useAppearanceVars } from './state/use-appearance';
 import { useSchedule } from './state/use-schedule';
 import { useSettings } from './state/use-settings';
 import { useNotifications } from './state/use-notifications';
+import { useNarrator } from './state/use-narrator';
 import { newGroupId, orderedTabIds, useWorkspace } from './state/use-workspace';
 
 const PAGE_SUBTITLE: Partial<Record<TabId, { en: string; yue: string }>> = {
@@ -71,6 +72,7 @@ export function App() {
     .filter((source) => source.state === 'active' && source.values)
     .map((source) => [source.ruleId, source.values!])), [schedule.status?.externalSources]);
   const settings = useMemo(() => resolveScheduledSettings(baseSettings, schedule.draft, new Date(), externalOverrides), [baseSettings, schedule.draft, scheduleClock, externalOverrides]);
+  useNarrator(settings, schedule.draft, notifications.active);
   const search = useSearchStates();
   useAppearanceVars(appearance.elements);
 

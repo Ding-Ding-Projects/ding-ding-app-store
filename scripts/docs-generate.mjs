@@ -37,6 +37,7 @@ const articles = [
   ['search-and-regex-builder', 'Search and regex builder', '搜尋同 Regex 建造器', 'experience', 'Search-and-Regex-Builder', 'shipped', ['tab-navigation', 'command-palette', 'offline-documentation-browser']],
   ['command-palette', 'Command palette', '指令板', 'experience', 'Command-Palette', 'shipped', ['search-and-regex-builder', 'settings-language-and-display-name', 'appearance-editor']],
   ['settings-language-and-display-name', 'Settings, language, and display name', '設定、語言同顯示名稱', 'experience', 'Settings-Language-and-Display-Name', 'shipped', ['command-palette', 'appearance-editor', 'update-schedule']],
+  ['optional-spoken-narrator', 'Optional spoken narrator', '可選語音旁白', 'experience', 'Optional-Spoken-Narrator', 'shipped', ['settings-language-and-display-name', 'notifications-and-status', 'update-schedule']],
   ['external-editor-exports', 'External editor exports', '外置編輯器匯出', 'experience', 'External-Editor-Exports', 'shipped', ['settings-language-and-display-name', 'activity-history', 'offline-documentation-browser', 'privacy-and-security']],
   ['appearance-editor', 'Appearance editor', '外觀編輯器', 'experience', 'Appearance-Editor', 'limited', ['settings-language-and-display-name', 'tab-navigation', 'privacy-and-security']],
   ['notifications-and-status', 'Notifications and operation status', '通知同操作狀態', 'experience', 'Notifications-and-Status', 'limited', ['activity-history', 'app-store-self-updater', 'update-schedule']],

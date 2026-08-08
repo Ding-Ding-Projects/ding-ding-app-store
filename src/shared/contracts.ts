@@ -277,6 +277,10 @@ export interface UserSettings {
   accent: string;
   displayName: string;
   automaticRepairConsent: boolean;
+  /** Optional renderer-only speech; it never authorizes a privileged media bridge. */
+  narratorEnabled: boolean;
+  narratorLanguage: 'en' | 'yue' | 'both';
+  narratorReducedSound: boolean;
 }
 
 /** The compiled-in settings are a public contract: every settings explanation names these values. */
@@ -289,6 +293,9 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   accent: '#6750A4',
   displayName: 'Ding Ding App Store',
   automaticRepairConsent: false,
+  narratorEnabled: false,
+  narratorLanguage: 'both',
+  narratorReducedSound: false,
 };
 
 export type SettingsValueSource = 'persisted' | 'fallback';

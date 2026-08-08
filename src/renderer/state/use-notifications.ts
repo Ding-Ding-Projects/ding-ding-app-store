@@ -19,6 +19,7 @@ export function parseNotificationRecords(value: string | null): NotificationReco
         && typeof (item as NotificationRecord).title === 'string'
         && typeof (item as NotificationRecord).message === 'string'
         && typeof (item as NotificationRecord).ok === 'boolean'
+        && ((item as NotificationRecord).category === undefined || ['general', 'success', 'progress', 'warning', 'error'].includes((item as NotificationRecord).category!))
         && typeof (item as NotificationRecord).createdAt === 'string'
         && ((item as NotificationRecord).dismissedAt === null || typeof (item as NotificationRecord).dismissedAt === 'string'),
       ))
@@ -67,6 +68,7 @@ export function useNotifications(): NotificationApi {
       title: (notice.title ?? (notice.ok ? 'Completed' : 'Needs attention')).slice(0, MAX_NOTIFICATION_TITLE_LENGTH),
       message: notice.message.slice(0, MAX_NOTIFICATION_MESSAGE_LENGTH),
       ok: notice.ok,
+      category: notice.category,
       createdAt: new Date().toISOString(),
       dismissedAt: null,
       undo: notice.undo,

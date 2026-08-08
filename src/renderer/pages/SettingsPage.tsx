@@ -149,6 +149,7 @@ export function SettingsPage({ settings, settingsProvenance, onSave, workspace, 
               <h2>Language &amp; voice · 語言同語氣</h2>
               {fieldsFor('general').map(renderField)}
               <p className="supporting">Funny levels style all messages, including warnings and errors, but never change facts. You can reset them any time.</p>
+              <p className="supporting">Spoken narrator is optional and off by default. It uses this device’s browser speech service only; it never sends notification text over the network. It yields to a connected accessibility integration, stays quiet during quiet hours or reduced-sound mode, and may be unavailable when the platform has no speech service.</p>
               <p className="supporting">Automatic source repair gives OpenCode blanket tool approval only inside an attested disposable environment with no host mounts, user profile, credentials, secrets, or Git metadata. The app fails closed when that isolation is unavailable. This consent is persisted and can be revoked here; ordinary release installation never invokes OpenCode.</p>
             </div>
             <div className="settings-actions">
