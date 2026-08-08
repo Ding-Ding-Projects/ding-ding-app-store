@@ -1,4 +1,6 @@
 export { verifyOfflineDocsBundle } from "./verify.mjs";
+export { createBundleResumeProvider } from "./cache-provider.mjs";
+export { importOfflineDocs } from "./importer.mjs";
 export {
   DEFAULT_LIMITS,
   OfflineDocsPolicyError,

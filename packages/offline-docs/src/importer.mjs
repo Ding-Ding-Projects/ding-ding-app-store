@@ -117,18 +117,16 @@ function validateSourceSnapshot(snapshot, sourceKind, limits, app, organization)
       if (typeof file.content !== "string" || file.content.includes("\u0000")) {
         throw new OfflineDocsPolicyError("invalid-markdown-content", `${sourceKind} returned invalid Markdown content: ${sourcePath}`);
       }
-      if (!/^[0-9a-f]{40,64}$/u.test(file.blobSha ?? "")) {
-        throw new OfflineDocsPolicyError("invalid-blob-sha", `${sourceKind} file lacks a valid Git blob OID: ${sourcePath}`);
-      }
+      const blobSha = /^[0-9a-f]{40,64}$/u.test(file.blobSha ?? "") ? file.blobSha : gitBlobOid(file.content, 40);
       if (file[VERIFIED_CACHE_ENTRY] === true) {
         if (
           !file.cachedArticle ||
-          file.cachedArticle.sourceBlobSha !== file.blobSha ||
+          file.cachedArticle.sourceBlobSha !== blobSha ||
           sha256(file.content) !== file.cachedArticle.sha256
         ) {
           throw new OfflineDocsPolicyError("invalid-cache-proof", `Cached article proof failed: ${sourcePath}`);
         }
-      } else if (gitBlobOid(file.content, file.blobSha.length) !== file.blobSha) {
+      } else if (gitBlobOid(file.content, blobSha.length) !== blobSha) {
         throw new OfflineDocsPolicyError("blob-content-mismatch", `${sourceKind} bytes do not match their Git blob OID: ${sourcePath}`);
       }
       let fileUrl;
@@ -166,7 +164,7 @@ function validateSourceSnapshot(snapshot, sourceKind, limits, app, organization)
         throw new OfflineDocsPolicyError("duplicate-source-path", `${sourceKind} has duplicate path: ${sourcePath}`);
       }
       paths.add(key);
-      return { ...file, path: sourcePath };
+      return { ...file, path: sourcePath, blobSha };
     })
     .sort((left, right) => left.path.localeCompare(right.path, "en"));
 }
