@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import { sourceTerminalEventSchema } from '../shared/contracts.js';
 import type {
   AppStoreUpdateState,
   DingDingStoreApi,
@@ -9,6 +10,9 @@ import type {
   ScheduleConfig,
   ScheduleStatus,
   ScheduleTaskId,
+  SourceJobCancelRequest,
+  SourceJobRequest,
+  SourceTerminalEvent,
   TabWorkspace,
   UserSettings,
 } from '../shared/contracts.js';
@@ -23,6 +27,18 @@ const api: DingDingStoreApi = {
     build: (request: OperationRequest) => ipcRenderer.invoke('operations:build', request),
     uninstall: (request: OperationRequest) => ipcRenderer.invoke('operations:uninstall', request),
     installed: () => ipcRenderer.invoke('operations:installed'),
+  },
+  sourceJobs: {
+    start: (request: SourceJobRequest) => ipcRenderer.invoke('source-jobs:start', request),
+    cancel: (request: SourceJobCancelRequest) => ipcRenderer.invoke('source-jobs:cancel', request),
+    subscribe: (listener: (event: Readonly<SourceTerminalEvent>) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, value: unknown) => {
+        const parsed = sourceTerminalEventSchema.safeParse(value);
+        if (parsed.success) listener(Object.freeze({ ...parsed.data }));
+      };
+      ipcRenderer.on('source-jobs:event', handler);
+      return () => ipcRenderer.removeListener('source-jobs:event', handler);
+    },
   },
   updates: {
     checkCatalog: () => ipcRenderer.invoke('updates:catalog'),

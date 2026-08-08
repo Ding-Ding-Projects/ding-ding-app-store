@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, ipcMain, session } from 'electron';
 import squirrelStartup from 'electron-squirrel-startup';
 import { z } from 'zod';
-import type { ElementKey, ElementOverride, HistoryExportFormat, OperationRequest, TabWorkspace, UserSettings } from '../shared/contracts.js';
+import type { ElementKey, ElementOverride, HistoryExportFormat, OperationRequest, SourceJobCancelRequest, SourceJobRequest, TabWorkspace, UserSettings } from '../shared/contracts.js';
 import { AppearanceService } from './appearance-service.js';
 import { CatalogService } from './catalog-service.js';
 import { HistoryService } from './history-service.js';
@@ -11,6 +11,7 @@ import { InstalledService } from './installed-service.js';
 import { OperationService } from './operation-service.js';
 import { Scheduler } from './scheduler.js';
 import { ScheduleService } from './schedule-service.js';
+import { SourceJobService } from './source-job-service.js';
 import { SettingsService } from './settings-service.js';
 import { UpdateService } from './update-service.js';
 import { WorkspaceService } from './workspace-service.js';
@@ -60,6 +61,15 @@ void app.whenReady().then(async () => {
   const installed = new InstalledService(catalog);
   const operations = new OperationService(catalog, history, installed);
   const settings = new SettingsService();
+  const sourceJobs = new SourceJobService(
+    catalog,
+    history,
+    settings,
+    path.join(app.getPath('userData'), 'source-jobs'),
+    path.join(app.getAppPath(), 'data', 'source-recipes.v1.json'),
+    undefined,
+    (event) => mainWindow?.webContents.send('source-jobs:event', event),
+  );
   const updates = new UpdateService(() => mainWindow);
   const workspace = new WorkspaceService();
   const appearance = new AppearanceService();
@@ -79,6 +89,14 @@ void app.whenReady().then(async () => {
   ipcMain.handle('operations:build', (_event, request: OperationRequest) => operations.build(request));
   ipcMain.handle('operations:uninstall', (_event, request: OperationRequest) => operations.uninstall(request));
   ipcMain.handle('operations:installed', () => operations.listInstalled());
+  ipcMain.handle('source-jobs:start', (event, request: SourceJobRequest) => {
+    if (event.sender !== mainWindow?.webContents) return { ok: false, appId: 'invalid', state: 'failed', message: 'Blocked source job request from an unknown renderer.' };
+    return sourceJobs.start(request);
+  });
+  ipcMain.handle('source-jobs:cancel', (event, request: SourceJobCancelRequest) => {
+    if (event.sender !== mainWindow?.webContents) return { ok: false, appId: 'invalid', state: 'failed', message: 'Blocked cancellation request from an unknown renderer.' };
+    return sourceJobs.cancel(request);
+  });
   ipcMain.handle('updates:catalog', () => catalog.list(true));
   ipcMain.handle('updates:store-check', () => updates.check());
   ipcMain.handle('updates:store-download', () => updates.download());
