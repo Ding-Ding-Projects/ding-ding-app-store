@@ -35,6 +35,12 @@ function assertPlainText(value, label, maxLength) {
   return text;
 }
 
+function assertExactKeys(value, allowed, label) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`${label} must be an object.`);
+  const unknown = Object.keys(value).filter((key) => !allowed.includes(key));
+  if (unknown.length > 0) throw new Error(`${label} contains unknown fields: ${unknown.join(', ')}.`);
+}
+
 export function assertNoSensitiveData(value, label = 'Generated release data') {
   for (const pattern of SENSITIVE_PATTERNS) {
     if (pattern.test(value)) throw new Error(`${label} contains token-like or private data.`);
@@ -90,6 +96,7 @@ export function extractSourceCommit(body, tag) {
 
 function normalizeDish(value, label) {
   if (!value || value.available === false) return null;
+  assertExactKeys(value, ['available', 'id', 'codeName', 'nameEn', 'nameZhHant', 'photoUrl', 'assetName', 'alt'], label);
   const codeName = assertPlainText(value.codeName, `${label} dim-sum code name`, 160);
   const photoUrl = assertPlainText(value.photoUrl, `${label} dim-sum photo URL`, 500);
   const assetName = assertPlainText(value.assetName, `${label} dim-sum asset name`, 180);
@@ -145,9 +152,26 @@ export function readGitCommitMetadata(shas, cwd = process.cwd()) {
   return result;
 }
 
+export function assertProspectiveCommitIsHead(commit, cwd = process.cwd()) {
+  const expected = requireSha(commit, 'Prospective release commit');
+  const headRun = spawnSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf8', windowsHide: true });
+  if (headRun.status !== 0) throw new Error('The checked-out HEAD could not be resolved.');
+  const actual = requireSha(headRun.stdout.trim(), 'Checked-out HEAD');
+  if (actual !== expected) throw new Error(`Prospective release commit ${expected} does not match checked-out HEAD ${actual}.`);
+  return actual;
+}
+
 function publishedReleaseDetails(repository, inventory, commitMetadata) {
   if (!REPOSITORY_PATTERN.test(repository)) throw new Error('Repository must be an owner/name pair.');
-  const releases = flattenReleasePages(inventory).filter((release) => release && release.draft === false && release.published_at);
+  const inventoryRows = flattenReleasePages(inventory);
+  for (const [index, release] of inventoryRows.entries()) {
+    if (!release || typeof release !== 'object' || Array.isArray(release)) throw new Error(`Release inventory row ${index} is malformed.`);
+    if (typeof release.draft !== 'boolean') throw new Error(`Release inventory row ${index} has an invalid draft state.`);
+    if (release.published_at !== null && release.published_at !== undefined && typeof release.published_at !== 'string') {
+      throw new Error(`Release inventory row ${index} has an invalid publication time.`);
+    }
+  }
+  const releases = inventoryRows.filter((release) => release.draft === false && release.published_at);
   const seenTags = new Set();
   const details = [];
   for (const release of releases) {
@@ -225,6 +249,7 @@ export function reconcilePublishedManifest(input, publishedAt) {
 }
 
 export function validateManifest(manifest, { allowPending = true } = {}) {
+  assertExactKeys(manifest, ['schemaVersion', 'repository', 'generatedAt', 'entries'], 'Release manifest');
   if (!manifest || typeof manifest !== 'object' || manifest.schemaVersion !== CHANGELOG_SCHEMA_VERSION ||
       !REPOSITORY_PATTERN.test(String(manifest.repository ?? '')) || !Array.isArray(manifest.entries)) {
     throw new Error('Release manifest schema is invalid.');
@@ -233,19 +258,26 @@ export function validateManifest(manifest, { allowPending = true } = {}) {
   requireIsoTimestamp(manifest.generatedAt, 'Manifest generatedAt');
   const tags = new Set();
   let previous = null;
+  let previousVersion = null;
   for (const entry of manifest.entries) {
+    assertExactKeys(entry, ['version', 'releasedAt', 'commit', 'changes', 'releaseUrl', 'publicationState', 'dimSum'], 'Release manifest entry');
     const tag = requireTag(entry.version);
     if (tags.has(tag)) throw new Error(`Duplicate manifest tag: ${tag}.`);
     tags.add(tag);
     const timestamp = requireIsoTimestamp(entry.releasedAt, `Release ${tag} timestamp`);
     if (previous && previous < timestamp) throw new Error('Release manifest entries are not newest-first.');
+    if (previous === timestamp && previousVersion.localeCompare(tag) < 0) throw new Error('Release manifest entries have invalid equal-time tag ordering.');
     previous = timestamp;
+    previousVersion = tag;
     requireSha(entry.commit, `Release ${tag} commit`);
     if (!Array.isArray(entry.changes) || entry.changes.length < 1 || entry.changes.length > 20) throw new Error(`Release ${tag} changes are outside their bounds.`);
     entry.changes.forEach((change) => assertPlainText(change, `Release ${tag} change`, MAX_CHANGE_LENGTH));
     if (entry.releaseUrl !== releaseUrl(manifest.repository, tag)) throw new Error(`Release ${tag} URL is invalid.`);
     if (!['published', ...(allowPending ? ['pending'] : [])].includes(entry.publicationState)) throw new Error(`Release ${tag} publication state is invalid.`);
-    if (entry.dimSum) normalizeDish({ available: true, ...entry.dimSum }, `Release ${tag}`);
+    if (entry.dimSum) {
+      assertExactKeys(entry.dimSum, ['codeName', 'photoUrl', 'assetName'], `Release ${tag} dim-sum data`);
+      normalizeDish({ available: true, ...entry.dimSum }, `Release ${tag}`);
+    }
   }
   assertNoSensitiveData(JSON.stringify(manifest));
   return manifest;
@@ -288,6 +320,7 @@ async function main() {
   const repository = argument('--repository');
   const fallback = process.argv.includes('--fallback');
   const prospective = { version: argument('--tag'), commit: argument('--commit'), releasedAt: argument('--released-at') };
+  if (!fallback) assertProspectiveCommitIsHead(prospective.commit);
   const releases = flattenReleasePages(inventory).filter((release) => release && release.draft === false && release.published_at);
   const shas = releases.map((release) => extractSourceCommit(release.body, String(release.tag_name)));
   if (!fallback) shas.push(prospective.commit);

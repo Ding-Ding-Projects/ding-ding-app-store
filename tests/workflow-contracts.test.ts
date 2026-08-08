@@ -34,6 +34,10 @@ describe('GitHub-hosted workflow and bootstrap contract', () => {
     expect(bootstrap).toContain('https://github.com/cli/cli/releases/download/');
     expect(bootstrap).toContain('Get-FileHash');
     expect(bootstrap).toContain('SHA-256 mismatch');
+    expect(bootstrap).toContain('$reportedText = ($reportedLines');
+    expect(bootstrap).toContain('[string]$reportedLines[0] -notmatch $expectedPattern');
+    expect(bootstrap).toContain('gh_${version}_windows_amd64\\bin\\gh.exe');
+    expect(bootstrap).not.toContain('Get-ChildItem -LiteralPath $extractRoot -Recurse');
     expect(bootstrap).not.toMatch(/winget|choco|scoop|Start-Process|Invoke-Expression/i);
   });
 
@@ -59,6 +63,10 @@ describe('GitHub-hosted workflow and bootstrap contract', () => {
     expect(release).toContain('--reconcile');
     expect(release).toContain('release-changelog.json');
     expect(release).not.toMatch(/git\s+(?:add|commit|push)\b/);
+    const initialSource = release.indexOf('"- Source commit: ``$env:GITHUB_SHA``"');
+    const publish = release.indexOf('gh release edit $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --draft=false');
+    expect(initialSource).toBeGreaterThan(-1);
+    expect(initialSource).toBeLessThan(publish);
   });
 
   it('compares generated documentation independently of checkout line endings', async () => {
