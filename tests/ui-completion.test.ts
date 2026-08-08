@@ -9,6 +9,7 @@ import type { HistoryEntry } from '../src/shared/contracts';
 import type { NotificationRecord } from '../src/renderer/notify';
 import { exportNotificationRecords } from '../src/renderer/components/NotificationCenter';
 import { parseChangelogDate } from '../src/renderer/pages/ChangelogViewer';
+import { aboutRowBody } from '../src/renderer/pages/SettingsPage';
 import { compile, makeMatcher, regexSafetyIssue } from '../src/renderer/search';
 
 const read = (path: string) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
@@ -32,8 +33,13 @@ describe('global renderer UI completion', () => {
     expect(app).toContain('`${settings.displayName} ${updateState.version} is ready`');
     expect(app).toContain('`${settings.displayName} ${updateState.version} 準備好喇`');
     expect(viewer).toContain('changelogMarkdown(exportEntries, settings.displayName)');
-    expect(settingsPage).toContain("row.en === 'Version' ? `${settings.displayName} preview 0.1.0.`");
+    expect(settingsPage).toContain('aboutRowBody(row, settings.displayName)');
     expect(changelogMarkdown(CHANGELOG_ENTRIES.slice(0, 1), 'My Store')).toContain('# My Store changelog');
+  });
+
+  it('searches the About Version card by its configured display name', () => {
+    expect(aboutRowBody({ en: 'Version', body: 'Ding Ding App Store preview 0.1.0.' }, 'My Store')).toBe('My Store preview 0.1.0.');
+    expect(aboutRowBody({ en: 'Licence', body: 'Apache-2.0.' }, 'My Store')).toBe('Apache-2.0.');
   });
 
   it('rejects changelog rows whose commit SHA is missing or shortened', () => {
