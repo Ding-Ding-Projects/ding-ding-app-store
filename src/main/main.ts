@@ -109,6 +109,8 @@ void app.whenReady().then(async () => {
   ipcMain.handle('updates:store-check', () => updates.check());
   ipcMain.handle('updates:store-download', () => updates.download());
   ipcMain.handle('updates:store-restart', () => updates.restart());
+  ipcMain.handle('updates:store-cancel-download', () => updates.cancelDownload());
+  ipcMain.handle('updates:open-release-notes', (_event, url: unknown) => updates.openReleaseNotes(typeof url === 'string' ? url : ''));
   ipcMain.handle('settings:load', () => settings.load());
   ipcMain.handle('settings:save', (_event, value: UserSettings) => settings.save(value));
   ipcMain.handle('history:list', () => history.list());

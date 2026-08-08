@@ -86,6 +86,7 @@ export function App() {
   } | null>(null);
   const operationRunningRef = useRef(false);
   const [updateState, setUpdateState] = useState<AppStoreUpdateState>({ status: 'idle' });
+  const [dismissedUpdateVersion, setDismissedUpdateVersion] = useState<string | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   const [notificationCenterOpen, setNotificationCenterOpen] = useState(false);
@@ -525,6 +526,18 @@ export function App() {
   }, [appearance.selectedKey, appearance.elements, activeTab, subTab]);
 
   const updatesBadge = Boolean(catalog?.apps.some((app) => app.updateState === 'available') || updateState.status === 'ready');
+  const updateVersion = updateState.status === 'available' || updateState.status === 'downloading' || updateState.status === 'ready' ? updateState.version : null;
+  useEffect(() => {
+    if (updateVersion && updateVersion !== dismissedUpdateVersion) setDismissedUpdateVersion(null);
+  }, [dismissedUpdateVersion, updateVersion]);
+  const restartUpdate = useCallback(async () => {
+    if (operationRunningRef.current || runningAction || sourceTerminal || action || schedule.dirty) {
+      notify({ ok: false, message: 'Save or finish the current operation before restarting to install the update.' });
+      return;
+    }
+    const result = await window.dingDingStore.updates.restartStore();
+    notify({ ok: result.ok, message: result.message });
+  }, [action, notify, runningAction, schedule.dirty, sourceTerminal]);
   const entries = useMemo(() => buildRegistry({
     settings,
     workspace: workspace.workspace,
@@ -575,15 +588,20 @@ export function App() {
         />
 
         <main className="content" id="surface-panel" role="tabpanel" aria-labelledby={`tab-${activeTab}`} {...el('content-surface')}>
-          {(updateState.status === 'available' || updateState.status === 'downloading' || updateState.status === 'ready' || updateState.status === 'failed') && (
+          {(((updateState.status === 'available' || updateState.status === 'downloading' || updateState.status === 'ready') && updateVersion !== dismissedUpdateVersion) || updateState.status === 'failed') && (
             <section className={`update-banner ${updateState.status}`} role="status" {...el('update-banner')}>
               <Icon>system_update</Icon>
               <div>
-                <strong>{updateState.status === 'ready' ? `Ding Ding App Store ${updateState.version} is ready` : updateState.status === 'available' ? `Version ${updateState.version} is available` : updateState.status === 'downloading' ? 'Downloading update…' : 'Update check failed'}</strong>
-                <p>{updateState.status === 'failed' ? updateState.message : 'Unsigned artifact: HTTPS feed metadata and package hashes protect transport integrity; no code signature is claimed.'}</p>
+                <strong>{updateState.status === 'ready' ? label(settings, `Ding Ding App Store ${updateState.version} is ready`, `Ding Ding App Store ${updateState.version} 準備好喇`) : updateState.status === 'available' ? label(settings, `Version ${updateState.version} is available`, `版本 ${updateState.version} 有得更新`) : updateState.status === 'downloading' ? label(settings, 'Downloading update…', '下載緊更新…') : label(settings, 'Update check failed', '更新檢查失敗')}</strong>
+                <p>{updateState.status === 'failed' ? updateState.message : label(settings, 'Unsigned artifact: HTTPS feed metadata and package hashes protect transport integrity; no code signature is claimed.', '未簽名檔案：HTTPS feed metadata 同 package hash 保護傳輸完整性，但唔宣稱有程式簽名。')}</p>
+                {(updateState.status === 'available' || updateState.status === 'downloading' || updateState.status === 'ready') && <p className="supporting">{label(settings, 'Package', '套件')} {updateState.package.fileName} · SHA-1 {updateState.package.sha1} · {updateState.package.bytes.toLocaleString()} bytes</p>}
+                {updateState.status === 'failed' && updateState.rollbackAvailable && <p className="supporting">{label(settings, 'The previous version remains untouched. Squirrel.Windows rollback was detected or may still be available; retry only after reviewing the release notes.', '上一個版本原封不動。偵測到 Squirrel.Windows rollback，或者 rollback 仍然可用；睇完 release notes 先再試。')}</p>}
               </div>
-              {updateState.status === 'available' && <button className="filled-button" onClick={() => void window.dingDingStore.updates.downloadStore().then(setUpdateState)}>Download</button>}
-              {updateState.status === 'ready' && <><button className="text-button">Later</button><button className="filled-button" onClick={() => void window.dingDingStore.updates.restartStore()}>Restart to install update</button></>}
+              {(updateState.status === 'available' || updateState.status === 'ready') && <a className="text-button" href={updateState.releaseNotesUrl} onClick={(event) => { event.preventDefault(); void window.dingDingStore.updates.openReleaseNotes(updateState.releaseNotesUrl).then((result) => notify({ ok: result.ok, message: result.message })); }}>{label(settings, 'Release notes', 'Release notes')}</a>}
+              {updateState.status === 'available' && <button className="filled-button" onClick={() => void window.dingDingStore.updates.downloadStore().then(setUpdateState).catch((error) => notify({ ok: false, message: (error as Error).message }))}>{label(settings, 'Download', '下載')}</button>}
+              {updateState.status === 'downloading' && <button className="text-button" onClick={() => void window.dingDingStore.updates.cancelStoreDownload().then(setUpdateState)}>{label(settings, 'Cancel download', '取消下載')}</button>}
+              {updateState.status === 'failed' && updateState.recoverable && <button className="filled-button" onClick={() => void window.dingDingStore.updates.checkStore().then(setUpdateState).catch((error) => notify({ ok: false, message: (error as Error).message }))}>{label(settings, 'Retry check', '再檢查')}</button>}
+              {updateState.status === 'ready' && <><button className="text-button" onClick={() => setDismissedUpdateVersion(updateState.version)}>{label(settings, 'Later', '遲啲先')}</button><button className="filled-button" onClick={() => void restartUpdate()}>{label(settings, 'Restart to install update', '重新啟動安裝更新')}</button></>}
             </section>
           )}
 
