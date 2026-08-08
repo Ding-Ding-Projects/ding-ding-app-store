@@ -254,6 +254,7 @@ describe('command registry reachability', () => {
   const settings = {
     language: 'bilingual', englishFunnyLevel: 2, cantoneseFunnyLevel: 4,
     theme: 'system', density: 'comfortable', accent: '#6750A4', displayName: 'Ding Ding App Store',
+    automaticRepairConsent: false,
   } as const;
 
   const registry = buildRegistry({

@@ -2,7 +2,6 @@
 
 > **Status: shipped.** This wiki page is generated from the canonical categorized article.
 
-
 ## Behaviour
 
 The Uninstall button appears only for a catalog app with an installed version. Its native confirmation requires two independently operated key controls and the full-range slider before the request can be dispatched. The main process re-discovers the current installed record, selects its typed uninstall route, runs a fixed Squirrel or MSI vector or removes one validated managed-portable directory, removes the record only after success, and appends the outcome to history.

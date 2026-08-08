@@ -2,7 +2,6 @@
 
 > **Status: shipped.** This wiki page is generated from the canonical categorized article.
 
-
 ## Behaviour
 
 Discovery runs during startup and whenever the renderer requests the installed list. It starts with the App Store's `installed-apps.v1.json` records, then checks every catalog entry through only its declared strategy: Squirrel applications below the current user's local application-data directory, MSI records in the standard per-user, machine, and 32-bit-on-64-bit uninstall registry keys, and portable applications inside the App Store's managed portable directory. The Installed tab filters the live catalog against these discovered versions.

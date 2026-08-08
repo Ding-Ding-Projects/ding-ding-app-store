@@ -2,7 +2,6 @@
 
 > **Status: limited.** This wiki page is generated from the canonical categorized article.
 
-
 ## Behaviour
 
 The packaged App Store checks its own Squirrel `RELEASES` feed after launch and on the configured repeat schedule. It parses full-package versions, compares the newest valid version with the running app, and publishes idle, checking, up-to-date, available, downloading, ready, or failed state. An available banner begins download only after the user acts; a ready banner offers `Restart to install update` and `Later`. Restart calls `quitAndInstall()` only from the ready state.

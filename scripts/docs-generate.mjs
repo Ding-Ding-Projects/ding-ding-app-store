@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const check = process.argv.includes('--check');
+const normalizeNewlines = (value) => value?.replaceAll('\r\n', '\n');
 
 // Hand-written coverage inventory. Adding a feature requires choosing its public category,
 // canonical article, wiki title, and related reading here before any bundle can pass.
@@ -25,7 +26,7 @@ const articles = [
   ['one-click-installation', 'One-click installation and adapter coverage', '一按安裝同配接器覆蓋', 'installation', 'One-Click-Installation', 'limited', ['verified-installer-operations', 'source-build-security', 'uninstall']],
   ['source-build-security', 'Source-build security', '原始碼建置安全', 'installation', 'Source-Build-Security', 'limited', ['verified-installer-operations', 'automatic-repair-and-universal-adapters', 'privacy-and-security']],
   ['uninstall', 'Protected uninstall', '安全解除安裝', 'installation', 'Uninstall', 'shipped', ['installed-app-discovery', 'verified-installer-operations', 'activity-history']],
-  ['automatic-repair-and-universal-adapters', 'Automatic repair and universal adapters', '自動修復同通用安裝配接器', 'installation', 'Automatic-Repair-and-Universal-Adapters', 'pending', ['verified-installer-operations', 'source-build-security', 'verification']],
+  ['automatic-repair-and-universal-adapters', 'Automatic repair and universal adapters', '自動修復同通用安裝配接器', 'installation', 'Automatic-Repair-and-Universal-Adapters', 'limited', ['verified-installer-operations', 'source-build-security', 'verification']],
   ['installed-app-discovery', 'Installed app discovery', '已安裝 App 偵測', 'installed', 'Installed-App-Discovery', 'shipped', ['uninstall', 'activity-history', 'privacy-and-security']],
   ['activity-history', 'Activity history and export', '操作記錄同匯出', 'installed', 'Activity-History', 'shipped', ['installed-app-discovery', 'verified-installer-operations', 'privacy-and-security']],
   ['per-app-update-checker', 'Per-app update checker', '每個 App 更新檢查', 'updates', 'Per-App-Update-Checker', 'limited', ['catalog-discovery', 'app-store-self-updater', 'update-schedule']],
@@ -43,9 +44,8 @@ const articles = [
 ].map(([id, title, titleYue, category, wiki, status, related]) => ({ id, title, titleYue, category, wiki, status, related }));
 
 const requiredSections = ['Behaviour', 'Configuration', 'Failure modes', 'Security considerations', 'Verification', 'Suggested articles'];
-const normalizeEol = (value) => value?.replace(/\r\n/g, '\n');
-
 function parseArticle(raw, expected) {
+  raw = normalizeNewlines(raw);
   const match = raw.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
   if (!match) throw new Error(`${expected.id}: missing front matter`);
   const meta = Object.fromEntries(match[1].split(/\r?\n/).filter(Boolean).map((line) => {
@@ -146,7 +146,7 @@ for (const [relative, content] of outputs) {
   const target = path.join(root, relative);
   if (check) {
     const actual = await readFile(target, 'utf8').catch(() => null);
-    if (normalizeEol(actual) !== normalizeEol(content)) failures.push(relative);
+    if (normalizeNewlines(actual) !== normalizeNewlines(content)) failures.push(relative);
   } else {
     await mkdir(path.dirname(target), { recursive: true });
     await writeFile(target, content, 'utf8');

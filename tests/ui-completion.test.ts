@@ -86,7 +86,7 @@ describe('global renderer UI completion', () => {
 
   it('keeps generated documentation checks stable across Windows checkout line endings', async () => {
     const generator = await read('scripts/docs-generate.mjs');
-    expect(generator).toContain("const normalizeEol = (value) => value?.replace(/\\r\\n/g, '\\n')");
-    expect(generator).toContain('normalizeEol(actual) !== normalizeEol(content)');
+    expect(generator).toContain("const normalizeNewlines = (value) => value?.replaceAll('\\r\\n', '\\n')");
+    expect(generator).toContain('normalizeNewlines(actual) !== normalizeNewlines(content)');
   });
 });

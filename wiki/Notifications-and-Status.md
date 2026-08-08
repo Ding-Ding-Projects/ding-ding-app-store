@@ -2,7 +2,6 @@
 
 > **Status: limited.** This wiki page is generated from the canonical categorized article.
 
-
 ## Behaviour
 
 Catalog, persistence, appearance, workspace, schedule, and operation results surface through a bottom-corner snackbar stack. Success and informational notices auto-dismiss after five seconds; errors persist until dismissed. Undo-capable operations attach an action. Every notice is also retained in the profile's bounded notification history, including its creation time and dismissed state. The App Store updater keeps its separate persistent banner so a restart decision is never lost to a short toast.

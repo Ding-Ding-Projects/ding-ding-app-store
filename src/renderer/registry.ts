@@ -114,7 +114,7 @@ export const SURFACES: readonly SurfaceRow[] = [
   { surface: 'settings.about', icon: 'info', en: 'Settings · About', yue: '設定 · 關於', keywords: ['version', 'licence', 'unsigned', 'changelog', 'external editor', 'vscode'] },
 ];
 
-export type SettingKind = 'select' | 'range' | 'color' | 'text';
+export type SettingKind = 'select' | 'range' | 'color' | 'text' | 'switch';
 
 export interface SettingField {
   key: keyof UserSettings;
@@ -140,6 +140,7 @@ export const SETTING_FIELDS: readonly SettingField[] = [
   },
   { key: 'englishFunnyLevel', section: 'general', kind: 'range', min: 1, max: 5, en: 'English funny level', yue: 'English 幽默程度', keywords: ['tone', 'humour', 'voice'] },
   { key: 'cantoneseFunnyLevel', section: 'general', kind: 'range', min: 1, max: 5, en: '粵語 funny level', yue: '粵語幽默程度', keywords: ['tone', 'humour', 'voice'] },
+  { key: 'automaticRepairConsent', section: 'general', kind: 'switch', en: 'Allow isolated automatic source repair', yue: '允許隔離自動 source 修正', keywords: ['source', 'repair', 'opencode', 'consent', 'isolation'] },
   {
     key: 'theme', section: 'appearance', kind: 'select', en: 'Theme', yue: '主題',
     keywords: ['dark', 'light', 'system'],

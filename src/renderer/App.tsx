@@ -7,6 +7,7 @@ import type {
   ElementKey,
   HistoryEntry,
   InstalledAppRecord,
+  SourceTerminalEvent,
   TabGroup,
   TabGroupColor,
   TabId,
@@ -20,6 +21,7 @@ import { AppearancePanel } from './components/AppearancePanel';
 import { CommandPalette } from './components/CommandPalette';
 import { NotificationCenter } from './components/NotificationCenter';
 import { SnackbarStack } from './components/SnackbarStack';
+import { SourceTerminalPanel } from './components/SourceTerminalPanel';
 import { TabRail } from './components/TabRail';
 import { el } from './el';
 import { downloadText, pickTextFile } from './files';
@@ -66,6 +68,14 @@ export function App() {
   const [installed, setInstalled] = useState<InstalledAppRecord[]>([]);
   const [action, setAction] = useState<{ kind: 'uninstall'; apps: CatalogApp[]; returnFocus: HTMLButtonElement } | null>(null);
   const [runningAction, setRunningAction] = useState<RunningAction | null>(null);
+  const [sourceTerminal, setSourceTerminal] = useState<{
+    appId: string;
+    appName: string;
+    jobId: string | null;
+    events: Readonly<SourceTerminalEvent>[];
+    fallbackMessage?: string;
+    returnFocus: HTMLButtonElement;
+  } | null>(null);
   const operationRunningRef = useRef(false);
   const [updateState, setUpdateState] = useState<AppStoreUpdateState>({ status: 'idle' });
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -113,22 +123,69 @@ export function App() {
     if (result.ok) void loadCatalog(true);
   }, [announce, loadCatalog, loadHistory, loadInstalled, notify]);
 
+  useEffect(() => window.dingDingStore.sourceJobs.subscribe((event) => {
+    setSourceTerminal((current) => {
+      if (!current || current.appId !== event.appId || (current.jobId && current.jobId !== event.jobId)) return current;
+      return { ...current, jobId: event.jobId, events: [...current.events, event] };
+    });
+    if (event.final) {
+      operationRunningRef.current = false;
+      setRunningAction(null);
+      reportOperation({ ok: event.state === 'succeeded', message: event.text });
+    }
+  }), [reportOperation]);
+
+  const closeSourceTerminal = useCallback(() => {
+    const target = sourceTerminal?.returnFocus;
+    setSourceTerminal(null);
+    if (target) window.setTimeout(() => target.focus(), 0);
+  }, [sourceTerminal]);
+
   const closeAction = useCallback(() => {
     const returnFocus = action?.returnFocus;
     setAction(null);
     if (returnFocus) window.setTimeout(() => returnFocus.focus(), 0);
   }, [action]);
 
-  const runImmediateBatch = useCallback(async (kind: ImmediateActionKind, selectedApps: CatalogApp[]) => {
+  const runImmediateBatch = useCallback(async (kind: ImmediateActionKind, selectedApps: CatalogApp[], trigger: HTMLButtonElement) => {
     if (operationRunningRef.current) return;
+    if (kind === 'build' && selectedApps.length !== 1) {
+      notify({ ok: false, message: `Source repair supports one selected application at a time. ${selectedApps.length} were selected; none were started.` });
+      return;
+    }
     operationRunningRef.current = true;
+    if (kind === 'build') {
+      const selectedApp = selectedApps[0];
+      setRunningAction({ kind, appId: selectedApp.id, completed: 0, total: 1 });
+      announce(`Preparing the source install for ${selectedApp.name}`);
+      setSourceTerminal({ appId: selectedApp.id, appName: selectedApp.name, jobId: null, events: [], returnFocus: trigger });
+      try {
+        const result = await window.dingDingStore.sourceJobs.start({ appId: selectedApp.id, decision: 'build' });
+        if (!result.ok || !result.jobId) {
+          setSourceTerminal((current) => current && current.appId === selectedApp.id ? { ...current, fallbackMessage: result.message } : current);
+          reportOperation(result);
+          operationRunningRef.current = false;
+          setRunningAction(null);
+        } else {
+          const jobId = result.jobId;
+          setSourceTerminal((current) => current && current.appId === selectedApp.id ? { ...current, jobId } : current);
+        }
+      } catch (error) {
+        const message = (error as Error).message;
+        setSourceTerminal((current) => current && current.appId === selectedApp.id ? { ...current, fallbackMessage: message } : current);
+        reportOperation({ ok: false, message });
+        operationRunningRef.current = false;
+        setRunningAction(null);
+      }
+      return;
+    }
     try {
       for (const [index, selectedApp] of selectedApps.entries()) {
         const next: RunningAction = { kind, appId: selectedApp.id, completed: index, total: selectedApps.length };
         setRunningAction(next);
-        announce(kind === 'install' ? `Installing ${selectedApp.name}` : `Preparing the source install for ${selectedApp.name}`);
+        announce(`Installing ${selectedApp.name}`);
         try {
-          const result = await window.dingDingStore.operations[kind]({ appId: selectedApp.id, decision: kind });
+          const result = await window.dingDingStore.operations.install({ appId: selectedApp.id, decision: 'install' });
           reportOperation(result);
         } catch (error) {
           reportOperation({ ok: false, message: (error as Error).message });
@@ -139,17 +196,17 @@ export function App() {
       operationRunningRef.current = false;
       setRunningAction(null);
     }
-  }, [announce, reportOperation]);
+  }, [announce, notify, reportOperation]);
 
   const startAction = useCallback(async (kind: ActionKind, selectedApp: CatalogApp, trigger: HTMLButtonElement) => {
     if (kind === 'uninstall') { setAction({ kind, apps: [selectedApp], returnFocus: trigger }); return; }
-    await runImmediateBatch(kind, [selectedApp]);
+    await runImmediateBatch(kind, [selectedApp], trigger);
   }, [runImmediateBatch]);
 
   const startBulkAction = useCallback(async (kind: ActionKind, selectedApps: CatalogApp[], trigger: HTMLButtonElement) => {
     if (!selectedApps.length) return;
     if (kind === 'uninstall') { setAction({ kind, apps: selectedApps, returnFocus: trigger }); return; }
-    await runImmediateBatch(kind, selectedApps);
+    await runImmediateBatch(kind, selectedApps, trigger);
   }, [runImmediateBatch]);
 
   useEffect(() => {
@@ -542,6 +599,16 @@ export function App() {
         {action && <ActionDialog action={action} settings={settings} onClose={closeAction} onResult={reportOperation} />}
 
         {notificationCenterOpen && <NotificationCenter records={notifications.records} settings={settings} persistenceAvailable={notifications.persistenceAvailable} onDismissMany={notifications.dismissMany} onDeleteMany={notifications.deleteMany} notify={notify} onClose={closeNotificationCenter} openRegex={regexRequest === 'notifications'} onRegexHandled={() => setRegexRequest(null)} />}
+        {sourceTerminal && (
+          <SourceTerminalPanel
+            appName={sourceTerminal.appName}
+            events={sourceTerminal.events}
+            fallbackMessage={sourceTerminal.fallbackMessage}
+            settings={settings}
+            onCancel={() => sourceTerminal.jobId && void window.dingDingStore.sourceJobs.cancel({ jobId: sourceTerminal.jobId, decision: 'cancel' })}
+            onClose={closeSourceTerminal}
+          />
+        )}
 
         {paletteOpen && (
           <CommandPalette

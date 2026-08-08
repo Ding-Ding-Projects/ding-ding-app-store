@@ -9,9 +9,33 @@ import type {
   ScheduleConfig,
   ScheduleStatus,
   ScheduleTaskId,
+  SourceJobCancelRequest,
+  SourceJobRequest,
+  SourceTerminalEvent,
   TabWorkspace,
   UserSettings,
 } from '../shared/contracts.js';
+
+const SOURCE_STATES = new Set(['queued', 'preparing', 'running', 'repairing', 'cancelling', 'succeeded', 'failed', 'cancelled']);
+const SOURCE_STREAMS = new Set(['system', 'progress', 'stdout', 'stderr']);
+const SOURCE_EVENT_KEYS = new Set(['jobId', 'appId', 'sequence', 'at', 'stream', 'state', 'text', 'progress', 'final']);
+
+function isSourceTerminalEvent(value: unknown): value is SourceTerminalEvent {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const event = value as Record<string, unknown>;
+  const keys = Object.keys(event);
+  return keys.length === SOURCE_EVENT_KEYS.size
+    && keys.every((key) => SOURCE_EVENT_KEYS.has(key))
+    && typeof event.jobId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(event.jobId)
+    && typeof event.appId === 'string' && /^[a-z0-9][a-z0-9-]{0,127}$/.test(event.appId)
+    && Number.isInteger(event.sequence) && Number(event.sequence) >= 0 && Number(event.sequence) <= 10_000
+    && typeof event.at === 'string' && Number.isFinite(Date.parse(event.at))
+    && typeof event.stream === 'string' && SOURCE_STREAMS.has(event.stream)
+    && typeof event.state === 'string' && SOURCE_STATES.has(event.state)
+    && typeof event.text === 'string' && event.text.length <= 2_048
+    && (event.progress === null || (Number.isInteger(event.progress) && Number(event.progress) >= 0 && Number(event.progress) <= 100))
+    && typeof event.final === 'boolean';
+}
 
 const api: DingDingStoreApi = {
   catalog: {
@@ -23,6 +47,17 @@ const api: DingDingStoreApi = {
     build: (request: OperationRequest) => ipcRenderer.invoke('operations:build', request),
     uninstall: (request: OperationRequest) => ipcRenderer.invoke('operations:uninstall', request),
     installed: () => ipcRenderer.invoke('operations:installed'),
+  },
+  sourceJobs: {
+    start: (request: SourceJobRequest) => ipcRenderer.invoke('source-jobs:start', request),
+    cancel: (request: SourceJobCancelRequest) => ipcRenderer.invoke('source-jobs:cancel', request),
+    subscribe: (listener: (event: Readonly<SourceTerminalEvent>) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, value: unknown) => {
+        if (isSourceTerminalEvent(value)) listener(Object.freeze({ ...value }));
+      };
+      ipcRenderer.on('source-jobs:event', handler);
+      return () => ipcRenderer.removeListener('source-jobs:event', handler);
+    },
   },
   updates: {
     checkCatalog: () => ipcRenderer.invoke('updates:catalog'),

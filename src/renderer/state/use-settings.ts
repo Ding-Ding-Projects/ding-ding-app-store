@@ -10,6 +10,7 @@ export const defaultSettings: UserSettings = {
   density: 'comfortable',
   accent: '#6750A4',
   displayName: 'Ding Ding App Store',
+  automaticRepairConsent: false,
 };
 
 export interface SettingsApi {

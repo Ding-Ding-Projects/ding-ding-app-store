@@ -44,6 +44,45 @@ export interface OperationResult {
   operationId?: string;
 }
 
+export const SOURCE_JOB_DECISIONS = ['build', 'run'] as const;
+export type SourceJobDecision = (typeof SOURCE_JOB_DECISIONS)[number];
+export type SourceJobState = 'queued' | 'preparing' | 'running' | 'repairing' | 'cancelling' | 'succeeded' | 'failed' | 'cancelled';
+export type SourceTerminalStream = 'system' | 'progress' | 'stdout' | 'stderr';
+
+export const sourceJobRequestSchema = z.strictObject({
+  appId: z.string().regex(/^[a-z0-9][a-z0-9-]{0,127}$/),
+  decision: z.enum(SOURCE_JOB_DECISIONS),
+});
+
+export const sourceJobCancelRequestSchema = z.strictObject({
+  jobId: z.uuid(),
+  decision: z.literal('cancel'),
+});
+
+export const sourceTerminalEventSchema = z.strictObject({
+  jobId: z.uuid(),
+  appId: z.string().regex(/^[a-z0-9][a-z0-9-]{0,127}$/),
+  sequence: z.number().int().min(0).max(10_000),
+  at: z.iso.datetime(),
+  stream: z.enum(['system', 'progress', 'stdout', 'stderr']),
+  state: z.enum(['queued', 'preparing', 'running', 'repairing', 'cancelling', 'succeeded', 'failed', 'cancelled']),
+  text: z.string().max(2_048),
+  progress: z.number().int().min(0).max(100).nullable(),
+  final: z.boolean(),
+});
+
+export type SourceJobRequest = z.infer<typeof sourceJobRequestSchema>;
+export type SourceJobCancelRequest = z.infer<typeof sourceJobCancelRequestSchema>;
+export type SourceTerminalEvent = z.infer<typeof sourceTerminalEventSchema>;
+
+export interface SourceJobStartResult {
+  ok: boolean;
+  appId: string;
+  jobId?: string;
+  state: SourceJobState;
+  message: string;
+}
+
 export type UninstallDescriptor =
   | { kind: 'squirrel'; executable: string; arguments: ['--uninstall', '-s'] }
   | { kind: 'msi'; executable: 'msiexec.exe'; arguments: ['/x', string, '/qn', '/norestart'] }
@@ -110,6 +149,7 @@ export interface UserSettings {
   density: 'comfortable' | 'compact' | 'spacious';
   accent: string;
   displayName: string;
+  automaticRepairConsent: boolean;
 }
 
 export const TAB_IDS = ['catalog', 'installed', 'updates', 'docs', 'activity', 'settings'] as const;
@@ -576,6 +616,11 @@ export interface DingDingStoreApi {
     build(request: OperationRequest): Promise<OperationResult>;
     uninstall(request: OperationRequest): Promise<OperationResult>;
     installed(): Promise<InstalledAppRecord[]>;
+  };
+  sourceJobs: {
+    start(request: SourceJobRequest): Promise<SourceJobStartResult>;
+    cancel(request: SourceJobCancelRequest): Promise<SourceJobStartResult>;
+    subscribe(listener: (event: Readonly<SourceTerminalEvent>) => void): () => void;
   };
   updates: {
     checkCatalog(): Promise<CatalogSnapshot>;

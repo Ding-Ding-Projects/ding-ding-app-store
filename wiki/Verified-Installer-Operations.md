@@ -2,7 +2,6 @@
 
 > **Status: limited.** This wiki page is generated from the canonical categorized article.
 
-
 ## Behaviour
 
 The current installer supports only catalog records whose reviewed package type is Squirrel or MSI and whose stable release contains exactly one matching asset. The main process downloads that asset into a private per-operation staging directory, verifies the declared byte count and GitHub `sha256:` digest, runs a fixed shell-free silent argument vector, records the installed version and uninstall route after exit code 0, writes an activity result, and removes the staging directory.
