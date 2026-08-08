@@ -201,6 +201,7 @@ try {
   await writeFile(path.resolve(output), `${JSON.stringify(proof, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
   logMilestone('evidence-written');
   if (app.isReady()) app.exit(exitCode);
+  else process.exit(exitCode);
 }
 
 process.exitCode = exitCode;
