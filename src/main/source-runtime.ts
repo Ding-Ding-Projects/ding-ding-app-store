@@ -196,7 +196,7 @@ export async function probeWindowsDisposableGuest(options: WindowsSandboxProbeOp
       provider: 'windows-sandbox',
       reason: 'sandbox-executable-missing',
       checkedAt,
-      evidence: [`Expected Windows Sandbox host binary was not found at ${executable}.`],
+      evidence: ['The Windows Sandbox host binary was not found. The exact host path stays in the main process.'],
       remediation: 'Enable Windows Sandbox or provide a reviewed disposable guest adapter; never run the recipe on the host.',
     };
   }
