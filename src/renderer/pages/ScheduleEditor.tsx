@@ -4,10 +4,20 @@ import type { ScheduleRunRecord, ScheduleTaskId, ScheduleTaskStatus, ScheduledSe
 import { el } from '../el';
 import { Icon } from '../icons';
 import { clockToMinutes, formatAbsolute, formatClock, formatMinutes, formatRelative, label } from '../i18n';
-import { CATALOG_INTERVAL_PRESETS, SELF_INTERVAL_PRESETS } from '../registry';
+import { CATALOG_INTERVAL_PRESETS, SELF_INTERVAL_PRESETS, SCHEDULE_FIELDS } from '../registry';
 import type { ScheduleApi } from '../state/use-schedule';
 
 const TICK_MS = 30_000;
+
+function ScheduleExplanation({ settings, keyName, source, dirty }: { settings: UserSettings; keyName: (typeof SCHEDULE_FIELDS)[number]['key']; source: 'persisted' | 'fallback'; dirty: boolean }) {
+  const field = SCHEDULE_FIELDS.find((candidate) => candidate.key === keyName) ?? SCHEDULE_FIELDS[SCHEDULE_FIELDS.length - 1];
+  const current = dirty
+    ? label(settings, `Current value: unsaved draft; saved base was ${source === 'persisted' ? 'persisted' : `compiled fallback (${field.defaultValue})`}.`, `目前值：未儲存草稿；已儲存基礎係${source === 'persisted' ? '已儲存' : `編譯內置後備值（${field.defaultValue}）`}。`)
+    : source === 'persisted'
+      ? label(settings, 'Current value: persisted in the validated schedule file.', '目前值：已儲存喺驗證過嘅排程檔。')
+      : label(settings, `Current value: compiled fallback (${field.defaultValue}).`, `目前值：編譯內置後備值（${field.defaultValue}）。`);
+  return <details className="setting-help"><summary>{label(settings, 'What this controls', '呢個控制咩')}</summary><p>{label(settings, field.explanation.en, field.explanation.yue)}</p><p className="provenance-line">{current}</p></details>;
+}
 
 /** Re-renders the relative countdown without polling the main process. */
 function useTick(): number {
@@ -88,6 +98,7 @@ function RuleCard({ rule, settings, onChange, onRemove }: { rule: ScheduledSetti
   return (
     <div className="scheduled-rule" {...el('schedule-card')}>
       <div className="scheduled-rule-heading"><input aria-label={label(settings, 'Enable rule', '啟用規則')} type="checkbox" checked={rule.enabled} onChange={(event) => onChange({ ...rule, enabled: event.target.checked })} /><input aria-label={label(settings, 'Rule label', '規則名稱')} value={rule.label} maxLength={64} onChange={(event) => onChange({ ...rule, label: event.target.value })} /><button className="text-button" onClick={onRemove}><Icon>delete</Icon>{label(settings, 'Remove', '移除')}</button></div>
+      <details className="setting-help"><summary>{label(settings, 'What this rule controls', '呢條規則控制咩')}</summary><p>{label(settings, 'This rule temporarily changes one supported setting inside its date, time, weekday, and time-zone window. Lower priority numbers win ties; the saved base value returns when no rule matches.', '呢條規則喺指定日期、時間、星期同時區時段暫時改一個支援設定；優先次序數字越細越先，冇規則配到就返去已儲存基礎值。')}</p><p className="provenance-line">{label(settings, 'Current rule value: unsaved draft until you save this schedule.', '目前規則值：儲存排程之前都係未儲存草稿。')}</p></details>
       <div className="scheduled-rule-grid">
         <label>{label(settings, 'Setting to override', '要覆蓋嘅設定')}<select value={selectedKey} onChange={(event) => setValue(event.target.value as RuleKey, ruleValue(rule, event.target.value as RuleKey))}>{RULE_KEYS.map((key) => <option key={key} value={key}>{key}</option>)}</select></label>
         <label>{label(settings, 'Scheduled value', '排程值')}{selectedKey === 'language' ? <select value={ruleValue(rule, selectedKey)} onChange={(event) => setValue(selectedKey, event.target.value)}><option value="en">English</option><option value="yue">香港粵語</option><option value="bilingual">English + 香港粵語</option></select> : selectedKey === 'theme' ? <select value={ruleValue(rule, selectedKey)} onChange={(event) => setValue(selectedKey, event.target.value)}><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select> : selectedKey === 'density' ? <select value={ruleValue(rule, selectedKey)} onChange={(event) => setValue(selectedKey, event.target.value)}><option value="comfortable">Comfortable</option><option value="compact">Compact</option><option value="spacious">Spacious</option></select> : <input type={selectedKey.includes('FunnyLevel') ? 'number' : selectedKey === 'accent' ? 'color' : 'text'} min={1} max={5} value={ruleValue(rule, selectedKey)} onChange={(event) => setValue(selectedKey, event.target.value)} />}</label>
@@ -108,6 +119,7 @@ export function ScheduleEditor({ settings, schedule }: { settings: UserSettings;
   useTick();
   const { draft, status, dirty, saving, issues } = schedule;
   const quietSpansMidnight = draft.quietHours.endMinute < draft.quietHours.startMinute;
+  const source = status?.configSource ?? 'fallback';
   const issueFor = (field: string) => issues.find((issue) => issue.field.startsWith(field))?.message;
 
   return (
@@ -123,6 +135,7 @@ export function ScheduleEditor({ settings, schedule }: { settings: UserSettings;
             {label(settings, 'Repeat checks while running', '執行期間重複檢查')}
           </label>
         </div>
+        <ScheduleExplanation settings={settings} keyName="selfUpdate.repeatEnabled" source={source} dirty={schedule.dirty} />
         <div className="chip-row" role="group" aria-label={label(settings, 'Check interval presets', '檢查間隔預設')}>
           {SELF_INTERVAL_PRESETS.map((minutes) => (
             <button key={minutes} aria-pressed={draft.selfUpdate.intervalMinutes === minutes} onClick={() => schedule.set('selfUpdate.intervalMinutes', minutes)}>{formatMinutes(settings, minutes)}</button>
@@ -141,6 +154,7 @@ export function ScheduleEditor({ settings, schedule }: { settings: UserSettings;
           />
         </label>
         <p className="supporting">= {formatMinutes(settings, draft.selfUpdate.intervalMinutes)}</p>
+        <ScheduleExplanation settings={settings} keyName="selfUpdate.intervalMinutes" source={source} dirty={schedule.dirty} />
         {issueFor('selfUpdate') && <p className="field-error" role="alert">{issueFor('selfUpdate')}</p>}
       </div>
 
@@ -149,6 +163,7 @@ export function ScheduleEditor({ settings, schedule }: { settings: UserSettings;
         <p className="supporting">{label(settings, 'Temporarily override language, funny levels, theme, density, accent, or display name during a local date/time window. Rules are evaluated in their saved time zone; lower priority numbers win ties. Your base settings remain recoverable when a window ends.', '喺指定本地日期／時間暫時覆蓋語言、幽默程度、主題、密度、主色或者顯示名稱。規則用儲存嘅時區判斷；優先次序數字越細越先。時段完咗之後會返去原本設定。')}</p>
         {draft.rules.map((rule) => <RuleCard key={rule.id} rule={rule} settings={settings} onChange={(next) => schedule.setRules(draft.rules.map((item) => item.id === next.id ? next : item))} onRemove={() => schedule.setRules(draft.rules.filter((item) => item.id !== rule.id))} />)}
         <button className="tonal-button" onClick={() => schedule.setRules([...draft.rules, newRule()])}><Icon>add</Icon>{label(settings, 'Add scheduled setting', '加排程設定')}</button>
+        <ScheduleExplanation settings={settings} keyName="rules" source={source} dirty={schedule.dirty} />
         {issueFor('rules') && <p className="field-error" role="alert">{issueFor('rules')}</p>}
       </div>
 
@@ -163,6 +178,7 @@ export function ScheduleEditor({ settings, schedule }: { settings: UserSettings;
             {label(settings, 'Scheduled catalog refresh', '定時重新整理目錄')}
           </label>
         </div>
+        <ScheduleExplanation settings={settings} keyName="catalogRefresh.enabled" source={source} dirty={schedule.dirty} />
         <div className="chip-row" role="group" aria-label={label(settings, 'Refresh interval presets', '整理間隔預設')}>
           {CATALOG_INTERVAL_PRESETS.map((minutes) => (
             <button key={minutes} aria-pressed={draft.catalogRefresh.intervalMinutes === minutes} onClick={() => schedule.set('catalogRefresh.intervalMinutes', minutes)}>{formatMinutes(settings, minutes)}</button>
@@ -181,6 +197,7 @@ export function ScheduleEditor({ settings, schedule }: { settings: UserSettings;
           />
         </label>
         <p className="supporting">= {formatMinutes(settings, draft.catalogRefresh.intervalMinutes)}</p>
+        <ScheduleExplanation settings={settings} keyName="catalogRefresh.intervalMinutes" source={source} dirty={schedule.dirty} />
         {issueFor('catalogRefresh') && <p className="field-error" role="alert">{issueFor('catalogRefresh')}</p>}
       </div>
 
@@ -192,11 +209,14 @@ export function ScheduleEditor({ settings, schedule }: { settings: UserSettings;
             {label(settings, 'Hold corner notifications during quiet hours', '靜音期間唔彈角落通知')}
           </label>
         </div>
+        <ScheduleExplanation settings={settings} keyName="quietHours.enabled" source={source} dirty={schedule.dirty} />
         <div className="time-range">
           <label>{label(settings, 'From', '由')}<input id="schedule-quietHours-startMinute" type="time" value={formatClock(draft.quietHours.startMinute)} onChange={(event) => schedule.set('quietHours.startMinute', clockToMinutes(event.target.value))} /></label>
           <label>{label(settings, 'To', '到')}<input id="schedule-quietHours-endMinute" type="time" value={formatClock(draft.quietHours.endMinute)} onChange={(event) => schedule.set('quietHours.endMinute', clockToMinutes(event.target.value))} /></label>
           {quietSpansMidnight && <span className="quiet-badge">{label(settings, 'Spans midnight', '跨過凌晨')}</span>}
         </div>
+        <ScheduleExplanation settings={settings} keyName="quietHours.startMinute" source={source} dirty={schedule.dirty} />
+        <ScheduleExplanation settings={settings} keyName="quietHours.endMinute" source={source} dirty={schedule.dirty} />
         <div className="chip-row" role="group" aria-label={label(settings, 'Quiet hour presets', '靜音預設')}>
           <button onClick={() => { schedule.set('quietHours.startMinute', 1320); schedule.set('quietHours.endMinute', 420); }}>22:00 – 07:00</button>
           <button onClick={() => { schedule.set('quietHours.startMinute', 540); schedule.set('quietHours.endMinute', 1020); }}>09:00 – 17:00</button>

@@ -18,6 +18,8 @@ Quiet hours never delay work. They hold corner notifications, keep the update ba
 
 Settings → Schedule is a browser-style sub-tab with its own search and full regex builder. Self-update intervals range from 60 to 10,080 minutes; catalog intervals range from 30 to 10,080. Quiet hours use local minute-of-day values, may wrap midnight, and must span at least 15 minutes. The editor shows the resolved time zone and daylight-saving behavior. Save is the only operation that validates, persists, and re-arms timers; discard and reset are explicit.
 
+Every schedule control has a progressive explanation and provenance line. A validated `schedule.v1.json` value is labelled persisted; a missing or malformed file is labelled compiled fallback with the exact shipped value (`true`, `360 minutes`, `false`, `22:00`, `07:00`, or `0 rules`). Unsaved edits are labelled drafts until Save succeeds. This metadata is held in a hand-written list that fails completeness checks when a schedule field is missing an explanation or fallback.
+
 The same editor stores up to 32 versioned scheduled-setting rules. A rule can temporarily override language mode, either funny-level slider, theme, density, accent, or display name; it carries a stable id, label, priority, optional ISO start/end dates, start/end times, an explicit weekday set, and an IANA time zone. Every-day means all seven weekdays. Cross-midnight windows are evaluated as one continuous window, and matching rules resolve by ascending priority then id. The base settings remain untouched and are restored automatically when no rule matches. Schema v1 files migrate to schema v2 with an empty rule list.
 
 ## Failure modes
@@ -30,7 +32,7 @@ The renderer sends only a typed schedule document or task identifier. It never s
 
 ## Verification
 
-Focused tests cover schema bounds, quiet-hour spans, rule migration, cross-midnight and date/weekday resolution, the absence of polling timers, startup routing, updater separation, and cache-fallback failure. Type check and build cover renderer/main integration. A long-duration wall-clock soak and successful packaged self-update remain outside this article's proof.
+Focused tests cover schema bounds, quiet-hour spans, rule migration, cross-midnight and date/weekday resolution, the absence of polling timers, startup routing, updater separation, cache-fallback failure, and settings/schedule explanation completeness. Type check and build cover renderer/main integration. A long-duration wall-clock soak and successful packaged self-update remain outside this article's proof.
 
 ## Suggested articles
 

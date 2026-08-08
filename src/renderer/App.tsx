@@ -56,7 +56,7 @@ export function App() {
   const notifications = useNotifications();
   const notify = notifications.notify;
 
-  const { settings: baseSettings, save: saveSettings, patch: patchSetting } = useSettings(notify);
+  const { settings: baseSettings, provenance: settingsProvenance, save: saveSettings, patch: patchSetting } = useSettings(notify);
   const workspace = useWorkspace(notify);
   const appearance = useAppearance(notify);
   const schedule = useSchedule(notify);
@@ -659,6 +659,7 @@ export function App() {
           {activeTab === 'settings' && (
             <SettingsPage
               settings={baseSettings}
+              settingsProvenance={settingsProvenance}
               onSave={(value) => void saveSettings(value)}
               workspace={workspace}
               appearance={appearance}

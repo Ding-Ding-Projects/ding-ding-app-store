@@ -14,6 +14,8 @@ summary: Registers shell elements for validated live CSS-variable overrides with
 
 The shell, title bar, rail, tab/group rows, content, headings, search, regex builder, cards, status, buttons, chips, banner, notifications, empty states, activity, docs, settings, schedule, dialog, palette, and snackbar are registered. Destructive confirmation controls, emergency exit, and window controls are deliberately not editable or hideable.
 
+Each editable token has a keyboard-reachable **What this controls** disclosure. The explanation names the actual effect and its bounded validation. The same disclosure reports either a persisted appearance override or the exact compiled fallback (for example `system-ui`, `100%`, `140%`, `md`, `none`, or the inherited Material surface/text colour); an unset override is never described as a mysterious “default”.
+
 ## Configuration
 
 The panel has its own search and regex builder plus Colour, Shape, Type, and Layout sub-tabs. Reset one element, reset all, ten-second reset undo, JSON export, and all-or-nothing import are available. `appearance.v1.json` stores only non-empty overrides. Colour editing now includes a continuous native field with hue, saturation, lightness, alpha, HEX/HEX8, RGB/A, and HSL/A entry, an accessible contrast readout, and an explicit note for unsupported HSV/HSB, HWB, Lab/LCH, OKLab/OKLCH, and CMYK spaces. Type editing includes searchable installed/bundled family choices, size, weight, style, underline/strike, letter spacing, and line height. More advanced Word properties (variation axes, underline colour, overline, capitalization, text effects, alignment, and pseudo-state editing) remain visible as future capability rather than silently discarded, so status is limited.
@@ -28,7 +30,7 @@ The renderer uses closed custom-property names and CSSOM `setProperty`; it never
 
 ## Verification
 
-Tests cover registry completeness, export/import round-trip, HEX8 and typography validation, unknown/prototype payloads, CSS injection fuzzing, CSSOM-only application, CSS readers for new typography tokens, and command-palette reachability. Type check and build are run on this branch; packaged capture of edit mode, keyboard selection, and panel collision behavior remains pending.
+Tests cover the hand-written token explanation list, registry completeness, export/import round-trip, HEX8 and typography validation, unknown/prototype payloads, CSS injection fuzzing, CSSOM-only application, CSS readers for new typography tokens, and command-palette reachability. Type check and build are run on this branch; packaged capture of edit mode, keyboard selection, and panel collision behavior remains pending.
 
 ## Suggested articles
 

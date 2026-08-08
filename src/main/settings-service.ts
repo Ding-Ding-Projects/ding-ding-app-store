@@ -1,8 +1,10 @@
 import path from 'node:path';
+import { readFile } from 'node:fs/promises';
 import { app } from 'electron';
 import { z } from 'zod';
-import type { UserSettings } from '../shared/contracts.js';
-import { readJson, writeJsonAtomic } from './json-store.js';
+import { DEFAULT_USER_SETTINGS } from '../shared/contracts.js';
+import type { SettingsProvenance, UserSettings } from '../shared/contracts.js';
+import { writeJsonAtomic } from './json-store.js';
 
 const settingsSchema = z.object({
   language: z.enum(['en', 'yue', 'bilingual']),
@@ -15,29 +17,38 @@ const settingsSchema = z.object({
   automaticRepairConsent: z.boolean().default(false),
 });
 
-const defaults: UserSettings = {
-  language: 'bilingual',
-  englishFunnyLevel: 2,
-  cantoneseFunnyLevel: 4,
-  theme: 'system',
-  density: 'comfortable',
-  accent: '#6750A4',
-  displayName: 'Ding Ding App Store',
-  automaticRepairConsent: false,
-};
-
 export class SettingsService {
   private readonly filePath = path.join(app.getPath('userData'), 'settings.v1.json');
+  private lastProvenance: SettingsProvenance = { source: 'fallback', fallback: { ...DEFAULT_USER_SETTINGS } };
 
   async load(): Promise<UserSettings> {
-    const stored = await readJson<unknown>(this.filePath, defaults);
-    const parsed = settingsSchema.safeParse(stored);
-    return parsed.success ? parsed.data : defaults;
+    return (await this.loadWithProvenance()).settings;
+  }
+
+  async loadWithProvenance(): Promise<{ settings: UserSettings; provenance: SettingsProvenance }> {
+    try {
+      const stored = JSON.parse(await readFile(this.filePath, 'utf8')) as unknown;
+      const parsed = settingsSchema.safeParse(stored);
+      if (parsed.success) {
+        this.lastProvenance = { source: 'persisted', fallback: { ...DEFAULT_USER_SETTINGS } };
+        return { settings: parsed.data, provenance: this.lastProvenance };
+      }
+    } catch {
+      // Missing, malformed, or unreadable settings use the explicit compiled fallback below.
+    }
+    this.lastProvenance = { source: 'fallback', fallback: { ...DEFAULT_USER_SETTINGS } };
+    return { settings: { ...DEFAULT_USER_SETTINGS }, provenance: this.lastProvenance };
+  }
+
+  async provenance(): Promise<SettingsProvenance> {
+    if (!this.lastProvenance) await this.loadWithProvenance();
+    return { source: this.lastProvenance.source, fallback: { ...this.lastProvenance.fallback } };
   }
 
   async save(input: UserSettings): Promise<UserSettings> {
     const value = settingsSchema.parse(input);
     await writeJsonAtomic(this.filePath, value);
+    this.lastProvenance = { source: 'persisted', fallback: { ...DEFAULT_USER_SETTINGS } };
     return value;
   }
 }

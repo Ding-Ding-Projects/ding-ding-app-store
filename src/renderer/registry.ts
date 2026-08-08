@@ -147,6 +147,9 @@ export interface SettingField {
   en: string;
   yue: string;
   keywords: string[];
+  explanation: { en: string; yue: string };
+  /** Exact compiled fallback shown when no validated settings file is available. */
+  defaultValue: string;
   min?: number;
   max?: number;
   options?: ReadonlyArray<{ value: string; en: string; yue: string }>;
@@ -156,18 +159,20 @@ export const SETTING_FIELDS: readonly SettingField[] = [
   {
     key: 'language', section: 'general', kind: 'select', en: 'Language mode', yue: '語言模式',
     keywords: ['english', 'cantonese', 'bilingual', '粵語'],
+    explanation: { en: 'Chooses whether every user-facing label is English, playful Hong Kong Cantonese, or both. Facts and identifiers stay unchanged.', yue: '揀所有介面文字用英文、玩味香港粵語，定係兩樣一齊顯示；事實同識別資料唔會改。' }, defaultValue: 'bilingual',
     options: [
       { value: 'en', en: 'English', yue: 'English' },
       { value: 'yue', en: '香港粵語', yue: '香港粵語' },
       { value: 'bilingual', en: 'English + 香港粵語', yue: 'English + 香港粵語' },
     ],
   },
-  { key: 'englishFunnyLevel', section: 'general', kind: 'range', min: 1, max: 5, en: 'English funny level', yue: 'English 幽默程度', keywords: ['tone', 'humour', 'voice'] },
-  { key: 'cantoneseFunnyLevel', section: 'general', kind: 'range', min: 1, max: 5, en: '粵語 funny level', yue: '粵語幽默程度', keywords: ['tone', 'humour', 'voice'] },
-  { key: 'automaticRepairConsent', section: 'general', kind: 'switch', en: 'Allow isolated automatic source repair', yue: '允許隔離自動 source 修正', keywords: ['source', 'repair', 'opencode', 'consent', 'isolation'] },
+  { key: 'englishFunnyLevel', section: 'general', kind: 'range', min: 1, max: 5, en: 'English funny level', yue: 'English 幽默程度', keywords: ['tone', 'humour', 'voice'], explanation: { en: 'Styles English copy from serious (1) to maximum playful (5), including warnings and errors without changing their facts.', yue: '調校英文語氣，由嚴肅（1）到最玩味（5），連警告同錯誤都包括，但事實唔變。' }, defaultValue: '2' },
+  { key: 'cantoneseFunnyLevel', section: 'general', kind: 'range', min: 1, max: 5, en: '粵語 funny level', yue: '粵語幽默程度', keywords: ['tone', 'humour', 'voice'], explanation: { en: 'Styles Cantonese copy from serious (1) to maximum playful (5), including warnings and errors without changing their facts.', yue: '調校粵語語氣，由嚴肅（1）到最玩味（5），連警告同錯誤都包括，但事實唔變。' }, defaultValue: '4' },
+  { key: 'automaticRepairConsent', section: 'general', kind: 'switch', en: 'Allow isolated automatic source repair', yue: '允許隔離自動 source 修正', keywords: ['source', 'repair', 'opencode', 'consent', 'isolation'], explanation: { en: 'Allows OpenCode to repair a reviewed source build only inside an attested disposable guest; normal installs never use it and the app fails closed without isolation.', yue: '只容許 OpenCode 喺驗證過、一次性隔離環境修正已審核 source build；普通安裝唔會用，冇隔離就安全停低。' }, defaultValue: 'false' },
   {
     key: 'theme', section: 'appearance', kind: 'select', en: 'Theme', yue: '主題',
     keywords: ['dark', 'light', 'system'],
+    explanation: { en: 'Chooses the live Material 3 light, dark, or operating-system theme without moving app identity or data.', yue: '揀即時 Material 3 淺色、深色或者跟作業系統主題，唔會搬走 app 身份或者資料。' }, defaultValue: 'system',
     options: [
       { value: 'system', en: 'System', yue: '跟系統' },
       { value: 'light', en: 'Light', yue: '淺色' },
@@ -177,26 +182,46 @@ export const SETTING_FIELDS: readonly SettingField[] = [
   {
     key: 'density', section: 'appearance', kind: 'select', en: 'Density', yue: '密度',
     keywords: ['spacing', 'compact', 'comfortable', 'spacious'],
+    explanation: { en: 'Changes spacing and control breathing room across the UI; it does not change stored values or validation bounds.', yue: '改全個介面嘅間距同控制項呼吸位，唔會改儲存值或者驗證範圍。' }, defaultValue: 'comfortable',
     options: [
       { value: 'compact', en: 'Compact', yue: '緊湊' },
       { value: 'comfortable', en: 'Comfortable', yue: '舒適' },
       { value: 'spacious', en: 'Spacious', yue: '寬鬆' },
     ],
   },
-  { key: 'accent', section: 'appearance', kind: 'color', en: 'Accent colour', yue: '主色', keywords: ['seed', 'primary', 'colour'] },
-  { key: 'displayName', section: 'appearance', kind: 'text', en: 'Display name', yue: '顯示名稱', keywords: ['title', 'brand'] },
+  { key: 'accent', section: 'appearance', kind: 'color', en: 'Accent colour', yue: '主色', keywords: ['seed', 'primary', 'colour'], explanation: { en: 'Sets the Material seed colour used to derive interactive accents. It accepts one six-digit hexadecimal colour.', yue: '設定 Material 種子主色，用嚟衍生互動色；只接受六位十六進制顏色。' }, defaultValue: '#6750A4' },
+  { key: 'displayName', section: 'appearance', kind: 'text', en: 'Display name', yue: '顯示名稱', keywords: ['title', 'brand'], explanation: { en: 'Renames visible labels only. Package identity, update feed, application-data location, and diagnostic identity remain the shipped product values.', yue: '淨係改畫面見到嘅名稱；套件身份、更新來源、資料位置同診斷身份仍然用出廠值。' }, defaultValue: 'Ding Ding App Store' },
 ];
 
+/** Hand-written completeness list: adding a setting requires its explanation and fallback contract. */
+export const SETTINGS_EXPLANATION_KEYS = [
+  'language', 'englishFunnyLevel', 'cantoneseFunnyLevel', 'automaticRepairConsent',
+  'theme', 'density', 'accent', 'displayName',
+] as const satisfies readonly (keyof UserSettings)[];
+
 export const SCHEDULE_FIELDS = [
-  { key: 'selfUpdate.repeatEnabled', kind: 'switch', en: 'Repeat checks while running', yue: '執行期間重複檢查', keywords: ['self', 'update', 'repeat'] },
-  { key: 'selfUpdate.intervalMinutes', kind: 'minutes', en: 'App Store check interval', yue: '商店檢查間隔', keywords: ['self', 'update', 'interval'] },
-  { key: 'catalogRefresh.enabled', kind: 'switch', en: 'Scheduled catalog refresh', yue: '定時重新整理目錄', keywords: ['catalog', 'refresh'] },
-  { key: 'catalogRefresh.intervalMinutes', kind: 'minutes', en: 'Catalog refresh interval', yue: '目錄重新整理間隔', keywords: ['catalog', 'interval'] },
-  { key: 'quietHours.enabled', kind: 'switch', en: 'Quiet hours', yue: '靜音時間', keywords: ['quiet', 'notification'] },
-  { key: 'quietHours.startMinute', kind: 'time', en: 'Quiet hours start', yue: '靜音開始', keywords: ['quiet', 'start'] },
-  { key: 'quietHours.endMinute', kind: 'time', en: 'Quiet hours end', yue: '靜音結束', keywords: ['quiet', 'end'] },
-  { key: 'rules', kind: 'rules', en: 'Scheduled settings rules', yue: '排程設定規則', keywords: ['date', 'time', 'timezone', 'weekday', 'theme', 'density', 'accent', 'language', 'cross-midnight'] },
+  { key: 'selfUpdate.repeatEnabled', kind: 'switch', en: 'Repeat checks while running', yue: '執行期間重複檢查', keywords: ['self', 'update', 'repeat'], explanation: { en: 'Controls repeat self-update checks after the unavoidable startup check; turning it off does not suppress startup discovery.', yue: '控制開機必做檢查之後要唔要重複檢查；關咗都唔會跳過開機檢查。' }, defaultValue: 'true' },
+  { key: 'selfUpdate.intervalMinutes', kind: 'minutes', en: 'App Store check interval', yue: '商店檢查間隔', keywords: ['self', 'update', 'interval'], explanation: { en: 'Sets the bounded repeat interval for the store updater. It is measured in local minutes and validated before timers re-arm.', yue: '設定商店更新器重複間隔，按本地分鐘計，驗證成功先會重新啟動計時器。' }, defaultValue: '360 minutes' },
+  { key: 'catalogRefresh.enabled', kind: 'switch', en: 'Scheduled catalog refresh', yue: '定時重新整理目錄', keywords: ['catalog', 'refresh'], explanation: { en: 'Allows catalog metadata refresh on its own schedule; a manual refresh remains available when disabled.', yue: '容許目錄 metadata 按排程更新；關咗仍然可以手動更新。' }, defaultValue: 'true' },
+  { key: 'catalogRefresh.intervalMinutes', kind: 'minutes', en: 'Catalog refresh interval', yue: '目錄重新整理間隔', keywords: ['catalog', 'interval'], explanation: { en: 'Sets the catalog refresh interval. The lower bound is the cache lifetime, so shorter values are rejected.', yue: '設定目錄更新間隔；最短值係 cache 壽命，太短會拒絕。' }, defaultValue: '360 minutes' },
+  { key: 'quietHours.enabled', kind: 'switch', en: 'Quiet hours', yue: '靜音時間', keywords: ['quiet', 'notification'], explanation: { en: 'Holds corner notifications during the chosen window while checks and the persistent update banner continue.', yue: '指定時段收埋角落通知，但檢查同持續更新橫幅照樣運作。' }, defaultValue: 'false' },
+  { key: 'quietHours.startMinute', kind: 'time', en: 'Quiet hours start', yue: '靜音開始', keywords: ['quiet', 'start'], explanation: { en: 'The local start time for holding notifications. Cross-midnight windows are evaluated as one continuous span.', yue: '收埋通知嘅本地開始時間；跨凌晨時段會當一段連續時間計。' }, defaultValue: '22:00' },
+  { key: 'quietHours.endMinute', kind: 'time', en: 'Quiet hours end', yue: '靜音結束', keywords: ['quiet', 'end'], explanation: { en: 'The local end time for quiet hours. Equal start and end values are invalid rather than silently guessed.', yue: '靜音時間嘅本地結束時間；同開始一樣會視為無效，唔會亂估。' }, defaultValue: '07:00' },
+  { key: 'rules', kind: 'rules', en: 'Scheduled settings rules', yue: '排程設定規則', keywords: ['date', 'time', 'timezone', 'weekday', 'theme', 'density', 'accent', 'language', 'cross-midnight'], explanation: { en: 'Temporarily overrides supported settings from local, validated date/time rules. Base settings stay recoverable and lower priority numbers win ties.', yue: '按本地、驗證過嘅日期／時間規則暫時覆蓋支援設定；基本設定可還原，優先次序數字越細越先。' }, defaultValue: '0 rules' },
 ] as const;
+
+/** Hand-written completeness list for every schedule control exposed by ScheduleEditor. */
+export const SCHEDULE_EXPLANATION_KEYS = [
+  'selfUpdate.repeatEnabled', 'selfUpdate.intervalMinutes', 'catalogRefresh.enabled',
+  'catalogRefresh.intervalMinutes', 'quietHours.enabled', 'quietHours.startMinute',
+  'quietHours.endMinute', 'rules',
+] as const;
+
+/** Hand-written completeness list for every appearance token row. */
+export const APPEARANCE_EXPLANATION_KEYS = [
+  'background', 'foreground', 'radius', 'borderWidth', 'elevation', 'fontScale', 'fontWeight',
+  'fontFamily', 'fontStyle', 'textDecoration', 'letterSpacing', 'lineHeight', 'paddingScale',
+] as const satisfies readonly TokenId[];
 
 export type ScheduleFieldKey = (typeof SCHEDULE_FIELDS)[number]['key'];
 
@@ -226,20 +251,20 @@ export function writeScheduleField(config: ScheduleConfig, key: ScheduleFieldKey
 
 export type TokenSection = 'colour' | 'shape' | 'type' | 'layout';
 
-export const TOKEN_META: Record<TokenId, { en: string; yue: string; section: TokenSection }> = {
-  background: { en: 'Background', yue: '背景', section: 'colour' },
-  foreground: { en: 'Text colour', yue: '文字顏色', section: 'colour' },
-  radius: { en: 'Corner radius', yue: '圓角', section: 'shape' },
-  borderWidth: { en: 'Border width', yue: '邊框粗幼', section: 'shape' },
-  elevation: { en: 'Elevation', yue: '陰影層級', section: 'shape' },
-  fontScale: { en: 'Text size', yue: '字型大細', section: 'type' },
-  fontWeight: { en: 'Text weight', yue: '字重', section: 'type' },
-  fontFamily: { en: 'Font family', yue: '字型家族', section: 'type' },
-  fontStyle: { en: 'Font style', yue: '字型樣式', section: 'type' },
-  textDecoration: { en: 'Underline and strike', yue: '底線同刪除線', section: 'type' },
-  letterSpacing: { en: 'Letter spacing', yue: '字距', section: 'type' },
-  lineHeight: { en: 'Line height', yue: '行高', section: 'type' },
-  paddingScale: { en: 'Padding', yue: '內距', section: 'layout' },
+export const TOKEN_META: Record<TokenId, { en: string; yue: string; section: TokenSection; explanation: { en: string; yue: string }; defaultValue: string }> = {
+  background: { en: 'Background', yue: '背景', section: 'colour', explanation: { en: 'Overrides this element’s surface colour while preserving the Material state and contrast checks.', yue: '覆蓋呢個元素嘅表面色，但保留 Material 狀態同對比度檢查。' }, defaultValue: 'inherited Material surface' },
+  foreground: { en: 'Text colour', yue: '文字顏色', section: 'colour', explanation: { en: 'Overrides the element’s foreground colour. The editor reports contrast against its resolved background.', yue: '覆蓋元素前景色；編輯器會報告相對已解析背景嘅對比度。' }, defaultValue: 'inherited text colour' },
+  radius: { en: 'Corner radius', yue: '圓角', section: 'shape', explanation: { en: 'Chooses the element’s bounded corner shape without changing its hit target.', yue: '揀元素有限範圍嘅圓角形狀，唔會改點擊範圍。' }, defaultValue: 'md' },
+  borderWidth: { en: 'Border width', yue: '邊框粗幼', section: 'shape', explanation: { en: 'Sets the visible outline width in pixels; zero means no custom outline.', yue: '設定可見輪廓嘅像素粗幼；零即係唔加自訂輪廓。' }, defaultValue: '0px' },
+  elevation: { en: 'Elevation', yue: '陰影層級', section: 'shape', explanation: { en: 'Chooses the Material elevation treatment for this element.', yue: '揀呢個元素嘅 Material 陰影層級。' }, defaultValue: 'none' },
+  fontScale: { en: 'Text size', yue: '字型大細', section: 'type', explanation: { en: 'Scales text for this element from 75% to 150%; it does not change the app-wide density.', yue: '將呢個元素文字縮放 75% 至 150%，唔會改全 app 密度。' }, defaultValue: '100%' },
+  fontWeight: { en: 'Text weight', yue: '字重', section: 'type', explanation: { en: 'Selects the supported font weight used by this element.', yue: '揀呢個元素支援嘅字重。' }, defaultValue: '400' },
+  fontFamily: { en: 'Font family', yue: '字型家族', section: 'type', explanation: { en: 'Selects an installed or bundled family; unsupported names are rejected rather than silently saved.', yue: '揀已安裝或者內置字型；唔支援嘅名稱會拒絕，唔會靜默儲存。' }, defaultValue: 'system-ui' },
+  fontStyle: { en: 'Font style', yue: '字型樣式', section: 'type', explanation: { en: 'Chooses normal, italic, or oblique style for this element.', yue: '揀呢個元素用正常、斜體或者傾斜樣式。' }, defaultValue: 'normal' },
+  textDecoration: { en: 'Underline and strike', yue: '底線同刪除線', section: 'type', explanation: { en: 'Applies the supported underline and/or line-through decoration without changing text content.', yue: '套用支援嘅底線／刪除線，唔會改文字內容。' }, defaultValue: 'none' },
+  letterSpacing: { en: 'Letter spacing', yue: '字距', section: 'type', explanation: { en: 'Adjusts tracking in tenths of an em, bounded to keep layouts readable.', yue: '以十分之一 em 調整字距，有限制避免版面失控。' }, defaultValue: '0/10em' },
+  lineHeight: { en: 'Line height', yue: '行高', section: 'type', explanation: { en: 'Sets line height from 80% to 240% for this element’s text.', yue: '設定呢個元素文字行高 80% 至 240%。' }, defaultValue: '140%' },
+  paddingScale: { en: 'Padding', yue: '內距', section: 'layout', explanation: { en: 'Scales the element’s internal spacing from 50% to 200% while retaining its content.', yue: '將元素內距縮放 50% 至 200%，保留入面內容。' }, defaultValue: '100%' },
 };
 
 export const TOKEN_SECTIONS: ReadonlyArray<{ id: TokenSection; en: string; yue: string }> = [

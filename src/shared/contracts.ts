@@ -199,6 +199,25 @@ export interface UserSettings {
   automaticRepairConsent: boolean;
 }
 
+/** The compiled-in settings are a public contract: every settings explanation names these values. */
+export const DEFAULT_USER_SETTINGS: UserSettings = {
+  language: 'bilingual',
+  englishFunnyLevel: 2,
+  cantoneseFunnyLevel: 4,
+  theme: 'system',
+  density: 'comfortable',
+  accent: '#6750A4',
+  displayName: 'Ding Ding App Store',
+  automaticRepairConsent: false,
+};
+
+export type SettingsValueSource = 'persisted' | 'fallback';
+export interface SettingsProvenance {
+  source: SettingsValueSource;
+  /** The exact compiled fallback shown when source is fallback. */
+  fallback: UserSettings;
+}
+
 export const TAB_IDS = ['catalog', 'installed', 'updates', 'docs', 'activity', 'settings'] as const;
 export type TabId = (typeof TAB_IDS)[number];
 export const tabIdSchema = z.enum(TAB_IDS);
@@ -697,6 +716,8 @@ export interface ScheduleNotice {
 
 export interface ScheduleStatus {
   config: ScheduleConfig;
+  /** Whether the active configuration came from a validated file or DEFAULT_SCHEDULE. */
+  configSource: SettingsValueSource;
   tasks: Record<ScheduleTaskId, ScheduleTaskStatus>;
   startupCheck: ScheduleRunRecord | null;
   quietHours: { active: boolean; timeZone: string; nextChangeAt: string | null; heldSinceQuietStart: number };
@@ -761,6 +782,7 @@ export interface DingDingStoreApi {
   settings: {
     load(): Promise<UserSettings>;
     save(settings: UserSettings): Promise<UserSettings>;
+    provenance(): Promise<SettingsProvenance>;
   };
   history: {
     list(): Promise<HistoryEntry[]>;
