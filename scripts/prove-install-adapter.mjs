@@ -83,7 +83,8 @@ function withProofTimeout(work, label) {
     timer = setTimeout(() => {
       timedOut = true;
       logMilestone('timeout', `label=${label} phase=${lastPhase}`);
-      void operationService?.cancel({ appId }).catch(() => undefined);
+      const cancellation = operationService?.cancel({ appId });
+      if (cancellation) void cancellation.catch(() => undefined);
       reject(new Error(`Install proof exceeded its ${Math.round(proofTimeoutMs / 60_000)}-minute safety limit during ${label}.`));
     }, remaining);
   });
@@ -177,6 +178,21 @@ try {
   exitCode = 1;
 } finally {
   clearInterval(heartbeat);
+  if (!proof) {
+    proof = {
+      schemaVersion: PROOF_SCHEMA,
+      appId,
+      runner: { os: process.platform, architecture: process.arch, image: 'windows-2022' },
+      sourceRuntimeInvoked: false,
+      startedAt,
+      completedAt: new Date().toISOString(),
+      timedOut,
+      milestones,
+      progress: events,
+      verdict: false,
+      error: 'The proof exited before it could produce a result.',
+    };
+  }
   await writeFile(path.resolve(output), `${JSON.stringify(proof, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
   logMilestone('evidence-written');
   if (app.isReady()) app.exit(exitCode);
