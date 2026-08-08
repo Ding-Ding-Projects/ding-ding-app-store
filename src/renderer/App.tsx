@@ -60,7 +60,12 @@ export function App() {
   const workspace = useWorkspace(notify);
   const appearance = useAppearance(notify);
   const schedule = useSchedule(notify);
-  const settings = useMemo(() => resolveScheduledSettings(baseSettings, schedule.draft), [baseSettings, schedule.draft]);
+  const [scheduleClock, setScheduleClock] = useState(0);
+  useEffect(() => {
+    const handle = window.setTimeout(() => setScheduleClock((value) => value + 1), 30_000);
+    return () => window.clearTimeout(handle);
+  }, [scheduleClock]);
+  const settings = useMemo(() => resolveScheduledSettings(baseSettings, schedule.draft), [baseSettings, schedule.draft, scheduleClock]);
   const search = useSearchStates();
   useAppearanceVars(appearance.elements);
 
