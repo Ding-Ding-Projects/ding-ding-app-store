@@ -46,6 +46,21 @@ describe('GitHub-hosted workflow and bootstrap contract', () => {
     expect(release).not.toMatch(/gh release create[^\n]*\$dish\.(?:assetName|photoUrl)/);
   });
 
+  it('generates and reconciles the bounded current-release changelog without a repository loop', async () => {
+    const release = await read('.github/workflows/release.yml');
+    const tag = release.indexOf('- name: Compute unique release tag');
+    const generate = release.indexOf('- name: Generate bounded in-app release manifest');
+    const build = release.indexOf('- name: Build renderer, main process, and preload');
+    expect(tag).toBeGreaterThan(-1);
+    expect(generate).toBeGreaterThan(tag);
+    expect(build).toBeGreaterThan(generate);
+    expect(release).toContain("gh api --paginate --slurp \"repos/$env:GITHUB_REPOSITORY/releases?per_page=100\"");
+    expect(release).toContain('scripts/generate-release-changelog.mjs');
+    expect(release).toContain('--reconcile');
+    expect(release).toContain('release-changelog.json');
+    expect(release).not.toMatch(/git\s+(?:add|commit|push)\b/);
+  });
+
   it('compares generated documentation independently of checkout line endings', async () => {
     const generator = await read('scripts/docs-generate.mjs');
     expect(generator).toContain("replaceAll('\\r\\n', '\\n')");
