@@ -43,6 +43,32 @@ describe('global renderer UI completion', () => {
     expect(aboutRowBody({ en: 'Licence', body: 'Apache-2.0.' }, 'My Store')).toBe('Apache-2.0.');
   });
 
+  it('routes settings and palette colour controls through the continuous translator', async () => {
+    const [settingsPage, palette, control, appearancePanel, scheduleEditor, settingsService, contracts] = await Promise.all([
+      read('src/renderer/pages/SettingsPage.tsx'),
+      read('src/renderer/components/CommandPalette.tsx'),
+      read('src/renderer/components/ColorTranslatorControl.tsx'),
+      read('src/renderer/components/AppearancePanel.tsx'),
+      read('src/renderer/pages/ScheduleEditor.tsx'),
+      read('src/main/settings-service.ts'),
+      read('src/shared/contracts.ts'),
+    ]);
+    expect(settingsPage).toContain("import { ColorTranslatorControl } from '../components/ColorTranslatorControl';");
+    expect(settingsPage).toContain('id={id}');
+    expect(settingsPage).not.toContain('type="color"');
+    expect(palette).toContain('<ColorTranslatorControl');
+    expect(palette).not.toContain('command-inline-control command-inline-color');
+    expect(appearancePanel).toContain('<ColorTranslatorControl');
+    expect(appearancePanel).not.toContain('type="color"');
+    expect(scheduleEditor).toContain('<ColorTranslatorControl');
+    expect(scheduleEditor).not.toContain('type="color"');
+    expect(control).toContain('COLOR_SPACES');
+    expect(control).toContain('HEX / HEX8');
+    expect(control).toContain('Alpha');
+    expect(settingsService).toContain('(?:[0-9a-fA-F]{2})?');
+    expect(contracts).toContain('(?:[0-9a-fA-F]{2})?$/).optional()');
+  });
+
   it('rejects changelog rows whose commit SHA is missing or shortened', () => {
     expect(validateChangelog([{ ...CHANGELOG_ENTRIES[0], commit: 'b4a94f3' }])).toContain(`${CHANGELOG_ENTRIES[0].version} is missing a full commit SHA.`);
   });

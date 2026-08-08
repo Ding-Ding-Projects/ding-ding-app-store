@@ -20,6 +20,7 @@ import { ChangelogViewer } from './ChangelogViewer';
 import { downloadText } from '../files';
 import { serializeStructuredExport } from '../../shared/export-registry';
 import { isExternalEditorBridgeAvailable, openExportInVsCode } from '../external-editor';
+import { ColorTranslatorControl } from '../components/ColorTranslatorControl';
 
 const ABOUT_ROWS = [
   { en: 'Version', yue: '版本', body: 'Ding Ding App Store preview 0.1.0.' },
@@ -102,7 +103,7 @@ export function SettingsPage({ settings, settingsProvenance, onSave, workspace, 
       return <div className="setting-field" key={field.key}><label htmlFor={id}>{text} <span>{String(draft[field.key])}</span><input id={id} type="range" min={field.min} max={field.max} value={Number(draft[field.key])} onChange={(event) => set(field.key, Number(event.target.value) as UserSettings[typeof field.key])} /></label>{explanation}</div>;
     }
     if (field.kind === 'color') {
-      return <div className="setting-field" key={field.key}><label htmlFor={id}>{text}<input id={id} type="color" value={String(draft[field.key])} onChange={(event) => set(field.key, event.target.value as UserSettings[typeof field.key])} /></label>{explanation}</div>;
+      return <div className="setting-field" key={field.key}><ColorTranslatorControl id={id} settings={settings} value={String(draft[field.key])} labelText={text} onChange={(next) => set(field.key, next as UserSettings[typeof field.key])} />{explanation}</div>;
     }
     if (field.kind === 'switch') {
       return <div className="setting-field" key={field.key}><label htmlFor={id} className="switch-row"><input id={id} type="checkbox" checked={Boolean(draft[field.key])} onChange={(event) => set(field.key, event.target.checked as UserSettings[typeof field.key])} /><span>{text}</span></label>{explanation}</div>;

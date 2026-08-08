@@ -11,7 +11,7 @@ import type { TokenSection } from '../registry';
 import { makeMatcher, useSurfaceSearch } from '../search';
 import type { AppearanceApi } from '../state/use-appearance';
 import { SearchBox } from './SearchBox';
-import { COLOR_SPACES, parseColor, toHex, translate, type ColorSpace } from '../color-translator';
+import { ColorTranslatorControl } from './ColorTranslatorControl';
 
 const ON_LIGHT = '#1d1b20';
 const ON_DARK = '#ffffff';
@@ -139,23 +139,6 @@ function SettingExplanation({ settings, explanation, persisted, fallback }: { se
 
 function ColorField({ token, value, settings, onChange }: { token: TokenId; value: ColorValue | undefined; settings: UserSettings; onChange(next: ColorValue | undefined): void }) {
   const hex = value?.kind === 'hex' ? value.hex : '#6750a4';
-  const [hexText, setHexText] = useState(hex);
-  const [invalid, setInvalid] = useState<string | null>(null);
-  const [clipped, setClipped] = useState(false);
-  const current = parseColor(hex, 'hex') ?? { r: 0.4, g: 0.31, b: 0.64, a: 1 };
-  const hslParts = translate(current, 'hsl').text.match(/hsl\(([-\d.]+) ([-\d.]+)% ([-\d.]+)%/);
-  const hue = Number(hslParts?.[1] ?? 0); const saturation = Number(hslParts?.[2] ?? 0); const lightness = Number(hslParts?.[3] ?? 0);
-  const values = useMemo(() => Object.fromEntries(COLOR_SPACES.map((space) => [space, translate(current, space).text])) as Record<ColorSpace, string>, [current.r, current.g, current.b, current.a]);
-  useEffect(() => setHexText(hex), [hex]);
-  const emit = (space: ColorSpace, text: string) => {
-    const parsed = parseColor(text, space);
-    if (!parsed) { setInvalid(space); return; }
-    setInvalid(null);
-    const wasClipped = parsed.r < 0 || parsed.r > 1 || parsed.g < 0 || parsed.g > 1 || parsed.b < 0 || parsed.b > 1;
-    setClipped(wasClipped);
-    onChange({ kind: 'hex', hex: toHex({ r: Math.min(1, Math.max(0, parsed.r)), g: Math.min(1, Math.max(0, parsed.g)), b: Math.min(1, Math.max(0, parsed.b)), a: parsed.a }) });
-  };
-  const copy = (text: string) => void navigator.clipboard?.writeText(text);
   return (
     <div className="appearance-token-row">
       <span className="token-name">{label(settings, TOKEN_META[token].en, TOKEN_META[token].yue)}</span>
@@ -176,22 +159,7 @@ function ColorField({ token, value, settings, onChange }: { token: TokenId; valu
           <option value="custom">{label(settings, 'Fixed colour', '固定顏色')}</option>
         </select>
       </label>
-      {value?.kind === 'hex' && (
-        <>
-          <label>{label(settings, 'Continuous colour field', '連續色彩場')}<input type="color" value={hex.slice(0, 7)} aria-label={label(settings, 'Continuous colour field', '連續色彩場')} onChange={(event) => emit('hex', `${event.target.value}${hex.length === 9 ? hex.slice(7) : ''}`)} /></label>
-          <div className="color-spectrum" role="group" aria-label={label(settings, 'Continuous colour controls', '連續色彩控制')}>
-            <label>{label(settings, 'Hue', '色相')}<input type="range" min="0" max="360" value={hue} onChange={(event) => emit('hsl', `hsl(${event.target.value} ${saturation}% ${lightness}% / ${Math.round(current.a * 100)}%)`)} /></label>
-            <label>{label(settings, 'Saturation', '飽和度')}<input type="range" min="0" max="100" value={saturation} onChange={(event) => emit('hsl', `hsl(${hue} ${event.target.value}% ${lightness}% / ${Math.round(current.a * 100)}%)`)} /></label>
-            <label>{label(settings, 'Lightness', '亮度')}<input type="range" min="0" max="100" value={lightness} onChange={(event) => emit('hsl', `hsl(${hue} ${saturation}% ${event.target.value}% / ${Math.round(current.a * 100)}%)`)} /></label>
-            <label>{label(settings, 'Alpha', '透明度')}<input type="range" min="0" max="100" value={Math.round(current.a * 100)} aria-valuetext={`${Math.round(current.a * 100)}%`} onChange={(event) => emit('rgb', `rgb(${current.r * 255} ${current.g * 255} ${current.b * 255} / ${event.target.value}%)`)} /></label>
-          </div>
-          <label>{label(settings, 'HEX / HEX8', 'HEX / HEX8')}<input value={hexText} maxLength={9} aria-invalid={invalid === 'hex'} onChange={(event) => { setHexText(event.target.value); emit('hex', event.target.value); }} /><button type="button" className="text-button" onClick={() => copy(hexText)}>{label(settings, 'Copy', '複製')}</button></label>
-          {COLOR_SPACES.filter((space) => space !== 'hex').map((space) => <label key={space}>{space.toUpperCase()}<input value={values[space]} aria-invalid={invalid === space} onChange={(event) => emit(space, event.target.value)} /><button type="button" className="text-button" aria-label={label(settings, `Copy ${space} value`, `複製 ${space} 數值`)} onClick={() => copy(values[space])}>{label(settings, 'Copy', '複製')}</button></label>)}
-          {invalid && <p className="notice warning" role="alert">{label(settings, `Invalid ${invalid} colour; enter a bounded value.`, `${invalid} 顏色無效；請輸入有限制嘅值。`)}</p>}
-          {clipped && <p className="notice warning" role="status">{label(settings, 'The colour was outside the sRGB gamut and was clipped before saving.', '顏色超出 sRGB 色域，儲存前已裁切。')}</p>}
-          <p className="supporting">{label(settings, 'All representations round-trip through canonical HEX/HEX8 with alpha. Named input uses the bounded CSS-name set shown by this editor. The CSS sink accepts only validated HEX/HEX8 or theme roles.', '所有表示都會連同透明度雙向轉換成標準 HEX/HEX8。名稱輸入只用呢個編輯器列出嘅有限 CSS 顏色名。CSS 只接受已驗證 HEX/HEX8 或主題角色。')}</p>
-        </>
-      )}
+      {value?.kind === 'hex' && <ColorTranslatorControl settings={settings} value={hex} labelText={label(settings, TOKEN_META[token].en, TOKEN_META[token].yue)} onChange={(next) => onChange({ kind: 'hex', hex: next })} />}
     </div>
   );
 }
@@ -297,7 +265,7 @@ function VariationAxesField({ value, settings, onChange }: { value: Record<strin
 function TextShadowField({ value, settings, onChange }: { value: { x: number; y: number; blur: number; color: ColorValue } | undefined; settings: UserSettings; onChange(next: { x: number; y: number; blur: number; color: ColorValue } | undefined): void }) {
   const current = value ?? { x: 0, y: 0, blur: 0, color: { kind: 'hex' as const, hex: '#00000080' } };
   const shadowHex = current.color.kind === 'hex' ? current.color.hex : '#000000';
-  return <div className="appearance-token-row"><span className="token-name">{label(settings, TOKEN_META.textShadow.en, TOKEN_META.textShadow.yue)}</span><SettingExplanation settings={settings} explanation={TOKEN_META.textShadow.explanation} persisted={value !== undefined} fallback={TOKEN_META.textShadow.defaultValue} /><div className="chip-row"><label>{label(settings, 'X', 'X')}<input type="number" min={-20} max={20} value={current.x} onChange={(event) => onChange({ ...current, x: Number(event.target.value) })} /></label><label>{label(settings, 'Y', 'Y')}<input type="number" min={-20} max={20} value={current.y} onChange={(event) => onChange({ ...current, y: Number(event.target.value) })} /></label><label>{label(settings, 'Blur', '模糊')}<input type="number" min={0} max={40} value={current.blur} onChange={(event) => onChange({ ...current, blur: Number(event.target.value) })} /></label><label>{label(settings, 'Shadow colour', '陰影顏色')}<input type="color" value={shadowHex.slice(0, 7)} onChange={(event) => onChange({ ...current, color: { kind: 'hex', hex: event.target.value } })} /></label></div><button className="text-button" type="button" onClick={() => onChange(undefined)}>{label(settings, 'Use default', '用預設')}</button></div>;
+  return <div className="appearance-token-row"><span className="token-name">{label(settings, TOKEN_META.textShadow.en, TOKEN_META.textShadow.yue)}</span><SettingExplanation settings={settings} explanation={TOKEN_META.textShadow.explanation} persisted={value !== undefined} fallback={TOKEN_META.textShadow.defaultValue} /><div className="chip-row"><label>{label(settings, 'X', 'X')}<input type="number" min={-20} max={20} value={current.x} onChange={(event) => onChange({ ...current, x: Number(event.target.value) })} /></label><label>{label(settings, 'Y', 'Y')}<input type="number" min={-20} max={20} value={current.y} onChange={(event) => onChange({ ...current, y: Number(event.target.value) })} /></label><label>{label(settings, 'Blur', '模糊')}<input type="number" min={0} max={40} value={current.blur} onChange={(event) => onChange({ ...current, blur: Number(event.target.value) })} /></label></div><ColorTranslatorControl settings={settings} value={shadowHex} labelText={label(settings, 'Shadow colour', '陰影顏色')} onChange={(next) => onChange({ ...current, color: { kind: 'hex', hex: next } })} /><button className="text-button" type="button" onClick={() => onChange(undefined)}>{label(settings, 'Use default', '用預設')}</button></div>;
 }
 
 export function AppearancePanel({ appearance, settings, notify, onClose }: {

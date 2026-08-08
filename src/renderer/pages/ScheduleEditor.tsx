@@ -6,6 +6,7 @@ import { Icon } from '../icons';
 import { clockToMinutes, formatAbsolute, formatClock, formatMinutes, formatRelative, label } from '../i18n';
 import { CATALOG_INTERVAL_PRESETS, SELF_INTERVAL_PRESETS, SCHEDULE_FIELDS } from '../registry';
 import type { ScheduleApi } from '../state/use-schedule';
+import { ColorTranslatorControl } from '../components/ColorTranslatorControl';
 
 const TICK_MS = 30_000;
 
@@ -91,7 +92,7 @@ function RuleCard({ rule, sourceStatus, settings, onChange, onRemove }: { rule: 
     else if (key === 'language') values[key] = value as ScheduledSettingRule['values']['language'];
     else if (key === 'theme') values[key] = value as ScheduledSettingRule['values']['theme'];
     else if (key === 'density') values[key] = value as ScheduledSettingRule['values']['density'];
-    else if (key === 'accent') values[key] = /^#[0-9a-f]{6}$/i.test(value) ? value : '#6750A4';
+    else if (key === 'accent') values[key] = /^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/i.test(value) ? value : '#6750A4';
     else values[key] = value.trim().slice(0, 64) || 'Ding Ding App Store';
     onChange({ ...rule, values });
   };
@@ -102,7 +103,7 @@ function RuleCard({ rule, sourceStatus, settings, onChange, onRemove }: { rule: 
       <details className="setting-help"><summary>{label(settings, 'What this rule controls', '呢條規則控制咩')}</summary><p>{label(settings, 'This rule temporarily changes one supported setting inside its date, time, weekday, and time-zone window. Lower priority numbers win ties; the saved base value returns when no rule matches.', '呢條規則喺指定日期、時間、星期同時區時段暫時改一個支援設定；優先次序數字越細越先，冇規則配到就返去已儲存基礎值。')}</p><p className="provenance-line">{label(settings, 'Current rule value: unsaved draft until you save this schedule.', '目前規則值：儲存排程之前都係未儲存草稿。')}</p></details>
       <div className="scheduled-rule-grid">
         <label>{label(settings, 'Setting to override', '要覆蓋嘅設定')}<select value={selectedKey} onChange={(event) => setValue(event.target.value as RuleKey, ruleValue(rule, event.target.value as RuleKey))}>{RULE_KEYS.map((key) => <option key={key} value={key}>{key}</option>)}</select></label>
-        <label>{label(settings, 'Scheduled value', '排程值')}{selectedKey === 'language' ? <select value={ruleValue(rule, selectedKey)} onChange={(event) => setValue(selectedKey, event.target.value)}><option value="en">English</option><option value="yue">香港粵語</option><option value="bilingual">English + 香港粵語</option></select> : selectedKey === 'theme' ? <select value={ruleValue(rule, selectedKey)} onChange={(event) => setValue(selectedKey, event.target.value)}><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select> : selectedKey === 'density' ? <select value={ruleValue(rule, selectedKey)} onChange={(event) => setValue(selectedKey, event.target.value)}><option value="comfortable">Comfortable</option><option value="compact">Compact</option><option value="spacious">Spacious</option></select> : <input type={selectedKey.includes('FunnyLevel') ? 'number' : selectedKey === 'accent' ? 'color' : 'text'} min={1} max={5} value={ruleValue(rule, selectedKey)} onChange={(event) => setValue(selectedKey, event.target.value)} />}</label>
+        <label>{label(settings, 'Scheduled value', '排程值')}{selectedKey === 'language' ? <select value={ruleValue(rule, selectedKey)} onChange={(event) => setValue(selectedKey, event.target.value)}><option value="en">English</option><option value="yue">香港粵語</option><option value="bilingual">English + 香港粵語</option></select> : selectedKey === 'theme' ? <select value={ruleValue(rule, selectedKey)} onChange={(event) => setValue(selectedKey, event.target.value)}><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select> : selectedKey === 'density' ? <select value={ruleValue(rule, selectedKey)} onChange={(event) => setValue(selectedKey, event.target.value)}><option value="comfortable">Comfortable</option><option value="compact">Compact</option><option value="spacious">Spacious</option></select> : selectedKey === 'accent' ? <ColorTranslatorControl settings={settings} value={ruleValue(rule, selectedKey) || '#6750A4'} labelText={label(settings, 'Scheduled accent', '排程主色')} onChange={(next) => setValue(selectedKey, next)} /> : <input type={selectedKey.includes('FunnyLevel') ? 'number' : 'text'} min={1} max={5} value={ruleValue(rule, selectedKey)} onChange={(event) => setValue(selectedKey, event.target.value)} />}</label>
         <label>{label(settings, 'Start date (optional)', '開始日期（可留空）')}<input type="date" value={rule.startDate ?? ''} onChange={(event) => onChange({ ...rule, startDate: event.target.value || null })} /></label>
         <label>{label(settings, 'End date (optional)', '結束日期（可留空）')}<input type="date" value={rule.endDate ?? ''} onChange={(event) => onChange({ ...rule, endDate: event.target.value || null })} /></label>
         <label>{label(settings, 'From', '由')}<input type="time" value={formatClock(rule.startMinute)} onChange={(event) => onChange({ ...rule, startMinute: clockToMinutes(event.target.value) })} /></label>

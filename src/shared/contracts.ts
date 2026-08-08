@@ -831,7 +831,7 @@ const scheduledSettingsValuesSchema = z.object({
   cantoneseFunnyLevel: z.number().int().min(1).max(5).optional(),
   theme: z.enum(['system', 'light', 'dark']).optional(),
   density: z.enum(['comfortable', 'compact', 'spacious']).optional(),
-  accent: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  accent: z.string().regex(/^#[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?$/).optional(),
   displayName: z.string().trim().min(1).max(64).optional(),
 }).strict().refine((value) => Object.keys(value).length > 0, 'Choose at least one setting to schedule.');
 

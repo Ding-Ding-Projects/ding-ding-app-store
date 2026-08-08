@@ -196,7 +196,7 @@ export const SETTING_FIELDS: readonly SettingField[] = [
       { value: 'spacious', en: 'Spacious', yue: '寬鬆' },
     ],
   },
-  { key: 'accent', section: 'appearance', kind: 'color', en: 'Accent colour', yue: '主色', keywords: ['seed', 'primary', 'colour'], explanation: { en: 'Sets the Material seed colour used to derive interactive accents. It accepts one six-digit hexadecimal colour.', yue: '設定 Material 種子主色，用嚟衍生互動色；只接受六位十六進制顏色。' }, defaultValue: '#6750A4' },
+  { key: 'accent', section: 'appearance', kind: 'color', en: 'Accent colour', yue: '主色', keywords: ['seed', 'primary', 'colour', 'alpha', 'hex8', 'rgb', 'hsl'], explanation: { en: 'Sets the Material seed colour used to derive interactive accents. It accepts HEX/HEX8 and the full bounded colour translator, preserving alpha when the CSS sink supports it.', yue: '設定 Material 種子主色，用嚟衍生互動色；接受 HEX/HEX8 同完整有限制色彩轉換器，CSS 支援時保留透明度。' }, defaultValue: '#6750A4' },
   { key: 'displayName', section: 'appearance', kind: 'text', en: 'Display name', yue: '顯示名稱', keywords: ['title', 'brand'], explanation: { en: 'Renames visible labels only. Package identity, update feed, application-data location, and diagnostic identity remain the shipped product values.', yue: '淨係改畫面見到嘅名稱；套件身份、更新來源、資料位置同診斷身份仍然用出廠值。' }, defaultValue: 'Ding Ding App Store' },
 ];
 
