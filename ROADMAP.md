@@ -15,19 +15,19 @@
 - [x] Truthful shared export registry: 18 history formats with UTF-8/LF/schema metadata, including bounded re-importable ZIP archives; nested documents remain complete JSON
 - [x] One-click install/source-install dispatch with strict catalog-ID and typed-decision boundary; destructive uninstall confirmation unchanged
 - [x] Closed release-adapter coverage for all 24 catalog records: 21 source-proven Windows routes and three explicit external blockers
-- [ ] Execute and launch every supported adapter on disposable clean-Windows profiles through `.github/workflows/install-adapter-proof.yml` (portable ZIP lane now covers `dim-sum-atlas`, `winforge`, and `wimforge`); resolve the missing WinSshCopyId release, empty Photo Viewer release, and authorized Home Assistant target
+- [ ] Execute and launch every supported adapter on disposable clean-Windows profiles through `.github/workflows/install-adapter-proof.yml` (portable ZIP lane now verifies `dim-sum-atlas` end to end on `windows-2022`; `winforge` and `wimforge` remain pending); resolve the missing WinSshCopyId release, empty Photo Viewer release, and authorized Home Assistant target
 - [ ] Complete source-build execution only after a real hard-disposable broker exists; keep bounded OpenCode repair and its current host refusal intact
 - [x] Generated offline catalog metadata for every reviewed catalog application, with stable IDs, public source links, adapter/blocker state, canonical boundary links, wiki/site mirrors, command-palette reachability, and fail-closed completeness coverage
 - [x] Local operation history: every install/build/uninstall outcome recorded, filterable by action/result/date, exported as 18 truthful formats including re-importable ZIP
 - [x] Local version browser: bounded Git snapshots with diff, labels, and explicit before/after restore revisions for App Store-owned state
-- [x] Persistent tab rail with left/right/top/bottom docking, pinning, grouping, overflow, four independent regex-backed tab searches, reversible bulk close/reopen, and full keyboard control
+- [x] Persistent tab rail with left/right/top/bottom docking, pinning, grouping, overflow, four independent regex-backed tab searches, searchable Move… into group… picker, reversible bulk close/reopen, and full keyboard control
 - [x] Independent search state and a full regex builder on every surface, including the command palette
 - [x] Per-element appearance editor with live preview, reset, export, and import
 - [x] Update schedule editor with last-run/next-run reporting and quiet hours
 - [x] Optional renderer-only notification narrator: persisted opt-in, English/Hong Kong Cantonese/both serialized delivery, stale queue replacement, category cooldowns, and quiet/reduced-sound accessibility yielding
 - [ ] Packaged-artifact hidden-desktop interaction and accessibility proof
 - [x] CI and release automation on pinned GitHub-hosted cloud runners (`windows-2022` for checks, packaging, and publication; `ubuntu-24.04` for Pages)
-- [x] Unsigned Squirrel.Windows release, verified end to end: [`v0.1.0-284-1`](https://github.com/Ding-Ding-Projects/ding-ding-app-store/releases/tag/v0.1.0-284-1) targets `c3d9a0d`, is non-draft, `Setup.exe` is confirmed `NotSigned`, and the release includes `RELEASES`, a full `.nupkg`, and `release-changelog.json`
+- [x] Unsigned Squirrel.Windows release, verified end to end: [`v0.1.0-740-1`](https://github.com/Ding-Ding-Projects/ding-ding-app-store/releases/tag/v0.1.0-740-1) targets `5f2fa4e`, is non-draft, `Setup.exe` is confirmed `NotSigned`, and the release includes `RELEASES`, a full `.nupkg`, and `release-changelog.json`
 - [x] Documentation deployment: [`https://ding-ding-projects.github.io/ding-ding-app-store/`](https://ding-ding-projects.github.io/ding-ding-app-store/) is live and verified serving the real site
 - [ ] Working update-feed proof (the self-updater code exists, but a clean-Windows restart/install cycle against the published unsigned feed still needs runtime evidence)
 
