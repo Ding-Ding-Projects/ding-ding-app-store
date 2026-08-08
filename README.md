@@ -5,7 +5,7 @@ Material Design 3 desktop software center for discovering, documenting, installi
 `npm install && npm start`
 
 **Documentation site:** <https://ding-ding-projects.github.io/ding-ding-app-store/><br>
-**Current state:** active development; the latest verified unsigned Windows release is [`v0.1.0-462-1`](https://github.com/Ding-Ding-Projects/ding-ding-app-store/releases/tag/v0.1.0-462-1), code-named **Crab Roe Soup Dumplings · 蟹粉小籠包**. Newer verified builds are listed on the [releases page](https://github.com/Ding-Ding-Projects/ding-ding-app-store/releases).
+**Current state:** active development; the latest verified unsigned Windows release is [`v0.1.0-492-1`](https://github.com/Ding-Ding-Projects/ding-ding-app-store/releases/tag/v0.1.0-492-1), code-named **White Chocolate Custard Bao · 白朱古力奶黃包**. Newer verified builds are listed on the [releases page](https://github.com/Ding-Ding-Projects/ding-ding-app-store/releases).
 
 ## Contents
 
