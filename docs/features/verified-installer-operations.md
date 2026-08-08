@@ -2,11 +2,11 @@
 
 ## Behaviour
 
-An install starts from a catalog record that names an immutable release asset, expected version, platform, and integrity metadata. The operation downloads to a controlled staging location, validates the downloaded bytes against release metadata, shows progress in the operation surface, and reports the installed version only after the installer exits successfully.
+Selecting **Install** or **Reinstall** starts the catalog-owned operation immediately; there is no typed-phrase confirmation because installation is non-destructive. The renderer sends only the selected catalog ID and the `install` decision. The main process then resolves a stable release, requires exactly one reviewed asset, downloads it to a controlled staging location, validates its declared size and SHA-256 digest, uses fixed shell-free unattended arguments, and reports the installed version only after the hidden installer exits successfully.
 
 ## Configuration
 
-Users choose a supported install location through a native folder picker or a validated path field. The app displays required disk space, elevation requirements where known, and whether the artifact is unsigned. The default is never to bypass an operating-system warning.
+The current packaged adapter owns its staging and install arguments; the renderer cannot provide a location, URL, executable, command, dependency, or argument. A complete per-app adapter must declare required disk space, elevation, dependency bootstrap, installed location, cancellation, and uninstall ownership. Those clean-machine adapter details remain incomplete where listed in [one-click installation and adapter coverage](one-click-installation.md). The app never bypasses an operating-system warning.
 
 ## Failure modes
 
@@ -18,8 +18,8 @@ Installer URLs must use HTTPS and originate from the verified project release re
 
 ## Verification
 
-This documentation lane establishes the operation contract only. No installer has been downloaded, executed, or captured, so runtime verification is pending.
+Focused source checks cover direct one-click dispatch and the retained main-process boundaries. No catalog installer has been downloaded, executed, or captured in this lane, so runtime verification is pending.
 
 ## Suggested articles
 
-Read [source-build security](source-build-security.md) when an installer is unavailable, and [uninstall](uninstall.md) for removal semantics.
+Read [one-click installation and adapter coverage](one-click-installation.md) for the 24-app gap matrix, [source-build security](source-build-security.md) when an installer is unavailable, and [uninstall](uninstall.md) for removal semantics.

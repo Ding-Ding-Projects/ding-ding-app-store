@@ -81,14 +81,19 @@ describe('desktop security and update contracts', () => {
     expect(history.toLowerCase()).toContain('history snapshots must never fail the operation');
   });
 
-  it('requires asset digest, bounded bytes, fixed shell-free launch, and exact confirmations', async () => {
+  it('requires asset digest, bounded bytes, fixed shell-free launch, and exact typed decisions', async () => {
     const operations = await read('src/main/operation-service.ts');
     expect(operations).toContain("/^sha256:");
     expect(operations).toContain('MAX_DOWNLOAD_BYTES');
     expect(operations).toContain('shell: false');
     expect(operations).toContain('windowsHide: true');
-    expect(operations).toContain('`INSTALL ${record.displayName}`');
-    expect(operations).toContain('`UNINSTALL ${record.displayName}`');
+    expect(operations).toContain("request.decision !== 'install'");
+    expect(operations).toContain("request.decision !== 'build'");
+    expect(operations).toContain("request.decision !== 'uninstall'");
+    expect(operations).toContain("keys.length === 2");
+    expect(operations).toContain("keys.includes('appId')");
+    expect(operations).toContain("keys.includes('decision')");
+    expect(operations).not.toContain('request.confirmation');
   });
 
   it('keeps self-updates unsigned, staged, and user-restarted', async () => {
@@ -140,6 +145,23 @@ describe('visible product contracts', () => {
     expect(app).toContain('firstKey && secondKey && slider === 100');
     expect(app).toContain('Emergency exit · 緊急離開');
   });
+
+  it('starts install and source-install operations in one click without an install confirmation dialog', async () => {
+    const shell = await read('src/renderer/App.tsx');
+    const apps = await read('src/renderer/pages/AppsPage.tsx');
+    const dialog = await read('src/renderer/components/ActionDialog.tsx');
+    expect(shell).toContain("if (kind === 'uninstall')");
+    expect(shell).toContain('window.dingDingStore.operations[kind]({ appId: selectedApp.id, decision: kind })');
+    expect(apps).toContain("onAction('install', app, event.currentTarget)");
+    expect(apps).toContain("onAction('build', app, event.currentTarget)");
+    expect(apps).toContain('Install from source');
+    expect(dialog).toContain("operations.uninstall({ appId: action.app.id, decision: 'uninstall' })");
+    expect(dialog).not.toContain('const [confirmation');
+    expect(dialog).not.toContain('value={confirmation}');
+    expect(dialog).not.toContain('Type <strong>');
+    expect(shell).toContain('operationRunningRef.current');
+    expect((await read('src/main/operation-service.ts'))).toContain('this.activeOperations.has(operationKey)');
+  });
 });
 
 describe('split renderer keeps every product contract in its own file', () => {
@@ -163,6 +185,10 @@ describe('split renderer keeps every product contract in its own file', () => {
     expect(dialog).toContain('firstKey && secondKey && slider === 100');
     expect(dialog).toContain('Emergency exit · 緊急離開');
     expect(dialog).toContain('export function SuperConfirm(');
+    expect(dialog).toContain('autoFocus');
+    expect(dialog).toContain('aria-describedby="action-description"');
+    expect(dialog).toContain("if (event.key === 'Tab')");
+    expect(await read('src/renderer/App.tsx')).toContain('returnFocus.focus()');
   });
 
   it('keeps the activity filters, search, and export controls on the activity page', async () => {
@@ -235,6 +261,37 @@ describe('activity history and export', () => {
     expect(app).toContain("'all', 'today', '7d', '30d'");
     expect(app).toContain('Copy JSON');
     expect(app).toMatch(/loadHistory\(\)/);
+  });
+});
+
+describe('one-click adapter coverage record', () => {
+  it('names every catalog application and the bounded repair-engine contract without claiming the missing adapters are complete', async () => {
+    const catalog = JSON.parse(await read('data/catalog.v1.json')) as { apps: Array<{ displayName: string }> };
+    const coverage = await read('docs/features/one-click-installation.md');
+    for (const app of catalog.apps) expect(coverage).toContain(`| ${app.displayName} |`);
+    for (const requirement of [
+      'build/run terminal simulator',
+      'automatic OpenCode bootstrap',
+      'disposable workspace',
+      'retry limit',
+      'arbitrary user paths',
+      'user secrets',
+    ]) expect(coverage).toContain(requirement);
+    expect(coverage).toContain('Not complete');
+    expect(coverage).toContain('runtime proof is still pending');
+  });
+
+  it('keeps primary installer outcomes honest when history, ownership recording, or cleanup fails', async () => {
+    const operations = await read('src/main/operation-service.ts');
+    expect(operations).toContain('Activity history could not record this outcome.');
+    expect(operations).toContain("installer exited successfully, but the App Store could not record installation ownership");
+    expect(operations).toContain('Temporary staging cleanup failed; the owned staging folder may remain.');
+    expect(operations).toMatch(/let result: OperationResult;[\s\S]*await rm\(operationDir[\s\S]*return this\.finish\(record, 'install', result\)/);
+  });
+
+  it('does not invoke the future OpenCode repair engine from ordinary one-click installation', async () => {
+    const runtime = `${await read('src/renderer/App.tsx')}\n${await read('src/main/operation-service.ts')}\n${await read('src/preload/index.ts')}`;
+    expect(runtime).not.toMatch(/opencode|repair engine|terminal simulator/i);
   });
 });
 

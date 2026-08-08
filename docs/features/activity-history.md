@@ -14,7 +14,7 @@ A history read or write failure never blocks or reverses the underlying operatio
 
 ## Security considerations
 
-History stores only operation outcomes already shown to the user in the confirmation dialog and toast — no credentials, tokens, download URLs, or file contents. It is written through the same atomic, app-owned local JSON store used for installed-app records, and it is exposed to the renderer only through the typed `history.list()`/`history.export()` bridge methods, never a generic IPC channel.
+History stores only operation outcomes already shown in the non-blocking result notification (and, for destructive removal, its protected dialog) — no credentials, tokens, download URLs, or file contents. It is written through the same atomic, app-owned local JSON store used for installed-app records, and it is exposed to the renderer only through the typed `history.list()`/`history.export()` bridge methods, never a generic IPC channel.
 
 ## Verification
 
