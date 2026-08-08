@@ -180,6 +180,7 @@ export interface UpdatePackageMetadata {
   sha1: string;
   /** The byte count declared by RELEASES and bounded before download. */
   bytes: number;
+}
 /**
  * Per-application update state.  This is deliberately separate from the
  * App Store self-updater state: discovering a release never starts an
