@@ -19,7 +19,7 @@
 - [x] Per-element appearance editor with live preview, reset, export, and import
 - [x] Update schedule editor with last-run/next-run reporting and quiet hours
 - [ ] Packaged-artifact hidden-desktop interaction and accessibility proof
-- [x] CI on GitHub-hosted runners (`ubuntu-latest` typecheck/tests/build on push and PR)
+- [x] CI and release automation on pinned GitHub-hosted cloud runners (`windows-2022` for checks, packaging, and publication; `ubuntu-24.04` for Pages)
 - [x] Unsigned Squirrel.Windows release, verified end to end: [`v0.1.0-1`](https://github.com/Ding-Ding-Projects/ding-ding-app-store/releases/tag/v0.1.0-1) is non-draft, `Setup.exe` confirmed `NotSigned`, with `RELEASES` and a full `.nupkg`
 - [x] Documentation deployment: [`https://ding-ding-projects.github.io/ding-ding-app-store/`](https://ding-ding-projects.github.io/ding-ding-app-store/) is live and verified serving the real site
 - [ ] Working update-feed proof (the self-updater code exists, but no release has yet been checked against a live feed end to end)
