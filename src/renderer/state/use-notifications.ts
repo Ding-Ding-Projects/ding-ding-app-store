@@ -1,11 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { ActiveNotice, Notice, NotificationRecord, Notify } from '../notify';
+import { RECOVERY_ACTION_KINDS } from '../notify';
+import type { ActiveNotice, Notice, NotificationRecord, Notify, RecoveryActionMetadata } from '../notify';
 
 export const NOTIFICATION_STORAGE_KEY = 'ding-ding-app-store.notifications.v1';
 export const MAX_NOTIFICATION_RECORDS = 250;
 export const MAX_NOTIFICATION_STORAGE_BYTES = 512_000;
 export const MAX_NOTIFICATION_TITLE_LENGTH = 120;
 export const MAX_NOTIFICATION_MESSAGE_LENGTH = 1_000;
+
+function recoveryMetadata(value: unknown): RecoveryActionMetadata | undefined {
+  if (!value || typeof value !== 'object' || !('kind' in value)) return undefined;
+  const kind = (value as { kind?: unknown }).kind;
+  return typeof kind === 'string' && (RECOVERY_ACTION_KINDS as readonly string[]).includes(kind)
+    ? { kind: kind as RecoveryActionMetadata['kind'] }
+    : undefined;
+}
 
 export function parseNotificationRecords(value: string | null): NotificationRecord[] {
   if (!value || value.length > MAX_NOTIFICATION_STORAGE_BYTES) return [];
@@ -23,7 +32,16 @@ export function parseNotificationRecords(value: string | null): NotificationReco
         && typeof (item as NotificationRecord).createdAt === 'string'
         && ((item as NotificationRecord).dismissedAt === null || typeof (item as NotificationRecord).dismissedAt === 'string'),
       ))
-      .map((record) => ({ ...record, title: record.title.slice(0, MAX_NOTIFICATION_TITLE_LENGTH), message: record.message.slice(0, MAX_NOTIFICATION_MESSAGE_LENGTH) }))
+      .map((record) => ({
+        id: record.id,
+        title: record.title.slice(0, MAX_NOTIFICATION_TITLE_LENGTH),
+        message: record.message.slice(0, MAX_NOTIFICATION_MESSAGE_LENGTH),
+        ok: record.ok,
+        category: record.category,
+        createdAt: record.createdAt,
+        dismissedAt: record.dismissedAt,
+        recovery: recoveryMetadata((record as { recovery?: unknown }).recovery),
+      }))
       .slice(0, MAX_NOTIFICATION_RECORDS);
   } catch {
     return [];
@@ -72,8 +90,19 @@ export function useNotifications(): NotificationApi {
       createdAt: new Date().toISOString(),
       dismissedAt: null,
       undo: notice.undo,
+      recovery: notice.recovery,
     };
-    setRecords((current) => [{ ...record, undo: undefined }, ...current].slice(0, MAX_NOTIFICATION_RECORDS));
+    // Keep only auditable metadata. Runtime callbacks are intentionally not serializable.
+    setRecords((current) => [{
+      id: record.id,
+      title: record.title,
+      message: record.message,
+      ok: record.ok,
+      category: record.category,
+      createdAt: record.createdAt,
+      dismissedAt: record.dismissedAt,
+      recovery: record.recovery ? { kind: record.recovery.kind } : undefined,
+    }, ...current].slice(0, MAX_NOTIFICATION_RECORDS));
     setActive((current) => [...current, record].slice(-4));
   }, []);
 

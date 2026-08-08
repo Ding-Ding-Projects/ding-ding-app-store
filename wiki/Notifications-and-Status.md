@@ -4,7 +4,7 @@
 
 ## Behaviour
 
-Catalog, persistence, appearance, workspace, schedule, and operation results surface through a bottom-corner snackbar stack. Success and informational notices auto-dismiss after five seconds; errors persist until dismissed. Undo-capable operations attach an action. Every notice is also retained in the profile's bounded notification history, including its creation time and dismissed state. The App Store updater keeps its separate persistent banner so a restart decision is never lost to a short toast.
+Catalog, persistence, appearance, workspace, schedule, and operation results surface through a bottom-corner snackbar stack. Success and informational notices auto-dismiss after five seconds; errors persist until dismissed. Undo-capable operations attach an action. A failure may also carry one typed recovery action only when the originating operation can genuinely repeat or reveal its own details: catalog refresh, the exact selected installer, managed-app update, App Store update check, scheduled check, and source job retry. The action label follows English, Hong Kong Cantonese, or bilingual mode; selecting it disables the button, executes once, and retires the stale notice so it cannot re-enter the same operation. Every notice is also retained in the profile's bounded notification history, including its creation time and dismissed state. The App Store updater keeps its separate persistent banner so a restart decision is never lost to a short toast.
 
 The optional spoken narrator observes new notifications only after the user enables it in Settings. It uses a renderer-only serialized queue, keeps the factual notification text intact at every funny level, replaces stale waiting status lines, and leaves errors outside ordinary cooldowns. Quiet hours, reduced-sound mode, absent speech support, and an explicit screen-reader integration marker keep the visual notification path intact while suppressing speech.
 
@@ -18,7 +18,7 @@ Quiet hours hold scheduler-generated corner notifications only; checks continue 
 
 ## Failure modes
 
-A thrown renderer-side action produces the actual error message where caught. Update failures remain in failed updater state. Schedule failures keep their main-process message and backoff. Malformed persisted notification data is ignored rather than trusted. There is no generic retry action for every error. Bulk uninstall reports item progress but cannot provide a real byte stream from an installer that does not expose one.
+A thrown renderer-side action produces the actual error message where caught. Update failures remain in failed updater state. Schedule failures keep their main-process message and backoff. Malformed persisted notification data is ignored rather than trusted. There is deliberately no generic retry: a failure without a verified safe recovery says so plainly. Retained history records the typed recovery kind for audit and export, but never a callback, so it truthfully says that an action once offered cannot be rerun after restart. Bulk uninstall reports item progress but cannot provide a real byte stream from an installer that does not expose one.
 
 ## Security considerations
 
@@ -26,7 +26,7 @@ Notices display bounded application-owned messages and never intentionally inclu
 
 ## Verification
 
-Focused tests cover bounded persistence parsing, stack/centre wiring, adjacent regex search, bulk selection, super-confirmed deletion, filtered export, and typed installer progress/cancellation contracts. Strict renderer typechecking and the production renderer build pass. Packaged hidden-desktop keyboard, screen-reader announcement timing, and real third-party installer progress remain runtime evidence gaps, so status remains limited.
+Focused tests cover bounded persistence parsing, typed recovery metadata, callback-free history export, stack/centre wiring, adjacent regex search, bulk selection, super-confirmed deletion, filtered export, and typed installer progress/cancellation contracts. Strict renderer typechecking and the production renderer build pass. Packaged hidden-desktop keyboard, screen-reader announcement timing, and real third-party installer progress remain runtime evidence gaps, so status remains limited.
 
 ## Suggested articles
 

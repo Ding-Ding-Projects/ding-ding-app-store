@@ -5,6 +5,12 @@ import type { Notify } from '../notify';
 import { writeScheduleField } from '../registry';
 import type { ScheduleFieldKey } from '../registry';
 
+function recoveryTaskForNotice(id: string): ScheduleTaskId | null {
+  if (id.startsWith('self-update-')) return 'self-update';
+  if (id.startsWith('catalog-refresh-')) return 'catalog-refresh';
+  return null;
+}
+
 export interface ScheduleApi {
   status: ScheduleStatus | null;
   draft: ScheduleConfig;
@@ -37,7 +43,12 @@ export function useSchedule(notify: Notify): ScheduleApi {
     if (!dirtyRef.current) setDraft(next.config);
     if (next.notice && !next.notice.silent && next.notice.id !== lastNoticeId.current) {
       lastNoticeId.current = next.notice.id;
-      notify({ ok: next.notice.level !== 'error', message: `${next.notice.en} · ${next.notice.yue}` });
+      const task = next.notice.level === 'error' ? recoveryTaskForNotice(next.notice.id) : null;
+      notify({
+        ok: next.notice.level !== 'error',
+        message: `${next.notice.en} · ${next.notice.yue}`,
+        recovery: task ? { kind: 'retry-scheduled-check', run: () => runNow(task) } : undefined,
+      });
     }
   }, [notify]);
 
