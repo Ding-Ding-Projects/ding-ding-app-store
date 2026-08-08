@@ -7,6 +7,7 @@ const APP_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,127}$/;
 const PROOF_SCHEMA = 'ding-ding-app-store.install-proof.v1';
 const DEFAULT_TIMEOUT_MS = 20 * 60_000;
 const MAX_PROGRESS_EVENTS = 256;
+const MAX_REGISTRY_DIAGNOSTICS = 16;
 
 function option(name, fallback = null) {
   const index = process.argv.indexOf(name);
@@ -128,6 +129,7 @@ try {
   const { OperationService } = await import('../dist/main/operation-service.js');
   const { adapterFor, selectInstallerAsset } = await import('../dist/main/install-adapters.js');
   const { cloudInstallProofTargetFor } = await import('../dist/main/install-proof-targets.js');
+  const { extractQuotedExecutable, registryEntryFingerprint } = await import('../dist/main/installed-detection.js');
 
   const catalog = new CatalogService();
   const installed = new InstalledService(catalog);
@@ -158,6 +160,9 @@ try {
     downloadVerification: 'operation-service-sha256',
   };
   logMilestone('integrity-resolved', `release=${release.tag_name} asset=${selectedAsset.name} bytes=${selectedAsset.size}`);
+  const beforeRegistry = target.ownershipKind === 'registry'
+    ? await withProofTimeout(installed.registrySnapshot(), 'initial registry diagnostics')
+    : [];
   const before = (await withProofTimeout(installed.list(true), 'initial discovery')).filter((record) => record.appId === appId).map((record) => ({
     appId: record.appId, version: record.version, source: record.source, hasUninstall: Boolean(record.uninstall),
     ownershipKind: record.ownership?.kind ?? null, adapterId: record.ownership?.adapterId ?? null,
@@ -184,6 +189,22 @@ try {
     uninstallKind: record.uninstall?.kind ?? null, ownershipKind: record.ownership?.kind ?? null,
     adapterId: record.ownership?.adapterId ?? null,
   }));
+  const afterRegistry = target.ownershipKind === 'registry'
+    ? await withProofTimeout(installed.registrySnapshot(), 'post-install registry diagnostics')
+    : [];
+  const beforeRegistryFingerprints = new Map(beforeRegistry.map((entry) => [entry.key.toLocaleLowerCase(), registryEntryFingerprint(entry)]));
+  const changedRegistryEntries = afterRegistry.filter((entry) =>
+    beforeRegistryFingerprints.get(entry.key.toLocaleLowerCase()) !== registryEntryFingerprint(entry));
+  const registryDiagnostics = {
+    changedEntryCount: changedRegistryEntries.length,
+    truncated: changedRegistryEntries.length > MAX_REGISTRY_DIAGNOSTICS,
+    entries: changedRegistryEntries.slice(0, MAX_REGISTRY_DIAGNOSTICS).map((entry) => ({
+      hive: entry.key.toUpperCase().startsWith('HKEY_CURRENT_USER\\') ? 'HKEY_CURRENT_USER' : 'HKEY_LOCAL_MACHINE',
+      displayName: entry.displayName,
+      displayVersion: entry.displayVersion,
+      uninstallExecutableName: path.win32.basename(extractQuotedExecutable(entry.uninstallString) ?? ''),
+    })),
+  };
   const matchedAfterInstall = afterInstall.length === 1
     && afterInstall[0].source === (target.ownershipKind === 'portable' ? 'portable-managed' : 'store')
     && afterInstall[0].hasUninstall
@@ -232,6 +253,7 @@ try {
     cleanStart,
     result: { ok: result.ok, message: result.message },
     afterInstall,
+    registryDiagnostics,
     matchedAfterInstall,
     cleanup,
     afterCleanup,

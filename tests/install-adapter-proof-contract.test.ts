@@ -88,6 +88,10 @@ describe('cloud install adapter proof boundary', () => {
     expect(script).toContain('&& integrity.sha256Verified');
     expect(script).toContain('persistedAfterCleanup.length === 0');
     expect(script).toContain('const MAX_PROGRESS_EVENTS = 256');
+    expect(script).toContain('const MAX_REGISTRY_DIAGNOSTICS = 16');
+    expect(script).toContain('changedEntryCount: changedRegistryEntries.length');
+    expect(script).toContain("hive: entry.key.toUpperCase().startsWith('HKEY_CURRENT_USER\\\\') ? 'HKEY_CURRENT_USER' : 'HKEY_LOCAL_MACHINE'");
+    expect(script).not.toContain('registryKey: entry.key');
     expect(script).toContain('phaseChanged || progressChanged || event.final');
     expect(script).toContain('droppedProgressEvents');
     expect(script).toContain('setInterval');
