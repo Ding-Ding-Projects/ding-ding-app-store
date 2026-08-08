@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promis
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { sourceJobCancelRequestSchema, sourceJobRequestSchema, sourceTerminalEventSchema } from '../src/shared/contracts.js';
+import { sourceJobCancelRequestSchema, sourceJobRequestSchema, sourceJobRetryRequestSchema, sourceTerminalEventSchema } from '../src/shared/contracts.js';
 import { SourceJobService } from '../src/main/source-job-service.js';
 import {
   PINNED_OPENCODE,
@@ -21,6 +21,7 @@ import {
   sourceRecipeCatalogSchema,
   validateOpenCodeArchive,
   validateOpenCodeExecutable,
+  ensurePinnedOpenCode,
   verifyOwnedRoot,
   type IsolationAttestation,
   type IsolationBroker,
@@ -66,6 +67,8 @@ describe('source job contracts', () => {
       { appId: 'reviewed-app', decision: 'run', cwd: 'C:\\Users' },
     ]) expect(sourceJobRequestSchema.safeParse(invalid).success).toBe(false);
     expect(sourceJobCancelRequestSchema.safeParse({ jobId: crypto.randomUUID(), decision: 'cancel', force: true }).success).toBe(false);
+    expect(sourceJobRetryRequestSchema.safeParse({ jobId: crypto.randomUUID(), decision: 'retry' }).success).toBe(true);
+    expect(sourceJobRetryRequestSchema.safeParse({ jobId: crypto.randomUUID(), decision: 'retry', force: true }).success).toBe(false);
   });
 
   it('keeps recipes pinned, vector-only, bounded, and free of Git execution', () => {
@@ -146,6 +149,23 @@ describe('owned workspace and repair bounds', () => {
     expect(await validateOpenCodeExecutable(invalid, async () => { versionRuns += 1; return PINNED_OPENCODE.version; })).toBe(false);
     expect(versionRuns).toBe(0);
     await expect(validateOpenCodeArchive(path.join(root, 'missing.zip'))).rejects.toThrow();
+  });
+
+  it('only bootstraps OpenCode inside an owned child and cleans a failed download', async () => {
+    const root = await tempRoot('opencode-bootstrap');
+    await mkdir(path.join(root, '.opencode-tool'));
+    await expect(ensurePinnedOpenCode({
+      workspaceRoot: root,
+      toolDirectory: 'nested/tool',
+      downloadArchive: async () => { throw new Error('must not download'); },
+      runVersion: async () => PINNED_OPENCODE.version,
+    })).rejects.toThrow(/bounded workspace child/i);
+    await expect(ensurePinnedOpenCode({
+      workspaceRoot: root,
+      downloadArchive: async (_url, destination) => { await writeFile(destination, 'not a pinned archive'); },
+      runVersion: async () => PINNED_OPENCODE.version,
+    })).rejects.toThrow(/SHA-256/i);
+    await expect(readFile(path.join(root, '.opencode-tool', `${PINNED_OPENCODE.assetName}.download`))).rejects.toThrow();
   });
   it('rejects lexical escape and symlink traversal', async () => {
     const root = await tempRoot('source-owned');
@@ -249,10 +269,10 @@ async function serviceFixture(behavior: 'wait-for-cancel' | 'hang' | 'complete',
   return { service, broker, events };
 }
 
-async function waitForFinal(events: SourceTerminalEvent[], timeoutMs = 1_000): Promise<SourceTerminalEvent> {
+async function waitForFinal(events: SourceTerminalEvent[], timeoutMs = 1_000, jobId?: string): Promise<SourceTerminalEvent> {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
-    const final = events.find((event) => event.final);
+    const final = events.find((event) => event.final && (!jobId || event.jobId === jobId));
     if (final) return final;
     await new Promise((resolve) => setTimeout(resolve, 5));
   }
@@ -284,6 +304,18 @@ describe('source job lifecycle', () => {
     expect(final.state).toBe('failed');
     expect(final.text).toMatch(/safety limit/i);
     expect(broker.disposed).toContain(started.jobId);
+  });
+
+  it('retries a failed job through the same typed recipe without accepting renderer commands', async () => {
+    const { service, events } = await serviceFixture('hang', 25);
+    const started = await service.start({ appId: recipe.appId, decision: 'build' });
+    const firstFinal = await waitForFinal(events);
+    expect(firstFinal.state).toBe('failed');
+    const retried = await service.retry({ jobId: started.jobId!, decision: 'retry' });
+    expect(retried.ok).toBe(true);
+    expect(retried.jobId).not.toBe(started.jobId);
+    await waitForFinal(events, 1_000, retried.jobId);
+    expect(await service.retry({ jobId: retried.jobId!, decision: 'retry', command: 'format C:' } as unknown)).toMatchObject({ ok: false, state: 'failed' });
   });
 
   it('requires persisted consent and never repairs ordinary release installation', async () => {

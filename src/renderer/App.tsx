@@ -167,6 +167,18 @@ export function App() {
     if (target) window.setTimeout(() => target.focus(), 0);
   }, [sourceTerminal]);
 
+  const retrySourceTerminal = useCallback(async () => {
+    if (!sourceTerminal?.jobId) return;
+    const previousJobId = sourceTerminal.jobId;
+    setSourceTerminal((current) => current ? { ...current, events: [], fallbackMessage: undefined } : current);
+    const result = await window.dingDingStore.sourceJobs.retry({ jobId: previousJobId, decision: 'retry' });
+    if (result.ok && result.jobId) {
+      setSourceTerminal((current) => current ? { ...current, jobId: result.jobId!, events: [] } : current);
+      return;
+    }
+    setSourceTerminal((current) => current ? { ...current, fallbackMessage: result.message } : current);
+  }, [sourceTerminal]);
+
   const closeAction = useCallback(() => {
     const returnFocus = action?.returnFocus;
     setAction(null);
@@ -632,6 +644,7 @@ export function App() {
             fallbackMessage={sourceTerminal.fallbackMessage}
             settings={settings}
             onCancel={() => sourceTerminal.jobId && void window.dingDingStore.sourceJobs.cancel({ jobId: sourceTerminal.jobId, decision: 'cancel' })}
+            onRetry={() => void retrySourceTerminal()}
             onClose={closeSourceTerminal}
           />
         )}

@@ -12,6 +12,7 @@ import type {
   ScheduleStatus,
   ScheduleTaskId,
   SourceJobCancelRequest,
+  SourceJobRetryRequest,
   SourceJobRequest,
   SourceTerminalEvent,
   TabWorkspace,
@@ -54,6 +55,7 @@ const api: DingDingStoreApi = {
   sourceJobs: {
     start: (request: SourceJobRequest) => ipcRenderer.invoke('source-jobs:start', request),
     cancel: (request: SourceJobCancelRequest) => ipcRenderer.invoke('source-jobs:cancel', request),
+    retry: (request: SourceJobRetryRequest) => ipcRenderer.invoke('source-jobs:retry', request),
     subscribe: (listener: (event: Readonly<SourceTerminalEvent>) => void) => {
       const handler = (_event: Electron.IpcRendererEvent, value: unknown) => {
         if (isSourceTerminalEvent(value)) listener(Object.freeze({ ...value }));

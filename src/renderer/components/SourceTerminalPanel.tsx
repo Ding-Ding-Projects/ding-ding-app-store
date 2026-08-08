@@ -6,12 +6,13 @@ import { label } from '../i18n';
 
 const ACTIVE_STATES = new Set<SourceJobState>(['queued', 'preparing', 'running', 'repairing', 'cancelling']);
 
-export function SourceTerminalPanel({ appName, events, fallbackMessage, settings, onCancel, onClose }: {
+export function SourceTerminalPanel({ appName, events, fallbackMessage, settings, onCancel, onRetry, onClose }: {
   appName: string;
   events: readonly Readonly<SourceTerminalEvent>[];
   fallbackMessage?: string;
   settings: UserSettings;
   onCancel(): void;
+  onRetry(): void;
   onClose(): void;
 }) {
   const output = useRef<HTMLDivElement>(null);
@@ -68,9 +69,14 @@ export function SourceTerminalPanel({ appName, events, fallbackMessage, settings
         ))}
       </div>
       <footer>
-        {active
-          ? <button className="text-button danger" disabled={state === 'cancelling'} onClick={onCancel}><Icon>cancel</Icon>{state === 'cancelling' ? label(settings, 'Cancelling…', '取消緊…') : label(settings, 'Cancel source job', '取消 source 工作')}</button>
-          : <button className="filled-button" onClick={onClose}><Icon>done</Icon>{label(settings, 'Close', '關閉')}</button>}
+        {active ? (
+          <button className="text-button danger" disabled={state === 'cancelling'} onClick={onCancel}><Icon>cancel</Icon>{state === 'cancelling' ? label(settings, 'Cancelling…', '取消緊…') : label(settings, 'Cancel source job', '取消 source 工作')}</button>
+        ) : (
+          <>
+            {(state === 'failed' || state === 'cancelled') && <button className="text-button" onClick={onRetry}><Icon>refresh</Icon>{label(settings, 'Retry automatically', '自動再試')}</button>}
+            <button className="filled-button" onClick={onClose}><Icon>done</Icon>{label(settings, 'Close', '關閉')}</button>
+          </>
+        )}
       </footer>
     </aside>
   );
