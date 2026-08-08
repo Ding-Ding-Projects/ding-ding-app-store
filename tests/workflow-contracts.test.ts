@@ -36,7 +36,7 @@ describe('GitHub-hosted workflow and bootstrap contract', () => {
     expect(bootstrap).toContain('SHA-256 mismatch');
     expect(bootstrap).toContain('$reportedText = ($reportedLines');
     expect(bootstrap).toContain('[string]$reportedLines[0] -notmatch $expectedPattern');
-    expect(bootstrap).toContain('gh_${version}_windows_amd64\\bin\\gh.exe');
+    expect(bootstrap).toContain("Join-Path $extractRoot 'bin\\gh.exe'");
     expect(bootstrap).not.toContain('Get-ChildItem -LiteralPath $extractRoot -Recurse');
     expect(bootstrap).not.toMatch(/winget|choco|scoop|Start-Process|Invoke-Expression/i);
   });

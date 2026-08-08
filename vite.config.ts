@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { GENERATED_RELEASE_MANIFEST } from './src/renderer/generated-changelog';
+import { GENERATED_RELEASE_MANIFEST } from './src/renderer/generated-changelog.ts';
 
 const packagedReleaseManifest = {
   name: 'packaged-release-manifest',

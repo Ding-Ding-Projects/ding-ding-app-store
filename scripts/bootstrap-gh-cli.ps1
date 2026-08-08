@@ -45,7 +45,7 @@ if (-not (Test-Path -LiteralPath $executable)) {
   if ($actual -ne $expected) { throw "GitHub CLI archive SHA-256 mismatch: expected $expected, received $actual." }
   $extractRoot = Join-Path $ToolsRoot "gh-$version-extracted"
   Expand-Archive -LiteralPath $archivePath -DestinationPath $extractRoot -Force
-  $expectedMember = Join-Path $extractRoot "gh_${version}_windows_amd64\bin\gh.exe"
+  $expectedMember = Join-Path $extractRoot 'bin\gh.exe'
   if (-not (Test-Path -LiteralPath $expectedMember -PathType Leaf)) { throw 'The verified GitHub CLI archive did not contain its exact expected gh.exe member.' }
   $resolvedExtractRoot = (Resolve-Path -LiteralPath $extractRoot).Path.TrimEnd('\') + '\'
   $resolvedSource = (Resolve-Path -LiteralPath $expectedMember).Path
