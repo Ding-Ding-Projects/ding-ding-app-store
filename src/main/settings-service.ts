@@ -12,7 +12,7 @@ const settingsSchema = z.object({
   cantoneseFunnyLevel: z.number().int().min(1).max(5),
   theme: z.enum(['system', 'light', 'dark']),
   density: z.enum(['comfortable', 'compact', 'spacious']),
-  accent: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+  accent: z.string().regex(/^#[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?$/),
   displayName: z.string().trim().min(1).max(64),
   automaticRepairConsent: z.boolean().default(false),
   narratorEnabled: z.boolean().default(false),

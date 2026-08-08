@@ -7,6 +7,7 @@ import { label } from '../i18n';
 import type { Action, Entry, EntryControl, EntryGroup, TokenValue } from '../registry';
 import { highlight, makeMatcher, useSurfaceSearch } from '../search';
 import { SearchBox } from './SearchBox';
+import { ColorTranslatorControl } from './ColorTranslatorControl';
 
 const GROUP_ORDER: EntryGroup[] = ['Pages', 'Tabs', 'Appearance', 'Schedule', 'Search', 'Settings', 'Apps'];
 const GROUP_LABELS: Record<EntryGroup, { en: string; yue: string }> = {
@@ -88,7 +89,7 @@ export function CommandPalette({ settings, entries, onAction, onClose, openRegex
       <input className="command-inline-control command-inline-range" aria-label={`${labelText} control`} type="range" min={control.min} max={control.max} step={control.step ?? 1} value={control.value} onClick={stop} onChange={(event) => applyControl(entry, control, Number(event.target.value))} />
     );
     if (control.kind === 'color') return (
-      <input className="command-inline-control command-inline-color" aria-label={`${labelText} control`} type="color" value={control.value} onClick={stop} onChange={(event) => applyControl(entry, control, event.target.value)} />
+      <div className="command-inline-color" onClick={stop} onKeyDown={stop}><ColorTranslatorControl settings={settings} value={control.value} labelText={`${labelText} control`} onChange={(next) => applyControl(entry, control, next)} /></div>
     );
     if (control.kind === 'switch') return (
       <input className="command-inline-control" aria-label={`${labelText} control`} type="checkbox" checked={control.value} onClick={stop} onChange={(event) => applyControl(entry, control, event.target.checked)} />

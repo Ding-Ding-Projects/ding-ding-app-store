@@ -75,7 +75,8 @@ describe('rich command palette renderer contract', () => {
     const palette = await readFile(new URL('../src/renderer/components/CommandPalette.tsx', import.meta.url), 'utf8');
     const app = await readFile(new URL('../src/renderer/App.tsx', import.meta.url), 'utf8');
     expect(palette).toContain("type=\"range\"");
-    expect(palette).toContain("type=\"color\"");
+    expect(palette).toContain("import { ColorTranslatorControl } from './ColorTranslatorControl';");
+    expect(palette).toContain('onKeyDown={stop}');
     expect(palette).toContain("type=\"checkbox\"");
     expect(palette).toContain('EntryControl');
     expect(app).toContain("event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'f'");

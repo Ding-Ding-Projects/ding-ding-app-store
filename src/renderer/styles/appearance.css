@@ -15,6 +15,13 @@
   .appearance-token-row .token-name { font-weight: 750; }
   .appearance-token-row label { margin: 4px 0; }
   .appearance-token-row .chip-row { margin: 4px 0; }
+  .color-translator-control { display: grid; gap: 8px; padding: 10px; border: 1px solid color-mix(in srgb, var(--outline) 38%, transparent); border-radius: 14px; background: var(--surface-container); }
+  .color-translator-control label { display: grid; gap: 4px; min-width: 0; }
+  .color-translator-control .color-translator-values { display: grid; gap: 6px; max-height: 340px; overflow: auto; }
+  .color-translator-control input[type="text"] { min-width: 0; }
+  .color-translator-control .text-button { justify-self: start; min-height: 32px; }
+  .command-inline-color { min-width: 0; max-width: min(420px, 78vw); max-height: 420px; overflow: auto; }
+  .command-inline-color .color-translator-control { min-width: 0; }
 
   .appearance-edit-banner { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-radius: 14px; background: var(--primary-container); color: color-mix(in srgb, var(--primary) 85%, black); font-weight: 700; }
 

@@ -4,7 +4,7 @@
 
 ## Behaviour
 
-Settings is divided into General, Appearance, Schedule, and About browser-style sub-tabs. Each sub-tab owns a search box and adjacent full regex builder and reports match counts on its tab. General persists exactly three language modes—English, playful Hong Kong Cantonese, and bilingual—plus independent English and Cantonese funny levels from 1 to 5. It also persists an optional renderer-only spoken narrator (off by default), its English/Cantonese/both choice, and a reduced-sound switch. Appearance persists system/light/dark theme, comfortable/compact/spacious density, a six-digit accent color, and a user-selected display name.
+Settings is divided into General, Appearance, Schedule, and About browser-style sub-tabs. Each sub-tab owns a search box and adjacent full regex builder and reports match counts on its tab. General persists exactly three language modes—English, playful Hong Kong Cantonese, and bilingual—plus independent English and Cantonese funny levels from 1 to 5. It also persists an optional renderer-only spoken narrator (off by default), its English/Cantonese/both choice, and a reduced-sound switch. Appearance persists system/light/dark theme, comfortable/compact/spacious density, an accent color, and a user-selected display name. The accent field and command-palette appearance controls use the same continuous translator as the appearance editor: HEX/HEX8, RGB/RGBA, HSL/HSLA, HSV/HSB, HWB, Lab/LCH, OKLab/OKLCH, CMYK, bounded named colors, alpha, gamut clipping warnings, copy actions, and keyboard-accessible range controls.
 
 Every control has a keyboard-reachable **What this controls** disclosure. It explains the real effect in the active language mode and places a provenance line beside it: a validated `settings.v1.json` value is labelled persisted, while a missing, malformed, or incomplete file is labelled compiled fallback with the exact value (`bilingual`, `2`, `4`, `system`, `comfortable`, `#6750A4`, `Ding Ding App Store`, or `false`). The registry keeps a hand-written completeness list so a new setting cannot silently ship without both pieces of copy.
 
@@ -26,11 +26,11 @@ Missing or invalid settings fall back to the full default document and mark ever
 
 ## Security considerations
 
-Only enumerated settings, bounded funny levels, narrator choices, a validated color, and a bounded display label are accepted. The renderer never learns the settings file path. The funny level changes voice only; operation facts, affected app, failure, and available action remain exact. The narrator has no network or privileged audio API and produces speech only from already-visible notifications.
+Only enumerated settings, bounded funny levels, narrator choices, a validated HEX/HEX8 color, and a bounded display label are accepted. Unsupported color-space input remains visible and fails closed; alpha is preserved through the canonical HEX/HEX8 value. The renderer never learns the settings file path. The funny level changes voice only; operation facts, affected app, failure, and available action remain exact. The narrator has no network or privileged audio API and produces speech only from already-visible notifications.
 
 ## Verification
 
-Schemas, the shared default object, and the hand-written explanation lists are covered by `tests/settings-provenance.test.ts` plus type/contract checks. Renderer code applies theme, density, accent, display name, language settings, and the optional narrator queue. Runtime verification should still capture all three language modes at narrow width and demonstrate that both funny-level controls change representative copy at every level.
+Schemas, the shared default object, the continuous color translator, and the hand-written explanation lists are covered by `tests/settings-provenance.test.ts`, `tests/color-translator.test.ts`, `tests/ui-completion.test.ts`, plus type/contract checks. Renderer code applies theme, density, accent, display name, language settings, and the optional narrator queue. Runtime verification should still capture all three language modes at narrow width and demonstrate that both funny-level controls change representative copy at every level.
 
 ## Suggested articles
 
