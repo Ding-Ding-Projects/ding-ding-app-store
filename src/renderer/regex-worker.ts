@@ -12,9 +12,11 @@ self.addEventListener('message', (event: MessageEvent<WorkerMessage>) => {
     if (Number.isInteger(value.id) && value.id > newestRequestId) newestRequestId = value.id;
     return;
   }
+  const candidateId = value && typeof value === 'object' && 'id' in value && Number.isInteger(value.id) && value.id >= 0 ? value.id : null;
+  if (candidateId !== null && candidateId > newestRequestId) newestRequestId = candidateId;
   const normalized = normalizeRegexWorkerRequest(value);
   if ('error' in normalized) {
-    self.postMessage({ id: normalized.id, error: normalized.error, matches: [] });
+    if (candidateId === null || candidateId === newestRequestId) self.postMessage({ id: normalized.id, error: normalized.error, matches: [] });
     return;
   }
   if (normalized.id <= newestRequestId) return;
