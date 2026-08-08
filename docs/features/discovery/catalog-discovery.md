@@ -14,6 +14,8 @@ The catalog starts from [`data/catalog.v1.json`](../../../data/catalog.v1.json),
 
 The Discover page provides its own plain-text-first search over names, descriptions, and repository names. The adjacent full regex builder applies the same pattern and flags to that field. A refresh command bypasses the 30-minute cache and replaces the visible snapshot only with parsed catalog data.
 
+Discover, Installed, and Updates collections support checkbox and Shift-range selection, visible-scope select-all, inversion, clear, filtered JSON export, and review counts that distinguish selected, shown, and total records. Bulk install and source-build actions run serially through the same typed one-click route. Bulk uninstall includes only selected installed applications and reuses the native destructive super-confirmation.
+
 ## Configuration
 
 The allowlist is source-controlled; the renderer cannot add a repository or change an adapter. The page search is session-only so reopening the app never silently hides results behind a restored filter. Catalog refresh is also available from the command palette and the scheduled catalog task.

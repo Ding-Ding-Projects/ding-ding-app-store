@@ -103,6 +103,28 @@ export interface InstalledAppRecord {
 export type OperationKind = 'install' | 'build' | 'uninstall';
 export type HistoryExportFormat = 'json' | 'jsonl' | 'csv' | 'markdown';
 
+export type ExternalEditorId = 'vscode';
+export type ExportRecordKind = 'catalog' | 'installed' | 'activity' | 'notifications' | 'changelog' | 'settings' | 'appearance' | 'tabs';
+
+export interface ExternalEditorCandidate {
+  id: ExternalEditorId;
+  label: string;
+  available: boolean;
+  edition: 'stable' | 'insiders' | 'portable' | 'unknown';
+}
+
+export interface ExternalEditorOpenRequest {
+  editor: ExternalEditorId;
+  recordKind: ExportRecordKind;
+  suggestedName: string;
+  mime: string;
+  content: string;
+}
+
+export type ExternalEditorResult =
+  | { ok: true; editor: ExternalEditorId }
+  | { ok: false; reason: 'bridge-unavailable' | 'not-installed' | 'write-failed' | 'launch-failed'; message: string };
+
 export interface HistoryEntry {
   id: string;
   appId: string;
@@ -576,6 +598,15 @@ export type ScheduleSaveResult =
   | { ok: false; message: string; issues: Array<{ field: string; message: string }> };
 
 export interface DingDingStoreApi {
+  /** Optional until the privileged adapter validates a 40-hex SHA and constructs the fixed commit URL. */
+  externalNavigation?: {
+    openCommit(commit: string): Promise<OperationResult>;
+  };
+  /** Optional until the privileged detection/write/open adapter is implemented and reviewed. */
+  externalEditor?: {
+    detect(): Promise<ExternalEditorCandidate[]>;
+    openExport(request: ExternalEditorOpenRequest): Promise<ExternalEditorResult>;
+  };
   catalog: {
     list(): Promise<CatalogSnapshot>;
     refresh(): Promise<CatalogSnapshot>;

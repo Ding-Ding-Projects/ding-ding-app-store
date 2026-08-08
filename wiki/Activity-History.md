@@ -6,11 +6,13 @@
 
 Every install, source-build attempt, and uninstall result flows through one recording helper. Each JSONL entry has a random identifier, timestamp, app identifier and display name, action kind, success flag, and the exact result message. The Activity page lists newest first and combines its own search with action, result, and date-preset filters. Copy JSON and downloads for JSON, JSONL, CSV, and Markdown are available.
 
+Rows support checkbox selection, Shift-range selection, select-all for the currently shown result set, and inverse selection. Copy and export use the selected rows when selection exists and otherwise use the filtered view; counts always distinguish selected, shown, and total records. Deletion remains unavailable because operation history is append-only.
+
 Successful operations also attempt a local Git snapshot of the installed-app and settings documents in an isolated repository under the App Store's history directory. Snapshots are append-only commits; no repository is created inside a user's project.
 
 ## Configuration
 
-The activity search is plain text by default and has its own adjacent full regex builder. Action filters cover install, build, and uninstall; result filters cover succeeded or failed; date presets cover today, seven days, 30 days, or all time. The current export methods serialize the complete stored history, not only the visible filtered rows; the UI must not claim a filtered export until that behavior changes.
+The activity search is plain text by default and has its own adjacent full regex builder. Action filters cover install, build, and uninstall; result filters cover succeeded or failed; date presets cover today, seven days, 30 days, or all time. Exports serialize only the explicit selection or current filtered rows.
 
 ## Failure modes
 

@@ -212,6 +212,49 @@
   .snackbar.success { background: var(--elx-snackbar-background, var(--success)); }
   .snackbar.error { background: var(--elx-snackbar-background, var(--error)); }
   .snackbar .icon-button, .snackbar .text-button { color: white; }
+  .snackbar-stack { position: fixed; z-index: 80; right: 24px; bottom: 24px; display: grid; gap: 10px; pointer-events: none; }
+  .snackbar-stack .snackbar { position: static; pointer-events: auto; }
+  .snackbar span:nth-child(2) { display: grid; gap: 3px; }
+  .snackbar small { color: inherit; opacity: .92; overflow-wrap: anywhere; }
+
+  .notification-button { position: relative; display: inline-grid; place-items: center; width: 46px; min-width: 46px; height: 46px; border-radius: 50%; }
+  .notification-count { position: absolute; top: 3px; right: 2px; min-width: 18px; height: 18px; padding: 0 4px; display: grid; place-items: center; border: 2px solid var(--surface); border-radius: 999px; color: white; background: var(--error); font-size: 10px; font-weight: 800; }
+  .notification-center {
+    position: fixed; z-index: 45; top: 56px; right: 0; bottom: 0; width: min(620px, 100vw); padding: 24px;
+    overflow: auto; color: var(--foreground); background: var(--surface); border-left: 1px solid color-mix(in srgb, var(--outline) 40%, transparent); box-shadow: -16px 0 48px #0003;
+  }
+  .notification-center > header, .changelog-viewer > header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  .notification-center h2, .changelog-viewer h2 { margin: 2px 0; }
+  .notification-center .search-wrap, .changelog-viewer .search-wrap { margin-top: 18px; }
+  .notification-list, .changelog-list { display: grid; gap: 10px; padding: 0; list-style: none; }
+  .notification-list > li, .changelog-list > li { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; align-items: start; gap: 12px; padding: 16px; border: 1px solid color-mix(in srgb, var(--outline) 28%, transparent); border-radius: 18px; background: var(--surface-container); }
+  .notification-list > li.dismissed { opacity: .72; }
+  .notification-list p, .changelog-list p { margin: 5px 0; overflow-wrap: anywhere; }
+  .notification-list small { color: var(--outline); }
+
+  .bulk-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; max-width: 1480px; margin: 12px auto; padding: 10px; border: 1px solid color-mix(in srgb, var(--outline) 28%, transparent); border-radius: 18px; background: var(--surface-container); }
+  .bulk-toolbar > strong { margin-right: auto; padding: 0 8px; }
+  .bulk-progress { display: inline-flex; align-items: center; gap: 6px; min-width: 180px; }
+  .bulk-progress progress { width: 90px; accent-color: var(--primary); }
+  .selection-check { display: inline-grid; place-items: center; min-width: 44px; min-height: 44px; margin: -8px; }
+  .app-card { position: relative; }
+  .app-selection { position: absolute; z-index: 2; top: 12px; right: 12px; margin: 0; }
+  .operation-progress { display: grid; gap: 8px; margin: 16px 0; }
+  .operation-progress progress { width: 100%; accent-color: var(--primary); }
+
+  .date-range { display: grid; grid-template-columns: minmax(160px, 1fr) minmax(150px, .7fr) minmax(160px, 1fr) minmax(150px, .7fr); gap: 12px; }
+  .date-range label { display: grid; gap: 6px; font-weight: 650; }
+  .date-range input { width: 100%; min-height: 48px; padding: 10px 12px; border: 1px solid var(--outline); border-radius: 12px; background: var(--surface); }
+  .changelog-viewer { max-width: 1100px; margin: 24px auto; padding: 24px; border-radius: 24px; background: var(--surface-container); }
+  .changelog-list > li { grid-template-columns: auto minmax(0, 1fr); background: var(--surface); }
+  .changelog-list h3 { margin: 0; }
+  .changelog-list time { color: var(--outline); }
+  .changelog-list a { display: inline-flex; align-items: center; gap: 5px; color: var(--primary); overflow-wrap: anywhere; }
+  .commit-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .commit-actions code { flex: 1 1 280px; overflow-wrap: anywhere; }
+  .editor-status { display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 14px; background: var(--surface); }
+  .editor-status.available { color: var(--success); }
+  .editor-status.unavailable { color: var(--outline); }
 
   .source-terminal-panel {
     position: fixed; z-index: 70; inset: 64px 20px 20px auto;

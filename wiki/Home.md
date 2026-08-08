@@ -32,7 +32,7 @@ The wiki mirrors the same canonical feature articles bundled into the applicatio
 - [Command palette](Command-Palette) — **shipped** — Opens with Ctrl+Shift+F and searches page, tab, appearance, schedule, search, setting, and catalog-app registry entries.
 - [Settings, language, and display name](Settings-Language-and-Display-Name) — **shipped** — Persists language, two independent funny levels, theme, density, accent, and a display-only app name through tabbed searchable settings.
 - [Appearance editor](Appearance-Editor) — **limited** — Registers shell elements for bounded live CSS-variable overrides with per-element reset, import/export, and main-process validation.
-- [Notifications and operation status](Notifications-and-Status) — **limited** — Uses corner toasts and a persistent updater banner for non-decision state while keeping install/removal decisions in native dialogs.
+- [Notifications and operation status](Notifications-and-Status) — **limited** — Stacks corner snackbars, retains searchable notification history, and keeps destructive decisions behind native super-confirmation.
 
 ## Documentation
 

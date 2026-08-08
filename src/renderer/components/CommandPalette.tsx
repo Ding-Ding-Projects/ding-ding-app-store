@@ -52,11 +52,16 @@ export function CommandPalette({ settings, entries, onAction, onClose, openRegex
   useEffect(() => { setCursor((current) => (current < visible.length ? current : 0)); }, [visible.length]);
 
   const optionId = (index: number) => `palette-option-${index}`;
+  const activate = (entry: Entry) => {
+    onAction(entry.action);
+    const keepsPaletteOpen = entry.action.type === 'command' && entry.action.command === 'open-regex:palette';
+    if (!keepsPaletteOpen) onClose();
+  };
 
   const onInputKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'ArrowDown') { event.preventDefault(); setCursor((current) => (visible.length ? (current + 1) % visible.length : 0)); }
     if (event.key === 'ArrowUp') { event.preventDefault(); setCursor((current) => (visible.length ? (current - 1 + visible.length) % visible.length : 0)); }
-    if (event.key === 'Enter' && visible[cursor]) { event.preventDefault(); onAction(visible[cursor].action); onClose(); }
+    if (event.key === 'Enter' && visible[cursor]) { event.preventDefault(); activate(visible[cursor]); }
   };
 
   const trap = (event: ReactKeyboardEvent<HTMLElement>) => {
@@ -106,7 +111,7 @@ export function CommandPalette({ settings, entries, onAction, onClose, openRegex
                       className={position === cursor ? 'command-row active' : 'command-row'}
                       disabled={entry.enabled === false}
                       onMouseEnter={() => setCursor(position)}
-                      onClick={() => { onAction(entry.action); onClose(); }}
+                      onClick={() => activate(entry)}
                     >
                       <Icon>{entry.icon}</Icon>
                       <span>
