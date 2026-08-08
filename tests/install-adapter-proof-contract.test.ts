@@ -89,6 +89,10 @@ describe('cloud install adapter proof boundary', () => {
     expect(script).toContain('persistedAfterCleanup.length === 0');
     expect(script).toContain('const MAX_PROGRESS_EVENTS = 256');
     expect(script).toContain('const MAX_REGISTRY_DIAGNOSTICS = 16');
+    expect(script).toContain('const CLEANUP_SETTLE_TIMEOUT_MS = 30_000');
+    expect(script).toContain('const CLEANUP_SETTLE_INTERVAL_MS = 250');
+    expect(script).toContain('await waitForTargetAbsence(installed, appId)');
+    expect(script).toContain("installedService.list(true), 'post-cleanup discovery'");
     expect(script).toContain('changedEntryCount: changedRegistryEntries.length');
     expect(script).toContain("hive: entry.key.toUpperCase().startsWith('HKEY_CURRENT_USER\\\\') ? 'HKEY_CURRENT_USER' : 'HKEY_LOCAL_MACHINE'");
     expect(script).not.toContain('registryKey: entry.key');

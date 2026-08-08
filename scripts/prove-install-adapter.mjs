@@ -8,6 +8,8 @@ const PROOF_SCHEMA = 'ding-ding-app-store.install-proof.v1';
 const DEFAULT_TIMEOUT_MS = 20 * 60_000;
 const MAX_PROGRESS_EVENTS = 256;
 const MAX_REGISTRY_DIAGNOSTICS = 16;
+const CLEANUP_SETTLE_TIMEOUT_MS = 30_000;
+const CLEANUP_SETTLE_INTERVAL_MS = 250;
 
 function option(name, fallback = null) {
   const index = process.argv.indexOf(name);
@@ -109,6 +111,20 @@ function withProofTimeout(work, label) {
     }, remaining);
   });
   return Promise.race([work, timeout]).finally(() => clearTimeout(timer));
+}
+
+async function waitForTargetAbsence(installedService, targetAppId) {
+  const settleDeadline = Math.min(deadline, Date.now() + CLEANUP_SETTLE_TIMEOUT_MS);
+  let records = [];
+  do {
+    records = (await withProofTimeout(installedService.list(true), 'post-cleanup discovery'))
+      .filter((record) => record.appId === targetAppId);
+    if (records.length === 0) return records;
+    const remaining = settleDeadline - Date.now();
+    if (remaining <= 0) return records;
+    await new Promise((resolve) => setTimeout(resolve, Math.min(CLEANUP_SETTLE_INTERVAL_MS, remaining)));
+  } while (Date.now() < settleDeadline);
+  return records;
 }
 
 const heartbeat = setInterval(() => {
@@ -218,7 +234,7 @@ try {
     const removed = await withProofTimeout(operationService.uninstall({ appId, decision: 'uninstall' }), 'uninstall');
     cleanup = { attempted: true, ok: removed.ok, message: removed.message };
   }
-  const afterCleanup = (await withProofTimeout(installed.list(true), 'post-cleanup discovery')).filter((record) => record.appId === appId).map((record) => ({
+  const afterCleanup = (await waitForTargetAbsence(installed, appId)).map((record) => ({
     appId: record.appId, version: record.version, source: record.source, hasUninstall: Boolean(record.uninstall),
   }));
   const persistedAfterCleanup = (await withProofTimeout(installed.list(false), 'persisted cleanup verification')).filter((record) => record.appId === appId).map((record) => ({
