@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { el } from '../el';
 import { Icon } from '../icons';
@@ -25,6 +25,11 @@ export function SearchBox({ surface, placeholder, openBuilder, onBuilderHandled,
 }) {
   const { state, setQuery, setRegex } = useSurfaceSearch(surface);
   const [builderOpen, setBuilderOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const closeBuilder = () => {
+    setBuilderOpen(false);
+    window.setTimeout(() => inputRef.current?.focus(), 0);
+  };
 
   useEffect(() => {
     if (!openBuilder) return;
@@ -36,6 +41,7 @@ export function SearchBox({ surface, placeholder, openBuilder, onBuilderHandled,
     <div className={className ? `search-wrap ${className}` : 'search-wrap'} {...el('search-field')}>
       <Icon>search</Icon>
       <input
+        ref={inputRef}
         id={searchInputId(surface)}
         type="search"
         value={state.query}
@@ -50,8 +56,8 @@ export function SearchBox({ surface, placeholder, openBuilder, onBuilderHandled,
       />
       {state.regex && <span className="regex-chip">/{state.regex.flags}</span>}
       {state.query && <button className="icon-button" {...el('icon-button')} aria-label={`Clear search in ${surface}`} onClick={() => { setQuery(''); setRegex(null); }}><Icon>close</Icon></button>}
-      <button className="icon-button" {...el('icon-button')} aria-label="Open full regex builder" aria-expanded={builderOpen} onClick={() => setBuilderOpen((open) => !open)}><Icon>regular_expression</Icon></button>
-      {builderOpen && <RegexBuilder query={state.query} onClose={() => setBuilderOpen(false)} onApply={(pattern, flags) => { setQuery(pattern); setRegex({ pattern, flags }); setBuilderOpen(false); }} />}
+      <button className="icon-button" {...el('icon-button')} aria-label="Open full regex builder" aria-expanded={builderOpen} onClick={() => builderOpen ? closeBuilder() : setBuilderOpen(true)}><Icon>regular_expression</Icon></button>
+      {builderOpen && <RegexBuilder query={state.query} onClose={closeBuilder} onApply={(pattern, flags) => { setQuery(pattern); setRegex({ pattern, flags }); closeBuilder(); }} />}
     </div>
   );
 }

@@ -15,6 +15,7 @@
     .docs-layout, .settings-grid, .schedule-grid { grid-template-columns: 1fr; }
     .docs-layout nav { position: static; }
     .appearance-panel { top: auto; left: 0; right: 0; bottom: 0; width: 100%; max-height: 62vh; border-left: 0; border-top: 1px solid color-mix(in srgb, var(--outline) 40%, transparent); }
+    .date-range { grid-template-columns: 1fr 1fr; }
     .source-terminal-panel { inset: 54px 10px 10px; width: auto; min-width: 0; max-height: calc(100vh - 64px); border-radius: 22px; }
   }
 
@@ -43,7 +44,14 @@
     .update-banner { align-items: flex-start; flex-wrap: wrap; }
     .update-banner button { flex: 1 1 auto; }
     .key-row { grid-template-columns: 1fr; }
-    .snackbar { right: 14px; bottom: 86px; width: calc(100vw - 28px); }
+    .snackbar-stack { right: 14px; bottom: 86px; width: calc(100vw - 28px); }
+    .snackbar { width: 100%; }
+    .notification-center { top: 48px; padding: 18px 14px 92px; }
+    .date-range { grid-template-columns: 1fr; }
+    .calendar-field input { min-height: 44px; }
+    .bulk-toolbar > strong { flex-basis: 100%; }
+    .bulk-toolbar button { flex: 1 1 145px; }
+    .changelog-viewer { padding: 16px; }
     .sub-tab-row button { flex: 1 1 120px; }
   }
 }

@@ -6,6 +6,10 @@
 
 Settings is divided into General, Appearance, Schedule, and About browser-style sub-tabs. Each sub-tab owns a search box and adjacent full regex builder and reports match counts on its tab. General persists exactly three language modes—English, playful Hong Kong Cantonese, and bilingual—plus independent English and Cantonese funny levels from 1 to 5. Appearance persists system/light/dark theme, comfortable/compact/spacious density, a six-digit accent color, and a user-selected display name.
 
+About includes a searchable in-app changelog for every existing release tag in the baseline, preserving real tag gaps and duplicate target commits. Typed or native-calendar start/end filters compose with text or regex search; selected or filtered entries can be copied or exported with full commit SHAs. Validation rejects missing or shortened SHAs instead of rendering an unverifiable link.
+
+The external-editor card persists Visual Studio Code as the preferred editor and exposes detection plus export-opening controls for catalog, activity, notifications, and changelog records. The renderer sends only a typed record kind, suggested filename, MIME type, and content. Until a reviewed privileged adapter implements installation discovery, controlled temporary-file creation, and launch, the controls report unavailable and normal downloads remain usable; no executable path or command is guessed.
+
 The display name changes the title bar label only. Package identity, user-data directory, installer name, feed, and diagnostic product identity remain fixed. Reset restores the shipped values.
 
 ## Configuration

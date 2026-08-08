@@ -19,13 +19,14 @@ import { ActionDialog } from './components/ActionDialog';
 import type { ActionKind, ImmediateActionKind } from './components/ActionDialog';
 import { AppearancePanel } from './components/AppearancePanel';
 import { CommandPalette } from './components/CommandPalette';
+import { NotificationCenter } from './components/NotificationCenter';
+import { SnackbarStack } from './components/SnackbarStack';
 import { SourceTerminalPanel } from './components/SourceTerminalPanel';
 import { TabRail } from './components/TabRail';
 import { el } from './el';
 import { downloadText, pickTextFile } from './files';
 import { Icon } from './icons';
 import { formatAbsolute, label } from './i18n';
-import type { Notice } from './notify';
 import { AppsPage } from './pages/AppsPage';
 import type { RunningAction } from './pages/AppsPage';
 import { ActivityPage } from './pages/ActivityPage';
@@ -38,6 +39,7 @@ import type { SurfaceId } from './search';
 import { useAppearance, useAppearanceVars } from './state/use-appearance';
 import { useSchedule } from './state/use-schedule';
 import { useSettings } from './state/use-settings';
+import { useNotifications } from './state/use-notifications';
 import { newGroupId, orderedTabIds, useWorkspace } from './state/use-workspace';
 
 const PAGE_SUBTITLE: Partial<Record<TabId, { en: string; yue: string }>> = {
@@ -49,8 +51,8 @@ const PAGE_SUBTITLE: Partial<Record<TabId, { en: string; yue: string }>> = {
 };
 
 export function App() {
-  const [toast, setToast] = useState<Notice | null>(null);
-  const notify = useCallback((notice: Notice) => setToast(notice), []);
+  const notifications = useNotifications();
+  const notify = notifications.notify;
 
   const { settings, save: saveSettings, patch: patchSetting } = useSettings(notify);
   const workspace = useWorkspace(notify);
@@ -64,7 +66,7 @@ export function App() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [installed, setInstalled] = useState<InstalledAppRecord[]>([]);
-  const [action, setAction] = useState<{ kind: 'uninstall'; app: CatalogApp; returnFocus: HTMLButtonElement } | null>(null);
+  const [action, setAction] = useState<{ kind: 'uninstall'; apps: CatalogApp[]; returnFocus: HTMLButtonElement } | null>(null);
   const [runningAction, setRunningAction] = useState<RunningAction | null>(null);
   const [sourceTerminal, setSourceTerminal] = useState<{
     appId: string;
@@ -78,6 +80,8 @@ export function App() {
   const [updateState, setUpdateState] = useState<AppStoreUpdateState>({ status: 'idle' });
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [notificationCenterOpen, setNotificationCenterOpen] = useState(false);
+  const notificationTriggerRef = useRef<HTMLButtonElement>(null);
   const [regexRequest, setRegexRequest] = useState<SurfaceId | null>(null);
   const [overflowRequest, setOverflowRequest] = useState(false);
   const [renameRequest, setRenameRequest] = useState<string | null>(null);
@@ -88,6 +92,10 @@ export function App() {
 
   const activeTab = workspace.workspace.activeTabId;
   const announce = useCallback((message: string) => setAnnouncement(message), []);
+  const closeNotificationCenter = useCallback(() => {
+    setNotificationCenterOpen(false);
+    window.setTimeout(() => notificationTriggerRef.current?.focus(), 0);
+  }, []);
 
   const loadCatalog = useCallback(async (refresh = false) => {
     setLoading(true);
@@ -139,46 +147,67 @@ export function App() {
     if (returnFocus) window.setTimeout(() => returnFocus.focus(), 0);
   }, [action]);
 
-  const startAction = useCallback(async (kind: ActionKind, selectedApp: CatalogApp, trigger: HTMLButtonElement) => {
-    if (kind === 'uninstall') {
-      setAction({ kind, app: selectedApp, returnFocus: trigger });
+  const runImmediateBatch = useCallback(async (kind: ImmediateActionKind, selectedApps: CatalogApp[], trigger: HTMLButtonElement) => {
+    if (operationRunningRef.current) return;
+    if (kind === 'build' && selectedApps.length !== 1) {
+      notify({ ok: false, message: `Source repair supports one selected application at a time. ${selectedApps.length} were selected; none were started.` });
       return;
     }
-    if (operationRunningRef.current) return;
     operationRunningRef.current = true;
-    const next: RunningAction = { kind: kind as ImmediateActionKind, appId: selectedApp.id };
-    setRunningAction(next);
-    announce(kind === 'install' ? `Installing ${selectedApp.name}` : `Preparing the source install for ${selectedApp.name}`);
-    try {
-      if (kind === 'build') {
-        setSourceTerminal({ appId: selectedApp.id, appName: selectedApp.name, jobId: null, events: [], returnFocus: trigger });
+    if (kind === 'build') {
+      const selectedApp = selectedApps[0];
+      setRunningAction({ kind, appId: selectedApp.id, completed: 0, total: 1 });
+      announce(`Preparing the source install for ${selectedApp.name}`);
+      setSourceTerminal({ appId: selectedApp.id, appName: selectedApp.name, jobId: null, events: [], returnFocus: trigger });
+      try {
         const result = await window.dingDingStore.sourceJobs.start({ appId: selectedApp.id, decision: 'build' });
-        const jobId = result.jobId;
-        if (!result.ok || !jobId) {
+        if (!result.ok || !result.jobId) {
           setSourceTerminal((current) => current && current.appId === selectedApp.id ? { ...current, fallbackMessage: result.message } : current);
           reportOperation(result);
           operationRunningRef.current = false;
           setRunningAction(null);
         } else {
+          const jobId = result.jobId;
           setSourceTerminal((current) => current && current.appId === selectedApp.id ? { ...current, jobId } : current);
         }
-        return;
-      }
-      const result = await window.dingDingStore.operations.install({ appId: selectedApp.id, decision: 'install' });
-      reportOperation(result);
-    } catch (error) {
-      const message = (error as Error).message;
-      if (kind === 'build') setSourceTerminal((current) => current && current.appId === selectedApp.id ? { ...current, fallbackMessage: message } : current);
-      reportOperation({ ok: false, message });
-      operationRunningRef.current = false;
-      setRunningAction(null);
-    } finally {
-      if (kind !== 'build') {
+      } catch (error) {
+        const message = (error as Error).message;
+        setSourceTerminal((current) => current && current.appId === selectedApp.id ? { ...current, fallbackMessage: message } : current);
+        reportOperation({ ok: false, message });
         operationRunningRef.current = false;
         setRunningAction(null);
       }
+      return;
     }
-  }, [announce, reportOperation]);
+    try {
+      for (const [index, selectedApp] of selectedApps.entries()) {
+        const next: RunningAction = { kind, appId: selectedApp.id, completed: index, total: selectedApps.length };
+        setRunningAction(next);
+        announce(`Installing ${selectedApp.name}`);
+        try {
+          const result = await window.dingDingStore.operations.install({ appId: selectedApp.id, decision: 'install' });
+          reportOperation(result);
+        } catch (error) {
+          reportOperation({ ok: false, message: (error as Error).message });
+        }
+        setRunningAction({ kind, appId: selectedApp.id, completed: index + 1, total: selectedApps.length });
+      }
+    } finally {
+      operationRunningRef.current = false;
+      setRunningAction(null);
+    }
+  }, [announce, notify, reportOperation]);
+
+  const startAction = useCallback(async (kind: ActionKind, selectedApp: CatalogApp, trigger: HTMLButtonElement) => {
+    if (kind === 'uninstall') { setAction({ kind, apps: [selectedApp], returnFocus: trigger }); return; }
+    await runImmediateBatch(kind, [selectedApp], trigger);
+  }, [runImmediateBatch]);
+
+  const startBulkAction = useCallback(async (kind: ActionKind, selectedApps: CatalogApp[], trigger: HTMLButtonElement) => {
+    if (!selectedApps.length) return;
+    if (kind === 'uninstall') { setAction({ kind, apps: selectedApps, returnFocus: trigger }); return; }
+    await runImmediateBatch(kind, selectedApps, trigger);
+  }, [runImmediateBatch]);
 
   useEffect(() => {
     void loadCatalog();
@@ -204,6 +233,12 @@ export function App() {
   }, [workspace.workspace.rail.width]);
 
   const openSurface = useCallback((surface: SurfaceId) => {
+    if (surface === 'notifications') { setNotificationCenterOpen(true); return; }
+    if (surface === 'changelog') {
+      workspace.dispatch({ type: 'activate', id: 'settings' });
+      setSubTab('settings.about');
+      return;
+    }
     if (surface.startsWith('settings.')) {
       workspace.dispatch({ type: 'activate', id: 'settings' });
       setSubTab(surface as SettingsSubTabId);
@@ -259,6 +294,8 @@ export function App() {
     const [first, second] = rest;
     switch (verb) {
       case 'refresh-catalog': case 'refresh-catalog-now': void loadCatalog(true); return;
+      case 'open-notifications': setNotificationCenterOpen(true); return;
+      case 'open-changelog': openSurface('settings.about'); focusLater('changelog-title'); return;
       case 'clear-all-searches': search.dispatch({ type: 'clear-all' }); announce('All searches cleared'); return;
       case 'focus-tab-search': focusLater('search-tabs'); return;
       case 'open-regex': openSurface(arg as SurfaceId); setRegexRequest(arg as SurfaceId); return;
@@ -383,6 +420,7 @@ export function App() {
         return;
       }
       if (event.key === 'Escape') {
+        if (notificationCenterOpen) { closeNotificationCenter(); return; }
         if (paletteOpen) { setPaletteOpen(false); return; }
         if (action) { closeAction(); return; }
         if (panelOpen) { setPanelOpen(false); return; }
@@ -392,7 +430,7 @@ export function App() {
     };
     window.addEventListener('keydown', listener);
     return () => window.removeEventListener('keydown', listener);
-  }, [activeTab, workspace, runCommand, createGroup, announce, paletteOpen, action, closeAction, panelOpen, appearance, search]);
+  }, [activeTab, workspace, runCommand, createGroup, announce, paletteOpen, action, closeAction, panelOpen, notificationCenterOpen, closeNotificationCenter, appearance, search]);
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -477,6 +515,7 @@ export function App() {
           <strong {...el('titlebar-brand')}>{settings.displayName}</strong>
           <span className="dev-badge" {...el('titlebar-badge')}>Preview 0.1.0</span>
           <div className="drag-space" />
+          <button ref={notificationTriggerRef} className="notification-button" onClick={() => setNotificationCenterOpen(true)} aria-label={`Open notification centre, ${notifications.unreadCount} unread`}><Icon>notifications</Icon>{notifications.unreadCount > 0 && <span className="notification-count" aria-hidden="true">{Math.min(notifications.unreadCount, 99)}</span>}</button>
           <button onClick={() => window.dingDingStore.window.minimize()} aria-label="Minimize"><Icon>remove</Icon></button>
           <button onClick={() => window.dingDingStore.window.toggleMaximize()} aria-label="Maximize or restore"><Icon>crop_square</Icon></button>
           <button className="close-window" onClick={() => window.dingDingStore.window.close()} aria-label="Close"><Icon>close</Icon></button>
@@ -530,13 +569,15 @@ export function App() {
               settings={settings}
               loading={loading}
               onAction={(kind, app, trigger) => void startAction(kind, app, trigger)}
+              onBulkAction={(kind, selectedApps, trigger) => void startBulkAction(kind, selectedApps, trigger)}
               runningAction={runningAction}
+              notify={notify}
               openRegex={regexRequest === activeTab}
               onRegexHandled={() => setRegexRequest(null)}
             />
           )}
           {activeTab === 'docs' && <DocsPage settings={settings} openRegex={regexRequest === 'docs'} onRegexHandled={() => setRegexRequest(null)} articleRequest={docRequest} onArticleHandled={() => setDocRequest(null)} />}
-          {activeTab === 'activity' && <ActivityPage entries={history} loading={historyLoading} settings={settings} openRegex={regexRequest === 'activity'} onRegexHandled={() => setRegexRequest(null)} />}
+          {activeTab === 'activity' && <ActivityPage entries={history} loading={historyLoading} settings={settings} openRegex={regexRequest === 'activity'} onRegexHandled={() => setRegexRequest(null)} notify={notify} />}
           {activeTab === 'settings' && (
             <SettingsPage
               settings={settings}
@@ -557,6 +598,7 @@ export function App() {
 
         {action && <ActionDialog action={action} settings={settings} onClose={closeAction} onResult={reportOperation} />}
 
+        {notificationCenterOpen && <NotificationCenter records={notifications.records} settings={settings} persistenceAvailable={notifications.persistenceAvailable} onDismissMany={notifications.dismissMany} onDeleteMany={notifications.deleteMany} notify={notify} onClose={closeNotificationCenter} openRegex={regexRequest === 'notifications'} onRegexHandled={() => setRegexRequest(null)} />}
         {sourceTerminal && (
           <SourceTerminalPanel
             appName={sourceTerminal.appName}
@@ -579,14 +621,7 @@ export function App() {
           />
         )}
 
-        {toast && (
-          <div className={`snackbar ${toast.ok ? 'success' : 'error'}`} role="status" {...el('snackbar')}>
-            <Icon>{toast.ok ? 'check_circle' : 'error'}</Icon>
-            <span>{toast.message}</span>
-            {toast.undo && <button className="text-button" onClick={() => { toast.undo?.run(); setToast(null); }}>{toast.undo.label}</button>}
-            <button className="icon-button" {...el('icon-button')} onClick={() => setToast(null)} aria-label="Dismiss notification"><Icon>close</Icon></button>
-          </div>
-        )}
+        <SnackbarStack notices={notifications.active} onDismiss={notifications.dismiss} />
 
         <div className="visually-hidden" role="status" aria-live="polite">{announcement}</div>
       </div>

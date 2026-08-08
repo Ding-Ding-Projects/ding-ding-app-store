@@ -42,7 +42,7 @@ Tabs, search, command palette, settings, appearance, and notifications.
 - [Command palette](./experience/command-palette.md) — **shipped** — Opens with Ctrl+Shift+F and searches page, tab, appearance, schedule, search, setting, and catalog-app registry entries.
 - [Settings, language, and display name](./experience/settings-language-and-display-name.md) — **shipped** — Persists language, two independent funny levels, theme, density, accent, and a display-only app name through tabbed searchable settings.
 - [Appearance editor](./experience/appearance-editor.md) — **limited** — Registers shell elements for bounded live CSS-variable overrides with per-element reset, import/export, and main-process validation.
-- [Notifications and operation status](./experience/notifications-and-status.md) — **limited** — Uses corner toasts and a persistent updater banner for non-decision state while keeping install/removal decisions in native dialogs.
+- [Notifications and operation status](./experience/notifications-and-status.md) — **limited** — Stacks corner snackbars, retains searchable notification history, and keeps destructive decisions behind native super-confirmation.
 
 ## Documentation
 

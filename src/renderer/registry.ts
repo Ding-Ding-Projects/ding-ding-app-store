@@ -37,6 +37,7 @@ const STATIC_COMMANDS = [
   'check-store-update', 'refresh-catalog-now', 'toggle-self-update-repeat', 'toggle-catalog-refresh',
   'toggle-quiet-hours', 'apply-quiet-night', 'show-next-runs', 'toggle-badges', 'toggle-color-bar',
   'toggle-pinned-icon-only', 'save-schedule', 'reset-schedule',
+  'open-notifications', 'open-changelog',
 ] as const;
 
 export type StaticCommandId = (typeof STATIC_COMMANDS)[number];
@@ -110,7 +111,7 @@ export const SURFACES: readonly SurfaceRow[] = [
   { surface: 'settings.general', icon: 'settings', en: 'Settings · General', yue: '設定 · 一般', keywords: ['language', 'funny', 'voice'] },
   { surface: 'settings.appearance', icon: 'palette', en: 'Settings · Appearance', yue: '設定 · 外觀', keywords: ['theme', 'density', 'accent', 'rail', 'tabs'] },
   { surface: 'settings.schedule', icon: 'schedule', en: 'Settings · Schedule', yue: '設定 · 排程', keywords: ['update', 'interval', 'quiet'] },
-  { surface: 'settings.about', icon: 'info', en: 'Settings · About', yue: '設定 · 關於', keywords: ['version', 'licence', 'unsigned'] },
+  { surface: 'settings.about', icon: 'info', en: 'Settings · About', yue: '設定 · 關於', keywords: ['version', 'licence', 'unsigned', 'changelog', 'external editor', 'vscode'] },
 ];
 
 export type SettingKind = 'select' | 'range' | 'color' | 'text' | 'switch';
@@ -315,6 +316,8 @@ export function buildRegistry(context: RegistryContext): Entry[] {
 
   entries.push(
     command('refresh-catalog', 'Refresh catalog', '重新整理目錄', 'refresh', ['reload', 'apps'], 'Pages'),
+    command('open-notifications', 'Open notification centre', '開通知中心', 'notifications', ['history', 'snackbar', 'messages'], 'Pages'),
+    command('open-changelog', 'Open the changelog viewer', '開更新記錄', 'history', ['release', 'version', 'commit'], 'Pages'),
     command('clear-all-searches', 'Clear all searches', '清除所有搜尋', 'search_off', ['reset', 'filter'], 'Search'),
     command('focus-tab-search', 'Focus tab search', '跳去分頁搜尋', 'search', ['tabs', 'filter', 'ctrl shift k'], 'Search'),
   );
@@ -326,6 +329,8 @@ export function buildRegistry(context: RegistryContext): Entry[] {
   entries.push(command('open-regex:tabs', 'Open regex builder for tab search', '開分頁搜尋嘅 regex 建造器', 'regular_expression', ['regex', 'tabs'], 'Search'));
   entries.push(command('open-regex:palette', 'Open regex builder for the command palette', '開指令面板嘅 regex 建造器', 'regular_expression', ['regex', 'palette'], 'Search'));
   entries.push(command('open-regex:appearance.elements', 'Open regex builder for appearance controls', '開外觀控制嘅 regex 建造器', 'regular_expression', ['regex', 'appearance'], 'Search'));
+  entries.push(command('open-regex:notifications', 'Open regex builder for notifications', '開通知搜尋嘅 regex 建造器', 'regular_expression', ['regex', 'notifications'], 'Search'));
+  entries.push(command('open-regex:changelog', 'Open regex builder for the changelog', '開更新記錄嘅 regex 建造器', 'regular_expression', ['regex', 'changelog'], 'Search'));
 
   for (const tab of workspace.tabs) {
     const meta = TAB_META[tab.id];
