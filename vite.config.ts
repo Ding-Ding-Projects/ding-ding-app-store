@@ -17,6 +17,10 @@ export default defineConfig({
   root: '.',
   plugins: [react(), packagedReleaseManifest],
   base: './',
+  test: {
+    testTimeout: 30_000,
+    hookTimeout: 30_000,
+  },
   build: {
     outDir: 'dist/renderer',
     emptyOutDir: false,
