@@ -2,6 +2,7 @@ import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { validateArticleLinks } from './docs-link-graph.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const check = process.argv.includes('--check');
@@ -135,6 +136,8 @@ for (const expected of articles) {
   const relative = `docs/features/${expected.category}/${expected.id}.md`;
   rows.push(parseArticle(await readFile(path.join(root, relative), 'utf8'), expected));
 }
+const linkFailures = validateArticleLinks(rows);
+if (linkFailures.length) throw new Error(`Documentation link graph failed:\n${linkFailures.map((item) => `- ${item}`).join('\n')}`);
 const outputs = await expectedOutputs(rows);
 
 const expectedCanonical = new Set(['docs/features/README.md', ...categories.map((row) => `docs/features/${row.id}/README.md`), ...articles.map((row) => `docs/features/${row.category}/${row.id}.md`)]);
