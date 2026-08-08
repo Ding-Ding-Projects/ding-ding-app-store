@@ -4,6 +4,12 @@
 
 The repository contains a sandboxed Electron/React/TypeScript shell, reviewed 24-application catalog, stable-release/update comparison, SHA-256-gated installer path, protected uninstall path, App Store self-updater state machine, Material Design 3 navigation, language/funny-level settings, regex builder, command palette, real local operation history with export, generated offline documentation, and a fail-closed common automatic source-repair runtime.
 
+## 2026-08-08 optional spoken narrator
+
+- Added persisted optional narrator settings (disabled by default), English/Hong Kong Cantonese/both delivery, renderer-only `speechSynthesis`, serialized utterances, stale pending-line replacement, routine category cooldowns, error delivery, and immediate cancellation for quiet hours or reduced-sound mode.
+- The narrator uses only already-visible notification text; it has no IPC surface, network request, recording, secret, or privileged audio bridge. Browser platforms do not disclose screen-reader presence, so the queue yields only to an explicit `data-screen-reader-active` integration marker instead of guessing.
+- Verification: focused narrator/settings contracts passed 35 tests; `npm run check` passed 212 root tests plus package suites; `npm run build` passed renderer/main/preload. Packaged hidden-desktop speech and actual screen-reader handoff remain runtime evidence gaps.
+
 ## 2026-08-08 bounded release inventory compaction
 
 - The release workflow now saves the paginated GitHui release response as a bounded raw file, then runs `scripts/compact-release-inventory.mjs` before generating the in-app changelog. The compactor and generator enforce 32 pages, 2,000 records, 16 MiB raw input, 64 KiB per release body, and emit only the tag, draft state, publication time, trusted URL candidate, and exact source/dim-sum evidence lines needed by the manifest generator.

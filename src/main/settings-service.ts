@@ -15,6 +15,9 @@ const settingsSchema = z.object({
   accent: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   displayName: z.string().trim().min(1).max(64),
   automaticRepairConsent: z.boolean().default(false),
+  narratorEnabled: z.boolean().default(false),
+  narratorLanguage: z.enum(['en', 'yue', 'both']).default('both'),
+  narratorReducedSound: z.boolean().default(false),
 });
 
 export class SettingsService {

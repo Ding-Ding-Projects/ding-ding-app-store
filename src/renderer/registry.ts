@@ -168,6 +168,13 @@ export const SETTING_FIELDS: readonly SettingField[] = [
   },
   { key: 'englishFunnyLevel', section: 'general', kind: 'range', min: 1, max: 5, en: 'English funny level', yue: 'English 幽默程度', keywords: ['tone', 'humour', 'voice'], explanation: { en: 'Styles English copy from serious (1) to maximum playful (5), including warnings and errors without changing their facts.', yue: '調校英文語氣，由嚴肅（1）到最玩味（5），連警告同錯誤都包括，但事實唔變。' }, defaultValue: '2' },
   { key: 'cantoneseFunnyLevel', section: 'general', kind: 'range', min: 1, max: 5, en: '粵語 funny level', yue: '粵語幽默程度', keywords: ['tone', 'humour', 'voice'], explanation: { en: 'Styles Cantonese copy from serious (1) to maximum playful (5), including warnings and errors without changing their facts.', yue: '調校粵語語氣，由嚴肅（1）到最玩味（5），連警告同錯誤都包括，但事實唔變。' }, defaultValue: '4' },
+  { key: 'narratorEnabled', section: 'general', kind: 'switch', en: 'Spoken narrator', yue: '語音旁白', keywords: ['speech', 'tts', 'voice', 'screen reader', 'quiet'], explanation: { en: 'Keeps optional renderer-only speech off until you enable it. It speaks notification facts without opening a network or privileged audio channel, yields when the app is marked as serving a screen reader, and stays silent during quiet hours or reduced-sound mode.', yue: '預設關閉可選嘅 renderer 語音；開咗都只會講通知事實，唔會開網絡或者高權限音訊通道。程式標記正服務螢幕閱讀器、靜音時間或者減少聲音模式時都會讓路。' }, defaultValue: 'false' },
+  { key: 'narratorLanguage', section: 'general', kind: 'select', en: 'Narrator language', yue: '旁白語言', keywords: ['speech', 'english', 'cantonese', 'both', 'voice'], explanation: { en: 'Chooses English, Hong Kong Cantonese, or both for the optional narrator. Both is serialized: English finishes before Cantonese begins.', yue: '揀可選旁白用英文、香港粵語，定係兩樣都講；兩樣都講時，英文講完先到粵語，唔會疊住。' }, defaultValue: 'both', options: [
+    { value: 'en', en: 'English', yue: 'English' },
+    { value: 'yue', en: 'Hong Kong Cantonese', yue: '香港粵語' },
+    { value: 'both', en: 'English then Hong Kong Cantonese', yue: '英文，然後香港粵語' },
+  ] },
+  { key: 'narratorReducedSound', section: 'general', kind: 'switch', en: 'Reduce narrator sound', yue: '減少旁白聲音', keywords: ['speech', 'quiet', 'reduced sound', 'accessibility'], explanation: { en: 'Silences the optional narrator immediately while leaving visual notifications, notification history, and assistive-technology announcements available.', yue: '即刻收埋可選旁白，但畫面通知、通知記錄同輔助科技提示照樣保留。' }, defaultValue: 'false' },
   { key: 'automaticRepairConsent', section: 'general', kind: 'switch', en: 'Allow isolated automatic source repair', yue: '允許隔離自動 source 修正', keywords: ['source', 'repair', 'opencode', 'consent', 'isolation'], explanation: { en: 'Allows OpenCode to repair a reviewed source build only inside an attested disposable guest; normal installs never use it and the app fails closed without isolation.', yue: '只容許 OpenCode 喺驗證過、一次性隔離環境修正已審核 source build；普通安裝唔會用，冇隔離就安全停低。' }, defaultValue: 'false' },
   {
     key: 'theme', section: 'appearance', kind: 'select', en: 'Theme', yue: '主題',
@@ -195,7 +202,7 @@ export const SETTING_FIELDS: readonly SettingField[] = [
 
 /** Hand-written completeness list: adding a setting requires its explanation and fallback contract. */
 export const SETTINGS_EXPLANATION_KEYS = [
-  'language', 'englishFunnyLevel', 'cantoneseFunnyLevel', 'automaticRepairConsent',
+  'language', 'englishFunnyLevel', 'cantoneseFunnyLevel', 'narratorEnabled', 'narratorLanguage', 'narratorReducedSound', 'automaticRepairConsent',
   'theme', 'density', 'accent', 'displayName',
 ] as const satisfies readonly (keyof UserSettings)[];
 

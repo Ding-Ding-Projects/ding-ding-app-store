@@ -30,10 +30,11 @@ The wiki mirrors the same canonical feature articles bundled into the applicatio
 - [Tab workspace](Tab-Navigation) — **shipped** — Keeps six recoverable browser-style pages in a persistent four-edge tab rail with pinning, groups, independent searches, bulk close/reopen, overflow, keyboard control, and JSON import/export.
 - [Search and regex builder](Search-and-Regex-Builder) — **shipped** — Gives every current collection/settings surface independent plain-text-first search and the same adjacent guided JavaScript regex builder.
 - [Command palette](Command-Palette) — **shipped** — Opens with Ctrl+Shift+F and searches page, tab, appearance, schedule, search, setting, and catalog-app registry entries.
-- [Settings, language, and display name](Settings-Language-and-Display-Name) — **shipped** — Persists language, two independent funny levels, theme, density, accent, and a display-only app name through tabbed searchable settings.
+- [Settings, language, and display name](Settings-Language-and-Display-Name) — **shipped** — Persists language, two independent funny levels, optional narrator preferences, theme, density, accent, and a display-only app name through tabbed searchable settings.
+- [Optional spoken narrator](Optional-Spoken-Narrator) — **shipped** — Optional renderer-only notification speech with serialized English and Hong Kong Cantonese delivery.
 - [External editor exports](External-Editor-Exports) — **shipped** — Exports every exposed record and view to an app-owned VS Code workspace through a validated, shell-free main-process adapter.
 - [Appearance editor](Appearance-Editor) — **limited** — Registers shell elements for validated live CSS-variable overrides with a bidirectional colour translator, Word-depth typography controls, reset, import, and export.
-- [Notifications and operation status](Notifications-and-Status) — **limited** — Stacks corner snackbars, retains searchable notification history, and keeps destructive decisions behind native super-confirmation.
+- [Notifications and operation status](Notifications-and-Status) — **limited** — Stacks corner snackbars, retains searchable notification history, optionally narrates new notices, and keeps destructive decisions behind native super-confirmation.
 - [Dim-sum startup surprise](Dim-Sum-Surprise) — **shipped** — Gives later launches a small non-blocking dim-sum card using only metadata and a published public catalog photo URL.
 
 ## Documentation
