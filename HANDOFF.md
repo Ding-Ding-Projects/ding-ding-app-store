@@ -8,7 +8,7 @@ The repository contains a sandboxed Electron/React/TypeScript shell, reviewed 24
 
 - `main` is at `5f2fa4e2f9aac3b74d14fec479162df552e737da`, and the checkout is clean. The tab rail now uses a bounded **Move… into group…** picker with its own regex-backed search, keyboard listbox, group colour/member counts, create-group path, Escape handling, and collapsed-group preservation; canonical/site/wiki/offline documentation is synchronized.
 - Real portable install evidence is verified by Windows cloud proof `31264987569` on `c31a234`: Dim Sum Atlas v0.1.13 downloaded, SHA-256 verified, extracted, installed, rediscovered with exact App Store ownership, uninstalled, and absent after cleanup. Source/OpenCode runtime was not invoked.
-- Exact main CI `31265384689` passed. Release `31265384687` passed tests, production build, unsigned Squirrel.Windows packaging, asset verification, line counting, and publication. Published [`v0.1.0-740-1`](https://github.com/Ding-Ding-Projects/ding-ding-app-store/releases/tag/v0.1.0-740-1) targets the exact SHA and includes unsigned Setup.exe, full `.nupkg`, RELEASES, release-changelog.json, workflow timing `00:04:42`, line-count table, and `Scallop Rice Noodle Rolls · 帶子腸粉`.
+- Exact main CI `31265753034` passed. Release `31265753053` passed tests, production build, unsigned Squirrel.Windows packaging, asset verification, line counting, and publication. Published [`v0.1.0-743-1`](https://github.com/Ding-Ding-Projects/ding-ding-app-store/releases/tag/v0.1.0-743-1) targets the exact SHA and includes unsigned Setup.exe, full `.nupkg`, RELEASES, release-changelog.json, workflow timing `00:04:21`, line-count table, and `Raspberry Chocolate Bao · 紅莓朱古力包`.
 
 ## 2026-08-08 discovery-only upstream installations
 
