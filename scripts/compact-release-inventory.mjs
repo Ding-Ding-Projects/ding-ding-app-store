@@ -55,9 +55,21 @@ export function compactReleaseInventory(input) {
       body: compactBody(release.body, tag),
     };
   });
-  const compactBytes = Buffer.byteLength(JSON.stringify(compacted), 'utf8');
+  // GitHub's paginated release listing can repeat an identical row when a
+  // release is created while pages are being read. Remove only byte-identical
+  // rows; same-tag rows with different evidence remain for the generator to
+  // reject as ambiguous rather than being silently merged.
+  const unique = [];
+  const fingerprints = new Set();
+  for (const release of compacted) {
+    const fingerprint = JSON.stringify(release);
+    if (fingerprints.has(fingerprint)) continue;
+    fingerprints.add(fingerprint);
+    unique.push(release);
+  }
+  const compactBytes = Buffer.byteLength(JSON.stringify(unique), 'utf8');
   if (compactBytes > MAX_INVENTORY_BYTES) throw new Error(`Compacted GitHub release inventory exceeded ${MAX_INVENTORY_BYTES} bytes.`);
-  return compacted;
+  return unique;
 }
 
 async function main() {

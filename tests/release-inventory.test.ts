@@ -27,6 +27,11 @@ describe('release inventory compactor', () => {
     expect(compactReleaseInventory([[{ ...row, body: undefined, draft: true }]])[0].body).toBe('');
   });
 
+  it('deduplicates byte-identical pagination repeats but preserves conflicting same-tag rows', () => {
+    expect(compactReleaseInventory([[row], [{ ...row }]])).toHaveLength(1);
+    expect(compactReleaseInventory([[row], [{ ...row, body: `${row.body}\n- Source commit: \`${sha}\`` }]])).toHaveLength(2);
+  });
+
   it('feeds compacted rows through the real manifest generator', () => {
     const compacted = compactReleaseInventory([[row]]);
     const manifest = generateReleaseManifest({
