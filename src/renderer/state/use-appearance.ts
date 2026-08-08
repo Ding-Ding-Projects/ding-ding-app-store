@@ -163,12 +163,12 @@ export function useAppearanceVars(elements: AppearanceElements): void {
     for (const name of applied.current) if (!names.includes(name)) root.style.removeProperty(name);
     for (const [name, value] of pairs) root.style.setProperty(name, value);
     applied.current = names;
-    for (const element of appliedElements.current) {
-      for (const property of ['--appearance-font-family', '--appearance-font-style', '--appearance-text-decoration', '--appearance-letter-spacing', '--appearance-line-height']) element.style.removeProperty(property);
-    }
+    const appearanceProperties = ['font-family', 'font-style', 'text-decoration', 'letter-spacing', 'line-height', 'font-variation-settings', 'text-decoration-style', 'text-decoration-color', 'text-decoration-thickness', 'text-transform', 'font-variant-caps', 'vertical-align', 'direction', 'text-align', 'text-shadow'];
+    const appearanceVariables = ['--appearance-font-family', '--appearance-font-style', '--appearance-text-decoration', '--appearance-letter-spacing', '--appearance-line-height', '--appearance-font-variation-settings', '--appearance-text-decoration-style', '--appearance-text-decoration-color', '--appearance-text-decoration-thickness', '--appearance-text-transform', '--appearance-font-variant-caps', '--appearance-vertical-align', '--appearance-direction', '--appearance-text-align', '--appearance-text-shadow'];
+    for (const element of appliedElements.current) for (const property of appearanceVariables) element.style.removeProperty(property);
     const byElement = new Map<string, Record<string, string>>();
     for (const [name, value] of pairs) {
-      const match = /^--elx-([a-z0-9-]+)-(font-family|font-style|text-decoration|letter-spacing|line-height)$/.exec(name);
+      const match = /^--elx-([a-z0-9-]+)-(font-family|font-style|text-decoration|letter-spacing|line-height|font-variation-settings|text-decoration-style|text-decoration-color|text-decoration-thickness|text-transform|font-variant-caps|vertical-align|direction|text-align|text-shadow)$/.exec(name);
       if (match) (byElement.get(match[1]) ?? (byElement.set(match[1], {}), byElement.get(match[1])!))[match[2]] = value;
     }
     const nextElements: HTMLElement[] = [];

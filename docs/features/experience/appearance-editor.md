@@ -4,7 +4,7 @@ title: Appearance editor
 titleYue: 外觀編輯器
 category: experience
 status: limited
-summary: Registers shell elements for validated live CSS-variable overrides with continuous HEX/RGB/HSL colour controls, typography controls, reset, import, and export.
+summary: Registers shell elements for validated live CSS-variable overrides with a bidirectional colour translator, Word-depth typography controls, reset, import, and export.
 ---
 # Appearance editor
 
@@ -18,7 +18,7 @@ Each editable token has a keyboard-reachable **What this controls** disclosure. 
 
 ## Configuration
 
-The panel has its own search and regex builder plus Colour, Shape, Type, and Layout sub-tabs. Reset one element, reset all, ten-second reset undo, JSON export, and all-or-nothing import are available. `appearance.v1.json` stores only non-empty overrides. Colour editing now includes a continuous native field with hue, saturation, lightness, alpha, HEX/HEX8, RGB/A, and HSL/A entry, an accessible contrast readout, and an explicit note for unsupported HSV/HSB, HWB, Lab/LCH, OKLab/OKLCH, and CMYK spaces. Type editing includes searchable installed/bundled family choices, size, weight, style, underline/strike, letter spacing, and line height. More advanced Word properties (variation axes, underline colour, overline, capitalization, text effects, alignment, and pseudo-state editing) remain visible as future capability rather than silently discarded, so status is limited.
+The panel has its own search and regex builder plus Colour, Shape, Type, and Layout sub-tabs. Reset one element, reset all, ten-second reset undo, JSON export, and all-or-nothing import are available. `appearance.v1.json` stores only non-empty overrides. Colour editing has a continuous native field and an anchored translator for a bounded CSS-name set, HEX/HEX8, RGB/RGBA, HSL/HSLA, HSV/HSB, HWB, Lab/LCH, OKLab/OKLCH, and CMYK. Every space round-trips through canonical validated HEX/HEX8 with alpha, exposes copy actions, reports invalid input and sRGB clipping, and keeps the contrast readout beside the selected element. Type editing includes searchable family choices, size, weight, style, decoration lines (including overline), variation axes, underline style/colour/thickness, capitalization and small caps, baseline offset, direction, alignment, and one bounded text shadow. These values are persisted as strict tokens and consumed by closed CSS custom-property readers.
 
 ## Failure modes
 
@@ -30,7 +30,7 @@ The renderer uses closed custom-property names and CSSOM `setProperty`; it never
 
 ## Verification
 
-Tests cover the hand-written token explanation list, registry completeness, export/import round-trip, HEX8 and typography validation, unknown/prototype payloads, CSS injection fuzzing, CSSOM-only application, CSS readers for new typography tokens, and command-palette reachability. Type check and build are run on this branch; packaged capture of edit mode, keyboard selection, and panel collision behavior remains pending.
+Tests cover the hand-written token explanation list, registry completeness, export/import round-trip, HEX8 and Word-depth typography validation, every translator space with alpha round-trips, malformed input, gamut clipping, unknown/prototype payloads, CSS injection fuzzing, CSSOM-only application, CSS readers for every new token, and command-palette reachability. Type check, focused contracts, and docs generation are run on this branch; packaged capture of edit mode, keyboard selection, and panel collision behavior remains pending.
 
 ## Suggested articles
 
