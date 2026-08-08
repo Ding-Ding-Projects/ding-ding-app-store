@@ -7,6 +7,8 @@
 
 Verification reports a specific revision and labels every evidence class independently: documentation completeness, static contracts, unit/integration tests, TypeScript/build, packaged application launch, hidden-desktop interaction, screenshot, installer execution, updater state, GitHub Actions run, release record, and public deployment. A stronger-looking proxy never upgrades a missing result.
 
+Each release resolves the first unused bilingual dim-sum code name whose image is already a published `catalog-v1*` asset in the public `Ding-Ding-Projects/dim-sum-photos` catalog. The release title and notes link that public photo; this repository does not copy or attach it. Catalog failure is recorded but does not block the software release.
+
 The repository keeps genuine packaged captures for the catalog, installed, and activity surfaces. The documentation generator supplies a reproducible count and exact synchronized-output check rather than relying on a manual file list.
 
 ## Configuration
