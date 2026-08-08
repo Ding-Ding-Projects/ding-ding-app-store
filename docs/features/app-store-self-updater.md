@@ -22,4 +22,4 @@ No updater feed, package, or restart has been exercised by this docs lane. This 
 
 ## Suggested articles
 
-Read [per-app update checker](per-app-update-checker.md) for catalog application updates and [verification](verification.md) for evidence boundaries.
+Read [update schedule](update-schedule.md) for the launch check and the bounded repeat schedule that drive this state machine, [per-app update checker](per-app-update-checker.md) for catalog application updates, and [verification](verification.md) for evidence boundaries.

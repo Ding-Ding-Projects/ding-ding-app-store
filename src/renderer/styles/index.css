@@ -1,0 +1,11 @@
+/* One declared layer order for the whole shell. Every file below opens its own @layer block. */
+@layer tokens, base, components, features, responsive;
+
+@import './tokens.css';
+@import './base.css';
+@import './components.css';
+@import './nav.css';
+@import './pages.css';
+@import './appearance.css';
+@import './schedule.css';
+@import './responsive.css';

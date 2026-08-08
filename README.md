@@ -23,6 +23,10 @@ Material Design 3 desktop software center for discovering, documenting, installi
 - Stable-release comparison for every catalog entry and a separate unsigned Squirrel self-updater.
 - Installer execution owned by the main process; the renderer cannot provide commands, paths, URLs, or arguments.
 - Offline documentation articles with an in-app browser and full local search/regex builder.
+- Persistent browser-style tab rail with pinning, grouping, overflow, tab search, and complete keyboard control.
+- Per-surface search state, a full regex builder everywhere, and a command palette that reaches every page, command, setting, and appearance control.
+- Per-element appearance editor with live preview, reset, and export/import, applied through CSS custom properties only.
+- Main-process update schedule with a launch check that cannot be disabled, bounded repeat intervals, and quiet hours that hold notifications without delaying checks.
 
 </details>
 

@@ -11,7 +11,10 @@
 - [ ] Installed-app discovery and adapter validation across every supported package type
 - [ ] Complete offline wiki/repository-doc import for every catalog application
 - [x] Local operation history: every install/build/uninstall outcome recorded, filterable by action/result/date, exported as JSON/CSV/Markdown
-- [ ] Complete tab pinning/grouping, four tab searches, per-element appearance editor, and schedule editor
+- [x] Persistent tab rail with pinning, grouping, overflow, tab search, and full keyboard control
+- [x] Independent search state and a full regex builder on every surface, including the command palette
+- [x] Per-element appearance editor with live preview, reset, export, and import
+- [x] Update schedule editor with last-run/next-run reporting and quiet hours
 - [ ] Packaged-artifact hidden-desktop interaction and accessibility proof
 - [x] CI on GitHub-hosted runners (`ubuntu-latest` typecheck/tests/build on push and PR)
 - [x] Unsigned Squirrel.Windows release, verified end to end: [`v0.1.0-1`](https://github.com/Ding-Ding-Projects/ding-ding-app-store/releases/tag/v0.1.0-1) is non-draft, `Setup.exe` confirmed `NotSigned`, with `RELEASES` and a full `.nupkg`
