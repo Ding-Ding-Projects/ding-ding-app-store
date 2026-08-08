@@ -1,6 +1,16 @@
 import { createContext, createElement, Fragment, useContext, useMemo, useReducer } from 'react';
 import type { Dispatch, ReactNode } from 'react';
 import type { PersistedSurfaceId } from '../shared/contracts';
+import {
+  boundedHaystack,
+  boundedPattern,
+  regexFlagsIssue,
+  regexSafetyIssue,
+  MAX_REGEX_PATTERN_LENGTH,
+} from './regex-safety';
+
+export { MAX_REGEX_HAYSTACK_LENGTH, MAX_REGEX_MATCHES, MAX_REGEX_PATTERN_LENGTH, MAX_REGEX_SAMPLE_LENGTH, REGEX_WORKER_BUDGET_MS, REGEX_WORKER_TIMEOUT_MS, SUPPORTED_REGEX_FLAGS } from './regex-safety';
+export { regexFlagsIssue, regexSafetyIssue } from './regex-safety';
 
 /** Persisted page surfaces plus the three ephemeral renderer-only search surfaces. */
 export type SurfaceId = PersistedSurfaceId
@@ -21,23 +31,13 @@ export interface SearchState { query: string; regex: RegexMode | null }
 /** Every surface without its own state reads this frozen value; a missing key is never written on read. */
 export const EMPTY_SEARCH: SearchState = Object.freeze({ query: '', regex: null });
 
-const MAX_PATTERN = 160;
-
-/** Conservative rejection before any pattern reaches synchronous collection filtering. */
-export function regexSafetyIssue(pattern: string): string | null {
-  if (pattern.length > MAX_PATTERN) return `Patterns are limited to ${MAX_PATTERN} characters.`;
-  if (/\\[1-9]/.test(pattern)) return 'Backreferences are disabled because they can make evaluation time unpredictable.';
-  if (/(?:\.\*){2,}|(?:\.\+){2,}/.test(pattern.replace(/\\\./g, ''))) return 'Repeated unbounded wildcards are disabled.';
-  if (/\((?:\?:)?[^()]*(?:[*+]|\{\d+,?\d*\})[^()]*\)(?:[*+]|\{\d+,?\d*\})/.test(pattern)) return 'Nested quantifiers are disabled to prevent excessive backtracking.';
-  if (/\((?:\?:)?[^()]*\|[^()]*\)(?:[*+]|\{\d+,?\d*\})/.test(pattern)) return 'Quantified alternation is disabled to prevent ambiguous backtracking.';
-  return null;
-}
-
 export function compile(regex: RegexMode | null, extraFlags = ''): RegExp | null {
   if (!regex) return null;
-  if (regexSafetyIssue(regex.pattern)) return null;
+  if (regexSafetyIssue(regex.pattern) || regexFlagsIssue(regex.flags)) return null;
   try {
-    return new RegExp(regex.pattern.slice(0, MAX_PATTERN), regex.flags.replace('g', '') + extraFlags);
+    const flags = `${regex.flags}${extraFlags}`;
+    if (regexFlagsIssue(flags.replace('g', ''))) return null;
+    return new RegExp(boundedPattern(regex.pattern), flags);
   } catch {
     return null;
   }
@@ -52,12 +52,17 @@ export function makeMatcher(state: SearchState): (haystack: string) => boolean {
     const expression = compile(state.regex);
     if (!expression) return () => false;
     return (haystack: string) => {
-      expression.lastIndex = 0;
-      return expression.test(haystack);
+      try {
+        expression.lastIndex = 0;
+        return expression.test(boundedHaystack(haystack));
+      } catch {
+        // A malformed or unsupported pattern must never make a collection render fail.
+        return false;
+      }
     };
   }
-  const needle = state.query.toLocaleLowerCase();
-  return (haystack: string) => haystack.toLocaleLowerCase().includes(needle);
+  const needle = boundedPattern(state.query).toLocaleLowerCase();
+  return (haystack: string) => boundedHaystack(haystack).toLocaleLowerCase().includes(needle);
 }
 
 export const matches = (state: SearchState, haystack: string): boolean => makeMatcher(state)(haystack);
@@ -68,24 +73,34 @@ export function highlight(state: SearchState, text: string): ReactNode {
   let expression: RegExp | null;
   if (state.regex) expression = compile(state.regex, 'g');
   else {
-    try { expression = new RegExp(escapeLiteral(state.query.slice(0, MAX_PATTERN)), 'gi'); }
+    try { expression = new RegExp(escapeLiteral(boundedPattern(state.query)), 'gi'); }
     catch { expression = null; }
   }
   if (!expression) return text;
   const parts: ReactNode[] = [];
   let cursor = 0;
   let guard = 0;
-  for (const match of text.matchAll(expression)) {
-    if (guard >= 100) break;
+  const boundedText = boundedHaystack(text);
+  while (guard < 100) {
+    let match: RegExpExecArray | null;
+    try { match = expression.exec(boundedText); } catch { return text; }
+    if (!match) break;
     const index = match.index ?? 0;
-    if (!match[0]) continue;
+    if (!match[0]) {
+      // RegExp.exec does not advance on a zero-width global match. Advance one
+      // UTF-16 code unit so a pattern such as ^ or (?=.) cannot loop forever.
+      expression.lastIndex = Math.max(expression.lastIndex, index + 1);
+      guard += 1;
+      continue;
+    }
     if (index > cursor) parts.push(text.slice(cursor, index));
     parts.push(createElement('mark', { key: `${index}-${guard}` }, match[0]));
     cursor = index + match[0].length;
     guard += 1;
   }
   if (!parts.length) return text;
-  if (cursor < text.length) parts.push(text.slice(cursor));
+  if (cursor < boundedText.length) parts.push(text.slice(cursor, boundedText.length));
+  if (boundedText.length < text.length) parts.push(text.slice(boundedText.length));
   return createElement(Fragment, null, ...parts);
 }
 

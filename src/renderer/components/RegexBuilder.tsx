@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { el } from '../el';
 import { Icon } from '../icons';
 import { regexSafetyIssue } from '../search';
+import { evaluateRegexInWorker } from '../regex-evaluator';
 
 /** The one guided regex builder. Every search surface in the app renders this exact component. */
 export function RegexBuilder({ query, onApply, onClose }: { query: string; onApply: (pattern: string, flags: string) => void; onClose: () => void }) {
@@ -27,20 +28,13 @@ export function RegexBuilder({ query, onApply, onClose }: { query: string; onApp
       setResult({ error: safetyIssue, matches: [], pending: false });
       return;
     }
-    const worker = new Worker(new URL('../regex-worker.ts', import.meta.url), { type: 'module' });
+    const controller = new AbortController();
     setResult((current) => ({ ...current, pending: true, error: '' }));
-    const timeout = window.setTimeout(() => {
-      worker.terminate();
-      if (evaluationId.current === id) setResult({ error: 'Evaluation timed out after 150 ms. Adjust the pattern to avoid excessive backtracking.', matches: [], pending: false });
-    }, 150);
-    worker.addEventListener('message', (event: MessageEvent<{ id: number; error: string; matches: Array<{ text: string; groups: string[] }> }>) => {
-      if (event.data.id !== id || evaluationId.current !== id) return;
-      window.clearTimeout(timeout);
-      worker.terminate();
-      setResult({ error: event.data.error, matches: event.data.matches, pending: false });
-    }, { once: true });
-    worker.postMessage({ id, pattern: pattern.slice(0, 160), flags, sample: sample.slice(0, 10_000) });
-    return () => { window.clearTimeout(timeout); worker.terminate(); };
+    void evaluateRegexInWorker({ pattern, flags, sample }, controller.signal).then((evaluation) => {
+      if (evaluationId.current !== id) return;
+      setResult({ error: evaluation.error, matches: evaluation.matches, pending: false });
+    });
+    return () => controller.abort();
   }, [pattern, flags, sample]);
   const add = (value: string) => setPattern((current) => `${current}${value}`.slice(0, 160));
 
