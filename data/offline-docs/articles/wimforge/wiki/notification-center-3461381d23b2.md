@@ -1,0 +1,90 @@
+# Notification Center
+
+The notification center is a durable, non-blocking activity ledger. It has its own local Git repository so status survives project changes and every notification lifecycle action remains auditable.
+
+## Storage model
+
+The default store is the application's local-data directory plus `notification-center`. The exact resolved path is shown on the History page. A custom CLI store can be selected with `--store`.
+
+The repository contains:
+
+- `notifications.json` — current notification state;
+- `events.jsonl` — immutable event records;
+- `.git` — the complete local history.
+
+The store refuses to initialize inside a WimForge project directory. Keeping it separate prevents project commits and application-wide notifications from becoming one ambiguous history.
+
+## Committed actions
+
+Every successful action writes state/event data atomically and creates a Git commit:
+
+| Action | Result |
+| --- | --- |
+| New | Stable notification ID, title, message, severity, source, timestamps, optional JSON data |
+| Read | Marks the item read |
+| Unread | Returns it to the unread count |
+| Dismiss | Hides it from the normal active list without deleting the record |
+| Restore | Makes a dismissed or deleted record active again |
+| Delete | Writes a tombstone; the record and Git ancestry remain recoverable |
+
+Supported severities are `info`, `success`, `warning`, `error`, and `progress`.
+
+Undo uses `git revert` on the latest store commit. Reverting that revert performs redo, so undo-of-undo remains normal Git history rather than a destructive reset.
+
+## Interface behavior
+
+The bell opens a Material drawer inside the application. It is exposed as a bilingual accessible dialog; opening it moves keyboard focus to the named close control. Escape closes the drawer, and focus returns to the notification bell so keyboard users do not lose their place. The notification list and each item report list/list-item, severity, read/dismiss/delete state, title, and message semantics.
+
+Bell 會喺 app 入面開 drawer，並向輔助技術報告做雙語 dialog。開啟時鍵盤 focus 會去有名稱嘅關閉掣；撳 Escape 關閉之後，focus 會返去通知 bell，鍵盤用家唔會唔知去咗邊。通知清單同每一項會報 list／list item、嚴重程度、讀／dismiss／delete 狀態、標題同訊息。
+
+It shows unread count, icon/text state, and actions for read/unread, dismiss, restore, and recoverable delete. Initialization, refresh, add, read/unread, dismiss, delete, restore, and undo operations are serialized on a background worker; the drawer does not wait synchronously for Git or suspend the main event loop and servicing jobs. The project rail includes notification work in its background status/progress.
+
+Bell 會喺 app 入面開 Material drawer，顯示未讀數量同讀／未讀、dismiss、restore、可復原 delete 操作。初始化、refresh、新通知、讀／未讀、dismiss、delete、restore 同 undo 會順序排去後台 worker 做；drawer 唔會同步企喺度等 Git，亦唔會塞住 UI event loop 或 servicing job。工程 rail 嘅後台狀態／進度亦會包括通知工作。
+
+Errors, completion, operator-approved OpenCode setup, and servicing status can create persistent entries. OpenCode discovery never starts merely because the elevated desktop launched. Short feedback can also appear as a snackbar. Recovery choices use in-app surfaces instead of native blocking dialogs.
+
+The History page shows the repository path, explains tombstones, creates a test event, and can undo the latest notification change.
+
+## CLI examples
+
+```powershell
+$store = 'C:\State\WimForgeNotifications'
+
+.\WimForgeCli.exe --store $store notifications new `
+  --title "ISO complete" `
+  --message "Boot-test the image before deployment." `
+  --severity success `
+  --data '{"project":"MyProject"}'
+
+.\WimForgeCli.exe --store $store notifications read NOTIFICATION_ID
+.\WimForgeCli.exe --store $store notifications unread NOTIFICATION_ID
+.\WimForgeCli.exe --store $store notifications dismiss NOTIFICATION_ID
+.\WimForgeCli.exe --store $store notifications restore NOTIFICATION_ID
+.\WimForgeCli.exe --store $store notifications delete NOTIFICATION_ID
+.\WimForgeCli.exe --store $store notifications list --all --json
+.\WimForgeCli.exe --store $store notifications events --limit 100
+.\WimForgeCli.exe --store $store notifications history
+.\WimForgeCli.exe --store $store notifications undo
+.\WimForgeCli.exe --store $store notifications redo
+```
+
+## Complete-save behavior
+
+GUI and CLI `.wimforge` exports include the notification repository beside the project repository. The hidden `.git` directory, events, current state, refs, objects, reflogs, and undo/redo commits are included. Import restores both histories before the project is opened.
+
+The exporter should briefly pause repository writers to capture one coherent application moment; ordinary filesystem APIs cannot provide a transaction across independent repositories.
+
+## Boundaries
+
+- A notification records application state, not proof that an external deployment succeeded. Check logs and output independently.
+- Tombstones preserve recovery evidence; they are not secure deletion.
+- Git history can contain sensitive message/data fields. Do not put secrets in notifications.
+- Undo operates on the latest repository commit. Use the project History Time Machine for selective project actions.
+
+## 香港粵語速讀
+
+通知中心有獨立 Git，所以讀/未讀、dismiss、restore 同可復原 delete 唔會跟開緊邊個工程一齊消失。每次通知 Git 操作會排去後台順序做，開 drawer 或撳操作唔會凍住介面；drawer 會管理鍵盤 focus，Escape 關閉再返去 bell。Delete 係 tombstone，唔係安全銷毀；Git 仍然可能有舊訊息，所以通知唔好放密碼、token 或 product key。條 bell drawer 同 snackbar 都係 app 內非封鎖畫面；OpenCode 亦只會在你明確批准 setup 後先會有相關通知。
+
+---
+
+[← History Time Machine](app-doc://article/wimforge.wiki.6eee581e6e437124) · [Project Bundles →](app-doc://article/wimforge.wiki.6fb52219fd512f87)

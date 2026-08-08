@@ -1,0 +1,63 @@
+# Security boundaries
+
+## Status
+
+**Partly verified.** Focused regression coverage includes message sanitization, IPC sender and payload boundaries, local-file authorization, transport cleanup, and persistence recovery behavior. Final consolidated verification and a complete Electron, mail-protocol, attachment-content, and cryptographic review remain open.
+
+## Behavior
+
+The application divides trust into four layers:
+
+1. The renderer presents data but cannot call Node.js directly.
+2. The preload exposes a fixed typed API.
+3. Every IPC operation first authenticates the current main window's `WebContents`, requires its top frame, and matches its exact trusted renderer URL/path. The main process then validates every non-PIM IPC argument with strict, bounded schemas, performs network and file operations, and strips secrets from public account summaries. PIM calls use the same sender gate before continuing through the PIM service's own strict schemas.
+4. Remote mail servers, messages, attachments, configuration XML, links, filenames, and imported/exported content are untrusted inputs.
+
+Account secrets are encrypted with Electron `safeStorage` before the JSON state file is written. Message MIME is parsed in the main process behind fixed raw-source, header, decoded-body, attachment-count, per-attachment, and combined-attachment ceilings; IMAP requests at most the raw ceiling plus one detection byte. Oversized/malformed failures expose stable retry-safe copy and do not mutate the detail cache. HTML bodies are then reduced to a default image-free allowlist plus a separately sanitized HTTP(S)-image variant with normalized origin metadata. The reader builds an opaque sandboxed document with a restrictive content-security policy. Remote images remain absent until the user stores an explicit decision for that message; then only its listed image origins enter `img-src`, while scripts, forms, frames, objects, media, connections, base URLs, referrers, and same-origin access remain denied.
+
+User-visible failures pass through one shared bounded redaction boundary. Mail transport failures are reduced to actionable connection, DNS, timeout, authentication, certificate, or network categories before they enter synchronization status, persisted notifications, pending-operation rows, or Outbox rows. Legacy stored mail errors are redacted again when projected to renderer-facing account and queue models. General renderer error surfaces also refuse raw host paths, URLs, query parameters, provider implementation names, stack locations, control characters, and oversized detail. Factual application-authored retry/refusal guidance remains visible.
+
+Attachment paths are capabilities, not renderer assertions. A path can enter a new compose draft only after the native file picker approves it. A saved draft may continue using its own previously approved attachment paths after restart, but changing the draft identifier does not transfer that approval. Sending also verifies that each authorized path still names a regular file.
+
+External editor launch accepts only a real Windows `.exe` with an executable signature that either appears in the finite Windows detection pass or was explicitly selected in a native picker. Custom approvals are stored outside renderer-facing preferences. Launch uses an argument array with shell execution disabled.
+
+## Configuration
+
+- TLS and STARTTLS are supported for mail transports; a `plain` mode exists for explicit manual configurations.
+- Renderer permissions are denied globally.
+- In-app navigation and HTTP redirects are prevented. Unsolicited main-to-renderer mailto delivery is sent only while the top-level page still matches the trusted renderer location.
+- External HTTP(S) links are handed to Windows.
+- State and local revision data stay below Electron's per-user application-data directory.
+
+## Failure modes
+
+- `safeStorage` may be unavailable; account creation and secret decryption then fail closed.
+- A corrupted or incompatible state file fails closed. A valid backup or interrupted-rename copy is promoted when available, while the corrupt original is quarantined; defaults are created only when no state or recovery material exists.
+- Sanitization can remove legitimate message formatting.
+- Local MIME ceilings can reject a server-valid message, and the bounded parser still lacks worker/process wall-time isolation.
+- Loading a consented remote image can disclose network address and open timing. An HTTP warning is not certificate diagnostics, and certificate UX remains unimplemented.
+- Keeping HTTP(S) links does not make their destinations trustworthy.
+- Attachment contents can still be malicious even when filenames are normalized.
+- Regex risk detection is heuristic and not a hard execution timeout.
+- OAuth account setup no longer accepts a pasted token. An ephemeral main-process authorization-code/PKCE state machine validates an exact `127.0.0.1` callback and exposes status-only IPC, but production has no provider client registration or token exchange and cannot connect an OAuth account.
+- A separate mock-only token lifecycle models exchange, expiry, refresh rotation, and revocation for tests/demo harnesses. Its AES-256-GCM vault is ephemeral and non-durable; production main, preload, IPC, and `AppService` do not import it.
+- The production main process owns a Windows `safeStorage` vault adapter with an explicit provider-registration gate, independently encrypted access/refresh values, bounded atomic generation rotation, metadata-only IPC, provider-level local clear, and injectable revoke-and-clear. Production registers no provider or revoker and calls no token endpoint.
+- A stale window, child frame, or unexpected renderer location cannot invoke a handler; replacing the main window also invalidates the old sender.
+
+## Security considerations
+
+Do not enable plaintext transport by default. Add clear warnings before allowing it. Attachment quarantine now supplies risky-extension and MIME/extension classification, randomized local payload names, provenance, integrity checking, and explicit release/delete; antivirus/content scanning and external reputation remain open. Message links need phishing and look-alike-domain treatment. The OAuth authorization foundation uses a system-browser opener, PKCE S256, timing-safe state comparison, exact loopback redirect handling, bounded terminal cleanup, and no persistence/logging. The Windows vault proves local at-rest handling and renderer separation only; the mock lifecycle proves state-machine behavior only. Provider registration, nonce/consent policy where applicable, real code exchange, provider refresh/revocation, account authentication, migration/recovery, and provider interoperability still require dedicated review.
+
+Redaction is a presentation and persistence boundary for error copy, not a substitute for keeping sensitive values out of logs or transport exceptions. Error categories retain the next safe action without repeating the raw endpoint, local path, query, provider adapter, or credential-bearing URL.
+
+The local Git history validates snapshots before commit and accepts restores only from commits in the current append-only lineage. Credentials remain ciphertext, but access permissions, stable encryption identifiers, restore migrations, and repository-retention behavior require continuing review.
+
+## Verification
+
+Focused redaction coverage passes 3 files / 19 unit/service/history tests plus 1 / 1 real-Electron restart scenario. The fixtures prove a raw Windows path, tokenized URL, private query text, and transport implementation name do not reach notifications, semantic/local-history previews, or the restored Outbox card, while the actionable connection-refused category remains visible. The consolidated gate and hosted run are recorded in `HANDOFF.md`; no live-provider, penetration-test, broad malformed-message/parser wall-time, malicious-attachment, clean-machine privacy, or packaged screen-reader claim is made.
+
+## Suggested articles
+
+- [Reading and message safety](app-doc://article/material-email.repository.5d1bee4eeb3843ef)
+- [Accounts and connectivity](app-doc://article/material-email.repository.0fa0513cf99d25a3)
+- [Local state and history](app-doc://article/material-email.repository.458399858adbe8c0)
