@@ -85,7 +85,7 @@ export function TabGroupHeader({ group, settings, expanded, bodyId, renaming, on
     );
   }
   return (
-    <button {...rest} className="tab-group-header" aria-expanded={expanded} aria-controls={bodyId} data-color={group.color} onClick={onToggle} {...el('tab-group-header')}>
+    <button {...rest} id={`tab-group-header-${group.id}`} className="tab-group-header" aria-expanded={expanded} aria-controls={bodyId} data-color={group.color} onClick={onToggle} {...el('tab-group-header')}>
       <span className="tab-group-caret" aria-hidden="true"><Icon>chevron_right</Icon></span>
       <span className="tab-group-dot" data-color={group.color} aria-hidden="true" />
       <span className="tab-group-name">{group.name}</span>

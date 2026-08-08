@@ -1,5 +1,7 @@
 import {
   ELEMENTS,
+  ELEVATIONS,
+  RADII,
   SURFACE_IDS,
   TAB_IDS,
   TAB_GROUP_COLORS,
@@ -29,6 +31,27 @@ export type EntryKind = 'page' | 'command' | 'setting' | 'appearance' | 'schedul
 export type EntryGroup = 'Pages' | 'Tabs' | 'Appearance' | 'Schedule' | 'Search' | 'Settings' | 'Apps';
 
 export type TokenValue = NonNullable<ElementOverride[keyof ElementOverride]>;
+
+/**
+ * A palette row may expose the same bounded control as its owning surface.
+ * Keeping this metadata declarative means the palette cannot accidentally invent
+ * a second setting implementation (or accept an untyped command string).
+ */
+export type EntryControl =
+  | { kind: 'select'; value: string; options: ReadonlyArray<{ value: string; en: string; yue: string }> }
+  | { kind: 'range'; value: number; min: number; max: number; step?: number }
+  | { kind: 'color'; value: string }
+  | { kind: 'switch'; value: boolean }
+  | { kind: 'text'; value: string; maxLength: number };
+
+export interface EntryTarget {
+  surface?: SurfaceId;
+  focusId?: string;
+  articleId?: string;
+  tabId?: TabId;
+  groupId?: string;
+  element?: ElementKey;
+}
 
 const STATIC_COMMANDS = [
   'refresh-catalog', 'clear-all-searches', 'focus-tab-search', 'new-group', 'collapse-all-groups',
@@ -68,11 +91,11 @@ export type CommandId =
   | `catalog-interval:${string}`;
 
 export type Action =
-  | { type: 'open-surface'; surface: SurfaceId }
-  | { type: 'set-setting'; key: keyof UserSettings; value: UserSettings[keyof UserSettings] | null }
-  | { type: 'set-appearance'; target: ElementKey; token: TokenId; value: TokenValue | null }
-  | { type: 'set-schedule'; key: ScheduleFieldKey; value: number | boolean | null }
-  | { type: 'command'; command: CommandId };
+  | { type: 'open-surface'; surface: SurfaceId; target?: EntryTarget }
+  | { type: 'set-setting'; key: keyof UserSettings; value: UserSettings[keyof UserSettings] | null; target?: EntryTarget }
+  | { type: 'set-appearance'; target: ElementKey; token: TokenId; value: TokenValue | null; destination?: EntryTarget }
+  | { type: 'set-schedule'; key: ScheduleFieldKey; value: number | boolean | null; target?: EntryTarget }
+  | { type: 'command'; command: CommandId; target?: EntryTarget };
 
 export interface Entry {
   id: string;
@@ -83,6 +106,7 @@ export interface Entry {
   yue: string;
   keywords: string[];
   action: Action;
+  control?: EntryControl;
   enabled?: boolean;
 }
 
@@ -257,19 +281,71 @@ export interface RegistryContext {
   apps: CatalogApp[];
 }
 
-const command = (id: CommandId, en: string, yue: string, icon: string, keywords: string[], group: EntryGroup): Entry => ({
-  id: `cmd:${id}`, kind: 'command', group, icon, en, yue, keywords, action: { type: 'command', command: id },
+const command = (id: CommandId, en: string, yue: string, icon: string, keywords: string[], group: EntryGroup, target?: EntryTarget): Entry => ({
+  id: `cmd:${id}`, kind: 'command', group, icon, en, yue, keywords, action: { type: 'command', command: id, target },
 });
 
+const settingTarget = (field: SettingField): EntryTarget => ({
+  surface: field.section === 'general' ? 'settings.general' : 'settings.appearance',
+  focusId: `setting-${String(field.key)}`,
+});
+
+const settingControl = (field: SettingField, value: UserSettings[typeof field.key]): EntryControl => {
+  if (field.kind === 'select') return { kind: 'select', value: String(value), options: field.options ?? [] };
+  if (field.kind === 'range') return { kind: 'range', value: Number(value), min: field.min ?? 1, max: field.max ?? 5, step: 1 };
+  if (field.kind === 'color') return { kind: 'color', value: String(value) };
+  if (field.kind === 'switch') return { kind: 'switch', value: Boolean(value) };
+  return { kind: 'text', value: String(value), maxLength: 64 };
+};
+
+const scheduleTarget = (key: ScheduleFieldKey): EntryTarget => ({
+  surface: 'settings.schedule',
+  focusId: `schedule-${key.replace('.', '-')}`,
+});
+
+const scheduleControl = (field: (typeof SCHEDULE_FIELDS)[number], schedule: ScheduleConfig): EntryControl | undefined => {
+  if (field.kind === 'switch') return { kind: 'switch', value: Boolean(readScheduleField(schedule, field.key)) };
+  if (field.kind === 'minutes') {
+    const options = field.key === 'selfUpdate.intervalMinutes'
+      ? SELF_INTERVAL_PRESETS
+      : CATALOG_INTERVAL_PRESETS;
+    return {
+      kind: 'select',
+      value: String(readScheduleField(schedule, field.key)),
+      options: options.map((value) => ({ value: String(value), en: `${value} minutes`, yue: `${value} 分鐘` })),
+    };
+  }
+  if (field.kind === 'time') return { kind: 'range', value: Number(readScheduleField(schedule, field.key)), min: 0, max: 1_439, step: 15 };
+  return undefined;
+};
+
+const appearanceControl = (token: TokenId, override: ElementOverride | undefined): EntryControl | undefined => {
+  if (token === 'background' || token === 'foreground') {
+    const color = override?.[token];
+    return { kind: 'color', value: color?.kind === 'hex' ? color.hex : '#6750a4' };
+  }
+  if (token === 'paddingScale') return { kind: 'range', value: Number(override?.paddingScale ?? 100), min: 50, max: 200, step: 5 };
+  if (token === 'fontScale') return { kind: 'range', value: Number(override?.fontScale ?? 100), min: 75, max: 150, step: 5 };
+  if (token === 'fontWeight') return { kind: 'range', value: Number(override?.fontWeight ?? 400), min: 400, max: 800, step: 100 };
+  if (token === 'borderWidth') return { kind: 'range', value: Number(override?.borderWidth ?? 0), min: 0, max: 3, step: 1 };
+  if (token === 'radius') return {
+    kind: 'select', value: String(override?.radius ?? 'md'), options: RADII.map((value) => ({ value, en: value, yue: value })),
+  };
+  if (token === 'elevation') return {
+    kind: 'select', value: String(override?.elevation ?? 'none'), options: ELEVATIONS.map((value) => ({ value, en: value, yue: value })),
+  };
+  return undefined;
+};
+
 export function buildRegistry(context: RegistryContext): Entry[] {
-  const { workspace, appearance, schedule, apps } = context;
+  const { settings, workspace, appearance, schedule, apps } = context;
   const entries: Entry[] = [];
 
   for (const surface of SURFACES) {
     entries.push({
       id: `page:${surface.surface}`, kind: 'page', group: 'Pages', icon: surface.icon,
       en: `Open ${surface.en}`, yue: `開 ${surface.yue}`, keywords: surface.keywords,
-      action: { type: 'open-surface', surface: surface.surface },
+      action: { type: 'open-surface', surface: surface.surface, target: { surface: surface.surface } },
     });
   }
 
@@ -281,6 +357,7 @@ export function buildRegistry(context: RegistryContext): Entry[] {
       'menu_book',
       [article.id, article.category, article.status, ...article.related],
       'Pages',
+      { surface: 'docs', articleId: article.id, focusId: `docs-tab-${article.id}` },
     ));
   }
 
@@ -288,13 +365,14 @@ export function buildRegistry(context: RegistryContext): Entry[] {
     entries.push({
       id: `set:${field.key}`, kind: 'setting', group: 'Settings', icon: 'settings',
       en: `Setting: ${field.en}`, yue: `設定：${field.yue}`, keywords: [field.key, ...field.keywords],
-      action: { type: 'set-setting', key: field.key, value: null },
+      action: { type: 'set-setting', key: field.key, value: null, target: settingTarget(field) },
+      control: settingControl(field, settings[field.key]),
     });
     for (const option of field.options ?? []) {
       entries.push(command(
         `set-option:${field.key}:${option.value}` as CommandId,
         `Set ${field.en} to ${option.en}`, `${field.yue}設做 ${option.yue}`, 'settings',
-        [field.key, option.value], 'Settings',
+        [field.key, option.value], 'Settings', settingTarget(field),
       ));
     }
   }
@@ -302,14 +380,15 @@ export function buildRegistry(context: RegistryContext): Entry[] {
   for (const definition of ELEMENTS) {
     const key = definition.key as ElementKey;
     const overridden = Object.keys(appearance[key] ?? {}).length;
-    entries.push(command(`edit-element:${key}`, `Edit appearance of ${definition.en}`, `編輯${definition.yue}外觀`, 'palette', [key, definition.yue, 'appearance', 'style'], 'Appearance'));
-    entries.push(command(`reset-element:${key}`, `Reset appearance of ${definition.en}`, `重設${definition.yue}外觀`, 'restart_alt', [key, definition.yue, 'reset'], 'Appearance'));
+    entries.push(command(`edit-element:${key}`, `Edit appearance of ${definition.en}`, `編輯${definition.yue}外觀`, 'palette', [key, definition.yue, 'appearance', 'style'], 'Appearance', { surface: 'settings.appearance', element: key }));
+    entries.push(command(`reset-element:${key}`, `Reset appearance of ${definition.en}`, `重設${definition.yue}外觀`, 'restart_alt', [key, definition.yue, 'reset'], 'Appearance', { surface: 'settings.appearance', element: key }));
     for (const token of definition.tokens) {
       entries.push({
         id: `appear:${key}:${token}`, kind: 'appearance', group: 'Appearance', icon: 'palette',
         en: `${definition.en} · ${TOKEN_META[token].en}`, yue: `${definition.yue} · ${TOKEN_META[token].yue}`,
         keywords: [key, token, definition.yue, TOKEN_META[token].section, overridden ? 'overridden' : 'default'],
-        action: { type: 'set-appearance', target: key, token, value: null },
+        action: { type: 'set-appearance', target: key, token, value: null, destination: { surface: 'settings.appearance', element: key } },
+        control: appearanceControl(token, appearance[key]),
       });
     }
   }
@@ -318,7 +397,8 @@ export function buildRegistry(context: RegistryContext): Entry[] {
     entries.push({
       id: `sched:${field.key}`, kind: 'schedule', group: 'Schedule', icon: 'schedule',
       en: `Schedule: ${field.en}`, yue: `排程：${field.yue}`, keywords: [field.key, ...field.keywords],
-      action: { type: 'set-schedule', key: field.key, value: null },
+      action: { type: 'set-schedule', key: field.key, value: null, target: scheduleTarget(field.key) },
+      control: scheduleControl(field, schedule),
     });
   }
 
@@ -342,22 +422,24 @@ export function buildRegistry(context: RegistryContext): Entry[] {
 
   for (const tab of workspace.tabs) {
     const meta = TAB_META[tab.id];
-    entries.push(command(`pin:${tab.id}`, tab.pinned ? `Unpin ${meta.en}` : `Pin ${meta.en}`, tab.pinned ? `取消釘住 ${meta.yue}` : `釘住 ${meta.yue}`, 'push_pin', [tab.id, 'pin'], 'Tabs'));
-    entries.push(command(`move-up:${tab.id}`, `Move ${meta.en} up`, `${meta.yue} 上移`, 'expand_more', [tab.id, 'order'], 'Tabs'));
-    entries.push(command(`move-down:${tab.id}`, `Move ${meta.en} down`, `${meta.yue} 下移`, 'expand_more', [tab.id, 'order'], 'Tabs'));
-    if (tab.groupId) entries.push(command(`group-remove:${tab.id}`, `Remove ${meta.en} from its group`, `${meta.yue} 離開分組`, 'folder', [tab.id, 'group'], 'Tabs'));
+    const tabTarget: EntryTarget = { tabId: tab.id, focusId: `tab-${tab.id}` };
+    entries.push(command(`pin:${tab.id}`, tab.pinned ? `Unpin ${meta.en}` : `Pin ${meta.en}`, tab.pinned ? `取消釘住 ${meta.yue}` : `釘住 ${meta.yue}`, 'push_pin', [tab.id, 'pin'], 'Tabs', tabTarget));
+    entries.push(command(`move-up:${tab.id}`, `Move ${meta.en} up`, `${meta.yue} 上移`, 'expand_more', [tab.id, 'order'], 'Tabs', tabTarget));
+    entries.push(command(`move-down:${tab.id}`, `Move ${meta.en} down`, `${meta.yue} 下移`, 'expand_more', [tab.id, 'order'], 'Tabs', tabTarget));
+    if (tab.groupId) entries.push(command(`group-remove:${tab.id}`, `Remove ${meta.en} from its group`, `${meta.yue} 離開分組`, 'folder', [tab.id, 'group'], 'Tabs', tabTarget));
     for (const group of workspace.groups) {
       if (tab.groupId === group.id || tab.pinned) continue;
-      entries.push(command(`group-add:${tab.id}:${group.id}` as CommandId, `Add ${meta.en} to ${group.name}`, `${meta.yue} 加入 ${group.name}`, 'folder', [tab.id, group.name, 'group'], 'Tabs'));
+      entries.push(command(`group-add:${tab.id}:${group.id}` as CommandId, `Add ${meta.en} to ${group.name}`, `${meta.yue} 加入 ${group.name}`, 'folder', [tab.id, group.name, 'group'], 'Tabs', { tabId: tab.id, groupId: group.id, focusId: `tab-group-header-${group.id}` }));
     }
   }
 
   for (const group of workspace.groups) {
-    entries.push(command(`group-rename:${group.id}`, `Rename group ${group.name}`, `改名分組 ${group.name}`, 'folder', [group.name, 'rename'], 'Tabs'));
-    entries.push(command(`group-collapse:${group.id}`, group.collapsed ? `Expand group ${group.name}` : `Collapse group ${group.name}`, group.collapsed ? `展開分組 ${group.name}` : `收埋分組 ${group.name}`, 'chevron_right', [group.name, 'collapse'], 'Tabs'));
-    entries.push(command(`group-delete:${group.id}`, `Delete group ${group.name}`, `刪除分組 ${group.name}`, 'delete', [group.name, 'delete'], 'Tabs'));
+    const groupTarget: EntryTarget = { groupId: group.id, focusId: `tab-group-header-${group.id}` };
+    entries.push(command(`group-rename:${group.id}`, `Rename group ${group.name}`, `改名分組 ${group.name}`, 'folder', [group.name, 'rename'], 'Tabs', groupTarget));
+    entries.push(command(`group-collapse:${group.id}`, group.collapsed ? `Expand group ${group.name}` : `Collapse group ${group.name}`, group.collapsed ? `展開分組 ${group.name}` : `收埋分組 ${group.name}`, 'chevron_right', [group.name, 'collapse'], 'Tabs', groupTarget));
+    entries.push(command(`group-delete:${group.id}`, `Delete group ${group.name}`, `刪除分組 ${group.name}`, 'delete', [group.name, 'delete'], 'Tabs', groupTarget));
     for (const color of TAB_GROUP_COLORS) {
-      entries.push(command(`group-color:${group.id}:${color}` as CommandId, `Recolour ${group.name} to ${GROUP_COLOR_LABELS[color].en}`, `${group.name} 轉做${GROUP_COLOR_LABELS[color].yue}色`, 'palette', [group.name, color], 'Tabs'));
+      entries.push(command(`group-color:${group.id}:${color}` as CommandId, `Recolour ${group.name} to ${GROUP_COLOR_LABELS[color].en}`, `${group.name} 轉做${GROUP_COLOR_LABELS[color].yue}色`, 'palette', [group.name, color], 'Tabs', groupTarget));
     }
   }
 
@@ -404,7 +486,7 @@ export function buildRegistry(context: RegistryContext): Entry[] {
     entries.push({
       id: `app:${app.id}`, kind: 'app', group: 'Apps', icon: 'deployed_code',
       en: app.name, yue: app.name, keywords: [app.repository, app.packageType, app.updateState],
-      action: { type: 'command', command: `open-app:${app.id}` },
+      action: { type: 'command', command: `open-app:${app.id}`, target: { surface: 'catalog', focusId: 'search-catalog' } },
     });
   }
 
