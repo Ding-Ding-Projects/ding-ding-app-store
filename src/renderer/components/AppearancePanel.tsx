@@ -4,6 +4,7 @@ import type { ColorRole, ColorValue, ElementKey, TokenId, UserSettings } from '.
 import { Icon } from '../icons';
 import { label } from '../i18n';
 import { downloadText, pickTextFile } from '../files';
+import { isExternalEditorBridgeAvailable, openExportInVsCode } from '../external-editor';
 import type { Notify } from '../notify';
 import { TOKEN_META, TOKEN_SECTIONS } from '../registry';
 import type { TokenSection } from '../registry';
@@ -361,6 +362,7 @@ export function AppearancePanel({ appearance, settings, notify, onClose }: {
         <button className="text-button" onClick={() => appearance.resetElement(selected)}>{label(settings, 'Reset element', '重設元素')}</button>
         <button className="text-button danger" onClick={() => appearance.resetAll()}>{label(settings, 'Reset all…', '全部重設…')}</button>
         <button className="text-button" onClick={() => void appearance.exportDocument().then((content) => downloadText('ding-ding-app-store-appearance.json', content, 'application/json'))}><Icon>download</Icon>{label(settings, 'Export', '匯出')}</button>
+        <button className="text-button" disabled={!isExternalEditorBridgeAvailable()} title={isExternalEditorBridgeAvailable() ? undefined : 'Unavailable: no validated Visual Studio Code adapter.'} onClick={() => void appearance.exportDocument().then((content) => openExportInVsCode({ recordKind: 'appearance', suggestedName: 'ding-ding-app-store-appearance.json', mime: 'application/json', content })).then((result) => notify({ ok: result.ok, message: result.ok ? 'Appearance export opened in Visual Studio Code.' : result.message }))}><Icon>code</Icon>{label(settings, 'Open in VS Code', '喺 VS Code 開')}</button>
         <button className="text-button" onClick={() => void pickTextFile().then((picked) => {
           if (!picked) return;
           if (!picked.ok) { notify({ ok: false, message: picked.message.slice(0, 200) }); return; }
