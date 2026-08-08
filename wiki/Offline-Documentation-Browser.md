@@ -2,7 +2,6 @@
 
 > **Status: shipped.** This wiki page is generated from the canonical categorized article.
 
-
 ## Behaviour
 
 The Documentation tab consumes the generated bundle produced from every canonical file beneath `docs/features/<category>/`. It presents category-aware browser-style article tabs, one active tab panel, an article status badge, full behavior/configuration/failure/security/verification text, and suggested-article links that switch the active in-app article. The same canonical source generates the static site's article bundle and the repository wiki mirror.

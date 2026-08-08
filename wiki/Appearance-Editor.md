@@ -2,7 +2,6 @@
 
 > **Status: limited.** This wiki page is generated from the canonical categorized article.
 
-
 ## Behaviour
 
 `Ctrl+Shift+E`, Settings, or the command palette enters edit mode. A pointer click, Enter/Space, or keyboard focus selects the nearest registered element without running its normal action. A docked panel shows the selected hierarchy and edits supported background, foreground, radius, border width, elevation, font scale, font weight, and padding scale tokens live. Overrides layer above theme, density, and accent.

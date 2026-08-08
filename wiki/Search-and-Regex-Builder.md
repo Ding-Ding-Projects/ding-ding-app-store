@@ -2,7 +2,6 @@
 
 > **Status: shipped.** This wiki page is generated from the canonical categorized article.
 
-
 ## Behaviour
 
 Discover, Installed, Updates, Documentation, Activity, every Settings sub-tab, the command palette, tab rail, and appearance-element list each own an independent search state. Plain text is the default. The adjacent `.*` action opens the shared guided builder anchored to that field, with literals, character classes, anchors, groups, alternation, quantifiers, raw pattern, `i/m/s/u` flags, sample text, syntax feedback, live match text, capture-group computation, copy, and apply.

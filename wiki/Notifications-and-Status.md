@@ -2,7 +2,6 @@
 
 > **Status: limited.** This wiki page is generated from the canonical categorized article.
 
-
 ## Behaviour
 
 Catalog, persistence, appearance, workspace, schedule, and operation results surface through a bottom-corner snackbar. Success and informational notices auto-dismiss; error state remains available long enough to act on. Undo-capable operations attach an action. The App Store updater uses a separate persistent banner for available, downloading, ready, and failed states so a restart decision is never lost to a short toast.

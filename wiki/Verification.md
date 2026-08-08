@@ -2,7 +2,6 @@
 
 > **Status: shipped.** This wiki page is generated from the canonical categorized article.
 
-
 ## Behaviour
 
 Verification reports a specific revision and labels every evidence class independently: documentation completeness, static contracts, unit/integration tests, TypeScript/build, packaged application launch, hidden-desktop interaction, screenshot, installer execution, updater state, GitHub Actions run, release record, and public deployment. A stronger-looking proxy never upgrades a missing result.

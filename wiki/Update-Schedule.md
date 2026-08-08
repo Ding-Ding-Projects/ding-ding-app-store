@@ -2,7 +2,6 @@
 
 > **Status: shipped.** This wiki page is generated from the canonical categorized article.
 
-
 ## Behaviour
 
 The scheduler owns two independent tasks: App Store self-update checks and catalog refresh. A self-check runs once after every launch and cannot be turned off; its repeat switch controls only later checks in that session. Catalog refresh can be enabled separately and is floored at the 30-minute catalog cache lifetime. Each task shows last run, trigger, outcome, exact message, next run, running state, and backoff state. Manual `Check now` and `Refresh now` use the same task functions.
