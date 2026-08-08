@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const check = process.argv.includes('--check');
+const normalizeNewlines = (value) => value?.replaceAll('\r\n', '\n');
 
 // Hand-written coverage inventory. Adding a feature requires choosing its public category,
 // canonical article, wiki title, and related reading here before any bundle can pass.
@@ -145,7 +146,7 @@ for (const [relative, content] of outputs) {
   const target = path.join(root, relative);
   if (check) {
     const actual = await readFile(target, 'utf8').catch(() => null);
-    if (actual !== content) failures.push(relative);
+    if (normalizeNewlines(actual) !== normalizeNewlines(content)) failures.push(relative);
   } else {
     await mkdir(path.dirname(target), { recursive: true });
     await writeFile(target, content, 'utf8');
