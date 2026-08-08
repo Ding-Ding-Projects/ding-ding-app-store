@@ -24,7 +24,7 @@
 - [x] Update schedule editor with last-run/next-run reporting and quiet hours
 - [ ] Packaged-artifact hidden-desktop interaction and accessibility proof
 - [x] CI and release automation on pinned GitHub-hosted cloud runners (`windows-2022` for checks, packaging, and publication; `ubuntu-24.04` for Pages)
-- [x] Unsigned Squirrel.Windows release, verified end to end: [`v0.1.0-282-1`](https://github.com/Ding-Ding-Projects/ding-ding-app-store/releases/tag/v0.1.0-282-1) targets `de63e1c`, is non-draft, `Setup.exe` is confirmed `NotSigned`, and the release includes `RELEASES`, a full `.nupkg`, and `release-changelog.json`
+- [x] Unsigned Squirrel.Windows release, verified end to end: [`v0.1.0-284-1`](https://github.com/Ding-Ding-Projects/ding-ding-app-store/releases/tag/v0.1.0-284-1) targets `c3d9a0d`, is non-draft, `Setup.exe` is confirmed `NotSigned`, and the release includes `RELEASES`, a full `.nupkg`, and `release-changelog.json`
 - [x] Documentation deployment: [`https://ding-ding-projects.github.io/ding-ding-app-store/`](https://ding-ding-projects.github.io/ding-ding-app-store/) is live and verified serving the real site
 - [ ] Working update-feed proof (the self-updater code exists, but a clean-Windows restart/install cycle against the published unsigned feed still needs runtime evidence)
 
