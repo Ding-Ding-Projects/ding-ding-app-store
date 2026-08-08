@@ -56,4 +56,14 @@ describe('installer progress and cancellation boundary', () => {
     expect(app).toContain('latestOperationIds');
     expect(app).toContain('cancellationFocusTargets');
   });
+
+  it('keeps the Cantonese locked outcome factual without embedding English fallback text', async () => {
+    const operations = await read('src/main/operation-service.ts');
+    const locked = operations.indexOf("if (message.includes('remains locked until restart'))");
+    const cancelled = operations.indexOf("if (message.startsWith('Installation cancelled.'))");
+    expect(locked).toBeGreaterThan(-1);
+    expect(locked).toBeLessThan(cancelled);
+    expect(operations).not.toContain('詳情：${message}');
+    expect(operations).toContain('程序終止未能完全確認');
+  });
 });

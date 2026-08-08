@@ -48,14 +48,18 @@ function invalidRequest(kind: OperationKind): OperationResult {
   };
 }
 
-function operationMessageYue(message: string): string {
+export function operationMessageYue(message: string): string {
+  if (message.includes('remains locked until restart')) {
+    if (message.startsWith('Installation cancelled.')) return '取消結果未能確認；安裝程式可能仍然運行，app 會鎖住直到重啟。請重啟後檢查已安裝狀態，唔好自動重試。';
+    if (message.startsWith('The installer exceeded the 15-minute safety limit.')) return '安裝程式超過 15 分鐘安全時限；程序終止未能完全確認，app 會鎖住直到重啟。請重啟後檢查已安裝狀態。';
+    return '操作結果未能確認；程序終止未能完全確認，app 會鎖住直到重啟。請重啟後檢查已安裝狀態，唔好自動重試。';
+  }
   if (message.startsWith('Installation cancelled.')) return '安裝已取消。下載或解壓嘅檔案會清理，完成後先解鎖。';
   if (message.startsWith('Cancellation requested;')) return '已請求取消；清理完成後，安裝結果會再通知你。';
   if (message.startsWith('Cancellation is already in progress')) return '取消已經進行緊；清理完成前，安裝會保持鎖定。';
   if (message.startsWith('The reviewed installer has already started.')) return '已審核安裝程式已經啟動；因為子程序可能仍然運行，暫時唔可以安全取消。';
   if (message.startsWith('The verified portable package is being applied.')) return '已驗證 portable package 正套用緊；替換完成前唔可以安全取消。';
   if (message.includes('installed successfully.')) return `${message.replace(' installed successfully.', ' 已成功安裝。')}`;
-  if (message.includes('remains locked until restart')) return `操作結果未能確認；app 會鎖住直到重啟。詳情：${message}`;
   return '安裝操作失敗；請開啟活動記錄查看完整結果。';
 }
 
