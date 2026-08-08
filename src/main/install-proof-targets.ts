@@ -39,6 +39,10 @@ export const CLOUD_INSTALL_PROOF_TARGETS = {
     appId: 'keepassxc', adapterId: 'keepassxc-msi', family: 'msi',
     ownershipKind: 'registry', uninstallKind: 'msi', requiresCleanStart: true, requiresDirectSha256: true,
   },
+  'codex-material': {
+    appId: 'codex-material', adapterId: 'codex-material-msi', family: 'msi',
+    ownershipKind: 'registry', uninstallKind: 'msi', requiresCleanStart: true, requiresDirectSha256: true,
+  },
 } as const satisfies Partial<Record<CatalogAppId, CloudInstallProofTarget>>;
 
 export type CloudInstallProofAppId = keyof typeof CLOUD_INSTALL_PROOF_TARGETS;
