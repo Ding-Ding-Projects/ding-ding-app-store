@@ -1,16 +1,27 @@
-interface RegexWorkerRequest { id: number; pattern: string; flags: string; sample: string }
+import { evaluateRegexSample, normalizeRegexWorkerRequest } from './regex-evaluation';
+import type { RegexWorkerRequest } from './regex-evaluation';
 
-self.addEventListener('message', (event: MessageEvent<RegexWorkerRequest>) => {
-  const { id, pattern, flags, sample } = event.data;
-  try {
-    const expression = new RegExp(pattern.slice(0, 160), flags.replace('g', '') + 'g');
-    const matches: Array<{ text: string; groups: string[] }> = [];
-    for (const match of sample.slice(0, 10_000).matchAll(expression)) {
-      matches.push({ text: match[0], groups: match.slice(1) });
-      if (matches.length >= 100) break;
-    }
-    self.postMessage({ id, error: '', matches });
-  } catch (error) {
-    self.postMessage({ id, error: (error as Error).message, matches: [] });
+type CancelMessage = { type: 'cancel'; id: number };
+type WorkerMessage = RegexWorkerRequest | CancelMessage;
+
+let newestRequestId = -1;
+
+self.addEventListener('message', (event: MessageEvent<WorkerMessage>) => {
+  const value = event.data;
+  if (value && typeof value === 'object' && 'type' in value && value.type === 'cancel') {
+    if (Number.isInteger(value.id) && value.id > newestRequestId) newestRequestId = value.id;
+    return;
   }
+  const normalized = normalizeRegexWorkerRequest(value);
+  if ('error' in normalized) {
+    self.postMessage({ id: normalized.id, error: normalized.error, matches: [] });
+    return;
+  }
+  if (normalized.id <= newestRequestId) return;
+  newestRequestId = normalized.id;
+  const result = evaluateRegexSample(normalized);
+  // A newer request can arrive while this bounded evaluation is running. Never
+  // publish stale preview data to a newer builder generation.
+  if (normalized.id !== newestRequestId) return;
+  self.postMessage(result);
 });

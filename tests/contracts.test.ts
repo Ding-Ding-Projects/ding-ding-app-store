@@ -126,9 +126,13 @@ describe('visible product contracts', () => {
 
   it('ships full regex-builder primitives and bounded sample evaluation', async () => {
     const app = await readRendererSources();
+    const safety = await read('src/renderer/regex-safety.ts');
+    const evaluator = await read('src/renderer/regex-evaluation.ts');
     for (const primitive of ['Literal', 'Class', 'Anchor', 'Group', 'Alternation', 'Quantifier']) expect(app).toContain(primitive);
-    expect(app).toContain('slice(0, 160)');
-    expect(app).toContain('slice(0, 10_000)');
+    expect(safety).toContain('MAX_REGEX_PATTERN_LENGTH = 160');
+    expect(safety).toContain('MAX_REGEX_SAMPLE_LENGTH = 10_000');
+    expect(evaluator).toContain('normalizeRegexWorkerRequest');
+    expect(evaluator).toContain('REGEX_WORKER_BUDGET_MS');
     expect(app).toContain('surface="activity"');
     expect(app).toContain("runExport('jsonl')");
   });
@@ -201,9 +205,13 @@ describe('split renderer keeps every product contract in its own file', () => {
 
   it('keeps every regex primitive and both evaluation bounds in the one regex builder', async () => {
     const builder = await read('src/renderer/components/RegexBuilder.tsx');
+    const safety = await read('src/renderer/regex-safety.ts');
+    const evaluator = await read('src/renderer/regex-evaluator.ts');
     for (const primitive of ['Literal', 'Class', 'Anchor', 'Group', 'Alternation', 'Quantifier']) expect(builder).toContain(primitive);
-    expect(builder).toContain('slice(0, 160)');
-    expect(builder).toContain('slice(0, 10_000)');
+    expect(safety).toContain('MAX_REGEX_PATTERN_LENGTH = 160');
+    expect(safety).toContain('MAX_REGEX_SAMPLE_LENGTH = 10_000');
+    expect(evaluator).toContain('new Worker(new URL');
+    expect(evaluator).toContain('AbortSignal');
   });
 
   it('keeps the two-key plus full-slider super-confirmation and the emergency exit in the action dialog', async () => {

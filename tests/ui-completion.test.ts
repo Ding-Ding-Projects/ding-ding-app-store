@@ -82,9 +82,14 @@ describe('global renderer UI completion', () => {
     expect(changelog).toContain('SearchBox surface="changelog"');
     expect(editor).toContain("reason: 'bridge-unavailable'");
     expect(contracts).toContain('externalEditor?:');
-    expect(regex).toContain("new Worker(new URL('../regex-worker.ts'");
-    expect(regex).toContain('worker.terminate()');
-    expect(regex).toContain('}, 150)');
+    const evaluator = await read('src/renderer/regex-evaluator.ts');
+    const worker = await read('src/renderer/regex-worker.ts');
+    expect(regex).toContain('evaluateRegexInWorker');
+    expect(evaluator).toContain("new Worker(new URL('./regex-worker.ts'");
+    expect(evaluator).toContain('worker?.terminate()');
+    expect(evaluator).toContain('REGEX_WORKER_TIMEOUT_MS');
+    expect(worker).toContain('normalizeRegexWorkerRequest');
+    expect(worker).toContain('newestRequestId');
   });
 
   it('keeps generated documentation checks stable across Windows checkout line endings', async () => {
