@@ -9,6 +9,9 @@ import type {
   ExternalEditorPreference,
   HistoryExportFormat,
   InstallCancelRequest,
+  ManagedUpdateCancelRequest,
+  ManagedUpdateRequest,
+  ManagedUpdateState,
   OperationRequest,
   ScheduleConfig,
   ScheduleStatus,
@@ -74,6 +77,15 @@ const api: DingDingStoreApi = {
     restartStore: () => ipcRenderer.invoke('updates:store-restart'),
     cancelStoreDownload: () => ipcRenderer.invoke('updates:store-cancel-download'),
     openReleaseNotes: (url: string) => ipcRenderer.invoke('updates:open-release-notes', url),
+    checkApp: (appId: string) => ipcRenderer.invoke('updates:app-check', appId),
+    downloadApp: (request: ManagedUpdateRequest) => ipcRenderer.invoke('updates:app-download', request),
+    cancelApp: (request: ManagedUpdateCancelRequest) => ipcRenderer.invoke('updates:app-cancel', request),
+    restartApp: (request: ManagedUpdateRequest) => ipcRenderer.invoke('updates:app-restart', request),
+    subscribeApp: (listener: (state: ManagedUpdateState) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, state: ManagedUpdateState) => listener(state);
+      ipcRenderer.on('updates:app-state', handler);
+      return () => ipcRenderer.removeListener('updates:app-state', handler);
+    },
     subscribe: (listener: (state: AppStoreUpdateState) => void) => {
       const handler = (_event: Electron.IpcRendererEvent, state: AppStoreUpdateState) => listener(state);
       ipcRenderer.on('updates:state', handler);

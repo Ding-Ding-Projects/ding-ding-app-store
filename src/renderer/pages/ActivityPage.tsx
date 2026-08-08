@@ -100,7 +100,8 @@ export function ActivityPage({ entries, loading, settings, openRegex, onRegexHan
   return <>
     <SearchBox surface="activity" placeholder="Search activity by app, action, or message" openBuilder={openRegex} onBuilderHandled={onRegexHandled} />
     <section className="history-panel">
-      <div className="chip-row" role="group" aria-label="Filter by action">{(['all', 'install', 'build', 'uninstall'] as const).map((value) => <button key={value} aria-pressed={kind === value} onClick={() => setKind(value)}>{value === 'all' ? 'All actions' : value}</button>)}</div>
+      {/* The shipped baseline was ['all', 'install', 'build', 'uninstall']; update is now a first-class history action. */}
+      <div className="chip-row" role="group" aria-label="Filter by action">{(['all', 'install', 'update', 'build', 'uninstall'] as const).map((value) => <button key={value} aria-pressed={kind === value} onClick={() => setKind(value)}>{value === 'all' ? 'All actions' : value}</button>)}</div>
       <div className="chip-row" role="group" aria-label="Filter by result">{(['all', 'ok', 'failed'] as const).map((value) => <button key={value} aria-pressed={result === value} onClick={() => setResult(value)}>{value === 'all' ? 'Any result' : value === 'ok' ? 'Succeeded' : 'Failed'}</button>)}</div>
       <div className="chip-row" role="group" aria-label="Filter by date">{(['all', 'today', '7d', '30d'] as const).map((value) => <button key={value} aria-pressed={preset === value} onClick={() => setPreset(value)}>{value === 'all' ? 'All time' : value === 'today' ? 'Today' : value === '7d' ? '7 days' : '30 days'}</button>)}</div>
       <div className="card-actions">
