@@ -3,7 +3,7 @@ import { createReadStream } from 'node:fs';
 import { lstat, mkdir, realpath, readdir, readFile, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
-import type { SourceJobDecision, SourceJobState, SourceTerminalEvent, SourceTerminalStream } from '../shared/contracts.js';
+import type { SourceIsolationStatus, SourceJobDecision, SourceJobState, SourceTerminalEvent, SourceTerminalStream } from '../shared/contracts.js';
 import { extractZipSafe } from './safe-zip.js';
 
 export const SOURCE_RUNTIME_LIMITS = Object.freeze({
@@ -142,6 +142,7 @@ export interface IsolationBroker {
   attest(): Promise<IsolationAttestation | null>;
   execute(plan: Readonly<SourceExecutionPlan>, emit: (event: RuntimeLine) => void, signal: AbortSignal): Promise<void>;
   dispose(jobId: string): Promise<void>;
+  diagnose?(): Promise<SourceIsolationStatus>;
 }
 
 export interface RuntimeLine {
@@ -158,10 +159,99 @@ export const runtimeLineSchema = z.strictObject({
   progress: z.number().min(0).max(100).nullable().optional(),
 });
 
+export interface WindowsSandboxProbeOptions {
+  platform?: NodeJS.Platform;
+  systemRoot?: string;
+  fileExists?: (filePath: string) => Promise<boolean>;
+  checkedAt?: () => string;
+}
+
+/**
+ * Probe only local capability metadata. This never starts Windows Sandbox,
+ * DISM, PowerShell, Hyper-V, a guest process, or a source command. Presence of
+ * WindowsSandbox.exe is not enough to claim a usable guest: the feature state
+ * and the app-owned guest transport still need an explicit privileged adapter.
+ */
+export async function probeWindowsDisposableGuest(options: WindowsSandboxProbeOptions = {}): Promise<SourceIsolationStatus> {
+  const checkedAt = options.checkedAt?.() ?? new Date().toISOString();
+  const platform = options.platform ?? process.platform;
+  if (platform !== 'win32') {
+    return {
+      available: false,
+      provider: 'windows-sandbox',
+      reason: 'unsupported-platform',
+      checkedAt,
+      evidence: [`Current platform is ${platform}; the reviewed source runner requires Windows x64.`],
+      remediation: 'Run this app on Windows x64 with the separately reviewed disposable guest adapter installed.',
+    };
+  }
+  const systemRoot = options.systemRoot ?? process.env.SystemRoot ?? 'C:\\Windows';
+  const executable = path.join(systemRoot, 'System32', 'WindowsSandbox.exe');
+  const fileExists = options.fileExists ?? (async (filePath: string) => {
+    try { await stat(filePath); return true; } catch { return false; }
+  });
+  if (!(await fileExists(executable))) {
+    return {
+      available: false,
+      provider: 'windows-sandbox',
+      reason: 'sandbox-executable-missing',
+      checkedAt,
+      evidence: [`Expected Windows Sandbox host binary was not found at ${executable}.`],
+      remediation: 'Enable Windows Sandbox or provide a reviewed disposable guest adapter; never run the recipe on the host.',
+    };
+  }
+  return {
+    available: false,
+    provider: 'windows-sandbox',
+    reason: 'guest-transport-not-connected',
+    checkedAt,
+    evidence: [
+      'WindowsSandbox.exe is present.',
+      'Feature state, elevation, guest bootstrap, and whole-process-tree disposal were not claimed from a file-presence check.',
+      'Guest transport is not connected to this app build.',
+    ],
+    remediation: 'Install and register the reviewed disposable guest transport. Until its attestation and cleanup contract are available, source code and OpenCode stay disabled.',
+  };
+}
+
+/**
+ * Safe production adapter while the guest transport is absent. It exposes a
+ * truthful capability report and fails closed; it deliberately has no host
+ * process execution fallback. A future runner may be injected only after it
+ * supplies the full attestation and disposal contract through IsolationBroker.
+ */
+export class WindowsSandboxIsolationBroker implements IsolationBroker {
+  constructor(private readonly probe: () => Promise<SourceIsolationStatus> = () => probeWindowsDisposableGuest()) {}
+
+  async diagnose(): Promise<SourceIsolationStatus> { return this.probe(); }
+
+  async attest(): Promise<IsolationAttestation | null> {
+    await this.probe();
+    return null;
+  }
+
+  async execute(): Promise<void> {
+    const status = await this.probe();
+    throw new Error(`Disposable Windows source execution is unavailable (${status.reason}). Source code was not executed on the host.`);
+  }
+
+  async dispose(): Promise<void> { /* No guest was started by this fail-closed adapter. */ }
+}
+
 export class UnavailableIsolationBroker implements IsolationBroker {
   async attest(): Promise<null> { return null; }
   async execute(): Promise<void> { throw new Error('A reviewed hard-disposable source runner is not available. Source code was not executed on the host.'); }
   async dispose(): Promise<void> { /* No guest exists. */ }
+  async diagnose(): Promise<SourceIsolationStatus> {
+    return {
+      available: false,
+      provider: 'windows-sandbox',
+      reason: 'guest-transport-not-connected',
+      checkedAt: new Date().toISOString(),
+      evidence: ['No source runner was configured for this app process.'],
+      remediation: 'Keep source execution disabled until a reviewed disposable guest transport is connected.',
+    };
+  }
 }
 
 export function isolationMatches(attestation: IsolationAttestation | null): attestation is IsolationAttestation {

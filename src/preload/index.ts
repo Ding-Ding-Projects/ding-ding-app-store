@@ -19,6 +19,7 @@ import type {
   SourceJobCancelRequest,
   SourceJobRetryRequest,
   SourceJobRequest,
+  SourceIsolationStatus,
   SourceTerminalEvent,
   TabWorkspace,
   SettingsProvenance,
@@ -28,6 +29,16 @@ import type {
 const SOURCE_STATES = new Set(['queued', 'preparing', 'running', 'repairing', 'cancelling', 'succeeded', 'failed', 'cancelled']);
 const SOURCE_STREAMS = new Set(['system', 'progress', 'stdout', 'stderr']);
 const SOURCE_EVENT_KEYS = new Set(['jobId', 'appId', 'sequence', 'at', 'stream', 'state', 'text', 'progress', 'final']);
+
+function parseSourceIsolationStatus(value: unknown): SourceIsolationStatus {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('The source isolation status response was invalid.');
+  const status = value as Record<string, unknown>;
+  if (typeof status.available !== 'boolean' || status.provider !== 'windows-sandbox' || typeof status.reason !== 'string' || (status.reason !== 'unsupported-platform' && status.reason !== 'guest-transport-not-connected' && !status.reason.startsWith('sandbox-'))) throw new Error('The source isolation status response was invalid.');
+  if (typeof status.checkedAt !== 'string' || !Number.isFinite(Date.parse(status.checkedAt))) throw new Error('The source isolation status response was invalid.');
+  if (!Array.isArray(status.evidence) || status.evidence.length > 8 || status.evidence.some((entry) => typeof entry !== 'string' || entry.length > 240)) throw new Error('The source isolation status response was invalid.');
+  if (typeof status.remediation !== 'string' || status.remediation.length > 600) throw new Error('The source isolation status response was invalid.');
+  return Object.freeze({ available: status.available, provider: 'windows-sandbox', reason: status.reason as SourceIsolationStatus['reason'], checkedAt: status.checkedAt, evidence: [...status.evidence] as string[], remediation: status.remediation });
+}
 
 function isSourceTerminalEvent(value: unknown): value is SourceTerminalEvent {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
@@ -62,6 +73,9 @@ const api: DingDingStoreApi = {
     start: (request: SourceJobRequest) => ipcRenderer.invoke('source-jobs:start', request),
     cancel: (request: SourceJobCancelRequest) => ipcRenderer.invoke('source-jobs:cancel', request),
     retry: (request: SourceJobRetryRequest) => ipcRenderer.invoke('source-jobs:retry', request),
+    status: async (): Promise<SourceIsolationStatus> => {
+      return parseSourceIsolationStatus(await ipcRenderer.invoke('source-jobs:status'));
+    },
     subscribe: (listener: (event: Readonly<SourceTerminalEvent>) => void) => {
       const handler = (_event: Electron.IpcRendererEvent, value: unknown) => {
         if (isSourceTerminalEvent(value)) listener(Object.freeze({ ...value }));
