@@ -4,6 +4,13 @@
 
 The repository contains a sandboxed Electron/React/TypeScript shell, reviewed 24-application catalog, stable-release/update comparison, SHA-256-gated installer path, protected uninstall path, App Store self-updater state machine, Material Design 3 navigation, language/funny-level settings, regex builder, command palette, real local operation history with export, generated offline documentation, and a fail-closed common automatic source-repair runtime.
 
+## 2026-08-08 truthful tab shortcut registry
+
+- Added one typed registry for tab pin/unpin, new-group, rail-search, and move-up/down chords. The row handler, menu handler, visible key caps, menu filtering text, and assistive `aria-keyshortcuts` values all read that registry instead of maintaining separate strings.
+- `Ctrl+Shift+P` now actually pins or unpins the focused tab, `Ctrl+Shift+G` creates and opens rename for a group around an eligible focused tab, and `Ctrl+Shift+K` focuses the rail search from anywhere in the window. Existing `Alt+ArrowUp`/`Alt+ArrowDown` movement now resolves through the same matcher.
+- Pinned tabs and the bounded group limit remain protected. Actions without a registered chord show no fake shortcut. Visual `<kbd>` labels are hidden from assistive technology because the semantic shortcut is exposed once through `aria-keyshortcuts`.
+- Focused unit/rendering/source-wiring tests cover exact modifiers, extra-modifier refusal, the shared group shape, menu output, accessibility semantics, and handler wiring. Production packaged interaction remains a separate runtime evidence boundary.
+
 ## 2026-08-08 final integrated tip and release
 
 - The last behavior-bearing `main` tip is `2df87e749e6d9f74696505f4797074fdb800abd3`; the checkout is clean. The tab rail now uses a bounded **Move… into group…** picker with its own regex-backed search, keyboard listbox, group colour/member counts, create-group path, Escape handling, and collapsed-group preservation; canonical/site/wiki/offline documentation is synchronized. Later commits only refresh handoff/release evidence.
