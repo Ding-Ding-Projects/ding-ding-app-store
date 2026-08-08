@@ -10,7 +10,7 @@ summary: Loads a reviewed public-app allowlist, enriches it with live repository
 
 ## Behaviour
 
-The catalog starts from [`data/catalog.v1.json`](../../../data/catalog.v1.json), a reviewed allowlist of public Ding Ding Projects repositories. Each entry fixes its public identifier, repository, display name, availability class, package type, source manifest, and one closed adapter ID. Asset patterns, arguments, registry identities, uninstall semantics, and blockers live in the typed hand-written adapter map rather than editable catalog JSON. The main process then queries public GitHub repository and latest stable-release metadata and returns cards containing the real description, version, source link, stars, package type, installed version, and update comparison. Private and archived repositories are excluded.
+The catalog starts from [`data/catalog.v1.json`](../../../data/catalog.v1.json), a reviewed allowlist of public Ding Ding Projects repositories. Each entry fixes its public identifier, repository, display name, availability class, package type, source manifest, and one closed adapter ID. Asset patterns, arguments, registry identities, uninstall semantics, and blockers live in the typed hand-written adapter map rather than editable catalog JSON. The documentation generator produces one separately labelled offline metadata record for each allowlisted ID; it reports only reviewed catalog and adapter state, not provider README/release text or executable details. The main process then queries public GitHub repository and latest stable-release metadata and returns cards containing the real description, version, source link, stars, package type, installed version, and update comparison. Private and archived repositories are excluded.
 
 The Discover page provides its own plain-text-first search over names, descriptions, and repository names. The adjacent full regex builder applies the same pattern and flags to that field. A refresh command bypasses the 30-minute cache and replaces the visible snapshot only with parsed catalog data.
 
@@ -30,7 +30,7 @@ Requests are restricted to `https://api.github.com`, use a 15-second timeout, re
 
 ## Verification
 
-The catalog schema, origin restriction, cache fallback, renderer boundary, and public-only filtering are directly implemented in `src/main/catalog-service.ts`. The packaged runtime capture in `docs/assets/screenshots/catalog-runtime.png` proves the built catalog surface rendered against the public organization at the captured revision. It does not prove that every listed application has a working adapter.
+The catalog schema, origin restriction, cache fallback, renderer boundary, and public-only filtering are directly implemented in `src/main/catalog-service.ts`. Generated-documentation tests independently preserve the hand-written 24-ID inventory, exact generated article IDs, catalogue/adapter alignment, command-palette reachability, and fail-closed unknown IDs. The packaged runtime capture in `docs/assets/screenshots/catalog-runtime.png` proves the built catalog surface rendered against the public organization at the captured revision. It does not prove that every listed application has a working adapter.
 
 ## Suggested articles
 

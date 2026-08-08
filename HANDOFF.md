@@ -41,7 +41,7 @@ The repository contains a sandboxed Electron/React/TypeScript shell, reviewed 24
 
 - Source builds remain intentionally blocked from execution until a real hard-disposable Windows broker and reviewed per-app recipes are supplied. The typed job/event contracts, read-only terminal panel, persisted consent, pinned OpenCode identity/configuration, dependency schema, finite repair loop, bounds, cancellation, ownership cleanup, and a non-launching Windows Sandbox capability probe are implemented and tested with fake brokers. The probe reports `WindowsSandbox.exe` presence separately from feature-state, elevation, and guest-transport evidence; it never treats a host binary as permission to execute source.
 - The 24-ID release-adapter audit is implemented: 21 source-proven release routes and three explicit blockers. Clean-Windows execution evidence remains to be collected per supported app; `WinSshCopyId` needs a release, `Photo-Viewer` needs a non-empty release, and `ha-bambulab` needs an explicitly authorized Home Assistant target.
-- Offline documentation import for every catalog application remains. Tab pinning/grouping with per-surface searches, the per-element appearance editor, and the schedule editor have landed (see the 2026-08-07 entry below); their packaged-runtime capture remains.
+- Packaged runtime interaction that opens representative generated catalog metadata records, follows their canonical links, and exercises their search/regex and command-palette destinations remains to be captured. The generated metadata itself is bundled and coverage-tested.
 - The self-update failure state was previously runtime-verified against an empty feed; the published release now exists, but a clean-Windows restart/install cycle against that unsigned feed is still unverified.
 - GitHub Pages is live and verified at `https://ding-ding-projects.github.io/ding-ding-app-store/`; the historical first-enable blocker and successful follow-up runs are recorded below.
 - The owner explicitly selected GitHub-hosted cloud runners on 2026-08-07. Current workflows pin `windows-2022` for checks, packaging, and publication and `ubuntu-24.04` for Pages; record each new run's actual verdict instead of relying on the runner choice alone.
@@ -50,6 +50,13 @@ The repository contains a sandboxed Electron/React/TypeScript shell, reviewed 24
 ## Next owner action
 
 Implement the hard-disposable broker without host mounts or secrets, add reviewed pinned recipes per application, and prove dependency/bootstrap/build/run/output/cancellation behavior on clean Windows. The current adapter exposes its exact missing guest-transport status and preserves the deliberate refusal; it must not grow a host fallback.
+
+## 2026-08-08 generated catalog offline documentation
+
+- Added one generated, metadata-only offline record for each of the 24 reviewed catalog application IDs. Each has a stable `catalog-app-<id>` identifier, display-name English title plus a Cantonese `目錄資料` fallback, public repository link, availability, package type, adapter/blocker state, source-manifest marker, and explicit install/update/source-build, security, failure, and verification boundaries.
+- The records derive only from the reviewed local catalog and hand-written adapter documentation inventory. They do not scrape provider README/release text, copy external assets, expose downloads or filesystem locations, or disclose commands, arguments, credentials, or private infrastructure.
+- The docs generator synchronizes generated records into the in-app TypeScript bundle, Documentation search, command palette, static-site article bundle, `docs/catalog-apps/`, and wiki mirror. Canonical feature articles remain authoritative and every generated record links back to the catalog, installation, update, source-build, security, and verification articles.
+- Focused documentation checks and 12 targeted tests passed before full repository verification. This lane does not claim a packaged UI interaction, clean-Windows installation, update, source build, application launch, or new release proof.
 
 ## 2026-08-07 universal reviewed release adapters
 

@@ -25,7 +25,7 @@ Material Design 3 desktop software center for discovering, documenting, installi
 - A closed 24-ID install-adapter map: 21 reviewed Squirrel/MSI/NSIS/Mozilla-NSIS/jpackage/portable routes and three explicit public-state blockers.
 - Exact registry/managed-portable discovery, freshly derived protected removal descriptors, append-only operation history, local Git snapshots, and filtered truthful export (17 flat-history formats plus re-importable JSON for nested documents).
 - Installer execution owned by the main process; the renderer cannot provide commands, paths, URLs, or arguments.
-- Offline documentation articles with an in-app browser and full local search/regex builder.
+- Offline documentation articles with an in-app browser and full local search/regex builder, including 24 generated catalog metadata records with public source links and truthful adapter/blocker boundaries.
 - Persistent browser-style tab rail with left/right/top/bottom docking, pinning, grouping, overflow, four independent regex-backed tab searches, reversible bulk close/reopen, and complete keyboard control.
 - Per-surface search state, a full regex builder everywhere, and a command palette that reaches every page, command, setting, and appearance control.
 - Per-element appearance editor with live preview, reset, and export/import, applied through CSS custom properties only.
@@ -93,7 +93,7 @@ The tab rail is a real persisted workspace: it defaults to the left edge but can
 <details id="project-guidance">
 <summary><strong>Project guidance</strong></summary>
 
-Repository-specific agent rules are in [`AGENTS.md`](AGENTS.md). The feature documentation under [`docs/features/`](docs/features/) and the in-app documentation bundle are the behavior record; update both whenever behavior changes.
+Repository-specific agent rules are in [`AGENTS.md`](AGENTS.md). The canonical feature documentation under [`docs/features/`](docs/features/), generated catalog metadata under [`docs/catalog-apps/`](docs/catalog-apps/), and the in-app documentation bundle are the behavior record; run `npm run docs:generate` after changing reviewed catalog metadata and `npm run docs:check` before committing.
 
 </details>
 

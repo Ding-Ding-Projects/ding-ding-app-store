@@ -17,7 +17,7 @@
 - [x] Closed release-adapter coverage for all 24 catalog records: 21 source-proven Windows routes and three explicit external blockers
 - [ ] Execute and launch every supported adapter on disposable clean-Windows profiles; resolve the missing WinSshCopyId release, empty Photo Viewer release, and authorized Home Assistant target
 - [ ] Complete source-build execution only after a real hard-disposable broker exists; keep bounded OpenCode repair and its current host refusal intact
-- [ ] Complete offline wiki/repository-doc import for every catalog application
+- [x] Generated offline catalog metadata for every reviewed catalog application, with stable IDs, public source links, adapter/blocker state, canonical boundary links, wiki/site mirrors, command-palette reachability, and fail-closed completeness coverage
 - [x] Local operation history: every install/build/uninstall outcome recorded, filterable by action/result/date, exported as JSON/CSV/Markdown
 - [x] Persistent tab rail with left/right/top/bottom docking, pinning, grouping, overflow, four independent regex-backed tab searches, reversible bulk close/reopen, and full keyboard control
 - [x] Independent search state and a full regex builder on every surface, including the command palette

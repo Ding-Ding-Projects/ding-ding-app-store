@@ -428,7 +428,7 @@ export function buildRegistry(context: RegistryContext): Entry[] {
       `Open article: ${article.title}`,
       `開文章：${article.titleYue}`,
       'menu_book',
-      [article.id, article.category, article.status, ...article.related],
+      [article.id, article.catalogAppId ?? '', article.category, article.status, article.source ?? 'canonical', ...article.related],
       'Pages',
       { surface: 'docs', articleId: article.id, focusId: `docs-tab-${article.id}` },
     ));
