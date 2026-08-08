@@ -7,6 +7,7 @@ import { Icon } from '../icons';
 import { label } from '../i18n';
 import { highlight, makeMatcher, useSurfaceSearch } from '../search';
 import { exportHistoryEntries } from '../history-export';
+import { HISTORY_EXPORT_FORMATS, historyExportFormat } from '../../shared/export-registry';
 import { isExternalEditorBridgeAvailable, openExportInVsCode } from '../external-editor';
 import type { Notify } from '../notify';
 import { dateKey, matchesHistoryDate, presetRange, resolveHistoryDateRange } from '../history-date-filter';
@@ -24,6 +25,7 @@ export function ActivityPage({ entries, loading, settings, openRegex, onRegexHan
   const [dateEnd, setDateEnd] = useState('');
   const [calendarMonth, setCalendarMonth] = useState(() => dateKey(new Date()).slice(0, 7));
   const [exportBusy, setExportBusy] = useState<HistoryExportFormat | null>(null);
+  const [exportFormat, setExportFormat] = useState<HistoryExportFormat>('json');
   const [copyBusy, setCopyBusy] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const lastSelected = useRef<number | null>(null);
@@ -50,14 +52,12 @@ export function ActivityPage({ entries, loading, settings, openRegex, onRegexHan
   const selectedEntries = filtered.filter((entry) => selected.has(entry.id));
   const exportEntries = selectedEntries.length ? selectedEntries : filtered;
 
-  const runExport = async (format: HistoryExportFormat) => {
-    setExportBusy(format);
+  const runExport = async () => {
+    const definition = historyExportFormat(exportFormat);
+    setExportBusy(exportFormat);
     try {
-      const content = exportHistoryEntries(exportEntries, format);
-      const extension = format === 'json' ? 'json' : format === 'jsonl' ? 'jsonl' : format === 'csv' ? 'csv' : 'md';
-      const mime = format === 'json' ? 'application/json' : format === 'jsonl' ? 'application/x-ndjson' : format === 'csv' ? 'text/csv' : 'text/markdown';
-      downloadText(`ding-ding-app-store-history.${extension}`, content, mime);
-      notify({ ok: true, message: `Exported ${exportEntries.length} filtered activity records as ${format.toUpperCase()}.` });
+      downloadText(`ding-ding-app-store-history.${definition.extension}`, exportHistoryEntries(exportEntries, exportFormat), definition.mime);
+      notify({ ok: true, message: `Exported ${exportEntries.length} filtered activity records as ${definition.label}.` });
     } finally {
       setExportBusy(null);
     }
@@ -73,7 +73,8 @@ export function ActivityPage({ entries, loading, settings, openRegex, onRegexHan
     }
   };
   const openInCode = async () => {
-    const result = await openExportInVsCode({ recordKind: 'activity', suggestedName: 'ding-ding-app-store-history.json', mime: 'application/json', content: exportHistoryEntries(exportEntries, 'json') });
+    const definition = historyExportFormat(exportFormat);
+    const result = await openExportInVsCode({ recordKind: 'activity', suggestedName: `ding-ding-app-store-history.${definition.extension}`, mime: definition.mime, content: exportHistoryEntries(exportEntries, exportFormat) });
     notify({ ok: result.ok, message: result.ok ? `Opened ${exportEntries.length} activity records in Visual Studio Code.` : result.message });
   };
   const selectAt = (index: number, checked: boolean, shiftKey: boolean) => {
@@ -132,10 +133,9 @@ export function ActivityPage({ entries, loading, settings, openRegex, onRegexHan
       <div className="chip-row" role="group" aria-label="Filter by date">{(['all', 'today', '7d', '30d'] as const).map((value) => <button key={value} aria-pressed={preset === value} onClick={() => setPresetAndRange(value)}>{value === 'all' ? 'All time' : value === 'today' ? 'Today' : value === '7d' ? '7 days' : '30 days'}</button>)}</div>
       <div className="card-actions">
         <button className="text-button" disabled={copyBusy} onClick={() => void copyJson()}><Icon>content_copy</Icon>{copyBusy ? 'Copying…' : 'Copy JSON'}</button>
-        <button className="text-button" disabled={exportBusy === 'json'} onClick={() => void runExport('json')}><Icon>download</Icon>JSON</button>
-        <button className="text-button" disabled={exportBusy === 'jsonl'} onClick={() => void runExport('jsonl')}><Icon>download</Icon>JSONL</button>
-        <button className="text-button" disabled={exportBusy === 'csv'} onClick={() => void runExport('csv')}><Icon>download</Icon>CSV</button>
-        <button className="text-button" disabled={exportBusy === 'markdown'} onClick={() => void runExport('markdown')}><Icon>download</Icon>Markdown</button>
+        <label>Export format<select value={exportFormat} onChange={(event) => setExportFormat(event.target.value as HistoryExportFormat)}>{HISTORY_EXPORT_FORMATS.map((format) => <option key={format.id} value={format.id}>{format.label}</option>)}</select></label>
+        <span className="supporting" aria-live="polite">UTF-8 · LF · {historyExportFormat(exportFormat).schema}</span>
+        <button className="text-button" disabled={exportBusy !== null || !exportEntries.length} onClick={() => void runExport()}><Icon>download</Icon>Export</button>
         <button className="text-button" disabled={!exportEntries.length || !isExternalEditorBridgeAvailable()} title={isExternalEditorBridgeAvailable() ? undefined : 'Unavailable: this build has no reviewed Visual Studio Code adapter.'} onClick={() => void openInCode()}><Icon>code</Icon>{isExternalEditorBridgeAvailable() ? 'Open in VS Code' : 'VS Code unavailable'}</button>
       </div>
       <div className="bulk-toolbar" aria-label="Activity bulk actions"><strong aria-live="polite">{selectedEntries.length} selected · {filtered.length} shown · {entries.length} total</strong><button className="text-button" disabled={!filtered.length} onClick={() => setSelected(new Set(filtered.map((entry) => entry.id)))}>Select all shown</button><button className="text-button" disabled={!filtered.length} onClick={() => setSelected((current) => new Set(filtered.filter((entry) => !current.has(entry.id)).map((entry) => entry.id)))}>Invert shown</button><button className="text-button" disabled={!selected.size} onClick={() => setSelected(new Set())}>Clear</button><button className="text-button" disabled title="Operation history is append-only and cannot be deleted.">Delete unavailable</button></div>

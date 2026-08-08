@@ -133,8 +133,9 @@ describe('visible product contracts', () => {
     expect(safety).toContain('MAX_REGEX_SAMPLE_LENGTH = 10_000');
     expect(evaluator).toContain('normalizeRegexWorkerRequest');
     expect(evaluator).toContain('REGEX_WORKER_BUDGET_MS');
-    expect(app).toContain('surface="activity"');
-    expect(app).toContain("runExport('jsonl')");
+    const activity = await read('src/renderer/pages/ActivityPage.tsx');
+    expect(activity).toContain('surface="activity"');
+    expect(activity).toContain('HISTORY_EXPORT_FORMATS');
   });
 
   it('ships all language modes and two independent funny-level controls', async () => {
@@ -281,14 +282,15 @@ describe('activity history and export', () => {
     expect(operations).toContain('No cancellable installation exists for this application.');
   });
 
-  it('bounds append-only history and exports JSON, JSONL, CSV, and Markdown', async () => {
+  it('bounds append-only history and delegates every supported format to the shared registry', async () => {
     const history = await read('src/main/history-service.ts');
+    const registry = await read('src/shared/export-registry.ts');
     expect(history).toContain('MAX_HISTORY_ENTRIES = 10_000');
     expect(history).toContain(".slice(-MAX_HISTORY_ENTRIES)");
-    expect(history).toContain("format === 'json'");
-    expect(history).toContain("format === 'jsonl'");
-    expect(history).toContain("format === 'csv'");
-    expect(history).toContain('| When | Action | App | Result | Message |');
+    expect(history).toContain('serializeHistoryEntries(await this.list(), format)');
+    for (const format of ["'json'", "'yaml'", "'toml'", "'xml'", "'tsv'", "'sql'", "'protobuf'"]) expect(registry).toContain(format);
+    expect(registry).toContain("encoding: 'UTF-8'");
+    expect(registry).toContain("lineEndings: 'LF'");
   });
 
   it('exposes history over the typed bridge only, never a generic channel', async () => {

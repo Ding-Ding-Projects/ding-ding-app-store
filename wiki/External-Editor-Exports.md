@@ -4,7 +4,7 @@
 
 ## Behaviour
 
-Every exportable app-store surface keeps its normal download action and also offers **Open in VS Code**: catalog and installed records, activity, notifications, changelog entries, offline documentation articles, settings, appearance, and tab layout. The main process writes the selected UTF-8 document into an app-owned workspace folder and launches the chosen validated VS Code edition with that folder as its workspace root. Opening an export never blocks the app or replaces the download.
+Every exportable app-store surface keeps its normal download action and also offers **Open in VS Code**: catalog and installed records, activity, notifications, changelog entries, offline documentation articles, settings, appearance, and tab layout. The main process writes the selected UTF-8 document into an app-owned workspace folder and launches the chosen validated VS Code edition with that folder as its workspace root. Activity uses the same selected truthful format for both download and VS Code; nested settings, layout, appearance, catalog, and notification documents deliberately remain JSON so they stay structurally complete and re-importable where an importer exists. Opening an export never blocks the app or replaces the download.
 
 ## Configuration
 

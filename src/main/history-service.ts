@@ -4,6 +4,7 @@ import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { app } from 'electron';
 import type { HistoryEntry, HistoryExportFormat, OperationKind } from '../shared/contracts.js';
+import { serializeHistoryEntries } from '../shared/export-registry.js';
 
 const MAX_HISTORY_BYTES = 10_000_000;
 const MAX_HISTORY_ENTRIES = 10_000;
@@ -26,10 +27,6 @@ async function git(cwd: string, args: string[]): Promise<number> {
     child.once('error', () => resolve(-1));
     child.once('exit', (code) => resolve(code ?? -1));
   });
-}
-
-function csvField(value: string): string {
-  return /[",\n]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value;
 }
 
 export interface HistoryRecordInput {
@@ -73,23 +70,7 @@ export class HistoryService {
   }
 
   async export(format: HistoryExportFormat): Promise<string> {
-    const entries = await this.list();
-    if (format === 'json') return `${JSON.stringify(entries, null, 2)}\n`;
-    if (format === 'jsonl') return `${entries.map((entry) => JSON.stringify(entry)).join('\n')}\n`;
-    if (format === 'csv') {
-      const header = 'occurredAt,kind,appId,displayName,ok,message';
-      const rows = entries.map((entry) =>
-        [entry.occurredAt, entry.kind, entry.appId, entry.displayName, String(entry.ok), entry.message]
-          .map(csvField)
-          .join(','),
-      );
-      return `${[header, ...rows].join('\r\n')}\r\n`;
-    }
-    const rows = entries.map(
-      (entry) =>
-        `| ${entry.occurredAt} | ${entry.kind} | ${entry.displayName} | ${entry.ok ? 'OK' : 'Failed'} | ${entry.message.replaceAll('|', '\\|')} |`,
-    );
-    return `${['| When | Action | App | Result | Message |', '| --- | --- | --- | --- | --- |', ...rows].join('\n')}\n`;
+    return serializeHistoryEntries(await this.list(), format);
   }
 
   private async snapshot(label: string): Promise<void> {

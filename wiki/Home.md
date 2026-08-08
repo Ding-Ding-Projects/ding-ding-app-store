@@ -17,7 +17,7 @@ The wiki mirrors the same canonical feature articles bundled into the applicatio
 ## Installed apps and history
 
 - [Installed app discovery](Installed-App-Discovery) — **shipped** — Reconciles App Store records with exact reviewed registry identities and the managed portable directory, then derives uninstall authority afresh.
-- [Activity history and export](Activity-History) — **shipped** — Appends every install, build, and uninstall result, offers composed filters, and exports the complete stored log in four text formats.
+- [Activity history and export](Activity-History) — **shipped** — Appends every install, build, and uninstall result, offers composed filters, and exports the selected or filtered log through a truthful 17-format registry.
 
 ## Updates and schedules
 

@@ -8,6 +8,7 @@ import { highlight, makeMatcher, useSurfaceSearch } from '../search';
 import type { ActionKind, ImmediateActionKind } from '../components/ActionDialog';
 import { SearchBox } from '../components/SearchBox';
 import { downloadText } from '../files';
+import { serializeStructuredExport } from '../../shared/export-registry';
 import { isExternalEditorBridgeAvailable, openExportInVsCode } from '../external-editor';
 import type { Notify } from '../notify';
 
@@ -128,7 +129,7 @@ export function AppsPage({ mode, apps, settings, loading, onAction, onManagedUpd
   };
   const exportSelection = async (openInCode: boolean) => {
     const records = selectedApps.length ? selectedApps : shown;
-    const content = JSON.stringify({ schemaVersion: 1, scope: mode, exportedAt: new Date().toISOString(), apps: records }, null, 2);
+    const content = serializeStructuredExport({ kind: 'ding-ding-app-store.apps', schemaVersion: 1, scope: mode, exportedAt: new Date().toISOString(), apps: records });
     if (!openInCode) { downloadText(`ding-ding-app-store-${mode}.json`, content, 'application/json'); notify({ ok: true, message: `Exported ${records.length} ${mode} records.` }); return; }
     const result = await openExportInVsCode({ recordKind: mode === 'installed' ? 'installed' : 'catalog', suggestedName: `ding-ding-app-store-${mode}.json`, mime: 'application/json', content });
     notify({ ok: result.ok, message: result.ok ? `Opened ${records.length} ${mode} records in Visual Studio Code.` : result.message });

@@ -9,11 +9,12 @@ import { SearchBox } from './SearchBox';
 import { DestructiveConfirmDialog } from './DestructiveConfirmDialog';
 import { openExportInVsCode } from '../external-editor';
 import { isExternalEditorBridgeAvailable } from '../external-editor';
+import { serializeStructuredExport } from '../../shared/export-registry';
 
 type NotificationFilter = 'all' | 'unread' | 'dismissed' | 'errors';
 
 function exportRecords(records: readonly NotificationRecord[]): string {
-  return JSON.stringify({ schemaVersion: 1, exportedAt: new Date().toISOString(), notifications: records }, null, 2);
+  return serializeStructuredExport({ kind: 'ding-ding-app-store.notifications', schemaVersion: 1, exportedAt: new Date().toISOString(), notifications: records });
 }
 
 export function NotificationCenter({ records, settings, persistenceAvailable, onDismissMany, onDeleteMany, notify, onClose, openRegex, onRegexHandled }: {
