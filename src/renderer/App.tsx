@@ -35,7 +35,7 @@ import { ActivityPage } from './pages/ActivityPage';
 import { DocsPage } from './pages/DocsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { buildRegistry, SETTING_FIELDS, TAB_META } from './registry';
-import type { Action, SettingsSubTabId, TokenValue } from './registry';
+import type { Action, EntryTarget, SettingsSubTabId, TokenValue } from './registry';
 import { SearchContext, useSearchStates } from './search';
 import type { SurfaceId } from './search';
 import { useAppearance, useAppearanceVars } from './state/use-appearance';
@@ -282,6 +282,26 @@ export function App() {
     setPanelOpen(true);
   }, [appearance]);
 
+  /**
+   * Palette results carry a typed destination instead of an opaque callback.
+   * Navigation happens before focus, then a short-lived marker makes the exact
+   * target visible without changing unrelated workspace state.
+   */
+  const applyPaletteTarget = useCallback((target?: EntryTarget) => {
+    if (!target) return;
+    if (target.surface) openSurface(target.surface);
+    if (target.tabId) workspace.dispatch({ type: 'activate', id: target.tabId });
+    if (target.element) selectElement(target.element);
+    const focusId = target.focusId;
+    window.setTimeout(() => {
+      const node = focusId ? window.document.getElementById(focusId) : target.element ? window.document.querySelector(`[data-el="${target.element}"]`) : null;
+      if (!(node instanceof HTMLElement)) return;
+      node.focus({ preventScroll: false });
+      node.setAttribute('data-palette-highlight', 'true');
+      window.setTimeout(() => node.removeAttribute('data-palette-highlight'), 1_200);
+    }, 0);
+  }, [openSurface, selectElement, workspace]);
+
   const railPatch = useCallback((patch: Partial<TabRailLayout>) => workspace.dispatch({ type: 'rail', patch }), [workspace]);
 
   const createGroup = useCallback((memberId: TabId | null) => {
@@ -391,27 +411,29 @@ export function App() {
   }, [loadCatalog, search, openSurface, workspace, deleteGroup, createGroup, notify, railPatch, appearance, selectElement, schedule, patchSetting, catalog]);
 
   const dispatchAction = useCallback((next: Action) => {
+    if (next.type === 'command') applyPaletteTarget(next.target);
     switch (next.type) {
-      case 'open-surface': openSurface(next.surface); return;
+      case 'open-surface': applyPaletteTarget(next.target ?? { surface: next.surface }); return;
       case 'set-setting': {
         if (next.value === null) {
           const field = SETTING_FIELDS.find((row) => row.key === next.key);
-          openSurface(field?.section === 'general' ? 'settings.general' : 'settings.appearance');
-          focusLater(`setting-${next.key}`);
+          applyPaletteTarget(next.target ?? {
+            surface: field?.section === 'general' ? 'settings.general' : 'settings.appearance',
+            focusId: `setting-${String(next.key)}`,
+          });
           return;
         }
         void patchSetting(next.key, next.value as UserSettings[keyof UserSettings]);
         return;
       }
       case 'set-appearance': {
-        selectElement(next.target);
+        applyPaletteTarget(next.destination ?? { surface: 'settings.appearance', element: next.target });
         if (next.value !== null) setPendingToken({ token: next.token, value: next.value });
         return;
       }
       case 'set-schedule': {
         if (next.value === null) {
-          openSurface('settings.schedule');
-          focusLater(`schedule-${next.key.replace('.', '-')}`);
+          applyPaletteTarget(next.target ?? { surface: 'settings.schedule', focusId: `schedule-${next.key.replace('.', '-')}` });
           return;
         }
         void schedule.applyNow([[next.key, next.value]]);
@@ -420,7 +442,7 @@ export function App() {
       case 'command': runCommand(next.command); return;
       default: return;
     }
-  }, [openSurface, patchSetting, selectElement, appearance, schedule, runCommand]);
+  }, [applyPaletteTarget, patchSetting, appearance, schedule, runCommand]);
 
   useEffect(() => {
     const listener = (event: KeyboardEvent) => {

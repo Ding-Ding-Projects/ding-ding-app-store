@@ -4,7 +4,7 @@ import type { UserSettings } from '../../shared/contracts';
 import { el } from '../el';
 import { Icon } from '../icons';
 import { label } from '../i18n';
-import type { Action, Entry, EntryGroup } from '../registry';
+import type { Action, Entry, EntryControl, EntryGroup, TokenValue } from '../registry';
 import { highlight, makeMatcher, useSurfaceSearch } from '../search';
 import { SearchBox } from './SearchBox';
 
@@ -58,6 +58,46 @@ export function CommandPalette({ settings, entries, onAction, onClose, openRegex
     if (!keepsPaletteOpen) onClose();
   };
 
+  const applyControl = (entry: Entry, control: EntryControl, raw: string | number | boolean) => {
+    const action = entry.action;
+    if (action.type === 'set-setting') {
+      onAction({ ...action, value: raw as UserSettings[keyof UserSettings] });
+      return;
+    }
+    if (action.type === 'set-schedule') {
+      onAction({ ...action, value: typeof raw === 'string' ? Number(raw) : raw as number | boolean });
+      return;
+    }
+    if (action.type === 'set-appearance') {
+      const value = control.kind === 'color' ? { kind: 'hex' as const, hex: String(raw).toLowerCase() } : raw;
+      onAction({ ...action, value: value as TokenValue });
+    }
+  };
+
+  const renderControl = (entry: Entry) => {
+    const control = entry.control;
+    if (!control) return null;
+    const labelText = label(settings, entry.en, entry.yue);
+    const stop = (event: ReactKeyboardEvent<HTMLElement> | React.MouseEvent<HTMLElement>) => event.stopPropagation();
+    if (control.kind === 'select') return (
+      <select className="command-inline-control" aria-label={`${labelText} control`} value={control.value} onClick={stop} onChange={(event) => applyControl(entry, control, event.target.value)}>
+        {control.options.map((option) => <option key={option.value} value={option.value}>{label(settings, option.en, option.yue)}</option>)}
+      </select>
+    );
+    if (control.kind === 'range') return (
+      <input className="command-inline-control command-inline-range" aria-label={`${labelText} control`} type="range" min={control.min} max={control.max} step={control.step ?? 1} value={control.value} onClick={stop} onChange={(event) => applyControl(entry, control, Number(event.target.value))} />
+    );
+    if (control.kind === 'color') return (
+      <input className="command-inline-control command-inline-color" aria-label={`${labelText} control`} type="color" value={control.value} onClick={stop} onChange={(event) => applyControl(entry, control, event.target.value)} />
+    );
+    if (control.kind === 'switch') return (
+      <input className="command-inline-control" aria-label={`${labelText} control`} type="checkbox" checked={control.value} onClick={stop} onChange={(event) => applyControl(entry, control, event.target.checked)} />
+    );
+    return (
+      <input className="command-inline-control command-inline-text" aria-label={`${labelText} control`} type="text" value={control.value} maxLength={control.maxLength} onClick={stop} onChange={(event) => applyControl(entry, control, event.target.value)} />
+    );
+  };
+
   const onInputKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'ArrowDown') { event.preventDefault(); setCursor((current) => (visible.length ? (current + 1) % visible.length : 0)); }
     if (event.key === 'ArrowUp') { event.preventDefault(); setCursor((current) => (visible.length ? (current - 1 + visible.length) % visible.length : 0)); }
@@ -103,23 +143,26 @@ export function CommandPalette({ settings, entries, onAction, onClose, openRegex
                   index += 1;
                   const position = index;
                   return (
-                    <button
+                    <div
                       key={entry.id}
                       id={optionId(position)}
                       role="option"
                       aria-selected={position === cursor}
                       className={position === cursor ? 'command-row active' : 'command-row'}
-                      disabled={entry.enabled === false}
+                      tabIndex={-1}
+                      aria-disabled={entry.enabled === false}
                       onMouseEnter={() => setCursor(position)}
-                      onClick={() => activate(entry)}
+                      onClick={() => { if (entry.enabled !== false) activate(entry); }}
+                      onKeyDown={(event) => { if ((event.key === 'Enter' || event.key === ' ') && !event.defaultPrevented) { event.preventDefault(); if (entry.enabled !== false) activate(entry); } }}
                     >
                       <Icon>{entry.icon}</Icon>
                       <span>
                         <strong>{highlight(search.state, label(settings, entry.en, entry.yue))}</strong>
                         <small>{entry.kind} · {entry.id}</small>
                       </span>
+                      {renderControl(entry)}
                       <Icon>arrow_forward</Icon>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
