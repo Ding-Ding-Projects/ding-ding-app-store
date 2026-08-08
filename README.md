@@ -43,14 +43,13 @@ The unsigned packaged application was driven on the sanctioned hidden Windows de
 <details id="screenshot-gallery">
 <summary><strong>Screenshot gallery — real packaged surfaces</strong></summary>
 
-These captures are from the built application on the hidden Windows desktop; they are evidence of the rendered surfaces, not mockups. The gallery covers discovery, installed-app detection, activity/history export, and the destructive-action super-confirmation.
+These captures are from the built application on the hidden Windows desktop; they are evidence of the rendered surfaces, not mockups. The gallery covers discovery, installed-app detection, and activity/history export. Install is one click; only uninstall keeps the native destructive gate.
 
 | Surface | Runtime capture |
 | --- | --- |
 | Catalog discovery, bilingual navigation, search, one-click install cards, and command-palette hint | ![Catalog discovery runtime capture](docs/assets/screenshots/catalog-runtime.png) |
 | Installed-app detection with Reinstall, Uninstall, and documentation actions | ![Installed-app detection runtime capture](docs/assets/screenshots/installed-runtime.png) |
 | Append-only activity history with JSON, JSONL, CSV, and Markdown export | ![Activity and export runtime capture](docs/assets/screenshots/activity-runtime.png) |
-| Native destructive-action super-confirmation before authorization | ![Destructive-action super-confirmation before authorization](docs/assets/screenshots/install-super-confirmation-before.png) |
 
 </details>
 

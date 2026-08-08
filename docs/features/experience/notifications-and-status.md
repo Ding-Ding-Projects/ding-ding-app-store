@@ -14,7 +14,7 @@ Catalog, persistence, appearance, workspace, schedule, and operation results sur
 
 The title-bar bell opens a non-blocking notification centre. Its own search field carries the adjacent full regex builder. Status filters compose with text search, and selection supports visible-scope select-all, inversion, clear, bulk dismiss, JSON export, and bulk delete. Delete states the exact review count and requires both independent keys plus the full confirmation slider.
 
-Install/build confirmation and destructive uninstall authorization use the native in-app dialog because they require a user decision. Informational errors and ordinary progress do not open a blocking system dialog.
+Install, Reinstall, and source installation are immediate one-click actions and never open a phrase-entry or second-confirmation dialog. Only destructive uninstall authorization uses the native two-key plus full-slider gate; informational errors and ordinary progress remain non-blocking notifications.
 
 ## Configuration
 
