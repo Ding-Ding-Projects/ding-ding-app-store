@@ -5,6 +5,7 @@ import type {
   ElementKey,
   ElementOverride,
   HistoryExportFormat,
+  InstallCancelRequest,
   OperationRequest,
   ScheduleConfig,
   ScheduleStatus,
@@ -44,6 +45,7 @@ const api: DingDingStoreApi = {
   },
   operations: {
     install: (request: OperationRequest) => ipcRenderer.invoke('operations:install', request),
+    cancelInstall: (request: InstallCancelRequest) => ipcRenderer.invoke('operations:cancel-install', request),
     build: (request: OperationRequest) => ipcRenderer.invoke('operations:build', request),
     uninstall: (request: OperationRequest) => ipcRenderer.invoke('operations:uninstall', request),
     installed: () => ipcRenderer.invoke('operations:installed'),

@@ -11,8 +11,9 @@
 - [x] Common typed source-job runtime, M3 terminal simulator, consent, pinned OpenCode bootstrap contract, bounded repair loop, cancellation, and fail-closed isolation gate
 - [x] Installed-app discovery for reviewed Squirrel, MSI, and managed-portable records with append-only history/export
 - [x] One-click install/source-install dispatch with strict catalog-ID and typed-decision boundary; destructive uninstall confirmation unchanged
-- [ ] Real install/uninstall adapter validation across every supported package type
-- [ ] Fully automatic clean-Windows adapters for all 24 catalog records, including pinned dependency bootstrap, portable archives, disposable source builds, bounded OpenCode repair, cancellation, and runtime proof
+- [x] Closed release-adapter coverage for all 24 catalog records: 21 source-proven Windows routes and three explicit external blockers
+- [ ] Execute and launch every supported adapter on disposable clean-Windows profiles; resolve the missing WinSshCopyId release, empty Photo Viewer release, and authorized Home Assistant target
+- [ ] Complete source-build execution only after a real hard-disposable broker exists; keep bounded OpenCode repair and its current host refusal intact
 - [ ] Complete offline wiki/repository-doc import for every catalog application
 - [x] Local operation history: every install/build/uninstall outcome recorded, filterable by action/result/date, exported as JSON/CSV/Markdown
 - [x] Persistent tab rail with pinning, grouping, overflow, tab search, and full keyboard control

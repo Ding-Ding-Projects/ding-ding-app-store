@@ -15,16 +15,26 @@ The repository contains a sandboxed Electron/React/TypeScript shell, reviewed 24
 ## Remaining
 
 - Source builds remain intentionally blocked from execution until a real hard-disposable Windows broker and reviewed per-app recipes are supplied. The typed job/event contracts, read-only terminal panel, persisted consent, pinned OpenCode identity/configuration, dependency schema, finite repair loop, bounds, cancellation, and ownership cleanup are implemented and tested with fake brokers.
-- Install adapters need real-release verification per application; opaque installers remain unsupported instead of receiving guessed flags.
+- The 24-ID release-adapter audit is implemented: 21 source-proven release routes and three explicit blockers. Clean-Windows execution evidence remains to be collected per supported app; `WinSshCopyId` needs a release, `Photo-Viewer` needs a non-empty release, and `ha-bambulab` needs an explicitly authorized Home Assistant target.
 - Offline documentation import for every catalog application remains. Tab pinning/grouping with per-surface searches, the per-element appearance editor, and the schedule editor have landed (see the 2026-08-07 entry below); their packaged-runtime capture remains.
 - The self-update failure state is runtime-verified: the repository has no release yet, so `RELEASES` returns HTTP 404. No successful update is claimed.
 - GitHub Pages is not yet live: creating a Pages site for the first time needs an admin-level token, and the Actions `GITHUB_TOKEN` used by `pages.yml` doesn't have it. See the 2026-08-07 CI/release/Pages entry below for the exact one-time manual step needed.
 - The owner explicitly selected GitHub-hosted cloud runners on 2026-08-07. Current workflows pin `windows-2022` for checks, packaging, and publication and `ubuntu-24.04` for Pages; record each new run's actual verdict instead of relying on the runner choice alone.
-- The one-click UI/typed-decision boundary does not make the 24 catalog adapters complete. Live clean-Windows dependency bootstrap, archive handling, 24 source recipes, a real disposable broker, actual OpenCode execution, produced application launch, packaged interaction capture, and per-app runtime proof remain tracked in `docs/features/installation/one-click-installation.md`.
+- The one-click UI/typed-decision boundary now reaches a reviewed release adapter for 21 catalog records. Live clean-Windows install/launch/cancel evidence, the three external release/target blockers, any future source recipes, a real disposable broker, actual OpenCode execution, and packaged interaction capture remain tracked in `docs/features/installation/one-click-installation.md`.
 
 ## Next owner action
 
 Implement the hard-disposable broker without host mounts or secrets, add reviewed pinned recipes per application, and prove dependency/bootstrap/build/run/output/cancellation behavior on clean Windows. Until then, preserve the common runtime's deliberate refusal instead of adding a host fallback.
+
+## 2026-08-07 universal reviewed release adapters
+
+- Audited all 24 public catalog repositories through the GitHub CLI, including current visibility/default branches, latest stable releases, asset names/sizes/GitHub digests, and source/release packaging configuration.
+- Replaced broad package-type dispatch with one closed adapter ID per catalog application. Twenty-one applications now select a source-proven Squirrel, MSI, NSIS, Mozilla NSIS, jpackage EXE, or managed portable ZIP asset. `WinSshCopyId` has no release, `Photo-Viewer` has a release with no assets, and `ha-bambulab` requires an explicitly authorized external Home Assistant target; all three are `unsupported` with exact evidence instead of a misleading Install button.
+- Added verified companion-checksum fallback, abortable bounded GitHub downloads, transactional traversal/symlink/bomb-safe ZIP extraction, fixed hidden shell-free process arguments, and typed install cancellation.
+- Reworked installed detection and uninstall authority around exact before/after-created registry keys and full-entry fingerprints. Ownership snapshots fail closed on any hive query failure or output overflow; unmanaged upstream matches are excluded from the managed Installed list; an unchanged entry is accepted only for an already-recorded same-version reinstall. Installer exit zero is insufficient, and uninstall never trusts a persisted command/path alone.
+- Independent review found and drove fixes for registry alias ownership, process-tree/extraction cancellation, portable metadata rollback, partial file writes/post-close hashing, and Windows ZIP aliases/duplicates/zero-byte files. Behavioural failure-injection tests cover the portable and archive corrections.
+- Preserved `source-runtime.ts`, the empty source recipe catalog, the unavailable production isolation broker, and all OpenCode/disposable tests unchanged. Release installation still has no import or call into repair.
+- Static/build verification is recorded by this lane's final commit. No clean-Windows installer execution or per-app launch is claimed; runtime evidence remains pending for each supported adapter.
 
 ## 2026-08-07 bounded automatic source-repair runtime
 

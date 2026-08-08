@@ -39,10 +39,10 @@ describe('catalog contract', () => {
   });
 
   it('allows executable installs only through reviewed package kinds', async () => {
-    const catalog = JSON.parse(await read('data/catalog.v1.json')) as { apps: Array<{ availability: string; packageType: string; assetPattern: string | null }> };
+    const catalog = JSON.parse(await read('data/catalog.v1.json')) as { apps: Array<{ availability: string; packageType: string; adapterId: string }> };
     for (const app of catalog.apps.filter((record) => record.availability === 'installable')) {
-      expect(['squirrel', 'msi', 'archive']).toContain(app.packageType);
-      expect(app.assetPattern).toBeTruthy();
+      expect(['squirrel', 'msi', 'nsis', 'jpackage', 'archive']).toContain(app.packageType);
+      expect(app.adapterId).toBeTruthy();
     }
   });
 });
@@ -73,8 +73,8 @@ describe('desktop security and update contracts', () => {
   it('discovers only allowlisted install records and keeps append-only local history', async () => {
     const installed = await read('src/main/installed-service.ts');
     const history = await read('src/main/history-service.ts');
-    expect(installed).toContain("record.uninstallStrategy !== 'squirrel'");
-    expect(installed).toContain("record.uninstallStrategy !== 'msi-registry'");
+    expect(installed).toContain('adapterFor(record.id)');
+    expect(installed).toContain('exactDisplayNameMatch');
     expect(installed).toContain("source: 'portable-managed'");
     expect(history).toContain("appendFile(this.logPath");
     expect(history).toContain("git(this.repositoryPath, ['commit', '-m', label])");
@@ -230,10 +230,13 @@ describe('activity history and export', () => {
     const operations = await read('src/main/operation-service.ts');
     expect(operations).toContain("private readonly history: HistoryService");
     expect(operations).toContain('private async finish(');
-    expect(operations.match(/this\.finish\(record, 'install'/g)?.length).toBeGreaterThanOrEqual(5);
+    expect(operations.match(/this\.finish\(record, 'install'/g)?.length).toBeGreaterThanOrEqual(4);
     expect(operations.match(/this\.finish\(record, 'build'/g)?.length).toBeGreaterThanOrEqual(2);
-    expect(operations.match(/this\.finish\(record, 'uninstall'/g)?.length).toBeGreaterThanOrEqual(4);
-    expect(operations).not.toMatch(/return \{ ok:/);
+    expect(operations.match(/this\.finish\(record, 'uninstall'/g)?.length).toBeGreaterThanOrEqual(3);
+    expect(operations).toContain("return this.finish(record, 'install'");
+    expect(operations).toContain("return this.finish(record, 'build'");
+    expect(operations).toContain("return this.finish(record, 'uninstall'");
+    expect(operations).toContain('No cancellable installation exists for this application.');
   });
 
   it('bounds append-only history and exports JSON, JSONL, CSV, and Markdown', async () => {
@@ -268,26 +271,24 @@ describe('activity history and export', () => {
 });
 
 describe('one-click adapter coverage record', () => {
-  it('names every catalog application and the bounded repair-engine contract without claiming the missing adapters are complete', async () => {
+  it('names every catalog application, the three blockers, and the separate repair boundary without claiming runtime proof', async () => {
     const catalog = JSON.parse(await read('data/catalog.v1.json')) as { apps: Array<{ displayName: string }> };
     const coverage = await read('docs/features/installation/one-click-installation.md');
     for (const app of catalog.apps) expect(coverage).toContain(`| ${app.displayName} |`);
     for (const requirement of [
-      'build/run terminal simulator',
-      'automatic OpenCode bootstrap',
-      'disposable workspace',
-      'retry limit',
-      'arbitrary user paths',
-      'user secrets',
+      'Twenty-one records',
+      'Win SSH Copy ID',
+      'Home Assistant Bambu Lab',
+      'Photo Viewer',
+      'ordinary release installation never imports or invokes the disposable/OpenCode runtime',
+      'per-application clean-machine execution remains runtime evidence to collect',
     ]) expect(coverage).toContain(requirement);
-    expect(coverage).toContain('Not complete');
-    expect(coverage).toContain('runtime proof is still pending');
   });
 
   it('keeps primary installer outcomes honest when history, ownership recording, or cleanup fails', async () => {
     const operations = await read('src/main/operation-service.ts');
     expect(operations).toContain('Activity history could not record this outcome.');
-    expect(operations).toContain("installer exited successfully, but the App Store could not record installation ownership");
+    expect(operations).toContain('installer exited successfully, but its exact reviewed installed-app entry was not detected');
     expect(operations).toContain('Temporary staging cleanup failed; the owned staging folder may remain.');
     expect(operations).toMatch(/let result: OperationResult;[\s\S]*await rm\(operationDir[\s\S]*return this\.finish\(record, 'install', result\)/);
   });

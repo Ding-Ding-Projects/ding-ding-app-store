@@ -10,7 +10,7 @@ summary: Loads a reviewed public-app allowlist, enriches it with live repository
 
 ## Behaviour
 
-The catalog starts from [`data/catalog.v1.json`](../../../data/catalog.v1.json), a reviewed allowlist of public Ding Ding Projects repositories. Each entry fixes its public identifier, repository, display name, availability class, package type, release-asset pattern, source manifest, and uninstall strategy. The main process then queries public GitHub repository and latest stable-release metadata and returns cards containing the real description, version, source link, stars, package type, installed version, and update comparison. Private and archived repositories are excluded.
+The catalog starts from [`data/catalog.v1.json`](../../../data/catalog.v1.json), a reviewed allowlist of public Ding Ding Projects repositories. Each entry fixes its public identifier, repository, display name, availability class, package type, source manifest, and one closed adapter ID. Asset patterns, arguments, registry identities, uninstall semantics, and blockers live in the typed hand-written adapter map rather than editable catalog JSON. The main process then queries public GitHub repository and latest stable-release metadata and returns cards containing the real description, version, source link, stars, package type, installed version, and update comparison. Private and archived repositories are excluded.
 
 The Discover page provides its own plain-text-first search over names, descriptions, and repository names. The adjacent full regex builder applies the same pattern and flags to that field. A refresh command bypasses the 30-minute cache and replaces the visible snapshot only with parsed catalog data.
 

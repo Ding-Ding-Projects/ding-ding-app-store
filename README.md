@@ -22,7 +22,8 @@ Material Design 3 desktop software center for discovering, documenting, installi
 - Sandboxed renderer (`contextIsolation`, no Node integration) and a narrow typed preload bridge.
 - Reviewed, versioned public catalog; private repositories and infrastructure never enter the product catalog.
 - Stable-release comparison for every catalog entry and a separate unsigned Squirrel self-updater.
-- Allowlisted Squirrel/MSI/managed-portable discovery, protected removal descriptors, append-only operation history, local Git snapshots, and filtered multi-format export.
+- A closed 24-ID install-adapter map: 21 reviewed Squirrel/MSI/NSIS/Mozilla-NSIS/jpackage/portable routes and three explicit public-state blockers.
+- Exact registry/managed-portable discovery, freshly derived protected removal descriptors, append-only operation history, local Git snapshots, and filtered multi-format export.
 - Installer execution owned by the main process; the renderer cannot provide commands, paths, URLs, or arguments.
 - Offline documentation articles with an in-app browser and full local search/regex builder.
 - Persistent browser-style tab rail with pinning, grouping, overflow, tab search, and complete keyboard control.
@@ -56,7 +57,7 @@ These captures are from the built application on the hidden Windows desktop; the
 <details id="security-and-trust">
 <summary><strong>Security and trust</strong></summary>
 
-Install and Reinstall are genuine one-click actions: the catalog button immediately submits only the application ID and a closed install decision, with no phrase-entry dialog. Installable assets still require an allowlisted application, a reviewed asset matcher, an HTTPS GitHub release origin, a bounded declared size, and a GitHub SHA-256 digest. Install results are recorded only after the hidden child process exits successfully. Uninstall uses only the exact entry recorded for that installation and still requires the two-key plus full-slider destructive confirmation.
+Install and Reinstall are genuine one-click actions: the catalog button immediately submits only the application ID and a closed install decision, with no phrase-entry dialog. Installable assets still require an allowlisted application, one app-specific adapter, an HTTPS GitHub release origin, bounded declared/received size, and either GitHub SHA-256 metadata or a GitHub-digested companion checksum. Install results are recorded only after hidden shell-free execution and exact installed-app rediscovery. Uninstall re-derives its authority from the current reviewed registry/portable identity and still requires the two-key plus full-slider destructive confirmation.
 
 The common dispatch is implemented, but fully automatic fresh-Windows coverage is not: the current [24-app adapter matrix](docs/features/one-click-installation.md) records every missing release, archive, source-toolchain, dependency-bootstrap, disposable-runner, bounded OpenCode-repair, cancellation, and runtime-proof requirement without treating a guessed command as an adapter.
 
