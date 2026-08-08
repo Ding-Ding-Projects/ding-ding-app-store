@@ -6,11 +6,13 @@ on:
   workflow_dispatch:
     inputs:
       app_id:
-        description: 'Reviewed portable proof target (currently dim-sum-atlas only)'
+        description: 'Reviewed portable proof target'
         required: true
         type: choice
         options:
           - dim-sum-atlas
+          - winforge
+          - wimforge
 
 permissions:
   contents: read
@@ -40,6 +42,7 @@ jobs:
       - name: Build the reviewed main process and preload
         run: npm run build
       - name: Run one selected adapter proof
+        timeout-minutes: 25
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Path proof-output -Force | Out-Null
@@ -48,15 +51,18 @@ jobs:
             --output (Join-Path $env:GITHUB_WORKSPACE 'proof-output/install-proof.json') `
             --data-root (Join-Path $env:RUNNER_TEMP 'ding-ding-install-proof-data')
       - name: Validate proof manifest boundary
+        if: always()
         shell: pwsh
         run: |
+          if (-not (Test-Path -LiteralPath proof-output/install-proof.json)) { throw 'The install proof did not emit its bounded manifest.' }
           $proof = Get-Content -LiteralPath proof-output/install-proof.json -Raw | ConvertFrom-Json
           if ($proof.schemaVersion -ne 'ding-ding-app-store.install-proof.v1') { throw 'Unexpected proof schema.' }
           if ($proof.sourceRuntimeInvoked -ne $false) { throw 'The install proof must never invoke source or OpenCode runtime.' }
           if ($proof.runner.image -ne 'windows-2022') { throw 'The proof did not record the pinned cloud image.' }
           if ($proof.verdict -ne $true) { throw 'The selected adapter proof did not reach its expected verdict.' }
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: install-adapter-proof-${{ inputs.app_id }}-${{ github.run_id }}
           path: proof-output/install-proof.json
-          if-no-files-found: error
+          if-no-files-found: ignore
