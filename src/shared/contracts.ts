@@ -146,11 +146,20 @@ export interface HistoryEntry {
   occurredAt: string;
 }
 
+export interface UpdatePackageMetadata {
+  /** The exact Squirrel full-package filename named by RELEASES. */
+  fileName: string;
+  /** Squirrel's SHA-1 package digest; it is a transport/package-integrity value, not a signature. */
+  sha1: string;
+  /** The byte count declared by RELEASES and bounded before download. */
+  bytes: number;
+}
+
 export type AppStoreUpdateState =
   | { status: 'idle' | 'checking' | 'up-to-date'; checkedAt?: string }
-  | { status: 'available' | 'downloading'; version: string; releaseNotesUrl: string }
-  | { status: 'ready'; version: string; releaseNotesUrl: string; unsigned: true }
-  | { status: 'failed'; message: string; checkedAt: string };
+  | { status: 'available' | 'downloading'; version: string; releaseNotesUrl: string; package: UpdatePackageMetadata }
+  | { status: 'ready'; version: string; releaseNotesUrl: string; package: UpdatePackageMetadata; unsigned: true }
+  | { status: 'failed'; message: string; checkedAt: string; recoverable: boolean; rollbackAvailable: boolean };
 
 export interface UserSettings {
   language: LanguageMode;
@@ -689,6 +698,8 @@ export interface DingDingStoreApi {
     checkStore(): Promise<AppStoreUpdateState>;
     downloadStore(): Promise<AppStoreUpdateState>;
     restartStore(): Promise<OperationResult>;
+    cancelStoreDownload(): Promise<AppStoreUpdateState>;
+    openReleaseNotes(url: string): Promise<OperationResult>;
     subscribe(listener: (state: AppStoreUpdateState) => void): () => void;
   };
   settings: {
