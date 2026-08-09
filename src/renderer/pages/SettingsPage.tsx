@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { SchoolUnlockKind, SettingsProvenance, UserSettings } from '../../shared/contracts';
+import type { SchoolUnlockKind, SettingsProvenance, SourceIsolationStatus, UserSettings } from '../../shared/contracts';
 import { SearchBox } from '../components/SearchBox';
 import { ExternalEditorSettings } from '../components/ExternalEditorSettings';
 import { el } from '../el';
@@ -22,6 +22,7 @@ import { downloadText } from '../files';
 import { serializeStructuredExport } from '../../shared/export-registry';
 import { isExternalEditorBridgeAvailable, openExportInVsCode } from '../external-editor';
 import { ColorTranslatorControl } from '../components/ColorTranslatorControl';
+import { SourceIsolationStatusCard } from '../components/SourceIsolationStatusCard';
 
 const ABOUT_ROWS = [
   { en: 'Version', yue: '版本', body: 'Ding Ding App Store preview 0.1.0.' },
@@ -50,9 +51,12 @@ function SettingExplanation({ settings, field, provenance }: { settings: UserSet
   );
 }
 
-export function SettingsPage({ settings, settingsProvenance, onSave, workspace, appearance, schedule, schoolMode, notify, subTab, onSubTab, regexRequest, onRegexHandled }: {
+export function SettingsPage({ settings, settingsProvenance, sourceIsolationStatus, sourceIsolationLoading, onRefreshSourceIsolation, onSave, workspace, appearance, schedule, schoolMode, notify, subTab, onSubTab, regexRequest, onRegexHandled }: {
   settings: UserSettings;
   settingsProvenance: SettingsProvenance;
+  sourceIsolationStatus: SourceIsolationStatus | null;
+  sourceIsolationLoading: boolean;
+  onRefreshSourceIsolation(): void;
   onSave(next: UserSettings): void;
   workspace: WorkspaceApi;
   appearance: AppearanceApi;
@@ -195,6 +199,7 @@ export function SettingsPage({ settings, settingsProvenance, onSave, workspace, 
               {!schoolEnabled && <p className="supporting">Funny levels style all messages, including warnings and errors, but never change facts. You can reset them any time.</p>}
               {!schoolEnabled && <p className="supporting">Spoken narrator is optional and off by default. It uses this device’s browser speech service only; it never sends notification text over the network. It yields to a connected accessibility integration, stays quiet during quiet hours or reduced-sound mode, and may be unavailable when the platform has no speech service.</p>}
               <p className="supporting">Automatic source repair gives OpenCode blanket tool approval only inside an attested disposable environment with no host mounts, user profile, credentials, secrets, or Git metadata. The app fails closed when that isolation is unavailable. This consent is persisted and can be revoked here; ordinary release installation never invokes OpenCode.</p>
+              {matcher('automatic source repair OpenCode isolation guest transport sandbox') && <SourceIsolationStatusCard settings={viewSettings} status={sourceIsolationStatus} loading={sourceIsolationLoading} onRefresh={onRefreshSourceIsolation} />}
             </div>
             {matcher(`${schoolLabel} school mode school name unlock credential PIN password passkey local reset`) && <section className="settings-card" aria-labelledby="school-mode-title">
               <h2 id="school-mode-title">{schoolLabel}</h2>

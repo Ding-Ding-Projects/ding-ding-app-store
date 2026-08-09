@@ -10,6 +10,8 @@ The source runtime defines reviewed pinned revisions, canonical dependency archi
 
 The release-installer lane now has a hand-written adapter record for every one of the 24 catalog IDs: 21 supported release routes and three explicit public-state blockers. That work does not weaken or replace this source runtime. The shipped source recipe catalog remains empty and production uses a fail-closed Windows Sandbox adapter: it can report `WindowsSandbox.exe` presence and the missing guest transport, but it never launches a host process. Therefore no repository, dependency, source build, application run, or OpenCode repair executes in the current package.
 
+The Settings surface and the read-only terminal simulator now call the typed isolation-status bridge directly. They show the provider, exact fail-closed reason, bounded evidence, remediation, and the last check time, with a retry-status action. This makes the missing guest transport visible before a source job is attempted; it does not add a shell prompt, accept commands, or enable host execution.
+
 ## Configuration
 
 The source recipe schema remains catalog-owned: app identifier, full 40-character revision, source archive digest, dependency inventory, tool versions and canonical HTTPS digests, fixed executable/argument vectors, expected outputs, repairable step IDs, retry ceiling, and time/resource limits. It is distinct from `src/main/install-adapters.ts`, whose release adapters contain no build or OpenCode command. Windows command shims and Git execution are excluded; recipes use direct executables such as `node.exe` plus a pinned CLI entry point.
@@ -26,7 +28,7 @@ Blanket OpenCode approval is an inner-guest convenience, not the security bounda
 
 ## Verification
 
-Focused tests cover strict request rejection, duplicate concurrent starts, persisted-consent refusal, isolation attestation, automatic-approval confinement, terminal validation/redaction/bounds, cancellation, global timeout, path and symbolic-link escape, OpenCode archive/executable pin separation, finite repair, exact rerun, real-tree diff bounds, ownership-marked cleanup, and proof that ordinary installer code never references repair. TypeScript and renderer builds exercise the integrated contracts and terminal panel.
+Focused tests cover strict request rejection, duplicate concurrent starts, persisted-consent refusal, isolation attestation, automatic-approval confinement, terminal validation/redaction/bounds, cancellation, global timeout, path and symbolic-link escape, OpenCode archive/executable pin separation, finite repair, exact rerun, real-tree diff bounds, ownership-marked cleanup, the typed isolation-status renderer bridge, and proof that ordinary installer code never references repair. TypeScript and renderer builds exercise the integrated contracts, status card, and terminal panel.
 
 Still pending: the privileged Windows Sandbox feature-state check, a real hard-disposable guest transport, live OpenCode bootstrap inside that guest, any reviewed source recipe, clean-Windows dependency/build/run/output proof, packaged terminal interaction and accessibility capture, and end-to-end cancellation/process-tree disposal. The release-adapter coverage tests additionally prove ordinary installation never imports or calls this runtime. Static, capability-probe, and fake-broker tests do not claim source execution.
 

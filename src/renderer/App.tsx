@@ -11,6 +11,7 @@ import type {
   ManagedUpdateState,
   OperationProgressEvent,
   SourceTerminalEvent,
+  SourceIsolationStatus,
   TabGroup,
   TabGroupColor,
   TabId,
@@ -28,6 +29,7 @@ import { CommandPalette } from './components/CommandPalette';
 import { NotificationCenter } from './components/NotificationCenter';
 import { SnackbarStack } from './components/SnackbarStack';
 import { SourceTerminalPanel } from './components/SourceTerminalPanel';
+import { SourceIsolationStatusCard } from './components/SourceIsolationStatusCard';
 import { TabRail } from './components/TabRail';
 import { el } from './el';
 import { downloadText, pickTextFile } from './files';
@@ -105,6 +107,8 @@ export function App() {
     fallbackMessage?: string;
     returnFocus: HTMLButtonElement;
   } | null>(null);
+  const [sourceIsolationStatus, setSourceIsolationStatus] = useState<SourceIsolationStatus | null>(null);
+  const [sourceIsolationLoading, setSourceIsolationLoading] = useState(false);
   const operationRunningRef = useRef(false);
   const [updateState, setUpdateState] = useState<AppStoreUpdateState>({ status: 'idle' });
   const lastStoreFailure = useRef<string | null>(null);
@@ -189,6 +193,19 @@ export function App() {
     try { setInstalled(await window.dingDingStore.operations.installed()); }
     catch (error) { notify({ ok: false, message: (error as Error).message }); }
   }, [notify]);
+
+  const refreshSourceIsolation = useCallback(async () => {
+    setSourceIsolationLoading(true);
+    try {
+      setSourceIsolationStatus(await window.dingDingStore.sourceJobs.status());
+    } catch (error) {
+      notify({ ok: false, message: (error as Error).message });
+    } finally {
+      setSourceIsolationLoading(false);
+    }
+  }, [notify]);
+
+  useEffect(() => { void refreshSourceIsolation(); }, [refreshSourceIsolation]);
 
   const reportOperation = useCallback((result: { ok: boolean; message: string; messageYue?: string }, recovery?: RecoveryAction) => {
     const message = result.messageYue ? label(settings, result.message, result.messageYue) : result.message;
@@ -877,6 +894,9 @@ export function App() {
             <SettingsPage
               settings={baseSettings}
               settingsProvenance={settingsProvenance}
+              sourceIsolationStatus={sourceIsolationStatus}
+              sourceIsolationLoading={sourceIsolationLoading}
+              onRefreshSourceIsolation={() => void refreshSourceIsolation()}
               onSave={(value) => void saveSettings(value)}
               workspace={workspace}
               appearance={appearance}
@@ -901,6 +921,9 @@ export function App() {
             appName={sourceTerminal.appName}
             events={sourceTerminal.events}
             fallbackMessage={sourceTerminal.fallbackMessage}
+            isolationStatus={sourceIsolationStatus}
+            isolationLoading={sourceIsolationLoading}
+            onRefreshIsolation={() => void refreshSourceIsolation()}
             settings={settings}
             onCancel={() => sourceTerminal.jobId && void window.dingDingStore.sourceJobs.cancel({ jobId: sourceTerminal.jobId, decision: 'cancel' })}
             onRetry={() => void retrySourceTerminal()}
