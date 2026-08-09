@@ -32,6 +32,7 @@ export interface Notice {
   message: string;
   ok: boolean;
   category?: NarratorCategory;
+  operationId?: string;
   undo?: { label: string; run: () => void };
   recovery?: RecoveryAction;
 }
@@ -46,6 +47,7 @@ export interface NotificationRecord {
   createdAt: string;
   dismissedAt: string | null;
   category?: NarratorCategory;
+  operationId?: string;
   recovery?: RecoveryActionMetadata;
 }
 

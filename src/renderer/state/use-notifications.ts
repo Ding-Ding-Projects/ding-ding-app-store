@@ -7,6 +7,7 @@ export const MAX_NOTIFICATION_RECORDS = 250;
 export const MAX_NOTIFICATION_STORAGE_BYTES = 512_000;
 export const MAX_NOTIFICATION_TITLE_LENGTH = 120;
 export const MAX_NOTIFICATION_MESSAGE_LENGTH = 1_000;
+const OPERATION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function recoveryMetadata(value: unknown): RecoveryActionMetadata | undefined {
   if (!value || typeof value !== 'object' || !('kind' in value)) return undefined;
@@ -29,6 +30,7 @@ export function parseNotificationRecords(value: string | null): NotificationReco
         && typeof (item as NotificationRecord).message === 'string'
         && typeof (item as NotificationRecord).ok === 'boolean'
         && ((item as NotificationRecord).category === undefined || ['general', 'success', 'progress', 'warning', 'error'].includes((item as NotificationRecord).category!))
+        && ((item as NotificationRecord).operationId === undefined || (typeof (item as NotificationRecord).operationId === 'string' && OPERATION_ID_PATTERN.test((item as NotificationRecord).operationId!)))
         && typeof (item as NotificationRecord).createdAt === 'string'
         && ((item as NotificationRecord).dismissedAt === null || typeof (item as NotificationRecord).dismissedAt === 'string'),
       ))
@@ -38,6 +40,7 @@ export function parseNotificationRecords(value: string | null): NotificationReco
         message: record.message.slice(0, MAX_NOTIFICATION_MESSAGE_LENGTH),
         ok: record.ok,
         category: record.category,
+        operationId: record.operationId,
         createdAt: record.createdAt,
         dismissedAt: record.dismissedAt,
         recovery: recoveryMetadata((record as { recovery?: unknown }).recovery),
@@ -87,6 +90,7 @@ export function useNotifications(): NotificationApi {
       message: notice.message.slice(0, MAX_NOTIFICATION_MESSAGE_LENGTH),
       ok: notice.ok,
       category: notice.category,
+      operationId: notice.operationId,
       createdAt: new Date().toISOString(),
       dismissedAt: null,
       undo: notice.undo,
@@ -99,6 +103,7 @@ export function useNotifications(): NotificationApi {
       message: record.message,
       ok: record.ok,
       category: record.category,
+      operationId: record.operationId,
       createdAt: record.createdAt,
       dismissedAt: record.dismissedAt,
       recovery: record.recovery ? { kind: record.recovery.kind } : undefined,

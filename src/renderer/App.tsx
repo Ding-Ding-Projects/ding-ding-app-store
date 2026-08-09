@@ -210,7 +210,7 @@ export function App() {
 
   const reportOperation = useCallback((result: { ok: boolean; message: string; messageYue?: string }, recovery?: RecoveryAction) => {
     const message = result.messageYue ? label(settings, result.message, result.messageYue) : result.message;
-    notify({ ok: result.ok, message, recovery: result.ok ? undefined : recovery });
+    notify({ ok: result.ok, message, operationId: result.operationId, recovery: result.ok ? undefined : recovery });
     announce(message);
     void loadHistory();
     void loadInstalled();

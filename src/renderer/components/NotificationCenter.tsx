@@ -24,6 +24,7 @@ export function exportNotificationRecords(records: readonly NotificationRecord[]
     message: record.message,
     ok: record.ok,
     category: record.category,
+    operationId: record.operationId,
     createdAt: record.createdAt,
     dismissedAt: record.dismissedAt,
     recovery: record.recovery ? { kind: record.recovery.kind } : undefined,
@@ -49,14 +50,17 @@ export function NotificationCenter({ records, settings, persistenceAvailable, on
   const [filter, setFilter] = useState<NotificationFilter>('all');
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [copyBusy, setCopyBusy] = useState(false);
   const lastSelected = useRef<number | null>(null);
   const shown = useMemo(() => records.filter((record) => {
     if (filter === 'unread' && record.dismissedAt !== null) return false;
     if (filter === 'dismissed' && record.dismissedAt === null) return false;
     if (filter === 'errors' && record.ok) return false;
-    return matcher(`${record.title}\n${record.message}\n${record.ok ? 'success' : 'error'}`);
+    return matcher(`${record.title}\n${record.message}\n${record.operationId ?? ''}\n${record.ok ? 'success' : 'error'}`);
   }), [records, filter, matcher]);
   const selectedShown = shown.filter((record) => selected.has(record.id));
+  const scopedOperationIds = (selectedShown.length ? selectedShown : shown).flatMap((record) => record.operationId ? [record.operationId] : []);
+  const operationIdClipboard = scopedOperationIds.join('\n');
 
   useEffect(() => { panelRef.current?.focus(); }, []);
 
@@ -106,6 +110,7 @@ export function NotificationCenter({ records, settings, persistenceAvailable, on
           <button className="text-button" onClick={() => setSelected(new Set(shown.map((record) => record.id)))} disabled={!shown.length}>Select all shown</button>
           <button className="text-button" onClick={() => setSelected((current) => new Set(shown.filter((record) => !current.has(record.id)).map((record) => record.id)))} disabled={!shown.length}>Invert shown</button>
           <button className="text-button" onClick={() => setSelected(new Set())} disabled={!selected.size}>Clear</button>
+          <button className="text-button" onClick={() => { setCopyBusy(true); void navigator.clipboard.writeText(operationIdClipboard).then(() => notify({ ok: true, message: `Copied ${scopedOperationIds.length} operation IDs.` })).catch((error) => notify({ ok: false, message: (error as Error).message || 'The operation IDs could not be copied.' })).finally(() => setCopyBusy(false)); }} disabled={!scopedOperationIds.length || copyBusy}>Copy operation IDs</button>
           <button className="text-button" onClick={() => { onDismissMany(activeIds); setSelected(new Set()); }} disabled={!activeIds.length}>Dismiss selected</button>
           <button ref={deleteButtonRef} className="text-button danger" onClick={() => setConfirmDelete(true)} disabled={!activeIds.length}>Delete selected</button>
           <button className="text-button" onClick={() => { downloadText('ding-ding-app-store-notifications.json', exportNotificationRecords(selectedShown.length ? selectedShown : shown), 'application/json'); notify({ ok: true, message: `Exported ${selectedShown.length || shown.length} notification records.` }); }} disabled={!shown.length}><Icon>download</Icon>Export shown</button>
@@ -115,7 +120,7 @@ export function NotificationCenter({ records, settings, persistenceAvailable, on
           <li key={record.id} className={record.dismissedAt ? 'dismissed' : ''}>
             <label className="selection-check"><input type="checkbox" checked={selected.has(record.id)} onClick={(event) => selectAt(index, event.currentTarget.checked, event.shiftKey)} onChange={() => undefined} /><span className="visually-hidden">Select {record.title}</span></label>
             <Icon>{record.ok ? 'check_circle' : 'error'}</Icon>
-            <div><strong>{record.title}</strong><p>{record.message}</p><small><time dateTime={record.createdAt}>{new Date(record.createdAt).toLocaleString()}</time>{record.dismissedAt ? ' · Dismissed' : ' · Unread'}</small>{record.recovery ? <small className="notification-recovery-history">{label(settings, `Recovery offered: ${recoveryActionLabel(settings, record.recovery.kind)}. Retained history cannot rerun it after restart.`, `曾經提供復原：${recoveryActionLabel(settings, record.recovery.kind)}。保留記錄喺重開後唔可以再執行。`)}</small> : !record.ok && <small className="notification-recovery-history">{label(settings, 'No safe recovery action is available for this failure.', '呢個失敗冇安全嘅復原操作。')}</small>}</div>
+            <div><strong>{record.title}</strong><p>{record.message}</p><small><time dateTime={record.createdAt}>{new Date(record.createdAt).toLocaleString()}</time>{record.dismissedAt ? ' · Dismissed' : ' · Unread'}</small>{record.operationId && <small className="notification-recovery-history">{label(settings, `Operation ID: ${record.operationId}`, `操作 ID：${record.operationId}`)}</small>}{record.recovery ? <small className="notification-recovery-history">{label(settings, `Recovery offered: ${recoveryActionLabel(settings, record.recovery.kind)}. Retained history cannot rerun it after restart.`, `曾經提供復原：${recoveryActionLabel(settings, record.recovery.kind)}。保留記錄喺重開後唔可以再執行。`)}</small> : !record.ok && <small className="notification-recovery-history">{label(settings, 'No safe recovery action is available for this failure.', '呢個失敗冇安全嘅復原操作。')}</small>}</div>
             {!record.dismissedAt && <button className="icon-button" onClick={() => onDismissMany([record.id])} aria-label={`Dismiss ${record.title}`}><Icon>close</Icon></button>}
           </li>
         ))}</ul> : <div className="empty-state"><Icon>notifications_off</Icon><h3>No matching notifications</h3><p>Clear the search or status filter to see more history.</p></div>}
