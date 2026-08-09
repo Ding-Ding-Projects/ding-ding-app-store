@@ -14,6 +14,7 @@ const settingsSchema = z.object({
   density: z.enum(['comfortable', 'compact', 'spacious']),
   accent: z.string().regex(/^#[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?$/),
   displayName: z.string().trim().min(1).max(64),
+  showEmojisInDialogs: z.boolean().default(true),
   automaticRepairConsent: z.boolean().default(false),
   narratorEnabled: z.boolean().default(false),
   narratorLanguage: z.enum(['en', 'yue', 'both']).default('both'),

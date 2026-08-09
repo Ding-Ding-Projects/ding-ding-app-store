@@ -6,7 +6,9 @@
 
 Settings is divided into General, Appearance, Schedule, and About browser-style sub-tabs. Each sub-tab owns a search box and adjacent full regex builder and reports match counts on its tab. General persists exactly three language modes—English, playful Hong Kong Cantonese, and bilingual—plus independent English and Cantonese funny levels from 1 to 5. It also persists an optional renderer-only spoken narrator (off by default), its English/Cantonese/both choice, and a reduced-sound switch. Appearance persists system/light/dark theme, comfortable/compact/spacious density, an accent color, and a user-selected display name. The accent field and command-palette appearance controls use the same continuous translator as the appearance editor: HEX/HEX8, RGB/RGBA, HSL/HSLA, HSV/HSB, HWB, Lab/LCH, OKLab/OKLCH, CMYK, bounded named colors, alpha, gamut clipping warnings, copy actions, and keyboard-accessible range controls.
 
-Every control has a keyboard-reachable **What this controls** disclosure. It explains the real effect in the active language mode and places a provenance line beside it: a validated `settings.v1.json` value is labelled persisted, while a missing, malformed, or incomplete file is labelled compiled fallback with the exact value (`bilingual`, `2`, `4`, `system`, `comfortable`, `#6750A4`, `Ding Ding App Store`, or `false`). The registry keeps a hand-written completeness list so a new setting cannot silently ship without both pieces of copy.
+Every control has a keyboard-reachable **What this controls** disclosure. It explains the real effect in the active language mode and places a provenance line beside it: a validated `settings.v1.json` value is labelled persisted, while a missing, malformed, or incomplete file is labelled compiled fallback with the exact value (`bilingual`, `2`, `4`, `true`, `system`, `comfortable`, `#6750A4`, `Ding Ding App Store`, or `false`). The registry keeps a hand-written completeness list so a new setting cannot silently ship without both pieces of copy.
+
+General settings also expose **Show emojis in dialogs and message boxes**. It is persisted and enabled by default. When enabled, a small non-semantic emoji decorates destructive-dialog and command-palette title/body copy; when disabled, the same factual text remains without decoration. Emoji never enters button text, field labels, accessible names, exports, history, or the spoken narrator.
 
 About includes a searchable in-app changelog for every existing release tag in the baseline, preserving real tag gaps and duplicate target commits. Typed or native-calendar start/end filters compose with text or regex search; selected or filtered entries can be copied or exported with full commit SHAs. Validation rejects missing or shortened SHAs instead of rendering an unverifiable link.
 
@@ -18,7 +20,7 @@ The Schedule sub-tab can optionally resolve scheduled language, funny levels, th
 
 ## Configuration
 
-`settings.v1.json` is validated in the main process. Defaults are bilingual, English funny level 2, Cantonese funny level 4, narrator disabled with English-then-Cantonese selected for a later opt-in, reduced sound disabled, system theme, comfortable density, accent `#6750A4`, `Ding Ding App Store`, and automatic repair consent `false`. The same compiled object is the provenance fallback contract used by the renderer; no opaque “default” label is shown. Language mode changes shared labels where translations exist; this revision still contains some English-only operational copy, so localization is broad but not complete.
+`settings.v1.json` is validated in the main process. Defaults are bilingual, English funny level 2, Cantonese funny level 4, narrator disabled with English-then-Cantonese selected for a later opt-in, reduced sound disabled, dialog emojis enabled, system theme, comfortable density, accent `#6750A4`, `Ding Ding App Store`, and automatic repair consent `false`. The same compiled object is the provenance fallback contract used by the renderer; no opaque “default” label is shown. Language mode changes shared labels where translations exist; this revision still contains some English-only operational copy, so localization is broad but not complete.
 
 ## Failure modes
 
@@ -30,7 +32,7 @@ Only enumerated settings, bounded funny levels, narrator choices, a validated HE
 
 ## Verification
 
-Schemas, the shared default object, the continuous color translator, and the hand-written explanation lists are covered by `tests/settings-provenance.test.ts`, `tests/color-translator.test.ts`, `tests/ui-completion.test.ts`, plus type/contract checks. Renderer code applies theme, density, accent, display name, language settings, and the optional narrator queue. Runtime verification should still capture all three language modes at narrow width and demonstrate that both funny-level controls change representative copy at every level.
+Schemas, the shared default object, the continuous color translator, the hand-written explanation lists, and the emoji-on/off copy boundary are covered by `tests/settings-provenance.test.ts`, `tests/dialog-emoji.test.ts`, `tests/color-translator.test.ts`, `tests/ui-completion.test.ts`, plus type/contract checks. Renderer code applies theme, density, accent, display name, language settings, dialog decoration, and the optional narrator queue. Runtime verification should still capture all three language modes at narrow width and demonstrate that both funny-level controls change representative copy at every level.
 
 ## Suggested articles
 
