@@ -77,7 +77,7 @@ export function DocsPage({ settings, schoolModeEnabled = false, schoolModeName =
 
   return (
     <>
-      <SearchBox surface="docs" placeholder={label(settings, 'Search every offline article', '搵晒所有離線文章')} openBuilder={openRegex} onBuilderHandled={onRegexHandled} />
+      <SearchBox surface="docs" settings={settings} placeholder={label(settings, 'Search every offline article', '搵晒所有離線文章')} openBuilder={openRegex} onBuilderHandled={onRegexHandled} />
       {active ? (
         <section className="docs-layout">
           <nav className="docs-tabs" role="tablist" aria-orientation="vertical" aria-label={label(settings, 'Documentation articles', '文件文章')}>

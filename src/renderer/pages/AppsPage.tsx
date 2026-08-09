@@ -144,7 +144,7 @@ export function AppsPage({ mode, apps, installed, settings, loading, onAction, o
 
   return (
     <>
-      <SearchBox surface={mode} placeholder={label(settings, 'Search apps, descriptions, and repositories', '搵 app、描述同 repository')} openBuilder={openRegex} onBuilderHandled={onRegexHandled} />
+      <SearchBox surface={mode} settings={settings} placeholder={label(settings, 'Search apps, descriptions, and repositories', '搵 app、描述同 repository')} openBuilder={openRegex} onBuilderHandled={onRegexHandled} />
       <div className="bulk-toolbar" aria-label={`${mode} bulk actions`}>
         <strong aria-live="polite">{selectedApps.length} selected · {shown.length} shown · {scoped.length} total</strong>
         {runningAction && <span className="bulk-progress" role="status" aria-live="polite"><progress max={runningAction.total} value={runningAction.completed} /> {runningAction.completed} of {runningAction.total} finished{operationProgress[runningAction.appId] ? ` · ${operationPhaseLabel(settings, operationProgress[runningAction.appId].phase)}` : ''}</span>}

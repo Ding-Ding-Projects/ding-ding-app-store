@@ -3,9 +3,11 @@ import { el } from '../el';
 import { Icon } from '../icons';
 import { regexSafetyIssue } from '../search';
 import { evaluateRegexInWorker } from '../regex-evaluator';
+import type { UserSettings } from '../../shared/contracts';
+import { dialogCopy } from '../dialog-emoji';
 
 /** The one guided regex builder. Every search surface in the app renders this exact component. */
-export function RegexBuilder({ query, onApply, onClose }: { query: string; onApply: (pattern: string, flags: string) => void; onClose: () => void }) {
+export function RegexBuilder({ query, settings, onApply, onClose }: { query: string; settings: UserSettings; onApply: (pattern: string, flags: string) => void; onClose: () => void }) {
   const [pattern, setPattern] = useState(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
   const [flags, setFlags] = useState('iu');
   const [sample, setSample] = useState('Material BlueMap\nDesktop Material\nWimForge');
@@ -40,7 +42,7 @@ export function RegexBuilder({ query, onApply, onClose }: { query: string; onApp
 
   return (
     <section className="popover regex-builder" role="dialog" aria-label="Regex builder" {...el('regex-builder')}>
-      <header><strong>Regex builder · Regex 建造器</strong><button className="icon-button" onClick={onClose} aria-label="Close regex builder"><Icon>close</Icon></button></header>
+      <header><strong>{dialogCopy(settings, 'Regex builder · Regex 建造器', '🔎')}</strong><button className="icon-button" onClick={onClose} aria-label="Close regex builder"><Icon>close</Icon></button></header>
       <div className="chip-row" aria-label="Guided regex parts">
         <button {...el('chip')} onClick={() => add('literal')}>Literal</button><button {...el('chip')} onClick={() => add('[A-Za-z]')}>Class</button>
         <button {...el('chip')} onClick={() => add('^')}>Anchor</button><button {...el('chip')} onClick={() => add('(group)')}>Group</button>

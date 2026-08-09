@@ -20,4 +20,19 @@ describe('dialog emoji preference', () => {
     expect(action).not.toMatch(/aria-label=\{?dialogCopy/);
     expect(destructive).not.toMatch(/aria-label=\{?dialogCopy/);
   });
+
+  it('covers every remaining visible dialog title without decorating accessible names', async () => {
+    const surfaces = [
+      'src/renderer/components/AppearancePanel.tsx',
+      'src/renderer/components/CommandPalette.tsx',
+      'src/renderer/components/NotificationCenter.tsx',
+      'src/renderer/components/RegexBuilder.tsx',
+      'src/renderer/components/TabRail.tsx',
+    ];
+    for (const file of surfaces) {
+      const source = await readFile(file, 'utf8');
+      expect(source, file).toContain('dialogCopy');
+      expect(source, file).not.toMatch(/aria-label=\{?dialogCopy/);
+    }
+  });
 });

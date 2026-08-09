@@ -10,6 +10,7 @@ import { EMPTY_SEARCH, compile, highlight, makeMatcher, SearchContext, useSurfac
 import { newGroupId, regionsOf } from '../state/use-workspace';
 import type { RegionKind, WorkspaceAction } from '../state/use-workspace';
 import { SearchBox, searchInputId } from './SearchBox';
+import { dialogCopy } from '../dialog-emoji';
 
 const ROW_HEIGHT: Record<TabWorkspace['rail']['tabHeight'], number> = { compact: 36, comfortable: 44, tall: 52 };
 const ROW_GAP = 5;
@@ -160,7 +161,7 @@ export function TabOverflowSheet({ rows, settings, onActivate, onClose }: {
 }) {
   return (
     <div className="popover tab-overflow-sheet" role="dialog" aria-label={label(settings, 'More tabs', '更多分頁')}>
-      <header><strong>{label(settings, 'More tabs', '更多分頁')}</strong><button className="icon-button" aria-label="Close overflow menu" onClick={onClose}><Icon>close</Icon></button></header>
+      <header><strong>{dialogCopy(settings, label(settings, 'More tabs', '更多分頁'), '🗂️')}</strong><button className="icon-button" aria-label="Close overflow menu" onClick={onClose}><Icon>close</Icon></button></header>
       <div className="command-list">
         {rows.length
           ? rows.map((row) => (
@@ -192,7 +193,7 @@ export function TabContextMenu({ target, workspace, settings, dispatch, onClose,
     if (!group) return null;
     return (
       <div className="popover tab-context-menu" role="menu" aria-label={label(settings, 'Group actions', '分組操作')}>
-        <SearchBox surface="tabs.menu" placeholder={label(settings, 'Search menu actions', '搜尋選單操作')} />
+        <SearchBox surface="tabs.menu" settings={settings} placeholder={label(settings, 'Search menu actions', '搜尋選單操作')} />
         {item('Rename group 改分組名', <button role="menuitem" key="rename" onClick={() => { onRename(group.id); onClose(); }}>{label(settings, 'Rename group', '改分組名')}</button>)}
         {item(`${group.collapsed ? 'Expand' : 'Collapse'} group`, <button role="menuitem" key="collapse" onClick={() => { dispatch({ type: 'group-collapse', groupId: group.id, collapsed: 'toggle' }); close(group.collapsed ? 'Group expanded' : 'Group collapsed'); }}>{group.collapsed ? label(settings, 'Expand group', '展開分組') : label(settings, 'Collapse group', '收埋分組')}</button>)}
         {item('Group colour', <div className="chip-row" role="group" key="colour" aria-label={label(settings, 'Group colour', '分組顏色')}>
@@ -226,7 +227,7 @@ export function TabContextMenu({ target, workspace, settings, dispatch, onClose,
   };
   return (
     <div className="popover tab-context-menu" role="menu" aria-label={label(settings, `${meta.en} actions`, `${meta.yue} 操作`)} onKeyDown={onShortcut}>
-      <SearchBox surface="tabs.menu" placeholder={label(settings, 'Search menu actions', '搜尋選單操作')} />
+      <SearchBox surface="tabs.menu" settings={settings} placeholder={label(settings, 'Search menu actions', '搜尋選單操作')} />
       {item(`Pin tab ${TAB_SHORTCUTS.pin.display}`, <button role="menuitem" key="pin" aria-keyshortcuts={TAB_SHORTCUTS.pin.aria} onClick={togglePin}><span>{tab.pinned ? label(settings, 'Unpin tab', '取消釘住') : label(settings, 'Pin tab', '釘住分頁')}</span><kbd aria-hidden="true">{TAB_SHORTCUTS.pin.display}</kbd></button>)}
       {item(`Move up ${TAB_SHORTCUTS.moveUp.display}`, <button role="menuitem" key="up" aria-keyshortcuts={TAB_SHORTCUTS.moveUp.aria} onClick={() => move(-1)}><span>{label(settings, 'Move up', '上移')}</span><kbd aria-hidden="true">{TAB_SHORTCUTS.moveUp.display}</kbd></button>)}
       {item(`Move down ${TAB_SHORTCUTS.moveDown.display}`, <button role="menuitem" key="down" aria-keyshortcuts={TAB_SHORTCUTS.moveDown.aria} onClick={() => move(1)}><span>{label(settings, 'Move down', '下移')}</span><kbd aria-hidden="true">{TAB_SHORTCUTS.moveDown.display}</kbd></button>)}
@@ -259,8 +260,8 @@ export function TabMoveGroupPicker({ tabId, workspace, settings, dispatch, onClo
   };
   return (
     <div className="popover tab-group-picker" role="dialog" aria-label={label(settings, 'Move tab into group', '將分頁移動到分組')}>
-      <header><strong>{label(settings, 'Move tab into group', '將分頁移動到分組')}</strong><button className="icon-button" aria-label={label(settings, 'Close group picker', '關閉分組選擇器')} onClick={onClose}><Icon>close</Icon></button></header>
-      <SearchBox surface="tabs.move-group" placeholder={label(settings, 'Search groups', '搜尋分組')} />
+      <header><strong>{dialogCopy(settings, label(settings, 'Move tab into group', '將分頁移動到分組'), '📁')}</strong><button className="icon-button" aria-label={label(settings, 'Close group picker', '關閉分組選擇器')} onClick={onClose}><Icon>close</Icon></button></header>
+      <SearchBox surface="tabs.move-group" settings={settings} placeholder={label(settings, 'Search groups', '搜尋分組')} />
       <div className="command-list" role="listbox" aria-label={label(settings, 'Available groups', '可用分組')}>
         {groups.map((group) => {
           const count = workspace.tabs.filter((candidate) => candidate.groupId === group.id).length;
@@ -314,7 +315,7 @@ export function TabBulkClosePanel({ workspace, settings, dispatch, announce }: {
     <details className="tab-management-panel">
       <summary>{label(settings, search.state.query ? 'Tab actions and discovery · filtered' : 'Tab actions and discovery', search.state.query ? '分頁操作同探索 · 已篩選' : '分頁操作同探索')}</summary>
       <div className="tab-management-body">
-        <SearchBox surface="tabs.bulk-close" placeholder={label(settings, 'Filter tab labels', '篩選分頁標籤')} />
+      <SearchBox surface="tabs.bulk-close" settings={settings} placeholder={label(settings, 'Filter tab labels', '篩選分頁標籤')} />
         <div className="tab-bulk-actions" role="group" aria-label={label(settings, 'Bulk tab actions', '批量分頁操作')}>
           <button type="button" className={mode === 'containing' ? 'tonal-button selected' : 'tonal-button'} onClick={() => activateMode('containing')} disabled={!search.state.query}>
             {label(settings, 'Close tabs containing text', '關閉包含文字嘅分頁')}
@@ -589,6 +590,7 @@ export function TabRail({ settings, workspace, dispatch, updatesBadge, onOpenPal
           />
           <SearchBox
             surface={`tabs.group.${row.group.id}`}
+            settings={settings}
             className="tab-group-search"
             placeholder={label(settings, `Search ${row.group.name}`, `搜尋 ${row.group.name}`)}
           />
@@ -623,11 +625,11 @@ export function TabRail({ settings, workspace, dispatch, updatesBadge, onOpenPal
   return (
     <nav className="navigation" aria-label={label(settings, 'Tabs', '分頁')} {...el('nav-rail')}>
       <div className="nav-title" {...el('nav-title')}>Ding Ding</div>
-      <SearchBox surface="tabs" className="tab-search" placeholder={label(settings, 'Search tabs', '搵分頁')} ariaKeyShortcuts={TAB_SHORTCUTS.railSearch.aria} openBuilder={openTabRegex} onBuilderHandled={onTabRegexHandled} />
+      <SearchBox surface="tabs" settings={settings} className="tab-search" placeholder={label(settings, 'Search tabs', '搵分頁')} ariaKeyShortcuts={TAB_SHORTCUTS.railSearch.aria} openBuilder={openTabRegex} onBuilderHandled={onTabRegexHandled} />
       <details className="tab-discovery-panel">
         <summary>{label(settings, groupNames.state.query || master.state.query ? 'All tab searches · filtered' : 'All tab searches', groupNames.state.query || master.state.query ? '所有分頁搜尋 · 已篩選' : '所有分頁搜尋')}</summary>
-        <SearchBox surface="tabs.groups" placeholder={label(settings, 'Search tab groups', '搜尋分頁組')} />
-        <SearchBox surface="tabs.master" placeholder={label(settings, 'Search every open tab', '搜尋所有開啟分頁')} />
+        <SearchBox surface="tabs.groups" settings={settings} placeholder={label(settings, 'Search tab groups', '搜尋分頁組')} />
+        <SearchBox surface="tabs.master" settings={settings} placeholder={label(settings, 'Search every open tab', '搜尋所有開啟分頁')} />
         <p className="supporting">{label(settings, 'Use the strip search for this rail, group search inside each group, group search for names, or master search across every open tab.', '分頁列搜尋查呢條列；分組搜尋查組內；分頁組搜尋查組名；主搜尋查所有開啟分頁。')}</p>
       </details>
       <TabBulkClosePanel workspace={workspace} settings={settings} dispatch={dispatch} announce={announce} />

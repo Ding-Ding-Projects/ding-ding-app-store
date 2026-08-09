@@ -82,7 +82,7 @@ export function ChangelogViewer({ settings, notify, openRegex, onRegexHandled }:
   return (
     <section className="changelog-viewer" aria-labelledby="changelog-title">
       <header><div><span className="eyebrow">EVERY RELEASE</span><h2 id="changelog-title">{label(settings, 'Changelog', '更新記錄')}</h2></div><span className="status-pill">{filtered.length} shown</span></header>
-      <SearchBox surface="changelog" placeholder={label(settings, 'Search versions, changes, and commit SHAs', '搵版本、改動同 commit SHA')} openBuilder={openRegex} onBuilderHandled={onRegexHandled} />
+      <SearchBox surface="changelog" settings={settings} placeholder={label(settings, 'Search versions, changes, and commit SHAs', '搵版本、改動同 commit SHA')} openBuilder={openRegex} onBuilderHandled={onRegexHandled} />
       <div className="date-range" aria-label="Changelog date range">
         <label>Start date<input value={start} placeholder="YYYY-MM-DD or locale date" onChange={(event) => setStart(event.target.value)} /></label>
         <label className="calendar-field">Start calendar<input type="date" value={/^\d{4}-\d{2}-\d{2}$/.test(start) ? start : ''} onChange={(event) => setStart(event.target.value)} /></label>
