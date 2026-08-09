@@ -208,7 +208,7 @@ export function App() {
 
   useEffect(() => { void refreshSourceIsolation(); }, [refreshSourceIsolation]);
 
-  const reportOperation = useCallback((result: { ok: boolean; message: string; messageYue?: string }, recovery?: RecoveryAction) => {
+  const reportOperation = useCallback((result: { ok: boolean; message: string; messageYue?: string; operationId?: string }, recovery?: RecoveryAction) => {
     const message = result.messageYue ? label(settings, result.message, result.messageYue) : result.message;
     notify({ ok: result.ok, message, operationId: result.operationId, recovery: result.ok ? undefined : recovery });
     announce(message);
