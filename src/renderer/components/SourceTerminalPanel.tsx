@@ -1,15 +1,19 @@
 import { useEffect, useMemo, useRef } from 'react';
-import type { SourceJobState, SourceTerminalEvent, UserSettings } from '../../shared/contracts';
+import type { SourceIsolationStatus, SourceJobState, SourceTerminalEvent, UserSettings } from '../../shared/contracts';
 import { el } from '../el';
 import { Icon } from '../icons';
 import { label } from '../i18n';
+import { SourceIsolationStatusCard } from './SourceIsolationStatusCard';
 
 const ACTIVE_STATES = new Set<SourceJobState>(['queued', 'preparing', 'running', 'repairing', 'cancelling']);
 
-export function SourceTerminalPanel({ appName, events, fallbackMessage, settings, onCancel, onRetry, onClose }: {
+export function SourceTerminalPanel({ appName, events, fallbackMessage, isolationStatus, isolationLoading, onRefreshIsolation, settings, onCancel, onRetry, onClose }: {
   appName: string;
   events: readonly Readonly<SourceTerminalEvent>[];
   fallbackMessage?: string;
+  isolationStatus: SourceIsolationStatus | null;
+  isolationLoading: boolean;
+  onRefreshIsolation(): void;
   settings: UserSettings;
   onCancel(): void;
   onRetry(): void;
@@ -52,6 +56,7 @@ export function SourceTerminalPanel({ appName, events, fallbackMessage, settings
         {!active && <button className="icon-button" onClick={onClose} aria-label={label(settings, 'Close terminal', '關閉終端')}><Icon>close</Icon></button>}
       </header>
       <p className="supporting">{label(settings, 'Read-only structured output. There is no interactive shell prompt, and commands, paths, URLs, environment values, and credentials never come from this window.', '只讀結構化輸出。呢度冇互動 shell；指令、路徑、網址、環境值同憑證都唔會由呢個視窗提供。')}</p>
+      <SourceIsolationStatusCard settings={settings} status={isolationStatus} loading={isolationLoading} onRefresh={onRefreshIsolation} compact />
       <div className="terminal-status">
         <span className={`status-pill terminal-state-${state}`}>{status}</span>
         <progress max={100} value={progress} aria-label={label(settings, 'Source job progress', 'Source 工作進度')} />
