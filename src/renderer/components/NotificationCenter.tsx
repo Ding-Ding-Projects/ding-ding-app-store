@@ -49,6 +49,7 @@ export function NotificationCenter({ records, settings, persistenceAvailable, on
   const [filter, setFilter] = useState<NotificationFilter>('all');
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [recoveryDetailsOpen, setRecoveryDetailsOpen] = useState(false);
   const lastSelected = useRef<number | null>(null);
   const shown = useMemo(() => records.filter((record) => {
     if (filter === 'unread' && record.dismissedAt !== null) return false;
@@ -57,6 +58,8 @@ export function NotificationCenter({ records, settings, persistenceAvailable, on
     return matcher(`${record.title}\n${record.message}\n${record.ok ? 'success' : 'error'}`);
   }), [records, filter, matcher]);
   const selectedShown = shown.filter((record) => selected.has(record.id));
+  const selectedRecovery = selectedShown.filter((record) => record.recovery);
+  const recoveryKinds = Array.from(new Set(selectedRecovery.map((record) => record.recovery?.kind).filter((kind): kind is NonNullable<NotificationRecord['recovery']>['kind'] => Boolean(kind))));
 
   useEffect(() => { panelRef.current?.focus(); }, []);
 
@@ -107,10 +110,19 @@ export function NotificationCenter({ records, settings, persistenceAvailable, on
           <button className="text-button" onClick={() => setSelected((current) => new Set(shown.filter((record) => !current.has(record.id)).map((record) => record.id)))} disabled={!shown.length}>Invert shown</button>
           <button className="text-button" onClick={() => setSelected(new Set())} disabled={!selected.size}>Clear</button>
           <button className="text-button" onClick={() => { onDismissMany(activeIds); setSelected(new Set()); }} disabled={!activeIds.length}>Dismiss selected</button>
+          <button className="text-button" onClick={() => setRecoveryDetailsOpen(true)} disabled={!selectedShown.length}>{label(settings, 'Recovery details', '復原詳情')}</button>
           <button ref={deleteButtonRef} className="text-button danger" onClick={() => setConfirmDelete(true)} disabled={!activeIds.length}>Delete selected</button>
           <button className="text-button" onClick={() => { downloadText('ding-ding-app-store-notifications.json', exportNotificationRecords(selectedShown.length ? selectedShown : shown), 'application/json'); notify({ ok: true, message: `Exported ${selectedShown.length || shown.length} notification records.` }); }} disabled={!shown.length}><Icon>download</Icon>Export shown</button>
           <button className="text-button" onClick={() => void openExportInVsCode({ recordKind: 'notifications', suggestedName: 'ding-ding-app-store-notifications.json', mime: 'application/json', content: exportNotificationRecords(selectedShown.length ? selectedShown : shown) }).then((result) => notify({ ok: result.ok, message: result.ok ? `Opened ${selectedShown.length || shown.length} notification records in Visual Studio Code.` : result.message }))} disabled={!shown.length || !isExternalEditorBridgeAvailable()} title={isExternalEditorBridgeAvailable() ? undefined : 'Unavailable: this build has no reviewed Visual Studio Code adapter.'}><Icon>code</Icon>{isExternalEditorBridgeAvailable() ? 'Open in VS Code' : 'VS Code unavailable'}</button>
         </div>
+        {recoveryDetailsOpen && <section className="notification-recovery-details" role="status" aria-labelledby="notification-recovery-details-title">
+          <header><h3 id="notification-recovery-details-title">{label(settings, 'Recovery details', '復原詳情')}</h3><button className="text-button" onClick={() => setRecoveryDetailsOpen(false)}>{label(settings, 'Close', '關閉')}</button></header>
+          {selectedRecovery.length ? <>
+            <p>{label(settings, `${selectedRecovery.length} selected notification${selectedRecovery.length === 1 ? '' : 's'} record a typed recovery kind:`, `揀選咗 ${selectedRecovery.length} 條通知，記錄咗有型別嘅復原種類：`)}</p>
+            <ul>{recoveryKinds.map((kind) => <li key={kind}>{recoveryActionLabel(settings, kind)}</li>)}</ul>
+            <p className="supporting">{label(settings, 'Retained history stores the recovery kind only. It has no callback or operation ID, so this panel will not invent a bulk retry after restart. Reopen the originating surface to run a newly validated action.', '保留歷史淨係儲存復原種類，冇 callback 或 operation ID，所以呢個面板唔會喺重開後亂整批量重試。請返去原本頁面，先可以執行新驗證過嘅操作。')}</p>
+          </> : <p>{label(settings, 'The selected notifications have no safe recovery action.', '揀選嘅通知冇安全嘅復原操作。')}</p>}
+        </section>}
         {shown.length ? <ul className="notification-list">{shown.map((record, index) => (
           <li key={record.id} className={record.dismissedAt ? 'dismissed' : ''}>
             <label className="selection-check"><input type="checkbox" checked={selected.has(record.id)} onClick={(event) => selectAt(index, event.currentTarget.checked, event.shiftKey)} onChange={() => undefined} /><span className="visually-hidden">Select {record.title}</span></label>

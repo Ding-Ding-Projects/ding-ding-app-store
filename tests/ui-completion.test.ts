@@ -191,6 +191,16 @@ describe('global renderer UI completion', () => {
     expect(worker).toContain('newestRequestId');
   });
 
+  it('keeps NotificationCenter bulk recovery truthful and callback-free', async () => {
+    const notifications = await read('src/renderer/components/NotificationCenter.tsx');
+    expect(notifications).toContain('Recovery details');
+    expect(notifications).toContain('const selectedRecovery = selectedShown.filter((record) => record.recovery);');
+    expect(notifications).toContain('no callback or operation ID');
+    expect(notifications).toContain('Reopen the originating surface');
+    expect(notifications).not.toContain('record.recovery.run');
+    expect(notifications).not.toContain('retry selected');
+  });
+
   it('routes every Activity control and state label through the persisted language mode', async () => {
     const activity = await read('src/renderer/pages/ActivityPage.tsx');
     expect(activity).toContain("placeholder={label(settings, 'Search activity by app, action, or message'");
