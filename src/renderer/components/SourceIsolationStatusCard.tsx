@@ -22,7 +22,7 @@ export function SourceIsolationStatusCard({ settings, status, loading, onRefresh
       <header className="source-isolation-header">
         <div>
           <p className="eyebrow">{label(settings, 'Automatic source repair', '自動 source 修正')}</p>
-          <h2 id="source-isolation-title"><Icon>security</Icon>{title}</h2>
+          <h2 id="source-isolation-title"><Icon>info</Icon>{title}</h2>
         </div>
         <button className="text-button" disabled={loading} onClick={onRefresh} aria-describedby="source-isolation-remediation">
           <Icon>refresh</Icon>{loading ? label(settings, 'Checking…', '檢查緊…') : label(settings, 'Check again', '再檢查')}

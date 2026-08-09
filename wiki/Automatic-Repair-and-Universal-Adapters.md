@@ -10,7 +10,7 @@ The source runtime defines reviewed pinned revisions, canonical dependency archi
 
 The release-installer lane now has a hand-written adapter record for every one of the 24 catalog IDs: 21 supported release routes and three explicit public-state blockers. That work does not weaken or replace this source runtime. The shipped source recipe catalog remains empty and production uses a fail-closed Windows Sandbox adapter: it can report `WindowsSandbox.exe` presence and the missing guest transport, but it never launches a host process. Therefore no repository, dependency, source build, application run, or OpenCode repair executes in the current package.
 
-The Settings surface and the read-only terminal simulator now call the typed isolation-status bridge directly. They show the provider, exact fail-closed reason, bounded evidence, remediation, and the last check time, with a retry-status action. This makes the missing guest transport visible before a source job is attempted; it does not add a shell prompt, accept commands, or enable host execution.
+The Settings surface and the read-only terminal simulator now call the typed isolation-status bridge directly. The Settings → General card is visible without a search prerequisite, and the command palette offers **Open source execution isolation details** to focus it. Both surfaces show the provider, exact fail-closed reason, bounded evidence, remediation, and the last check time, with a retry-status action. This makes the missing guest transport visible before a source job is attempted; it does not add a shell prompt, accept commands, or enable host execution.
 
 ## Configuration
 

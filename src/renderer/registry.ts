@@ -60,7 +60,7 @@ const STATIC_COMMANDS = [
   'check-store-update', 'refresh-catalog-now', 'toggle-self-update-repeat', 'toggle-catalog-refresh',
   'toggle-quiet-hours', 'apply-quiet-night', 'show-next-runs', 'toggle-badges', 'toggle-color-bar',
   'toggle-pinned-icon-only', 'save-schedule', 'reset-schedule',
-  'open-notifications', 'open-changelog', 'open-school-mode',
+  'open-notifications', 'open-changelog', 'open-school-mode', 'open-source-details',
 ] as const;
 
 export type StaticCommandId = (typeof STATIC_COMMANDS)[number];
@@ -497,6 +497,7 @@ export function buildRegistry(context: RegistryContext): Entry[] {
     command('clear-all-searches', 'Clear all searches', '清除所有搜尋', 'search_off', ['reset', 'filter'], 'Search'),
     command('focus-tab-search', 'Focus tab search', '跳去分頁搜尋', 'search', ['tabs', 'filter', 'ctrl shift k'], 'Search'),
     command('open-school-mode', `Open ${schoolModeName} settings`, `開 ${schoolModeName} 設定`, 'settings', [schoolModeName, 'school', 'mode', 'unlock', 'credential', 'reset'], 'Settings', { surface: 'settings.general', focusId: 'school-mode-title' }),
+    command('open-source-details', 'Open source execution isolation details', '開 source 執行隔離詳情', 'info', ['source', 'repair', 'OpenCode', 'isolation', 'guest', 'transport', 'sandbox', 'status'], 'Settings', { surface: 'settings.general', focusId: 'source-isolation-title' }),
   );
 
   for (const surface of SURFACES) {

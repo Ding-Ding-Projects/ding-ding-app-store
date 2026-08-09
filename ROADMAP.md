@@ -11,6 +11,7 @@
 - [x] Common typed source-job runtime, M3 terminal simulator, consent, pinned OpenCode bootstrap contract, bounded repair loop, cancellation, and fail-closed isolation gate
 - [x] Typed terminal retry path and guest-only pinned OpenCode bootstrap (reuses or downloads the exact archive without host PATH access)
 - [x] Windows Sandbox capability probe and typed source-runner status (reports binary presence without launching a host process; fails closed while guest transport is absent)
+- [x] Source isolation status is directly visible in Settings → General and reachable through a typed command-palette destination; the card remains read-only and fail-closed
 - [x] Installed-app discovery for reviewed Squirrel, MSI, and managed-portable records, including typed discovery-only upstream installs with no inherited install/update/uninstall authority, plus append-only history/export
 - [x] Truthful shared export registry: 18 history formats with UTF-8/LF/schema metadata, including bounded re-importable ZIP archives; nested documents remain complete JSON
 - [x] One-click install/source-install dispatch with strict catalog-ID and typed-decision boundary; destructive uninstall confirmation unchanged

@@ -104,7 +104,7 @@ export function SettingsPage({ settings, settingsProvenance, sourceIsolationStat
   );
   const counts = useMemo(() => ({
     'settings.general': SETTING_FIELDS.filter((field) => !isSchoolHidden(field) && field.section === 'general' && matcher(`${field.en}\n${field.yue}\n${field.keywords.join(' ')}`)).length
-      + (matcher(`${schoolLabel} school mode school name unlock credential PIN password passkey local reset`) ? 1 : 0),
+      + (matcher(`${schoolLabel} school mode school name unlock credential PIN password passkey local reset`) ? 1 : 0) + 1,
     'settings.appearance': SETTING_FIELDS.filter((field) => field.section === 'appearance' && matcher(`${field.en}\n${field.yue}\n${field.keywords.join(' ')}`)).length
       + (matcher('rail tabs layout appearance element override') ? 1 : 0),
     'settings.schedule': SCHEDULE_FIELDS.filter((field) => matcher(`${field.en}\n${field.yue}\n${field.keywords.join(' ')}`)).length,
@@ -198,8 +198,8 @@ export function SettingsPage({ settings, settingsProvenance, sourceIsolationStat
               {fieldsFor('general').map(renderField)}
               {!schoolEnabled && <p className="supporting">Funny levels style all messages, including warnings and errors, but never change facts. You can reset them any time.</p>}
               {!schoolEnabled && <p className="supporting">Spoken narrator is optional and off by default. It uses this device’s browser speech service only; it never sends notification text over the network. It yields to a connected accessibility integration, stays quiet during quiet hours or reduced-sound mode, and may be unavailable when the platform has no speech service.</p>}
-              <p className="supporting">Automatic source repair gives OpenCode blanket tool approval only inside an attested disposable environment with no host mounts, user profile, credentials, secrets, or Git metadata. The app fails closed when that isolation is unavailable. This consent is persisted and can be revoked here; ordinary release installation never invokes OpenCode.</p>
-              {matcher('automatic source repair OpenCode isolation guest transport sandbox') && <SourceIsolationStatusCard settings={viewSettings} status={sourceIsolationStatus} loading={sourceIsolationLoading} onRefresh={onRefreshSourceIsolation} />}
+              <p className="supporting">{label(viewSettings, 'Automatic source repair gives OpenCode blanket tool approval only inside an attested disposable environment with no host mounts, user profile, credentials, secrets, or Git metadata. The app fails closed when that isolation is unavailable. This consent is persisted and can be revoked here; ordinary release installation never invokes OpenCode.', '自動 source 修正只會喺驗證過嘅一次性隔離環境入面畀 OpenCode 完整工具批准；冇 host mount、user profile、憑證、秘密或者 Git metadata。冇隔離就安全停低；呢個同意可以喺呢度撤回，普通 release 安裝永遠唔會叫 OpenCode。')}</p>
+              <SourceIsolationStatusCard settings={viewSettings} status={sourceIsolationStatus} loading={sourceIsolationLoading} onRefresh={onRefreshSourceIsolation} />
             </div>
             {matcher(`${schoolLabel} school mode school name unlock credential PIN password passkey local reset`) && <section className="settings-card" aria-labelledby="school-mode-title">
               <h2 id="school-mode-title">{schoolLabel}</h2>

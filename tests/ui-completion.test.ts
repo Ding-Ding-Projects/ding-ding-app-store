@@ -191,6 +191,20 @@ describe('global renderer UI completion', () => {
     expect(worker).toContain('newestRequestId');
   });
 
+  it('routes every Activity control and state label through the persisted language mode', async () => {
+    const activity = await read('src/renderer/pages/ActivityPage.tsx');
+    expect(activity).toContain("placeholder={label(settings, 'Search activity by app, action, or message'");
+    expect(activity).toContain("label(settings, 'Filter by result', '按結果篩選')");
+    expect(activity).toContain("label(settings, 'Filter by date', '按日期篩選')");
+    expect(activity).toContain("label(settings, 'Select all shown', '揀晒目前顯示')");
+    expect(activity).toContain("label(settings, 'Open in VS Code', '喺 VS Code 開')");
+    expect(activity).toContain("actionLabel(entry.kind)");
+    expect(activity).not.toContain('placeholder="Search activity by app, action, or message"');
+    expect(activity).not.toContain('aria-label="Filter by result"');
+    expect(activity).not.toContain('aria-label="Filter by date"');
+    expect(activity).not.toContain('>No matching activity<');
+  });
+
   it('keeps generated documentation checks stable across Windows checkout line endings', async () => {
     const generator = await read('scripts/docs-generate.mjs');
     expect(generator).toContain("const normalizeNewlines = (value) => value?.replaceAll('\\r\\n', '\\n')");

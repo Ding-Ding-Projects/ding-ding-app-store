@@ -33,6 +33,7 @@ Material Design 3 desktop software center for discovering, documenting, installi
 - Main-process update schedule with a launch check that cannot be disabled, bounded repeat intervals, and quiet hours that hold notifications without delaying checks.
 - In-app changelog browsing with exact release/commit records, plain-text-first regex search, a month/year-jump calendar with two-click range selection and presets, filtered Markdown export, and truthful VS Code opening.
 - Optional renderer-only spoken notification narrator, off by default, with English/Hong Kong Cantonese/both delivery, serialized queueing, quiet-hours/reduced-sound suppression, and no network or privileged audio bridge.
+- Source execution isolation status is visible in Settings → General without a hidden search prerequisite, and the command palette provides **Open source execution isolation details**. The card remains read-only and fail-closed: it reports guest transport evidence and remediation but never starts host source or OpenCode execution.
 
 </details>
 

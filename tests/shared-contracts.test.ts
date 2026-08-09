@@ -362,7 +362,7 @@ describe('command registry reachability', () => {
       'import-appearance', 'open-schedule', 'check-store-update', 'refresh-catalog-now',
       'toggle-self-update-repeat', 'toggle-catalog-refresh', 'toggle-quiet-hours', 'apply-quiet-night',
       'show-next-runs', 'self-interval:1440', 'catalog-interval:30', 'pin:catalog', 'move-up:settings',
-      'move-down:docs', 'clear-search:activity', 'open-regex:tabs',
+      'move-down:docs', 'clear-search:activity', 'open-regex:tabs', 'open-source-details',
     ]) {
       expect(commands.has(command)).toBe(true);
     }
