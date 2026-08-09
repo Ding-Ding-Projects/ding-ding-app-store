@@ -80,6 +80,13 @@ The complete offline in-app browser and its generated public mirrors.
 
 - [Offline documentation browser](./documentation/offline-documentation-browser.md) — **shipped** — Bundles canonical feature articles plus generated reviewed catalog metadata into the desktop build, renders one article at a time through safe React Markdown, and keeps links inside the browser.
 
+## Memory synchronization
+
+Shared instruction provenance, offline bundles, and safe synchronization boundaries.
+
+- [Shared Status Hub](./memory-sync/status-hub.md) — **limited** — Documents the interactive status and handoff surface, its session boundaries, and the evidence limits of this App Store bundle.
+- [Shared convenience skills](./memory-sync/convenience-skills.md) — **limited** — Describes how shared skills are selected, mirrored, and kept provenance-aware without importing secrets or granting host authority.
+
 ## Security and privacy
 
 Renderer isolation, privileged validation, local data, and evidence boundaries.

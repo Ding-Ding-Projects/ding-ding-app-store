@@ -68,6 +68,11 @@ The wiki mirrors the same canonical feature articles bundled into the applicatio
 
 - [Offline documentation browser](Offline-Documentation-Browser) — **shipped** — Bundles canonical feature articles plus generated reviewed catalog metadata into the desktop build, renders one article at a time through safe React Markdown, and keeps links inside the browser.
 
+## Memory synchronization
+
+- [Shared Status Hub](Status-Hub) — **limited** — Documents the interactive status and handoff surface, its session boundaries, and the evidence limits of this App Store bundle.
+- [Shared convenience skills](Convenience-Skills) — **limited** — Describes how shared skills are selected, mirrored, and kept provenance-aware without importing secrets or granting host authority.
+
 ## Security and privacy
 
 - [Privacy and security](Privacy-and-Security) — **shipped** — Keeps network, filesystem, process, update, and persistence authority in the sandboxed main-process boundary with typed renderer requests.

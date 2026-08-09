@@ -14,6 +14,7 @@ These articles describe the current application at the exact boundary implemente
 - **Updates and schedules:** Per-app update checker (limited), App Store self-updater (limited), Update schedule (shipped)
 - **Workspace and customization:** Tab workspace (shipped), Search and regex builder (shipped), Command palette (shipped), Settings, language, and display name (shipped), Universal School mode (shipped), Optional spoken narrator (shipped), External editor exports (shipped), Appearance editor (limited), Notifications and operation status (limited), Dim-sum startup surprise (shipped), Changelog viewer (shipped)
 - **Documentation:** Offline documentation browser (shipped)
+- **Memory synchronization:** Shared Status Hub (limited), Shared convenience skills (limited)
 - **Security and privacy:** Privacy and security (shipped)
 - **Verification:** Verification and evidence (shipped)
 

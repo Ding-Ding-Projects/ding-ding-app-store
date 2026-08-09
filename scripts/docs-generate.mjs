@@ -18,6 +18,7 @@ const categories = [
   { id: 'updates', title: 'Updates and schedules', summary: 'Catalog comparisons, the App Store updater, repeat checks, and quiet hours.' },
   { id: 'experience', title: 'Workspace and customization', summary: 'Tabs, search, command palette, settings, appearance, and notifications.' },
   { id: 'documentation', title: 'Documentation', summary: 'The complete offline in-app browser and its generated public mirrors.' },
+  { id: 'memory-sync', title: 'Memory synchronization', summary: 'Shared instruction provenance, offline bundles, and safe synchronization boundaries.' },
   { id: 'security', title: 'Security and privacy', summary: 'Renderer isolation, privileged validation, local data, and evidence boundaries.' },
   { id: 'verification', title: 'Verification', summary: 'What static checks, tests, runtime captures, workflows, and releases prove.' },
 ];
@@ -47,6 +48,8 @@ const articles = [
   ['dim-sum-surprise', 'Dim-sum startup surprise', '開機點心驚喜', 'experience', 'Dim-Sum-Surprise', 'shipped', ['update-schedule', 'notifications-and-status', 'privacy-and-security']],
   ['changelog-viewer', 'Changelog viewer', '更新記錄瀏覽器', 'experience', 'Changelog-Viewer', 'shipped', ['command-palette', 'external-editor-exports', 'verification']],
   ['offline-documentation-browser', 'Offline documentation browser', '離線文件瀏覽器', 'documentation', 'Offline-Documentation-Browser', 'shipped', ['search-and-regex-builder', 'command-palette', 'verification']],
+  ['status-hub', 'Shared Status Hub', '共用 Status Hub', 'memory-sync', 'Status-Hub', 'limited', ['convenience-skills', 'offline-documentation-browser', 'privacy-and-security', 'verification']],
+  ['convenience-skills', 'Shared convenience skills', '共用便利技能', 'memory-sync', 'Convenience-Skills', 'limited', ['status-hub', 'privacy-and-security', 'source-build-security', 'verification']],
   ['privacy-and-security', 'Privacy and security', '私隱同安全', 'security', 'Privacy-and-Security', 'shipped', ['verified-installer-operations', 'source-build-security', 'verification']],
   ['verification', 'Verification and evidence', '驗證同證據', 'verification', 'Verification', 'shipped', ['catalog-discovery', 'offline-documentation-browser', 'app-store-self-updater']],
 ].map(([id, title, titleYue, category, wiki, status, related]) => ({ id, title, titleYue, category, wiki, status, related }));
