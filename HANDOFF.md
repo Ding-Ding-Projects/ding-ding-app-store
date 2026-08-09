@@ -1,5 +1,11 @@
 # Handoff
 
+## 2026-08-09 complete non-secret App Store state history
+
+- The local Git version browser now snapshots and restores seven fixed App Store-owned JSON files together: settings, installed records, workspace tabs, appearance, schedules, schedule-run metadata, and external-editor preference. Restore preserves the current complete set first, writes the selected set, serializes the whole restore against concurrent snapshots, and reports whether rollback completed if a target or commit fails. Older two-file revisions remain readable with explicit empty fallbacks for newer state files, and successful restore is a new append-only revision.
+- Credential vaults, School-mode verifier material, managed-update staging/metadata, update-pending markers, user project files, network remotes, and arbitrary paths remain outside the allowlist. The renderer still supplies only a full revision ID; fixed target names and bounded JSON are enforced in the main process.
+- Focused history/contracts tests pass 41/41; full local verification passes 260 root tests plus catalog 11, domain 20, offline-docs 20, docs synchronization, renderer/main/preload build, and diff check. Packaged hidden-desktop capture of the expanded version panel remains unverified because the sanctioned cheap headless bridge is unavailable in this lane.
+
 ## 2026-08-08 second MSI clean-Windows adapter proof lane
 
 - Branch `codex/next-nonportable-proof` restores the previously verified `keepassxc-msi` typed target that the current documentation references and adds exactly one new target, `codex-material` through the existing reviewed `codex-material-msi` adapter. The portable trio and qBittorrent Squirrel target remain unchanged; the workflow remains manual-dispatch only on `windows-2022`.
