@@ -262,7 +262,7 @@ export type ExternalEditorOpenArchiveRequestInput = z.infer<typeof externalEdito
 
 export type ExternalEditorResult =
   | { ok: true; editor: ExternalEditorId }
-  | { ok: false; reason: 'bridge-unavailable' | 'not-installed' | 'write-failed' | 'launch-failed'; message: string };
+  | { ok: false; reason: 'bridge-unavailable' | 'not-installed' | 'write-failed' | 'launch-failed' | 'launch-timeout'; message: string };
 
 export interface HistoryEntry {
   id: string;

@@ -1,7 +1,9 @@
 import { readFile } from 'node:fs/promises';
 import { rm } from 'node:fs/promises';
+import { EventEmitter } from 'node:events';
 import { describe, expect, it, vi } from 'vitest';
 import { createHistoryArchive } from '../src/main/history-archive';
+import { launchWorkspace } from '../src/main/external-editor-service';
 import { extractZipSafe } from '../src/main/safe-zip';
 import { externalEditorOpenArchiveRequestSchema, externalEditorOpenRequestSchema, externalEditorPreferenceSchema } from '../src/shared/contracts';
 
@@ -14,6 +16,47 @@ vi.mock('electron', () => ({
 const read = (file: string) => readFile(new URL(`../${file}`, import.meta.url), 'utf8');
 
 describe('external editor and export boundary', () => {
+  it('reports an observed spawn without waiting for the timeout', async () => {
+    vi.useFakeTimers();
+    try {
+      const child = Object.assign(new EventEmitter(), { unref: vi.fn() });
+      const spawnProcess = vi.fn(() => child) as unknown as typeof import('node:child_process').spawn;
+      const pending = launchWorkspace('Code.exe', 'C:\\exports', spawnProcess);
+      child.emit('spawn');
+      await expect(pending).resolves.toBe('spawned');
+      expect(spawnProcess).toHaveBeenCalledWith('Code.exe', ['--reuse-window', 'C:\\exports'], expect.objectContaining({ shell: false, windowsHide: true }));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('reports a child-process error as a failed launch', async () => {
+    vi.useFakeTimers();
+    try {
+      const child = Object.assign(new EventEmitter(), { unref: vi.fn() });
+      const spawnProcess = vi.fn(() => child) as unknown as typeof import('node:child_process').spawn;
+      const pending = launchWorkspace('Code.exe', 'C:\\exports', spawnProcess);
+      child.emit('error', new Error('not found'));
+      await expect(pending).resolves.toBe('failed');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('fails closed with timeout when Windows emits no launch event', async () => {
+    vi.useFakeTimers();
+    try {
+      const child = Object.assign(new EventEmitter(), { unref: vi.fn() });
+      const spawnProcess = vi.fn(() => child) as unknown as typeof import('node:child_process').spawn;
+      const pending = launchWorkspace('Code.exe', 'C:\\exports', spawnProcess);
+      await vi.advanceTimersByTimeAsync(2_000);
+      await expect(pending).resolves.toBe('timeout');
+      expect(spawnProcess).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('accepts only typed, bounded export metadata', () => {
     expect(externalEditorOpenRequestSchema.safeParse({ editor: 'vscode', recordKind: 'settings', suggestedName: 'settings.json', mime: 'application/json', content: '{"schemaVersion":1}' }).success).toBe(true);
     expect(externalEditorOpenRequestSchema.safeParse({ editor: 'vscode', recordKind: 'settings', suggestedName: '../settings.json', mime: 'application/json', content: '{}' }).success).toBe(false);
@@ -50,6 +93,8 @@ describe('external editor and export boundary', () => {
     expect(preload).toContain("ipcRenderer.invoke('external-editor:open-archive', request)");
     expect(service).toContain('extractZipSafe');
     expect(service).toContain("['--reuse-window', workspace]");
+    expect(service).toContain("reason: 'launch-timeout'");
+    expect(service).toContain("finish('timeout')");
     expect(renderer).not.toContain('executable');
     expect(renderer).not.toContain('filePath');
   });

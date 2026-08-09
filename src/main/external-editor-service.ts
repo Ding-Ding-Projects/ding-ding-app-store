@@ -28,6 +28,31 @@ const internalPreferenceSchema = z.strictObject({
   customPath: z.string().max(512).optional(),
 });
 type InternalPreference = z.infer<typeof internalPreferenceSchema>;
+export type LaunchOutcome = 'spawned' | 'failed' | 'timeout';
+
+/**
+ * Starts a validated editor workspace and reports only observed launch states.
+ * A timeout is deliberately not treated as success: Windows may still start a
+ * slow editor later, but this operation has no proof that it opened the export.
+ */
+export async function launchWorkspace(executable: string, workspace: string, spawnProcess: typeof spawn = spawn): Promise<LaunchOutcome> {
+  return await new Promise<LaunchOutcome>((resolve) => {
+    const child = spawnProcess(executable, ['--reuse-window', workspace], { detached: true, windowsHide: true, shell: false, stdio: 'ignore' });
+    let settled = false;
+    let timer: NodeJS.Timeout | undefined;
+    const finish = (value: LaunchOutcome) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      resolve(value);
+    };
+    child.once('spawn', () => finish('spawned'));
+    child.once('error', () => finish('failed'));
+    timer = setTimeout(() => finish('timeout'), 2_000);
+    timer.unref();
+    child.unref();
+  });
+}
 
 const EDITION_LABEL: Record<ExternalEditorEdition, string> = {
   stable: 'Visual Studio Code',
@@ -180,18 +205,11 @@ export class ExternalEditorService {
     } catch {
       return { ok: false, reason: 'write-failed', message: 'The export could not be written to the app-owned temporary workspace.' };
     }
-    const launched = await new Promise<boolean>((resolve) => {
-      const child = spawn(executable, ['--reuse-window', folder], { detached: true, windowsHide: true, shell: false, stdio: 'ignore' });
-      let settled = false;
-      const finish = (value: boolean) => { if (settled) return; settled = true; resolve(value); };
-      child.once('spawn', () => finish(true));
-      child.once('error', () => finish(false));
-      setTimeout(() => finish(true), 2_000).unref();
-      child.unref();
-    });
-    if (!launched) {
+    const launched = await launchWorkspace(executable, folder);
+    if (launched === 'failed') {
       return { ok: false, reason: 'launch-failed', message: 'Visual Studio Code was found, but Windows did not start it. The export remains in the app-owned workspace and can still be downloaded.' };
     }
+    if (launched === 'timeout') return { ok: false, reason: 'launch-timeout', message: 'Visual Studio Code launch was not confirmed within 2 seconds. The export remains in the app-owned workspace and can still be downloaded.' };
     return { ok: true, editor: 'vscode' };
   }
 
@@ -224,16 +242,9 @@ export class ExternalEditorService {
       await rm(folder, { recursive: true, force: true }).catch(() => undefined);
       return { ok: false, reason: 'write-failed', message: 'The ZIP archive could not be validated and extracted into the app-owned workspace.' };
     }
-    const launched = await new Promise<boolean>((resolve) => {
-      const child = spawn(executable, ['--reuse-window', workspace], { detached: true, windowsHide: true, shell: false, stdio: 'ignore' });
-      let settled = false;
-      const finish = (value: boolean) => { if (settled) return; settled = true; resolve(value); };
-      child.once('spawn', () => finish(true));
-      child.once('error', () => finish(false));
-      setTimeout(() => finish(true), 2_000).unref();
-      child.unref();
-    });
-    if (!launched) return { ok: false, reason: 'launch-failed', message: 'Visual Studio Code was found, but Windows did not start it. The extracted archive remains in the app-owned workspace.' };
+    const launched = await launchWorkspace(executable, workspace);
+    if (launched === 'failed') return { ok: false, reason: 'launch-failed', message: 'Visual Studio Code was found, but Windows did not start it. The extracted archive remains in the app-owned workspace.' };
+    if (launched === 'timeout') return { ok: false, reason: 'launch-timeout', message: 'Visual Studio Code launch was not confirmed within 2 seconds. The extracted archive remains in the app-owned workspace.' };
     return { ok: true, editor: 'vscode' };
   }
 

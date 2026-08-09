@@ -18,7 +18,7 @@ Settings → About contains the searchable External editor card. Stable, Insider
 
 ## Failure modes
 
-Missing VS Code, a stale selected executable, an invalid filename or MIME type, oversized content, an unsafe ZIP entry, an unwritable app-owned export folder, or a failed launch produces a localized non-blocking notification. The download action remains available. A failed launch never claims that the export opened; a validated text file or extracted archive remains inside the app-owned workspace for recovery.
+Missing VS Code, a stale selected executable, an invalid filename or MIME type, oversized content, an unsafe ZIP entry, an unwritable app-owned export folder, a child-process error, or a launch that is not confirmed within two seconds produces a localized non-blocking notification. The download action remains available. A failed or unconfirmed launch never claims that the export opened; a validated text file or extracted archive remains inside the app-owned workspace for recovery.
 
 ## Security considerations
 
@@ -26,7 +26,7 @@ The preload API exposes only typed editor ids, editions, record kinds, bounded s
 
 ## Verification
 
-Contract tests reject traversal, executable-path injection, unknown editions, unknown keys, unsafe archive payloads, and oversized content. Source checks prove the main/preload IPC handlers, native validation picker, PATH/install discovery, app-owned workspace write/extraction, shell-free launch, command-palette routes, and every renderer export action. `npm run check`, `npm run build`, and `npm run docs:check` are required before integration. A packaged hidden-desktop run should still verify the real VS Code availability boundary on the target Windows machine; this source lane does not claim that runtime launch.
+Contract tests reject traversal, executable-path injection, unknown editions, unknown keys, unsafe archive payloads, and oversized content. Launch tests cover observed spawn, child-process error, and the no-event timeout; the timeout is a fail-closed result rather than guessed success. Source checks prove the main/preload IPC handlers, native validation picker, PATH/install discovery, app-owned workspace write/extraction, shell-free launch, command-palette routes, and every renderer export action. `npm run check`, `npm run build`, and `npm run docs:check` are required before integration. A packaged hidden-desktop run should still verify the real VS Code availability boundary on the target Windows machine; this source lane does not claim that runtime launch.
 
 ## Suggested articles
 
