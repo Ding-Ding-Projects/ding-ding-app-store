@@ -15,6 +15,13 @@ import { DestructiveConfirmDialog } from '../components/DestructiveConfirmDialog
 
 type HistoryResult = 'all' | 'ok' | 'failed';
 
+function historyDateError(settings: UserSettings, error: string): string {
+  if (!error || settings.language === 'en') return error;
+  if (error.startsWith('Start date must be before')) return '開始日期要早過結束日期；你輸入嘅內容保留返。';
+  if (error.startsWith('Start date')) return '開始日期未完整或者無效；你輸入嘅內容保留返。';
+  return '結束日期未完整或者無效；你輸入嘅內容保留返。';
+}
+
 export function ActivityPage({ entries, revisions, loading, settings, openRegex, onRegexHandled, notify, onHistoryChanged }: {
   entries: HistoryEntry[]; revisions: HistoryRevision[]; loading: boolean; settings: UserSettings; openRegex: boolean; onRegexHandled(): void; notify: Notify; onHistoryChanged(): Promise<void>;
 }) {
@@ -170,9 +177,9 @@ export function ActivityPage({ entries, revisions, loading, settings, openRegex,
     finally { setRevisionBusy(null); setRestoreRevision(null); }
   };
 
-  if (loading) return <div className="loading-grid" aria-label="Loading activity"><div className="skeleton" /><div className="skeleton" /></div>;
+  if (loading) return <div className="loading-grid" aria-label={label(settings, 'Loading activity', '讀緊操作記錄')}><div className="skeleton" /><div className="skeleton" /></div>;
   if (!entries.length && !revisions.length) {
-    return <div className="empty-state" {...el('empty-state')}><Icon>history</Icon><h2>No operations yet · 仲未有操作</h2><p>Installs, builds, updates, uninstalls, failures, and recoveries will appear here with exact results and export controls.</p></div>;
+    return <div className="empty-state" {...el('empty-state')}><Icon>history</Icon><h2>{label(settings, 'No operations yet', '仲未有操作')}</h2><p>{label(settings, 'Installs, builds, updates, uninstalls, failures, and recoveries will appear here with exact results and export controls.', '安裝、建置、更新、解除安裝、失敗同復原會連同準確結果同匯出控制喺呢度出現。')}</p></div>;
   }
 
   const setPresetAndRange = (next: 'all' | 'today' | '7d' | '30d') => {
@@ -189,22 +196,22 @@ export function ActivityPage({ entries, revisions, loading, settings, openRegex,
   };
 
   return <>
-    <SearchBox surface="activity" settings={settings} placeholder="Search activity by app, action, or message" openBuilder={openRegex} onBuilderHandled={onRegexHandled} />
+    <SearchBox surface="activity" settings={settings} placeholder={label(settings, 'Search activity by app, action, or message', '按 app、動作或者訊息搵操作記錄')} openBuilder={openRegex} onBuilderHandled={onRegexHandled} />
     <section className="history-panel">
         <div className="chip-row" role="group" aria-label={label(settings, 'Filter by action; choose one or more', '按動作篩選；可以揀一個或多個')}>
           <button aria-pressed={!kinds.size} onClick={() => setKinds(new Set())}>{label(settings, 'All actions', '全部動作')} ({entries.length})</button>
           {actionKinds.map((action) => <button key={action} aria-pressed={kinds.has(action)} onClick={() => toggleKind(action)}>{actionLabel(action)} ({actionCounts.get(action) ?? 0})</button>)}
         </div>
-      <div className="chip-row" role="group" aria-label="Filter by result">{(['all', 'ok', 'failed'] as const).map((value) => <button key={value} aria-pressed={result === value} onClick={() => setResult(value)}>{value === 'all' ? 'Any result' : value === 'ok' ? 'Succeeded' : 'Failed'}</button>)}</div>
+      <div className="chip-row" role="group" aria-label={label(settings, 'Filter by result', '按結果篩選')}>{(['all', 'ok', 'failed'] as const).map((value) => <button key={value} aria-pressed={result === value} onClick={() => setResult(value)}>{value === 'all' ? label(settings, 'Any result', '任何結果') : value === 'ok' ? label(settings, 'Succeeded', '成功') : label(settings, 'Failed', '失敗')}</button>)}</div>
       <details className="history-date-filter" open={Boolean(dateStart || dateEnd || dateRange.error)}>
-        <summary>Advanced date range · 進階日期範圍</summary>
-        <div className="date-range" aria-label="Activity date range">
-          <label>Start date<input value={dateStart} placeholder="YYYY-MM-DD or locale date" aria-invalid={Boolean(dateRange.error && dateStart)} onChange={(event) => setManualDate(setDateStart)(event.target.value)} /></label>
-          <label className="calendar-field">Start calendar<input type="date" value={/^\d{4}-\d{2}-\d{2}$/.test(dateStart) ? dateStart : ''} onChange={(event) => setManualDate(setDateStart)(event.target.value)} /></label>
-          <label>End date<input value={dateEnd} placeholder="YYYY-MM-DD or locale date" aria-invalid={Boolean(dateRange.error && dateEnd)} onChange={(event) => setManualDate(setDateEnd)(event.target.value)} /></label>
-          <label className="calendar-field">End calendar<input type="date" value={/^\d{4}-\d{2}-\d{2}$/.test(dateEnd) ? dateEnd : ''} onChange={(event) => setManualDate(setDateEnd)(event.target.value)} /></label>
+        <summary>{label(settings, 'Advanced date range', '進階日期範圍')}</summary>
+        <div className="date-range" aria-label={label(settings, 'Activity date range', '操作記錄日期範圍')}>
+          <label>{label(settings, 'Start date', '開始日期')}<input value={dateStart} placeholder={label(settings, 'YYYY-MM-DD or locale date', 'YYYY-MM-DD 或本地日期')} aria-invalid={Boolean(dateRange.error && dateStart)} onChange={(event) => setManualDate(setDateStart)(event.target.value)} /></label>
+          <label className="calendar-field">{label(settings, 'Start calendar', '開始日曆')}<input type="date" value={/^\d{4}-\d{2}-\d{2}$/.test(dateStart) ? dateStart : ''} onChange={(event) => setManualDate(setDateStart)(event.target.value)} /></label>
+          <label>{label(settings, 'End date', '結束日期')}<input value={dateEnd} placeholder={label(settings, 'YYYY-MM-DD or locale date', 'YYYY-MM-DD 或本地日期')} aria-invalid={Boolean(dateRange.error && dateEnd)} onChange={(event) => setManualDate(setDateEnd)(event.target.value)} /></label>
+          <label className="calendar-field">{label(settings, 'End calendar', '結束日曆')}<input type="date" value={/^\d{4}-\d{2}-\d{2}$/.test(dateEnd) ? dateEnd : ''} onChange={(event) => setManualDate(setDateEnd)(event.target.value)} /></label>
         </div>
-        <div className="calendar-jump"><label>Calendar month and year<input type="month" value={calendarMonth} onChange={(event) => setCalendarMonth(event.target.value)} /></label><button className="text-button" onClick={() => { setDateStart(''); setDateEnd(''); setPreset('all'); }}>Clear dates</button></div>
+        <div className="calendar-jump"><label>{label(settings, 'Calendar month and year', '日曆月份同年份')}<input type="month" value={calendarMonth} onChange={(event) => setCalendarMonth(event.target.value)} /></label><button className="text-button" onClick={() => { setDateStart(''); setDateEnd(''); setPreset('all'); }}>{label(settings, 'Clear dates', '清除日期')}</button></div>
         <div className="calendar-grid" role="grid" aria-label={label(settings, `Calendar for ${calendarMonth}`, `日曆：${calendarMonth}`)}>
           {calendarDays.map((day) => {
             const value = dateKey(day);
@@ -214,36 +221,36 @@ export function ActivityPage({ entries, revisions, loading, settings, openRegex,
             </div>;
           })}
         </div>
-        {dateRange.error && <p className="field-error" role="alert">{dateRange.error}</p>}
+        {dateRange.error && <p className="field-error" role="alert">{historyDateError(settings, dateRange.error)}</p>}
       </details>
-      <div className="chip-row" role="group" aria-label="Filter by date">{(['all', 'today', '7d', '30d'] as const).map((value) => <button key={value} aria-pressed={preset === value} onClick={() => setPresetAndRange(value)}>{value === 'all' ? 'All time' : value === 'today' ? 'Today' : value === '7d' ? '7 days' : '30 days'}</button>)}</div>
+      <div className="chip-row" role="group" aria-label={label(settings, 'Filter by date', '按日期篩選')}>{(['all', 'today', '7d', '30d'] as const).map((value) => <button key={value} aria-pressed={preset === value} onClick={() => setPresetAndRange(value)}>{value === 'all' ? label(settings, 'All time', '全部時間') : value === 'today' ? label(settings, 'Today', '今日') : value === '7d' ? label(settings, '7 days', '七日') : label(settings, '30 days', '三十日')}</button>)}</div>
       <details className="history-revisions" open={revisions.length > 0}>
-        <summary>Local versions · 本機版本 ({revisions.length})</summary>
+        <summary>{label(settings, 'Local versions', '本機版本')} ({revisions.length})</summary>
         <p className="supporting">{label(settings, 'These versions contain App Store-owned settings, installed records, workspace tabs, appearance, schedules, run metadata, and external-editor preference. Credentials, secrets, staged update paths, and user project files are excluded. Restore creates a new revision; it never rewrites local history.', '呢啲版本包括 App Store 自己嘅設定、已安裝記錄、工作區分頁、外觀、排程、執行資料同外部編輯器偏好。憑證、秘密、更新暫存路徑同你嘅專案檔案唔會包括。還原會新增版本，唔會改寫本機歷史。')}</p>
         {revisions.length ? <ol className="revision-list">{revisions.map((revision) => <li key={revision.id} className="revision-row">
           <div className="revision-copy"><strong>{revision.label}</strong><span>{new Date(revision.occurredAt).toLocaleString()} · <code>{revision.id.slice(0, 12)}</code></span><small>{revision.changedFiles.length ? revision.changedFiles.join(', ') : label(settings, 'No tracked file delta', '冇追蹤檔案變更')}</small></div>
-          <div className="revision-actions"><button className="text-button" aria-label={label(settings, `${revisionDiffs[revision.id] === undefined ? 'View' : 'Hide'} diff for ${revision.label}`, `${revisionDiffs[revision.id] === undefined ? '查看' : '隱藏'}「${revision.label}」嘅差異`)} disabled={revisionBusy === revision.id} onClick={() => void showDiff(revision)}>{revisionDiffs[revision.id] === undefined ? 'View diff' : 'Hide diff'}</button><button className="text-button" aria-label={label(settings, `Label revision ${revision.label}`, `標籤版本「${revision.label}」`)} disabled={!revision.restorable || revisionBusy === revision.id} onClick={() => { setLabelRevision(revision); setLabelDraft(revision.label); }}>Label</button><button className="text-button" aria-label={label(settings, `Restore revision ${revision.label}`, `還原版本「${revision.label}」`)} disabled={!revision.restorable || revisionBusy === revision.id} onClick={() => setRestoreRevision(revision)}>Restore</button></div>
+          <div className="revision-actions"><button className="text-button" aria-label={label(settings, `${revisionDiffs[revision.id] === undefined ? 'View' : 'Hide'} diff for ${revision.label}`, `${revisionDiffs[revision.id] === undefined ? '查看' : '隱藏'}「${revision.label}」嘅差異`)} disabled={revisionBusy === revision.id} onClick={() => void showDiff(revision)}>{revisionDiffs[revision.id] === undefined ? label(settings, 'View diff', '查看差異') : label(settings, 'Hide diff', '隱藏差異')}</button><button className="text-button" aria-label={label(settings, `Label revision ${revision.label}`, `標籤版本「${revision.label}」`)} disabled={!revision.restorable || revisionBusy === revision.id} onClick={() => { setLabelRevision(revision); setLabelDraft(revision.label); }}>{label(settings, 'Label', '標籤')}</button><button className="text-button" aria-label={label(settings, `Restore revision ${revision.label}`, `還原版本「${revision.label}」`)} disabled={!revision.restorable || revisionBusy === revision.id} onClick={() => setRestoreRevision(revision)}>{label(settings, 'Restore', '還原')}</button></div>
           {revisionDiffs[revision.id] !== undefined && <pre className="revision-diff" aria-label={`Diff for ${revision.label}`}>{revisionDiffs[revision.id]}</pre>}
-          {labelRevision?.id === revision.id && <form className="revision-label-form" onSubmit={(event) => { event.preventDefault(); void saveRevisionLabel(); }}><label>Revision label<input autoFocus maxLength={80} value={labelDraft} onChange={(event) => setLabelDraft(event.target.value)} /></label><button className="filled-button" disabled={revisionBusy === revision.id || !labelDraft.trim()} type="submit">Save label</button><button className="text-button" type="button" onClick={() => setLabelRevision(null)}>Cancel</button></form>}
-        </li>)}</ol> : <p className="empty-state compact">No local snapshots yet. A successful App Store operation creates the first version.</p>}
+          {labelRevision?.id === revision.id && <form className="revision-label-form" onSubmit={(event) => { event.preventDefault(); void saveRevisionLabel(); }}><label>{label(settings, 'Revision label', '版本標籤')}<input autoFocus maxLength={80} value={labelDraft} onChange={(event) => setLabelDraft(event.target.value)} /></label><button className="filled-button" disabled={revisionBusy === revision.id || !labelDraft.trim()} type="submit">{label(settings, 'Save label', '儲存標籤')}</button><button className="text-button" type="button" onClick={() => setLabelRevision(null)}>{label(settings, 'Cancel', '取消')}</button></form>}
+        </li>)}</ol> : <p className="empty-state compact">{label(settings, 'No local snapshots yet. A successful App Store operation creates the first version.', '仲未有本機快照。App Store 操作成功後會建立第一個版本。')}</p>}
       </details>
       <div className="card-actions">
-        <button className="text-button" disabled={copyBusy} onClick={() => void copyJson()}><Icon>content_copy</Icon>{copyBusy ? 'Copying…' : 'Copy JSON'}</button>
-        <label>Export format<select value={exportFormat} onChange={(event) => setExportFormat(event.target.value as HistoryExportFormat)}>{HISTORY_EXPORT_FORMATS.map((format) => <option key={format.id} value={format.id}>{format.label}</option>)}</select></label>
+        <button className="text-button" disabled={copyBusy} onClick={() => void copyJson()}><Icon>content_copy</Icon>{copyBusy ? label(settings, 'Copying…', '複製緊…') : label(settings, 'Copy JSON', '複製 JSON')}</button>
+        <label>{label(settings, 'Export format', '匯出格式')}<select aria-label={label(settings, 'Export format', '匯出格式')} value={exportFormat} onChange={(event) => setExportFormat(event.target.value as HistoryExportFormat)}>{HISTORY_EXPORT_FORMATS.map((format) => <option key={format.id} value={format.id}>{format.label}</option>)}</select></label>
         <span className="supporting" aria-live="polite">UTF-8 · LF · {historyExportFormat(exportFormat).schema}</span>
-        <button className="text-button" disabled={exportBusy !== null || !exportEntries.length} onClick={() => void runExport()}><Icon>download</Icon>Export</button>
-        <button className="text-button" disabled={!exportEntries.length || !isExternalEditorBridgeAvailable()} title={isExternalEditorBridgeAvailable() ? undefined : 'Unavailable: this build has no reviewed Visual Studio Code adapter.'} onClick={() => void openInCode()}><Icon>code</Icon>{isExternalEditorBridgeAvailable() ? 'Open in VS Code' : 'VS Code unavailable'}</button>
+        <button className="text-button" disabled={exportBusy !== null || !exportEntries.length} onClick={() => void runExport()}><Icon>download</Icon>{label(settings, 'Export', '匯出')}</button>
+        <button className="text-button" disabled={!exportEntries.length || !isExternalEditorBridgeAvailable()} title={isExternalEditorBridgeAvailable() ? undefined : label(settings, 'Unavailable: this build has no reviewed Visual Studio Code adapter.', '未能使用：呢個版本冇已審核嘅 Visual Studio Code adapter。')} onClick={() => void openInCode()}><Icon>code</Icon>{isExternalEditorBridgeAvailable() ? label(settings, 'Open in VS Code', '喺 VS Code 開') : label(settings, 'VS Code unavailable', 'VS Code 未能使用')}</button>
       </div>
-      <div className="bulk-toolbar" aria-label="Activity bulk actions"><strong aria-live="polite">{selectedEntries.length} selected · {filtered.length} shown · {entries.length} total</strong><button className="text-button" disabled={!filtered.length} onClick={() => setSelected(new Set(filtered.map((entry) => entry.id)))}>Select all shown</button><button className="text-button" disabled={!filtered.length} onClick={() => setSelected((current) => new Set(filtered.filter((entry) => !current.has(entry.id)).map((entry) => entry.id)))}>Invert shown</button><button className="text-button" disabled={!selected.size} onClick={() => setSelected(new Set())}>Clear</button><button className="text-button" disabled title="Operation history is append-only and cannot be deleted.">Delete unavailable</button></div>
+      <div className="bulk-toolbar" aria-label={label(settings, 'Activity bulk actions', '操作記錄批量操作')}><strong aria-live="polite">{label(settings, `${selectedEntries.length} selected · ${filtered.length} shown · ${entries.length} total`, `揀咗 ${selectedEntries.length} · 顯示 ${filtered.length} · 總共 ${entries.length}`)}</strong><button className="text-button" disabled={!filtered.length} onClick={() => setSelected(new Set(filtered.map((entry) => entry.id)))}>{label(settings, 'Select all shown', '揀晒目前顯示')}</button><button className="text-button" disabled={!filtered.length} onClick={() => setSelected((current) => new Set(filtered.filter((entry) => !current.has(entry.id)).map((entry) => entry.id)))}>{label(settings, 'Invert shown', '反轉目前顯示')}</button><button className="text-button" disabled={!selected.size} onClick={() => setSelected(new Set())}>{label(settings, 'Clear', '清除')}</button><button className="text-button" disabled title={label(settings, 'Operation history is append-only and cannot be deleted.', '操作記錄只可追加，唔可以刪除。')}>{label(settings, 'Delete unavailable', '刪除未能使用')}</button></div>
       {filtered.length ? <ul className="history-list">{filtered.map((entry, index) => <li key={entry.id} className={entry.ok ? 'history-row ok' : 'history-row failed'} {...el('history-row')}>
-        <label className="selection-check"><input type="checkbox" checked={selected.has(entry.id)} onClick={(event) => selectAt(index, event.currentTarget.checked, event.shiftKey)} onChange={() => undefined} /><span className="visually-hidden">Select {entry.displayName} {entry.kind}</span></label>
+        <label className="selection-check"><input type="checkbox" checked={selected.has(entry.id)} onClick={(event) => selectAt(index, event.currentTarget.checked, event.shiftKey)} onChange={() => undefined} /><span className="visually-hidden">{label(settings, `Select ${entry.displayName} ${entry.kind}`, `揀選 ${entry.displayName} ${entry.kind}`)}</span></label>
         <Icon>{entry.ok ? 'check_circle' : 'error'}</Icon>
         <div className="history-copy">
-          <div className="history-heading"><strong>{highlight(search.state, entry.displayName)}</strong><span className="status-pill" {...el('status-pill')}>{entry.kind}</span><time dateTime={entry.occurredAt}>{new Date(entry.occurredAt).toLocaleString()}</time></div>
+          <div className="history-heading"><strong>{highlight(search.state, entry.displayName)}</strong><span className="status-pill" {...el('status-pill')}>{actionLabel(entry.kind)}</span><time dateTime={entry.occurredAt}>{new Date(entry.occurredAt).toLocaleString()}</time></div>
           <p>{highlight(search.state, entry.message)}</p>
         </div>
-      </li>)}</ul> : <div className="empty-state" {...el('empty-state')}><Icon>search_off</Icon><h2>No matching activity</h2><p>{label(settings, 'Clear the search, action, result, or date filters to see more history.', '清除搜尋、動作、結果或者日期篩選就會見到更多記錄。')}</p></div>}
+      </li>)}</ul> : <div className="empty-state" {...el('empty-state')}><Icon>search_off</Icon><h2>{label(settings, 'No matching activity', '冇配到嘅操作記錄')}</h2><p>{label(settings, 'Clear the search, action, result, or date filters to see more history.', '清除搜尋、動作、結果或者日期篩選就會見到更多記錄。')}</p></div>}
     </section>
-    {restoreRevision && <DestructiveConfirmDialog settings={settings} title={`Restore “${restoreRevision.label}”?`} description="This replaces the App Store's own settings, installed records, workspace, appearance, and schedule state with the selected local snapshot. Credentials, staged update paths, and user project files are never touched. A before-restore revision and a new restore revision are recorded." actionLabel="RESTORE LOCAL VERSION" onClose={() => setRestoreRevision(null)} onConfirm={() => void restoreSelectedRevision()} />}
+    {restoreRevision && <DestructiveConfirmDialog settings={settings} title={label(settings, `Restore “${restoreRevision.label}”?`, `還原「${restoreRevision.label}」？`)} description={label(settings, "This replaces the App Store's own settings, installed records, workspace, appearance, and schedule state with the selected local snapshot. Credentials, staged update paths, and user project files are never touched. A before-restore revision and a new restore revision are recorded.", '呢個操作會用所揀本機快照取代 App Store 自己嘅設定、已安裝記錄、工作區、外觀同排程狀態。憑證、更新暫存路徑同你嘅專案檔案完全唔會掂；還原前同還原後都會新增版本。')} actionLabel={label(settings, 'RESTORE LOCAL VERSION', '還原本機版本')} onClose={() => setRestoreRevision(null)} onConfirm={() => void restoreSelectedRevision()} />}
   </>;
 }

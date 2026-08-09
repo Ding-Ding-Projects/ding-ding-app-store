@@ -1,5 +1,10 @@
 # Handoff
 
+## 2026-08-09 source-isolation status discoverability
+
+- Settings → General now renders the typed Source execution isolation status card without requiring an internal search phrase. The existing read-only card still reports provider, fail-closed reason, bounded evidence, remediation, and last check time; it never launches host source or OpenCode execution.
+- The command palette registers `open-source-details` with a typed Settings → General target and focuses `source-isolation-title`. Focused coverage is in `tests/source-isolation-discoverability.test.ts`; docs and generated mirrors must be refreshed before the final commit. Packaged UI interaction remains a separate runtime evidence boundary.
+
 ## 2026-08-09 fail-closed VS Code export launch evidence
 
 - The external-editor adapter now distinguishes observed child `spawn`, child `error`, and a two-second no-event timeout. A timeout is typed as `launch-timeout` and never reports that Visual Studio Code opened the export; the app-owned text or extracted ZIP workspace remains available for download/recovery.

@@ -583,6 +583,7 @@ export function App() {
       case 'open-notifications': setNotificationCenterOpen(true); return;
       case 'open-changelog': openSurface('settings.about'); focusLater('changelog-title'); return;
       case 'open-school-mode': openSurface('settings.general'); focusLater('school-mode-title'); return;
+      case 'open-source-details': openSurface('settings.general'); focusLater('source-isolation-title'); return;
       case 'clear-all-searches': search.dispatch({ type: 'clear-all' }); announce('All searches cleared'); return;
       case 'focus-tab-search': focusLater('search-tabs'); return;
       case 'open-regex': openSurface(arg as SurfaceId); setRegexRequest(arg as SurfaceId); return;
