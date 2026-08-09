@@ -55,8 +55,8 @@ export interface EntryTarget {
 
 const STATIC_COMMANDS = [
   'refresh-catalog', 'clear-all-searches', 'focus-tab-search', 'new-group', 'collapse-all-groups',
-  'show-overflow', 'reset-tabs', 'export-tabs', 'import-tabs', 'toggle-appearance-edit',
-  'reset-appearance-all', 'export-appearance', 'import-appearance', 'open-schedule',
+  'show-overflow', 'reset-tabs', 'export-tabs', 'open-tabs-in-code', 'import-tabs', 'toggle-appearance-edit',
+  'reset-appearance-all', 'export-appearance', 'open-appearance-in-code', 'import-appearance', 'open-schedule',
   'check-store-update', 'refresh-catalog-now', 'toggle-self-update-repeat', 'toggle-catalog-refresh',
   'toggle-quiet-hours', 'apply-quiet-night', 'show-next-runs', 'toggle-badges', 'toggle-color-bar',
   'toggle-pinned-icon-only', 'save-schedule', 'reset-schedule',
@@ -538,6 +538,7 @@ export function buildRegistry(context: RegistryContext): Entry[] {
     command('show-overflow', 'Show the tab overflow menu', '顯示分頁溢出選單', 'more_horiz', ['overflow'], 'Tabs'),
     command('reset-tabs', 'Reset tab layout', '重設分頁版面', 'restart_alt', ['reset', 'tabs'], 'Tabs'),
     command('export-tabs', 'Export tab layout', '匯出分頁版面', 'download', ['export', 'tabs'], 'Tabs'),
+    command('open-tabs-in-code', 'Open tab layout export in VS Code', '喺 VS Code 開分頁版面匯出', 'code', ['export', 'tabs', 'vscode'], 'Tabs'),
     command('import-tabs', 'Import tab layout', '匯入分頁版面', 'upload', ['import', 'tabs'], 'Tabs'),
     command('toggle-badges', workspace.rail.showBadges ? 'Hide tab badges' : 'Show tab badges', workspace.rail.showBadges ? '收起分頁徽章' : '顯示分頁徽章', 'tab', ['badge'], 'Tabs'),
     command('toggle-color-bar', workspace.rail.showGroupColorBar ? 'Hide group colour bar' : 'Show group colour bar', workspace.rail.showGroupColorBar ? '收起分組色條' : '顯示分組色條', 'palette', ['group', 'colour'], 'Tabs'),
@@ -549,6 +550,7 @@ export function buildRegistry(context: RegistryContext): Entry[] {
     command('toggle-appearance-edit', 'Toggle appearance edit mode', '切換外觀編輯模式', 'edit', ['appearance', 'edit', 'ctrl shift e'], 'Appearance'),
     command('reset-appearance-all', 'Reset all appearance overrides', '重設所有外觀設定', 'restart_alt', ['appearance', 'reset'], 'Appearance'),
     command('export-appearance', 'Export appearance', '匯出外觀', 'download', ['appearance', 'export'], 'Appearance'),
+    command('open-appearance-in-code', 'Open appearance export in VS Code', '喺 VS Code 開外觀匯出', 'code', ['appearance', 'export', 'vscode'], 'Appearance'),
     command('import-appearance', 'Import appearance', '匯入外觀', 'upload', ['appearance', 'import'], 'Appearance'),
   );
 

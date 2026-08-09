@@ -10,7 +10,7 @@ summary: Exports every exposed record and view to an app-owned VS Code workspace
 
 ## Behaviour
 
-Every exportable app-store surface keeps its normal download action and also offers **Open in VS Code**: catalog and installed records, activity, notifications, changelog entries, offline documentation articles, settings, appearance, and tab layout. The main process writes the selected UTF-8 document into an app-owned workspace folder and launches the chosen validated VS Code edition with that folder as its workspace root. Activity uses the same selected truthful format for both download and VS Code; nested settings, layout, appearance, catalog, and notification documents deliberately remain JSON so they stay structurally complete and re-importable where an importer exists. Opening an export never blocks the app or replaces the download.
+Every exportable app-store surface keeps its normal download action and also offers **Open in VS Code**: catalog and installed records, activity, notifications, changelog entries, offline documentation articles, settings, appearance, and tab layout. The main process writes the selected UTF-8 document into an app-owned workspace folder and launches the chosen validated VS Code edition with that folder as its workspace root. Activity uses the same selected truthful format for both download and VS Code; nested settings, layout, appearance, catalog, and notification documents deliberately remain JSON so they stay structurally complete and re-importable where an importer exists. Activity ZIP exports are validated and extracted into an app-owned workspace before VS Code opens the folder, so binary archives are first-class editor exports rather than download-only exceptions. Opening an export never blocks the app or replaces the download.
 
 ## Configuration
 
@@ -18,15 +18,15 @@ Settings → About contains the searchable External editor card. Stable, Insider
 
 ## Failure modes
 
-Missing VS Code, a stale selected executable, an invalid filename or MIME type, oversized content, an unwritable app-owned export folder, or a failed launch produces a localized non-blocking notification. The download action remains available. A failed launch never claims that the export opened, and the generated file remains inside the app-owned workspace for recovery.
+Missing VS Code, a stale selected executable, an invalid filename or MIME type, oversized content, an unsafe ZIP entry, an unwritable app-owned export folder, or a failed launch produces a localized non-blocking notification. The download action remains available. A failed launch never claims that the export opened; a validated text file or extracted archive remains inside the app-owned workspace for recovery.
 
 ## Security considerations
 
-The preload API exposes only typed editor ids, editions, record kinds, bounded suggested names, allowlisted MIME types, and bounded text. Main-process schemas reject traversal, repeated dots, unknown keys, executable paths, and oversized payloads. Launch uses a validated executable with `shell: false`, `windowsHide: true`, and no renderer-controlled arguments. The workspace folder is created below application data with a restrictive file mode.
+The preload API exposes only typed editor ids, editions, record kinds, bounded suggested names, allowlisted MIME types, and bounded text or base64 archive data. Main-process schemas reject traversal, repeated dots, unknown keys, executable paths, unsafe ZIP entries, and oversized payloads. ZIP extraction uses the existing Windows-safe archive validator with fixed entry/size bounds before launch. Launch uses a validated executable with `shell: false`, `windowsHide: true`, and no renderer-controlled arguments. The workspace folder is created below application data with a restrictive file mode.
 
 ## Verification
 
-Contract tests reject traversal, executable-path injection, unknown editions, unknown keys, and oversized content. Source checks prove the main/preload IPC handlers, native validation picker, PATH/install discovery, app-owned workspace write, shell-free launch, and every renderer export action. `npm run check`, `npm run build`, and `npm run docs:check` are required before integration. A packaged hidden-desktop run should still verify the real VS Code availability boundary on the target Windows machine; this source lane does not claim that runtime launch.
+Contract tests reject traversal, executable-path injection, unknown editions, unknown keys, unsafe archive payloads, and oversized content. Source checks prove the main/preload IPC handlers, native validation picker, PATH/install discovery, app-owned workspace write/extraction, shell-free launch, command-palette routes, and every renderer export action. `npm run check`, `npm run build`, and `npm run docs:check` are required before integration. A packaged hidden-desktop run should still verify the real VS Code availability boundary on the target Windows machine; this source lane does not claim that runtime launch.
 
 ## Suggested articles
 

@@ -159,6 +159,13 @@ describe('global renderer UI completion', () => {
     expect(notifications).toContain('SearchBox surface="notifications"');
     expect(changelog).toContain('SearchBox surface="changelog"');
     expect(editor).toContain("reason: 'bridge-unavailable'");
+    expect(editor).toContain('openArchiveInVsCode');
+    expect(activity).toContain('openArchiveInVsCode');
+    expect(activity).not.toContain('VS Code unavailable for ZIP');
+    expect(app).toContain("case 'export-tabs'");
+    expect(app).toContain("case 'export-appearance'");
+    expect(app).toContain("case 'open-tabs-in-code'");
+    expect(app).toContain("case 'open-appearance-in-code'");
     expect(contracts).toContain('externalEditor?:');
     const evaluator = await read('src/renderer/regex-evaluator.ts');
     const worker = await read('src/renderer/regex-worker.ts');

@@ -8,7 +8,7 @@ import { label } from '../i18n';
 import { highlight, makeMatcher, useSurfaceSearch } from '../search';
 import { exportHistoryEntries } from '../history-export';
 import { HISTORY_EXPORT_FORMATS, historyExportFormat } from '../../shared/export-registry';
-import { isExternalEditorBridgeAvailable, openExportInVsCode } from '../external-editor';
+import { isExternalEditorBridgeAvailable, openArchiveInVsCode, openExportInVsCode } from '../external-editor';
 import type { Notify } from '../notify';
 import { dateKey, matchesHistoryDate, presetRange, resolveHistoryDateRange } from '../history-date-filter';
 import { DestructiveConfirmDialog } from '../components/DestructiveConfirmDialog';
@@ -107,7 +107,13 @@ export function ActivityPage({ entries, revisions, loading, settings, openRegex,
   };
   const openInCode = async () => {
     if (exportFormat === 'zip') {
-      notify({ ok: false, message: 'ZIP archives are binary downloads and cannot be opened as text in Visual Studio Code.' });
+      try {
+        const archive = await window.dingDingStore.history.archive({ entryIds: exportEntries.map((entry) => entry.id) });
+        const result = await openArchiveInVsCode({ recordKind: 'activity', suggestedName: archive.filename, mime: archive.mime, base64: archive.base64 });
+        notify({ ok: result.ok, message: result.ok ? `Opened ${archive.recordCount} activity records as a re-importable ZIP workspace in Visual Studio Code.` : result.message });
+      } catch (error) {
+        notify({ ok: false, message: (error as Error).message || 'The ZIP archive could not be opened in Visual Studio Code.' });
+      }
       return;
     }
     const definition = historyExportFormat(exportFormat);
@@ -220,7 +226,7 @@ export function ActivityPage({ entries, revisions, loading, settings, openRegex,
         <label>Export format<select value={exportFormat} onChange={(event) => setExportFormat(event.target.value as HistoryExportFormat)}>{HISTORY_EXPORT_FORMATS.map((format) => <option key={format.id} value={format.id}>{format.label}</option>)}</select></label>
         <span className="supporting" aria-live="polite">UTF-8 · LF · {historyExportFormat(exportFormat).schema}</span>
         <button className="text-button" disabled={exportBusy !== null || !exportEntries.length} onClick={() => void runExport()}><Icon>download</Icon>Export</button>
-        <button className="text-button" disabled={!exportEntries.length || exportFormat === 'zip' || !isExternalEditorBridgeAvailable()} title={exportFormat === 'zip' ? 'ZIP archives are binary downloads; use Export to save the archive.' : isExternalEditorBridgeAvailable() ? undefined : 'Unavailable: this build has no reviewed Visual Studio Code adapter.'} onClick={() => void openInCode()}><Icon>code</Icon>{exportFormat === 'zip' ? 'VS Code unavailable for ZIP' : isExternalEditorBridgeAvailable() ? 'Open in VS Code' : 'VS Code unavailable'}</button>
+        <button className="text-button" disabled={!exportEntries.length || !isExternalEditorBridgeAvailable()} title={isExternalEditorBridgeAvailable() ? undefined : 'Unavailable: this build has no reviewed Visual Studio Code adapter.'} onClick={() => void openInCode()}><Icon>code</Icon>{isExternalEditorBridgeAvailable() ? 'Open in VS Code' : 'VS Code unavailable'}</button>
       </div>
       <div className="bulk-toolbar" aria-label="Activity bulk actions"><strong aria-live="polite">{selectedEntries.length} selected · {filtered.length} shown · {entries.length} total</strong><button className="text-button" disabled={!filtered.length} onClick={() => setSelected(new Set(filtered.map((entry) => entry.id)))}>Select all shown</button><button className="text-button" disabled={!filtered.length} onClick={() => setSelected((current) => new Set(filtered.filter((entry) => !current.has(entry.id)).map((entry) => entry.id)))}>Invert shown</button><button className="text-button" disabled={!selected.size} onClick={() => setSelected(new Set())}>Clear</button><button className="text-button" disabled title="Operation history is append-only and cannot be deleted.">Delete unavailable</button></div>
       {filtered.length ? <ul className="history-list">{filtered.map((entry, index) => <li key={entry.id} className={entry.ok ? 'history-row ok' : 'history-row failed'} {...el('history-row')}>

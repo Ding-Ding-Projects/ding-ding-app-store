@@ -83,4 +83,27 @@ describe('re-importable activity ZIP archive', () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+
+  it('supports a constrained VS Code workspace extraction policy', async () => {
+    const archive = await createHistoryArchive([entry()]);
+    const root = await mkdtemp(path.join(os.tmpdir(), 'ding-ding-history-archive-limits-'));
+    try {
+      const zipPath = path.join(root, 'history.zip');
+      await writeFile(zipPath, Buffer.from(archive.base64, 'base64'));
+      await expect(extractZipSafe(zipPath, path.join(root, 'too-small'), undefined, { maxBytes: 10 })).rejects.toThrow(/extracted-size safety limit|expanded/i);
+      await expect(extractZipSafe(zipPath, path.join(root, 'wrong-members'), undefined, {
+        maxEntries: 4,
+        maxBytes: 32 * 1024 * 1024,
+        allowedNames: new Set(['history.jsonl']),
+      })).rejects.toThrow(/not allowed/i);
+      await expect(extractZipSafe(zipPath, path.join(root, 'missing-required'), undefined, {
+        maxEntries: 4,
+        maxBytes: 32 * 1024 * 1024,
+        allowedNames: new Set(['README.txt', 'history.json', 'history.jsonl', 'manifest.json']),
+        requiredNames: new Set(['README.txt', 'history.json', 'history.jsonl', 'manifest.json', 'missing.txt']),
+      })).rejects.toThrow(/missing a required member/i);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });
