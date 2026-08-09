@@ -30,6 +30,7 @@
 - [x] Per-element appearance editor with live preview, reset, export, and import
 - [x] Advanced changelog date filtering with typed dates, month/year jump, two-click range selection, presets, and localized keyboard controls
 - [x] Truthful VS Code export launch outcomes: observed spawn succeeds; child errors and unconfirmed two-second launches fail closed while exports remain recoverable
+- [x] External editor settings card localized across all persisted language modes, including edition/status/tooltips/recovery controls
 - [x] Update schedule editor with last-run/next-run reporting and quiet hours
 - [x] Optional renderer-only notification narrator: persisted opt-in, English/Hong Kong Cantonese/both serialized delivery, stale queue replacement, category cooldowns, and quiet/reduced-sound accessibility yielding
 - [ ] Packaged-artifact hidden-desktop interaction and accessibility proof

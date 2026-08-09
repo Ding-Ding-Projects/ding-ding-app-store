@@ -1,5 +1,10 @@
 # Handoff
 
+## 2026-08-09 external-editor settings language coverage
+
+- The External editor settings card now routes its explanation, edition selector, availability state, tooltips, and download/recovery actions through the shared English/Hong Kong Cantonese/bilingual label helper. Validated executable labels and error facts remain exact.
+- Focused coverage is added to `tests/ui-completion.test.ts`; the canonical external-editor article and generated site/wiki/offline mirrors must be refreshed before the final commit. The bridge and packaged VS Code launch boundary are unchanged and remain subject to their existing runtime evidence limits.
+
 ## 2026-08-09 source-isolation status discoverability
 
 - Settings → General now renders the typed Source execution isolation status card without requiring an internal search phrase. The existing read-only card still reports provider, fail-closed reason, bounded evidence, remediation, and last check time; it never launches host source or OpenCode execution.
