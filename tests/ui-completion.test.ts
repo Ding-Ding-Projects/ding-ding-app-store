@@ -201,6 +201,18 @@ describe('global renderer UI completion', () => {
     expect(notifications).not.toContain('retry selected');
   });
 
+  it('routes NotificationCenter controls and states through the persisted language mode', async () => {
+    const notifications = await read('src/renderer/components/NotificationCenter.tsx');
+    expect(notifications).toContain("label(settings, 'Filter notifications', '篩選通知')");
+    expect(notifications).toContain("label(settings, 'Select all shown', '揀選全部顯示項目')");
+    expect(notifications).toContain("label(settings, 'Dismiss selected', '清除已揀選')");
+    expect(notifications).toContain("label(settings, 'Delete selected', '刪除已揀選')");
+    expect(notifications).toContain("label(settings, 'No matching notifications', '冇符合嘅通知')");
+    expect(notifications).toContain("aria-label={label(settings, 'Close notification centre', '關閉通知中心')}");
+    expect(notifications).not.toContain('aria-label="Filter notifications"');
+    expect(notifications).not.toContain('>No matching notifications<');
+  });
+
   it('routes every Activity control and state label through the persisted language mode', async () => {
     const activity = await read('src/renderer/pages/ActivityPage.tsx');
     expect(activity).toContain("placeholder={label(settings, 'Search activity by app, action, or message'");

@@ -17,5 +17,7 @@ describe('committed release line counter', () => {
     expect(report.project.agent + report.project.people + report.project.uncommitted).toBe(report.project.total);
     expect(report.grand.total).toBeGreaterThanOrEqual(report.project.total);
     expect(report.rows.some((row) => row.category === 'Excluded lockfiles')).toBe(true);
-  }, 30_000);
+  // Fresh linked checkouts may need a cold git-blame walk; keep the bound finite
+  // while allowing the committed counter to complete on a shared Windows runner.
+  }, 60_000);
 });

@@ -1,5 +1,10 @@
 # Handoff
 
+## 2026-08-09 NotificationCenter language-mode coverage
+
+- NotificationCenter now routes its heading, filter chips, selection summary, bulk actions, export/open states, row status labels, accessibility names, empty state, and destructive confirmation through the persisted English/Hong Kong Cantonese/bilingual mode. Stored titles, messages, timestamps, operation IDs, and recovery facts remain unchanged.
+- Focused coverage is in `tests/ui-completion.test.ts`; the canonical notifications article and generated site/wiki/offline mirrors are refreshed by the docs generator. No notification persistence schema, operation authority, or recovery callback changed. Packaged UI and screen-reader runtime proof remain outside this source/test slice.
+
 ## 2026-08-09 NotificationCenter bulk recovery details
 
 - NotificationCenter now offers Recovery details for selected records and summarizes their typed recovery kinds in the active language mode. Persisted history remains callback-free and operation-ID-free, so the panel explicitly refuses to invent a bulk retry after restart and directs users back to the originating surface.
