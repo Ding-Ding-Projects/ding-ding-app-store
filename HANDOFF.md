@@ -1,5 +1,12 @@
 # Handoff
 
+## 2026-08-09 Changelog viewer language-mode coverage
+
+- ChangelogViewer now routes every viewer-owned status, date-validation message, bulk/copy/export action and outcome, Visual Studio Code state, commit-navigation control, accessibility label, and empty state through English, playful Hong Kong Cantonese, or bilingual copy. Release and calendar dates follow the app language instead of the operating-system display locale; exact versions, source timestamps, and full SHAs remain factual.
+- Non-decision Changelog success/error messages use all five independent English and Cantonese funny levels as fact-preserving prefixes. Known validation issues split the affected release fact from the localized predicate so bilingual mode does not duplicate its version. Typed Visual Studio Code failure reasons and commit-result English/Cantonese pairs prevent Cantonese-only mode from falling back to hardcoded English; unexpected exceptions expose one bounded operation code rather than caught internal detail, and Markdown download remains the editor-failure recovery route.
+- Commit links now use a real typed bridge: the renderer sends only a full 40-hex SHA, the main handler validates the sender and SHA again, and the privileged service constructs the fixed Ding Ding App Store repository URL before calling Electron's external opener. Invalid, missing, and throwing opener states return sanitized English/Cantonese results with copy-link recovery; no renderer-controlled URL or command crosses IPC.
+- Focused coverage lives in `tests/changelog-localization.test.ts`, `tests/external-navigation.test.ts`, and `tests/ui-completion.test.ts`. The canonical Changelog article and generated site/wiki/offline mirrors record the boundary. This lane has source, service-runtime, test, type, and production-build evidence only; it does not claim a fresh packaged hidden-desktop interaction, screen-reader drive, or Changelog capture.
+
 ## 2026-08-09 Catalog language coverage
 
 - `codex/next-global-gap-3` adds a focused renderer slice for the Discover, Installed, and Updates cards and bulk toolbar. Persisted language mode now reaches status pills, selection labels, stable-release empty metadata, update download/retry/cancel/restart/release-note actions, Visual Studio Code fallback, bulk counts/actions, loading state, and no-match state.

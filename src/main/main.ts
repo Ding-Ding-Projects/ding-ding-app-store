@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { app, BrowserWindow, ipcMain, session } from 'electron';
+import { app, BrowserWindow, ipcMain, session, shell } from 'electron';
 import squirrelStartup from 'electron-squirrel-startup';
 import { z } from 'zod';
 import type { ElementKey, ElementOverride, ExternalEditorOpenRequest, ExternalEditorPreference, HistoryExportFormat, InstallCancelRequest, OperationRequest, SchoolModeConfigureRequest, SchoolModeRenameRequest, SchoolModeToggleRequest, SchoolModeVerifyRequest, SourceJobCancelRequest, SourceJobRequest, TabWorkspace, UserSettings } from '../shared/contracts.js';
@@ -18,6 +18,7 @@ import { UpdateService } from './update-service.js';
 import { ManagedUpdateService } from './managed-update-service.js';
 import { WorkspaceService } from './workspace-service.js';
 import { ExternalEditorService } from './external-editor-service.js';
+import { ExternalNavigationService } from './external-navigation-service.js';
 import { ExternalScheduledSettingsService } from './external-scheduled-settings-service.js';
 import { HomeAssistantVault } from './home-assistant-vault.js';
 import { SchoolModeService } from './school-mode-service.js';
@@ -96,6 +97,7 @@ void app.whenReady().then(async () => {
   const externalScheduledSettings = new ExternalScheduledSettingsService({ tokenStore: new HomeAssistantVault() });
   const dimSum = new DimSumService();
   const externalEditor = new ExternalEditorService();
+  const externalNavigation = new ExternalNavigationService(shell);
   const scheduler = new Scheduler({
     getWindow: () => mainWindow,
     service: schedule,
@@ -185,6 +187,14 @@ void app.whenReady().then(async () => {
   ipcMain.handle('external-editor:add-validated', (event) => event.sender === mainWindow?.webContents ? externalEditor.addValidated() : null);
   ipcMain.handle('external-editor:open-export', (event, request: ExternalEditorOpenRequest) => event.sender === mainWindow?.webContents ? externalEditor.openExport(request) : { ok: false as const, reason: 'bridge-unavailable' as const, message: 'Blocked external editor request from an unknown renderer.' });
   ipcMain.handle('external-editor:open-archive', (event, request: unknown) => event.sender === mainWindow?.webContents ? externalEditor.openArchive(request) : { ok: false as const, reason: 'bridge-unavailable' as const, message: 'Blocked external editor request from an unknown renderer.' });
+  ipcMain.handle('external-navigation:open-commit', (event, commit: unknown) => event.sender === mainWindow?.webContents
+    ? externalNavigation.openCommit(commit)
+    : {
+        ok: false,
+        appId: 'ding-ding-app-store',
+        message: 'Blocked commit navigation from an unknown renderer.',
+        messageYue: '已阻擋來自未知介面嘅 commit 導覽。',
+      });
   ipcMain.on('window:minimize', () => mainWindow?.minimize());
   ipcMain.on('window:toggle-maximize', () => {
     if (mainWindow?.isMaximized()) mainWindow.unmaximize(); else mainWindow?.maximize();

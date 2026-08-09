@@ -89,6 +89,9 @@ function isOperationProgressEvent(value: unknown): value is OperationProgressEve
 }
 
 const api: DingDingStoreApi = {
+  externalNavigation: {
+    openCommit: (commit: string) => ipcRenderer.invoke('external-navigation:open-commit', commit),
+  },
   catalog: {
     list: () => ipcRenderer.invoke('catalog:list'),
     refresh: () => ipcRenderer.invoke('catalog:refresh'),

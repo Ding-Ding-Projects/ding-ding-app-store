@@ -1069,7 +1069,7 @@ export type ScheduleSaveResult =
   | { ok: false; message: string; issues: Array<{ field: string; message: string }> };
 
 export interface DingDingStoreApi {
-  /** Optional until the privileged adapter validates a 40-hex SHA and constructs the fixed commit URL. */
+  /** Privileged adapter accepts only a 40-hex SHA and constructs the fixed repository commit URL. */
   externalNavigation?: {
     openCommit(commit: string): Promise<OperationResult>;
   };

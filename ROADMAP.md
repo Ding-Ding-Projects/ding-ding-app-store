@@ -29,6 +29,7 @@
 - [x] Independent search state and a full regex builder on every surface, including the command palette
 - [x] Per-element appearance editor with live preview, reset, export, and import
 - [x] Advanced changelog date filtering with typed dates, month/year jump, two-click range selection, presets, and localized keyboard controls
+- [x] Changelog viewer language-mode coverage for dates, validation, bulk/copy/export outcomes, empty states, and five-level message voice without rewriting version or SHA facts, plus sender-validated full-SHA commit navigation through a fixed main-process repository URL
 - [x] Truthful VS Code export launch outcomes: observed spawn succeeds; child errors and unconfirmed two-second launches fail closed while exports remain recoverable
 - [x] Update schedule editor with last-run/next-run reporting and quiet hours
 - [x] Optional renderer-only notification narrator: persisted opt-in, English/Hong Kong Cantonese/both serialized delivery, stale queue replacement, category cooldowns, and quiet/reduced-sound accessibility yielding
