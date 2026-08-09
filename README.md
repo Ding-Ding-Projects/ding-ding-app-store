@@ -31,6 +31,7 @@ Material Design 3 desktop software center for discovering, documenting, installi
 - Per-element appearance editor with live preview, reset, and export/import, applied through CSS custom properties only.
 - Every exposed export surface also offers a truthful Open in VS Code action: the main process validates PATH/install locations or a native portable selection, writes an app-owned workspace, and launches with shell-free arguments. A child-process error or missing launch event within two seconds is reported as unconfirmed rather than success, while the export remains recoverable. Activity ZIP exports are safely extracted into that workspace before opening the folder; ordinary downloads remain available when VS Code is absent, and the command palette keeps download and explicit-open commands separate.
 - Main-process update schedule with a launch check that cannot be disabled, bounded repeat intervals, and quiet hours that hold notifications without delaying checks.
+- In-app changelog browsing with exact release/commit records, plain-text-first regex search, a month/year-jump calendar with two-click range selection and presets, filtered Markdown export, and truthful VS Code opening.
 - Optional renderer-only spoken notification narrator, off by default, with English/Hong Kong Cantonese/both delivery, serialized queueing, quiet-hours/reduced-sound suppression, and no network or privileged audio bridge.
 
 </details>

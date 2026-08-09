@@ -8,7 +8,7 @@ import { MAX_NOTIFICATION_RECORDS, MAX_NOTIFICATION_STORAGE_BYTES, parseNotifica
 import type { HistoryEntry } from '../src/shared/contracts';
 import type { NotificationRecord } from '../src/renderer/notify';
 import { exportNotificationRecords } from '../src/renderer/components/NotificationCenter';
-import { parseChangelogDate } from '../src/renderer/pages/ChangelogViewer';
+import { changelogCalendarDays, chooseChangelogDate, parseChangelogDate } from '../src/renderer/pages/ChangelogViewer';
 import { aboutRowBody } from '../src/renderer/pages/SettingsPage';
 import { compile, makeMatcher, regexSafetyIssue } from '../src/renderer/search';
 
@@ -85,6 +85,17 @@ describe('global renderer UI completion', () => {
     expect(parseChangelogDate('2026-02-28')).not.toBeNull();
   });
 
+  it('provides a bounded month-jump calendar with two-click range selection', () => {
+    const days = changelogCalendarDays('2026-02');
+    expect(days).toHaveLength(42);
+    expect(days.some((day) => day.getFullYear() === 2026 && day.getMonth() === 1 && day.getDate() === 1)).toBe(true);
+    expect(changelogCalendarDays('not-a-month')).toEqual([]);
+    expect(chooseChangelogDate('', '', '2026-02-03')).toEqual({ start: '2026-02-03', end: '' });
+    expect(chooseChangelogDate('2026-02-03', '', '2026-02-01')).toEqual({ start: '2026-02-01', end: '2026-02-03' });
+    expect(chooseChangelogDate('2026-02-03', '', '2026-02-07')).toEqual({ start: '2026-02-03', end: '2026-02-07' });
+    expect(chooseChangelogDate('2026-02-03', '2026-02-07', '2026-02-10')).toEqual({ start: '2026-02-10', end: '' });
+  });
+
   it('rejects adversarial regex shapes before synchronous list filtering', () => {
     for (const pattern of ['(a+)+$', '(.*)+$', '(a|aa)+$', '(a*){2,}', '(a)\\1+']) {
       expect(regexSafetyIssue(pattern)).toBeTruthy();
@@ -158,6 +169,9 @@ describe('global renderer UI completion', () => {
     expect(notifications).toContain('if (deleteButtonRef.current && !deleteButtonRef.current.disabled)');
     expect(notifications).toContain('SearchBox surface="notifications"');
     expect(changelog).toContain('SearchBox surface="changelog"');
+    expect(changelog).toContain('changelogCalendarDays(calendarMonth)');
+    expect(changelog).toContain('type="month"');
+    expect(changelog).toContain('chooseChangelogDate(start, end, picked)');
     expect(editor).toContain("reason: 'bridge-unavailable'");
     expect(editor).toContain('openArchiveInVsCode');
     expect(activity).toContain('openArchiveInVsCode');
