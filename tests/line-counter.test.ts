@@ -19,5 +19,5 @@ describe('committed release line counter', () => {
     expect(report.rows.some((row) => row.category === 'Excluded lockfiles')).toBe(true);
   // Fresh linked checkouts may need a cold git-blame walk; keep the bound finite
   // while allowing the committed counter to complete on a shared Windows runner.
-  }, 60_000);
+  }, 120_000);
 });
