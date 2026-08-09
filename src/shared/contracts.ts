@@ -327,6 +327,39 @@ export interface UserSettings {
   narratorReducedSound: boolean;
 }
 
+/**
+ * Shared local School mode state.  The renderer receives only this public
+ * projection; the verifier salt and digest remain in the main process.
+ */
+export type SchoolUnlockKind = 'pin' | 'password' | 'passkey';
+export interface SchoolModeState {
+  schemaVersion: 1;
+  enabled: boolean;
+  displayName: string;
+  unlockKind: SchoolUnlockKind | null;
+}
+export interface SchoolModeConfigureRequest {
+  displayName: string;
+  unlockKind: SchoolUnlockKind;
+  credential: string;
+}
+export interface SchoolModeRenameRequest {
+  displayName: string;
+  credential?: string;
+}
+export interface SchoolModeToggleRequest {
+  enabled: boolean;
+  credential?: string;
+}
+export interface SchoolModeVerifyRequest {
+  credential: string;
+}
+export interface SchoolModeMutationResult {
+  ok: boolean;
+  state: SchoolModeState;
+  message: string;
+}
+
 /** The compiled-in settings are a public contract: every settings explanation names these values. */
 export const DEFAULT_USER_SETTINGS: UserSettings = {
   language: 'bilingual',
@@ -1069,6 +1102,13 @@ export interface DingDingStoreApi {
     load(): Promise<UserSettings>;
     save(settings: UserSettings): Promise<UserSettings>;
     provenance(): Promise<SettingsProvenance>;
+  };
+  schoolMode: {
+    load(): Promise<SchoolModeState>;
+    configure(request: SchoolModeConfigureRequest): Promise<SchoolModeMutationResult>;
+    rename(request: SchoolModeRenameRequest): Promise<SchoolModeMutationResult>;
+    setEnabled(request: SchoolModeToggleRequest): Promise<SchoolModeMutationResult>;
+    verify(request: SchoolModeVerifyRequest): Promise<boolean>;
   };
   history: {
     list(): Promise<HistoryEntry[]>;
