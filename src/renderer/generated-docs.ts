@@ -388,6 +388,40 @@ export const GENERATED_DOCS: readonly GeneratedDocArticle[] = [
     "source": "canonical"
   },
   {
+    "id": "status-hub",
+    "title": "Shared Status Hub",
+    "titleYue": "共用 Status Hub",
+    "category": "memory-sync",
+    "wiki": "Status-Hub",
+    "status": "limited",
+    "related": [
+      "convenience-skills",
+      "offline-documentation-browser",
+      "privacy-and-security",
+      "verification"
+    ],
+    "summary": "Documents the interactive status and handoff surface, its session boundaries, and the evidence limits of this App Store bundle.",
+    "body": "# Shared Status Hub\n\n## Behaviour\n\nThe shared Status Hub is the live handoff surface for agent sessions: each session has a status card, current evidence, next gates, and a bounded question channel. A question is accepted only when the authenticated service acknowledges it for the owning session; a static page or a button that cannot deliver an answer is not presented as interactive. The card distinguishes running, waiting, blocked, failed, and verified states without upgrading a pending workflow.\n\nThis App Store repository documents the Status Hub contract and mirrors its public feature articles into the offline browser. It does not claim that this packaged desktop app hosts the hub, injects answers into a chat, or observes an agent inbox without a real bridge. The live service, deployment, and visual capture remain separate evidence lanes.\n\n## Configuration\n\nThe Status Hub session record is scoped to a bounded session identifier and cursor. Authentication, session limits, question size, answer size, and polling cadence are bounded by the service; cards expose only public status projections. A local fallback page may show copied evidence when no authenticated hub connector is available, but it must say that answers cannot reach the agent automatically.\n\n## Failure modes\n\nAn unavailable service, rejected authentication, expired session, invalid cursor, unknown question, stale answer, provider outage, or unsupported bridge fails closed as a typed blocked or unavailable state. The UI preserves the last known evidence without pretending that a question was delivered. A missing screenshot capability or queued workflow is recorded as pending rather than green, and the offline App Store article remains readable.\n\n## Security considerations\n\nStatus cards contain bounded evidence and never expose enrollment tokens, session secrets, private prompts, credentials, or raw inbox payloads. Question answers are accepted only by the owning authenticated session; public projections omit private text. The App Store renderer receives typed status data and cannot submit shell commands, invoke host agents, or alter another repository through this documentation route.\n\n## Verification\n\nThe docs generator validates this article, its related links, the memory-sync category index, the static-site mirror, the wiki page, and the generated offline bundle. Focused documentation tests assert the Status Hub name, accepted-answer boundary, and no-direct-chat/runtime claim. These checks prove article and mirror completeness only; they do not prove a live service deployment, authenticated answer delivery, headless screenshot, or packaged desktop integration.\n\n## Suggested articles\n\n- [Shared convenience skills](./convenience-skills.md)\n- [Offline documentation browser](../documentation/offline-documentation-browser.md)\n- [Privacy and security](../security/privacy-and-security.md)\n- [Verification and evidence](../verification/verification.md)\n",
+    "source": "canonical"
+  },
+  {
+    "id": "convenience-skills",
+    "title": "Shared convenience skills",
+    "titleYue": "共用便利技能",
+    "category": "memory-sync",
+    "wiki": "Convenience-Skills",
+    "status": "limited",
+    "related": [
+      "status-hub",
+      "privacy-and-security",
+      "source-build-security",
+      "verification"
+    ],
+    "summary": "Describes how shared skills are selected, mirrored, and kept provenance-aware without importing secrets or granting host authority.",
+    "body": "# Shared convenience skills\n\n## Behaviour\n\nShared convenience skills are reusable instructions and workflows distributed with provenance metadata. A synchronization record identifies the approved source snapshot, validates the owner and path, imports only the documented skill file, and reports whether the record is available, imported, skipped, or blocked. The App Store's offline documentation browser can explain a skill without executing its commands or silently changing another tool's installation.\n\n## Configuration\n\nEach skill record is bounded by an owner, repository, immutable commit, permitted path, schema version, and size limit. The mirror stores the source revision and a sanitized public article; it does not copy private vocabulary, credentials, staging files, executable payloads, or arbitrary repository trees. A local cache may retain the last verified record so offline readers can distinguish old verified content from a refresh that has not completed.\n\n## Failure modes\n\nPrivate or unavailable source, moved commit, redirect, malformed front matter, path traversal, oversized file, digest mismatch, unknown skill type, or provider outage fails closed as a typed blocked or unavailable result. The synchronizer preserves the last verified article when safe and states what could not be refreshed. It never guesses a replacement path, runs a downloaded script, or presents a partial bundle as complete.\n\n## Security considerations\n\nSkill text is untrusted provider-authored content and is rendered in the isolated documentation surface without shell, filesystem, network, or privileged adapter access. The renderer receives typed metadata only; it cannot turn a skill name into a command or executable path. Secrets never enter generated TypeScript, site files, wiki mirrors, exports, notifications, screenshots, or Git history, and a skill article does not authorize source execution or automatic repair.\n\n## Verification\n\n`npm run docs:check` validates the canonical skill article, memory-sync category index, internal links, static-site mirror, wiki page, and offline bundle together. Focused tests assert the skill inventory, provenance wording, blocked outcomes, and secret-assignment exclusion. A green documentation check is not live synchronization or host-runtime evidence; those require a separately authenticated and observed run.\n\n## Suggested articles\n\n- [Shared Status Hub](./status-hub.md)\n- [Privacy and security](../security/privacy-and-security.md)\n- [Source-build security](../installation/source-build-security.md)\n- [Verification and evidence](../verification/verification.md)\n",
+    "source": "canonical"
+  },
+  {
     "id": "privacy-and-security",
     "title": "Privacy and security",
     "titleYue": "私隱同安全",

@@ -1,5 +1,10 @@
 # Handoff
 
+## 2026-08-09 Memory synchronization documentation coverage
+
+- Added the limited-status `memory-sync` category with canonical `status-hub` and `convenience-skills` articles. They document session/provenance boundaries, typed blocked states, secret exclusion, isolated provider-authored text, and the fact that this App Store bundle does not claim direct chat injection, host execution, live service deployment, or automatic repair.
+- The existing docs generator inventory now enforces the category and both article IDs. Generated category indexes, site articles, wiki pages, and the offline TypeScript bundle are synchronized; focused tests cover article sections, inventory membership, fail-closed wording, and secret-assignment exclusion. Runtime, deployment, screenshot, and authenticated answer delivery remain separate evidence lanes.
+
 ## 2026-08-09 NotificationCenter language-mode coverage
 
 - NotificationCenter now routes its heading, filter chips, selection summary, bulk actions, export/open states, row status labels, accessibility names, empty state, and destructive confirmation through the persisted English/Hong Kong Cantonese/bilingual mode. Stored titles, messages, timestamps, operation IDs, and recovery facts remain unchanged.
