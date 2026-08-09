@@ -232,6 +232,6 @@ export function ActivityPage({ entries, revisions, loading, settings, openRegex,
         </div>
       </li>)}</ul> : <div className="empty-state" {...el('empty-state')}><Icon>search_off</Icon><h2>No matching activity</h2><p>{label(settings, 'Clear the search, action, result, or date filters to see more history.', '清除搜尋、動作、結果或者日期篩選就會見到更多記錄。')}</p></div>}
     </section>
-    {restoreRevision && <DestructiveConfirmDialog title={`Restore “${restoreRevision.label}”?`} description="This replaces the App Store's own installed-app and settings files with the selected local snapshot. A before-restore revision and a new restore revision are recorded; user project files are never touched." actionLabel="RESTORE LOCAL VERSION" onClose={() => setRestoreRevision(null)} onConfirm={() => void restoreSelectedRevision()} />}
+    {restoreRevision && <DestructiveConfirmDialog settings={settings} title={`Restore “${restoreRevision.label}”?`} description="This replaces the App Store's own installed-app and settings files with the selected local snapshot. A before-restore revision and a new restore revision are recorded; user project files are never touched." actionLabel="RESTORE LOCAL VERSION" onClose={() => setRestoreRevision(null)} onConfirm={() => void restoreSelectedRevision()} />}
   </>;
 }

@@ -119,7 +119,7 @@ export function NotificationCenter({ records, settings, persistenceAvailable, on
           </li>
         ))}</ul> : <div className="empty-state"><Icon>notifications_off</Icon><h3>No matching notifications</h3><p>Clear the search or status filter to see more history.</p></div>}
       </aside>
-      {confirmDelete && <DestructiveConfirmDialog title={`Delete ${activeIds.length} notification records?`} description="This permanently removes the selected notification history from this app profile. Export it first if you may need it later." actionLabel={`DELETE ${activeIds.length} RECORDS`} onClose={closeDelete} onConfirm={() => { onDeleteMany(activeIds); setSelected(new Set()); notify({ ok: true, message: `Deleted ${activeIds.length} notification records.` }); }} />}
+      {confirmDelete && <DestructiveConfirmDialog settings={settings} title={`Delete ${activeIds.length} notification records?`} description="This permanently removes the selected notification history from this app profile. Export it first if you may need it later." actionLabel={`DELETE ${activeIds.length} RECORDS`} onClose={closeDelete} onConfirm={() => { onDeleteMany(activeIds); setSelected(new Set()); notify({ ok: true, message: `Deleted ${activeIds.length} notification records.` }); }} />}
     </>
   );
 }

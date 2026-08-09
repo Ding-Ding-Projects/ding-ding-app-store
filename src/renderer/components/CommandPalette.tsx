@@ -3,6 +3,7 @@ import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { UserSettings } from '../../shared/contracts';
 import { el } from '../el';
 import { Icon } from '../icons';
+import { dialogCopy } from '../dialog-emoji';
 import { label } from '../i18n';
 import type { Action, Entry, EntryControl, EntryGroup, TokenValue } from '../registry';
 import { highlight, makeMatcher, useSurfaceSearch } from '../search';
@@ -120,7 +121,7 @@ export function CommandPalette({ settings, entries, onAction, onClose, openRegex
     <div className="scrim" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <section className="command-palette" role="dialog" aria-modal="true" aria-label="Command palette" ref={dialogRef} onKeyDown={trap} {...el('command-palette')}>
         <header>
-          <h2>Command palette · 指令板</h2>
+          <h2>{dialogCopy(settings, 'Command palette · 指令板', '🧭')}</h2>
           <button className="icon-button" onClick={onClose} aria-label="Close command palette"><Icon>close</Icon></button>
         </header>
         <SearchBox

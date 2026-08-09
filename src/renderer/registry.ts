@@ -175,6 +175,7 @@ export const SETTING_FIELDS: readonly SettingField[] = [
     { value: 'both', en: 'English then Hong Kong Cantonese', yue: '英文，然後香港粵語' },
   ] },
   { key: 'narratorReducedSound', section: 'general', kind: 'switch', en: 'Reduce narrator sound', yue: '減少旁白聲音', keywords: ['speech', 'quiet', 'reduced sound', 'accessibility'], explanation: { en: 'Silences the optional narrator immediately while leaving visual notifications, notification history, and assistive-technology announcements available.', yue: '即刻收埋可選旁白，但畫面通知、通知記錄同輔助科技提示照樣保留。' }, defaultValue: 'false' },
+  { key: 'showEmojisInDialogs', section: 'general', kind: 'switch', en: 'Show emojis in dialogs and message boxes', yue: '喺對話框同訊息框顯示 emoji', keywords: ['emoji', 'dialog', 'message box', 'decoration', 'accessibility'], explanation: { en: 'Adds a non-semantic emoji to dialog and message-box title/body copy while leaving buttons, field labels, and accessible names factual and unchanged.', yue: '喺對話框同訊息框標題／內文加非語義 emoji；按鈕、欄位標籤同輔助科技名稱保持事實原文。' }, defaultValue: 'true' },
   { key: 'automaticRepairConsent', section: 'general', kind: 'switch', en: 'Allow isolated automatic source repair', yue: '允許隔離自動 source 修正', keywords: ['source', 'repair', 'opencode', 'consent', 'isolation'], explanation: { en: 'Allows OpenCode to repair a reviewed source build only inside an attested disposable guest; normal installs never use it and the app fails closed without isolation.', yue: '只容許 OpenCode 喺驗證過、一次性隔離環境修正已審核 source build；普通安裝唔會用，冇隔離就安全停低。' }, defaultValue: 'false' },
   {
     key: 'theme', section: 'appearance', kind: 'select', en: 'Theme', yue: '主題',
@@ -202,7 +203,7 @@ export const SETTING_FIELDS: readonly SettingField[] = [
 
 /** Hand-written completeness list: adding a setting requires its explanation and fallback contract. */
 export const SETTINGS_EXPLANATION_KEYS = [
-  'language', 'englishFunnyLevel', 'cantoneseFunnyLevel', 'narratorEnabled', 'narratorLanguage', 'narratorReducedSound', 'automaticRepairConsent',
+  'language', 'englishFunnyLevel', 'cantoneseFunnyLevel', 'narratorEnabled', 'narratorLanguage', 'narratorReducedSound', 'showEmojisInDialogs', 'automaticRepairConsent',
   'theme', 'density', 'accent', 'displayName',
 ] as const satisfies readonly (keyof UserSettings)[];
 

@@ -4,6 +4,7 @@ import { el } from '../el';
 import { Icon } from '../icons';
 import { label } from '../i18n';
 import { SuperConfirm } from './SuperConfirm';
+import { dialogCopy } from '../dialog-emoji';
 
 export type ActionKind = 'install' | 'build' | 'uninstall';
 export type ImmediateActionKind = Exclude<ActionKind, 'uninstall'>;
@@ -70,8 +71,8 @@ export function ActionDialog({ action, settings, onClose, onResult }: { action: 
   return (
     <div className="scrim" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}>
       <section ref={dialogRef} className="dialog" role="dialog" aria-modal="true" aria-labelledby="action-title" aria-describedby="action-description" {...el('dialog')}>
-        <header><div><span className="eyebrow">UNINSTALL</span><h2 id="action-title">{action.apps.length === 1 ? action.apps[0].name : `${action.apps.length} selected applications`}</h2></div><button className="icon-button" onClick={onClose} disabled={busy} aria-label="Emergency exit"><Icon>close</Icon></button></header>
-        <p id="action-description">{label(settings, `This removes ${action.apps.length === 1 ? action.apps[0].name : `${action.apps.length} recorded installations`}. The local action history keeps every result.`, `會移除${action.apps.length === 1 ? action.apps[0].name : `${action.apps.length} 個記錄中嘅安裝`}；本機 action history 會留低每個結果。`)}</p>
+        <header><div><span className="eyebrow">UNINSTALL</span><h2 id="action-title">{dialogCopy(settings, action.apps.length === 1 ? action.apps[0].name : `${action.apps.length} selected applications`, '⚠️')}</h2></div><button className="icon-button" onClick={onClose} disabled={busy} aria-label="Emergency exit"><Icon>close</Icon></button></header>
+        <p id="action-description">{dialogCopy(settings, label(settings, `This removes ${action.apps.length === 1 ? action.apps[0].name : `${action.apps.length} recorded installations`}. The local action history keeps every result.`, `會移除${action.apps.length === 1 ? action.apps[0].name : `${action.apps.length} 個記錄中嘅安裝`}；本機 action history 會留低每個結果。`), '⚠️')}</p>
         {busy && <div className="operation-progress" role="status" aria-live="polite"><progress max={action.apps.length} value={progress} /><span>{progress} of {action.apps.length} finished</span></div>}
         <SuperConfirm firstKey={firstKey} secondKey={secondKey} slider={slider} onFirstKey={setFirstKey} onSecondKey={setSecondKey} onSlider={setSlider} />
         <footer><button className="text-button" onClick={onClose} disabled={busy}>Emergency exit · 緊急離開</button><button className="filled-button danger-fill" onClick={submit} disabled={!destructiveReady || busy}>{busy ? 'Working…' : `UNINSTALL ${action.apps.length}`}</button></footer>

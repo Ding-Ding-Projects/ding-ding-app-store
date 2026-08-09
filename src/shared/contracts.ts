@@ -318,6 +318,8 @@ export interface UserSettings {
   density: 'comfortable' | 'compact' | 'spacious';
   accent: string;
   displayName: string;
+  /** Decorates dialog/message title and body copy only; never control labels or accessible names. */
+  showEmojisInDialogs: boolean;
   automaticRepairConsent: boolean;
   /** Optional renderer-only speech; it never authorizes a privileged media bridge. */
   narratorEnabled: boolean;
@@ -334,6 +336,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   density: 'comfortable',
   accent: '#6750A4',
   displayName: 'Ding Ding App Store',
+  showEmojisInDialogs: true,
   automaticRepairConsent: false,
   narratorEnabled: false,
   narratorLanguage: 'both',
