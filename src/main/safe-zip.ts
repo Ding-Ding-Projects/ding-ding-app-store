@@ -132,6 +132,7 @@ export async function extractZipSafe(archivePath: string, destinationRoot: strin
         const target = path.resolve(root, ...relative.split('/'));
         if (target !== root && !target.startsWith(`${root}${path.sep}`)) throw new Error(`Portable archive entry escaped its destination: ${entry.fileName}`);
         const kind = entryKind(entry);
+        if (limits.allowedNames && kind === 'directory') throw new Error(`Portable archive allowlist accepts files only: ${entry.fileName}`);
         if (kind === 'directory') {
           await mkdir(target, { recursive: true });
           zip.readEntry();

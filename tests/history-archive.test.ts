@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { extractZipSafe } from '../src/main/safe-zip.js';
 import { createHistoryArchive } from '../src/main/history-archive.js';
 import type { HistoryEntry } from '../src/shared/contracts.js';
+import yazl from 'yazl';
 
 const entry = (overrides: Partial<HistoryEntry> = {}): HistoryEntry => ({
   id: 'f6a5dd12-70f1-4f4a-9f1b-1d9c8a7d6e5c',
@@ -102,6 +103,23 @@ describe('re-importable activity ZIP archive', () => {
         allowedNames: new Set(['README.txt', 'history.json', 'history.jsonl', 'manifest.json']),
         requiredNames: new Set(['README.txt', 'history.json', 'history.jsonl', 'manifest.json', 'missing.txt']),
       })).rejects.toThrow(/missing a required member/i);
+
+      const directoryZip = await new Promise<Buffer>((resolve) => {
+        const zip = new yazl.ZipFile();
+        const chunks: Buffer[] = [];
+        zip.outputStream.on('data', (chunk: Buffer) => chunks.push(chunk));
+        zip.outputStream.on('end', () => resolve(Buffer.concat(chunks)));
+        zip.addEmptyDirectory('manifest.json/');
+        zip.end();
+      });
+      const directoryZipPath = path.join(root, 'directory.zip');
+      await writeFile(directoryZipPath, directoryZip);
+      await expect(extractZipSafe(directoryZipPath, path.join(root, 'directory-output'), undefined, {
+        maxEntries: 4,
+        maxBytes: 32 * 1024 * 1024,
+        allowedNames: new Set(['manifest.json']),
+        requiredNames: new Set(['manifest.json']),
+      })).rejects.toThrow(/files only|directory/i);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
