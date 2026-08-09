@@ -15,6 +15,17 @@ import { dialogCopy } from '../dialog-emoji';
 
 type NotificationFilter = 'all' | 'unread' | 'dismissed' | 'errors';
 
+function notificationFilterLabel(settings: UserSettings, value: NotificationFilter): string {
+  const copy: Record<NotificationFilter, [string, string]> = {
+    all: ['All', '全部'],
+    unread: ['Unread', '未讀'],
+    dismissed: ['Dismissed', '已清除'],
+    errors: ['Errors', '錯誤'],
+  };
+  const [en, yue] = copy[value];
+  return label(settings, en, yue);
+}
+
 export function exportNotificationRecords(records: readonly NotificationRecord[]): string {
   // Exports are an explicit allowlist. This makes a callback, accidental
   // renderer property, or any future private runtime field impossible to leak.
@@ -86,7 +97,7 @@ export function NotificationCenter({ records, settings, persistenceAvailable, on
       else panelRef.current?.focus();
     }, 0);
   };
-  const selectionLabel = `${selectedShown.length} selected · ${shown.length} shown · ${records.length} total`;
+  const selectionLabel = label(settings, `${selectedShown.length} selected · ${shown.length} shown · ${records.length} total`, `揀選 ${selectedShown.length} · 顯示 ${shown.length} · 總數 ${records.length}`);
   const selectAt = (index: number, checked: boolean, shiftKey: boolean) => {
     setSelected((current) => {
       const next = new Set(current);
@@ -104,21 +115,21 @@ export function NotificationCenter({ records, settings, persistenceAvailable, on
   return (
     <>
       <aside ref={panelRef} className="notification-center" role="dialog" aria-modal="false" aria-labelledby="notification-centre-title" tabIndex={-1}>
-        <header><div><span className="eyebrow">HISTORY</span><h2 id="notification-centre-title">{dialogCopy(settings, label(settings, 'Notification centre', '通知中心'), '🔔')}</h2></div><button className="icon-button" onClick={onClose} aria-label="Close notification centre"><Icon>close</Icon></button></header>
+        <header><div><span className="eyebrow">{label(settings, 'HISTORY', '歷史')}</span><h2 id="notification-centre-title">{dialogCopy(settings, label(settings, 'Notification centre', '通知中心'), '🔔')}</h2></div><button className="icon-button" onClick={onClose} aria-label={label(settings, 'Close notification centre', '關閉通知中心')}><Icon>close</Icon></button></header>
         <SearchBox surface="notifications" settings={settings} placeholder={label(settings, 'Search notification titles and messages', '搵通知標題同內容')} openBuilder={openRegex} onBuilderHandled={onRegexHandled} />
-        {!persistenceAvailable && <div className="notice warning" role="alert"><Icon>error</Icon>Notification history could not be saved in this profile. Current snackbars still work, but retained history may be lost after restart.</div>}
-        <div className="chip-row" role="group" aria-label="Filter notifications">{(['all', 'unread', 'dismissed', 'errors'] as const).map((value) => <button key={value} aria-pressed={filter === value} onClick={() => setFilter(value)}>{value}</button>)}</div>
-        <div className="bulk-toolbar" aria-label="Notification bulk actions">
+        {!persistenceAvailable && <div className="notice warning" role="alert"><Icon>error</Icon>{label(settings, 'Notification history could not be saved in this profile. Current snackbars still work, but retained history may be lost after restart.', '呢個設定檔未能儲存通知歷史。即時提示仍然運作，但重開後可能搵唔返保留嘅記錄。')}</div>}
+        <div className="chip-row" role="group" aria-label={label(settings, 'Filter notifications', '篩選通知')}>{(['all', 'unread', 'dismissed', 'errors'] as const).map((value) => <button key={value} aria-pressed={filter === value} onClick={() => setFilter(value)}>{notificationFilterLabel(settings, value)}</button>)}</div>
+        <div className="bulk-toolbar" aria-label={label(settings, 'Notification bulk actions', '通知批量操作')}>
           <strong aria-live="polite">{selectionLabel}</strong>
-          <button className="text-button" onClick={() => setSelected(new Set(shown.map((record) => record.id)))} disabled={!shown.length}>Select all shown</button>
-          <button className="text-button" onClick={() => setSelected((current) => new Set(shown.filter((record) => !current.has(record.id)).map((record) => record.id)))} disabled={!shown.length}>Invert shown</button>
-          <button className="text-button" onClick={() => setSelected(new Set())} disabled={!selected.size}>Clear</button>
-          <button className="text-button" onClick={() => { setCopyBusy(true); void navigator.clipboard.writeText(operationIdClipboard).then(() => notify({ ok: true, message: `Copied ${scopedOperationIds.length} operation IDs.` })).catch((error) => notify({ ok: false, message: (error as Error).message || 'The operation IDs could not be copied.' })).finally(() => setCopyBusy(false)); }} disabled={!scopedOperationIds.length || copyBusy}>Copy operation IDs</button>
-          <button className="text-button" onClick={() => { onDismissMany(activeIds); setSelected(new Set()); }} disabled={!activeIds.length}>Dismiss selected</button>
+          <button className="text-button" onClick={() => setSelected(new Set(shown.map((record) => record.id)))} disabled={!shown.length}>{label(settings, 'Select all shown', '揀選全部顯示項目')}</button>
+          <button className="text-button" onClick={() => setSelected((current) => new Set(shown.filter((record) => !current.has(record.id)).map((record) => record.id)))} disabled={!shown.length}>{label(settings, 'Invert shown', '反轉顯示項目')}</button>
+          <button className="text-button" onClick={() => setSelected(new Set())} disabled={!selected.size}>{label(settings, 'Clear', '清除')}</button>
+          <button className="text-button" onClick={() => { setCopyBusy(true); void navigator.clipboard.writeText(operationIdClipboard).then(() => notify({ ok: true, message: label(settings, `Copied ${scopedOperationIds.length} operation IDs.`, `已複製 ${scopedOperationIds.length} 個操作 ID。`) })).catch((error) => notify({ ok: false, message: (error as Error).message || label(settings, 'The operation IDs could not be copied.', '未能複製操作 ID。') })).finally(() => setCopyBusy(false)); }} disabled={!scopedOperationIds.length || copyBusy}>{label(settings, 'Copy operation IDs', '複製操作 ID')}</button>
+          <button className="text-button" onClick={() => { onDismissMany(activeIds); setSelected(new Set()); }} disabled={!activeIds.length}>{label(settings, 'Dismiss selected', '清除已揀選')}</button>
           <button className="text-button" onClick={() => setRecoveryDetailsOpen(true)} disabled={!selectedShown.length}>{label(settings, 'Recovery details', '復原詳情')}</button>
-          <button ref={deleteButtonRef} className="text-button danger" onClick={() => setConfirmDelete(true)} disabled={!activeIds.length}>Delete selected</button>
-          <button className="text-button" onClick={() => { downloadText('ding-ding-app-store-notifications.json', exportNotificationRecords(selectedShown.length ? selectedShown : shown), 'application/json'); notify({ ok: true, message: `Exported ${selectedShown.length || shown.length} notification records.` }); }} disabled={!shown.length}><Icon>download</Icon>Export shown</button>
-          <button className="text-button" onClick={() => void openExportInVsCode({ recordKind: 'notifications', suggestedName: 'ding-ding-app-store-notifications.json', mime: 'application/json', content: exportNotificationRecords(selectedShown.length ? selectedShown : shown) }).then((result) => notify({ ok: result.ok, message: result.ok ? `Opened ${selectedShown.length || shown.length} notification records in Visual Studio Code.` : result.message }))} disabled={!shown.length || !isExternalEditorBridgeAvailable()} title={isExternalEditorBridgeAvailable() ? undefined : 'Unavailable: this build has no reviewed Visual Studio Code adapter.'}><Icon>code</Icon>{isExternalEditorBridgeAvailable() ? 'Open in VS Code' : 'VS Code unavailable'}</button>
+          <button ref={deleteButtonRef} className="text-button danger" onClick={() => setConfirmDelete(true)} disabled={!activeIds.length}>{label(settings, 'Delete selected', '刪除已揀選')}</button>
+          <button className="text-button" onClick={() => { downloadText('ding-ding-app-store-notifications.json', exportNotificationRecords(selectedShown.length ? selectedShown : shown), 'application/json'); notify({ ok: true, message: label(settings, `Exported ${selectedShown.length || shown.length} notification records.`, `已匯出 ${selectedShown.length || shown.length} 條通知記錄。`) }); }} disabled={!shown.length}><Icon>download</Icon>{label(settings, 'Export shown', '匯出顯示項目')}</button>
+          <button className="text-button" onClick={() => void openExportInVsCode({ recordKind: 'notifications', suggestedName: 'ding-ding-app-store-notifications.json', mime: 'application/json', content: exportNotificationRecords(selectedShown.length ? selectedShown : shown) }).then((result) => notify({ ok: result.ok, message: result.ok ? label(settings, `Opened ${selectedShown.length || shown.length} notification records in Visual Studio Code.`, `已喺 Visual Studio Code 開啟 ${selectedShown.length || shown.length} 條通知記錄。`) : result.message }))} disabled={!shown.length || !isExternalEditorBridgeAvailable()} title={isExternalEditorBridgeAvailable() ? undefined : label(settings, 'Unavailable: this build has no reviewed Visual Studio Code adapter.', '未能使用：呢個版本冇已審核嘅 Visual Studio Code 適配器。')}><Icon>code</Icon>{isExternalEditorBridgeAvailable() ? label(settings, 'Open in VS Code', '喺 VS Code 開啟') : label(settings, 'VS Code unavailable', 'VS Code 未能使用')}</button>
         </div>
         {recoveryDetailsOpen && <section className="notification-recovery-details" role="status" aria-labelledby="notification-recovery-details-title">
           <header><h3 id="notification-recovery-details-title">{label(settings, 'Recovery details', '復原詳情')}</h3><button className="text-button" onClick={() => setRecoveryDetailsOpen(false)}>{label(settings, 'Close', '關閉')}</button></header>
@@ -130,14 +141,14 @@ export function NotificationCenter({ records, settings, persistenceAvailable, on
         </section>}
         {shown.length ? <ul className="notification-list">{shown.map((record, index) => (
           <li key={record.id} className={record.dismissedAt ? 'dismissed' : ''}>
-            <label className="selection-check"><input type="checkbox" checked={selected.has(record.id)} onClick={(event) => selectAt(index, event.currentTarget.checked, event.shiftKey)} onChange={() => undefined} /><span className="visually-hidden">Select {record.title}</span></label>
+            <label className="selection-check"><input type="checkbox" checked={selected.has(record.id)} onClick={(event) => selectAt(index, event.currentTarget.checked, event.shiftKey)} onChange={() => undefined} /><span className="visually-hidden">{label(settings, `Select ${record.title}`, `揀選 ${record.title}`)}</span></label>
             <Icon>{record.ok ? 'check_circle' : 'error'}</Icon>
-            <div><strong>{record.title}</strong><p>{record.message}</p><small><time dateTime={record.createdAt}>{new Date(record.createdAt).toLocaleString()}</time>{record.dismissedAt ? ' · Dismissed' : ' · Unread'}</small>{record.operationId && <small className="notification-recovery-history">{label(settings, `Operation ID: ${record.operationId}`, `操作 ID：${record.operationId}`)}</small>}{record.recovery ? <small className="notification-recovery-history">{label(settings, `Recovery offered: ${recoveryActionLabel(settings, record.recovery.kind)}. Retained history cannot rerun it after restart.`, `曾經提供復原：${recoveryActionLabel(settings, record.recovery.kind)}。保留記錄喺重開後唔可以再執行。`)}</small> : !record.ok && <small className="notification-recovery-history">{label(settings, 'No safe recovery action is available for this failure.', '呢個失敗冇安全嘅復原操作。')}</small>}</div>
-            {!record.dismissedAt && <button className="icon-button" onClick={() => onDismissMany([record.id])} aria-label={`Dismiss ${record.title}`}><Icon>close</Icon></button>}
+            <div><strong>{record.title}</strong><p>{record.message}</p><small><time dateTime={record.createdAt}>{new Date(record.createdAt).toLocaleString()}</time>{record.dismissedAt ? label(settings, ' · Dismissed', ' · 已清除') : label(settings, ' · Unread', ' · 未讀')}</small>{record.operationId && <small className="notification-recovery-history">{label(settings, `Operation ID: ${record.operationId}`, `操作 ID：${record.operationId}`)}</small>}{record.recovery ? <small className="notification-recovery-history">{label(settings, `Recovery offered: ${recoveryActionLabel(settings, record.recovery.kind)}. Retained history cannot rerun it after restart.`, `曾經提供復原：${recoveryActionLabel(settings, record.recovery.kind)}。保留記錄喺重開後唔可以再執行。`)}</small> : !record.ok && <small className="notification-recovery-history">{label(settings, 'No safe recovery action is available for this failure.', '呢個失敗冇安全嘅復原操作。')}</small>}</div>
+            {!record.dismissedAt && <button className="icon-button" onClick={() => onDismissMany([record.id])} aria-label={label(settings, `Dismiss ${record.title}`, `清除 ${record.title}`)}><Icon>close</Icon></button>}
           </li>
-        ))}</ul> : <div className="empty-state"><Icon>notifications_off</Icon><h3>No matching notifications</h3><p>Clear the search or status filter to see more history.</p></div>}
+        ))}</ul> : <div className="empty-state"><Icon>notifications_off</Icon><h3>{label(settings, 'No matching notifications', '冇符合嘅通知')}</h3><p>{label(settings, 'Clear the search or status filter to see more history.', '清除搜尋或狀態篩選，就可以睇到更多歷史。')}</p></div>}
       </aside>
-      {confirmDelete && <DestructiveConfirmDialog settings={settings} title={`Delete ${activeIds.length} notification records?`} description="This permanently removes the selected notification history from this app profile. Export it first if you may need it later." actionLabel={`DELETE ${activeIds.length} RECORDS`} onClose={closeDelete} onConfirm={() => { onDeleteMany(activeIds); setSelected(new Set()); notify({ ok: true, message: `Deleted ${activeIds.length} notification records.` }); }} />}
+      {confirmDelete && <DestructiveConfirmDialog settings={settings} title={label(settings, `Delete ${activeIds.length} notification records?`, `刪除 ${activeIds.length} 條通知記錄？`)} description={label(settings, 'This permanently removes the selected notification history from this app profile. Export it first if you may need it later.', '呢個操作會永久刪除呢個設定檔入面揀選嘅通知歷史。如果遲啲可能要用，請先匯出。')} actionLabel={label(settings, `DELETE ${activeIds.length} RECORDS`, `刪除 ${activeIds.length} 條記錄`)} onClose={closeDelete} onConfirm={() => { onDeleteMany(activeIds); setSelected(new Set()); notify({ ok: true, message: label(settings, `Deleted ${activeIds.length} notification records.`, `已刪除 ${activeIds.length} 條通知記錄。`) }); }} />}
     </>
   );
 }
