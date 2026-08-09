@@ -1,5 +1,10 @@
 # Handoff
 
+## 2026-08-09 fail-closed VS Code export launch evidence
+
+- The external-editor adapter now distinguishes observed child `spawn`, child `error`, and a two-second no-event timeout. A timeout is typed as `launch-timeout` and never reports that Visual Studio Code opened the export; the app-owned text or extracted ZIP workspace remains available for download/recovery.
+- `tests/external-editor.test.ts` covers all three launch outcomes with a fake child seam and verifies the shell-free `--reuse-window` invocation. This proves the result state machine only; no packaged VS Code launch or hidden-desktop interaction is claimed because the sanctioned cheap headless bridge is unavailable in this lane.
+
 ## 2026-08-09 complete non-secret App Store state history
 
 - The local Git version browser now snapshots and restores seven fixed App Store-owned JSON files together: settings, installed records, workspace tabs, appearance, schedules, schedule-run metadata, and external-editor preference. Restore preserves the current complete set first, writes the selected set, serializes the whole restore against concurrent snapshots, and reports whether rollback completed if a target or commit fails. Older two-file revisions remain readable with explicit empty fallbacks for newer state files, and successful restore is a new append-only revision.
