@@ -15,3 +15,4 @@ Tabs, search, command palette, settings, appearance, and notifications.
 - [Notifications and operation status](./notifications-and-status.md) — Stacks corner snackbars, retains searchable notification history, optionally narrates new notices, and keeps destructive decisions behind native super-confirmation.
 - [Dim-sum startup surprise](./dim-sum-surprise.md) — Gives later launches a small non-blocking dim-sum card using only metadata and a published public catalog photo URL.
 - [Changelog viewer](./changelog-viewer.md) — Browses every released version with searchable commit links, typed date filters, an anchored month-jump range calendar, presets, and filtered copy/export actions.
+- [Catalog language coverage](./catalog-language.md) — Keeps Discover, Installed, and Updates controls, status facts, loading states, and recovery actions aligned with the persisted language mode.

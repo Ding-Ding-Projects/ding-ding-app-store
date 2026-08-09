@@ -1,5 +1,12 @@
 # Handoff
 
+## 2026-08-09 Catalog language coverage
+
+- `codex/next-global-gap-3` adds a focused renderer slice for the Discover, Installed, and Updates cards and bulk toolbar. Persisted language mode now reaches status pills, selection labels, stable-release empty metadata, update download/retry/cancel/restart/release-note actions, Visual Studio Code fallback, bulk counts/actions, loading state, and no-match state.
+- Added canonical `docs/features/experience/catalog-language.md`; the generator now mirrors it into the offline bundle, static site, wiki, category index, and command-palette documentation inventory.
+- Focused `tests/apps-page-discovery.test.tsx` covers the existing discovery-only safety boundary and Cantonese rendering of update/detection facts. Local full verification and cloud CI/release evidence remain pending until the branch is dewed.
+- The implementation changes renderer copy only. It does not alter catalog identifiers, installer adapters, source execution, ownership, privileged IPC, or provider-authored descriptions, and no packaged hidden-desktop capture is claimed.
+
 ## 2026-08-09 Memory synchronization documentation coverage
 
 - Added the limited-status `memory-sync` category with canonical `status-hub` and `convenience-skills` articles. They document session/provenance boundaries, typed blocked states, secret exclusion, isolated provider-authored text, and the fact that this App Store bundle does not claim direct chat injection, host execution, live service deployment, or automatic repair.

@@ -35,11 +35,11 @@ const app: CatalogApp = {
   docsAvailable: true,
 };
 
-function render(installedRecord: InstalledAppRecord) {
+function render(installedRecord: InstalledAppRecord, userSettings: UserSettings = settings) {
   return renderToStaticMarkup(createElement(AppCard, {
     app,
     installedRecord,
-    settings,
+    settings: userSettings,
     onAction: vi.fn(),
     onManagedUpdate: vi.fn(),
     onCancelInstall: vi.fn(),
@@ -72,5 +72,23 @@ describe('discovery-only app card', () => {
     expect(markup).not.toContain('>Uninstall<');
     expect(markup).not.toContain('Download update');
     expect(markup).not.toContain('Restart to install update');
+  });
+
+  it('localizes catalog status and management facts through the persisted language mode', () => {
+    const markup = render({
+      appId: app.id,
+      displayName: app.name,
+      version: '1.0.0',
+      packageType: 'msi',
+      source: 'msi-registry',
+      installRoot: null,
+      uninstall: null,
+      ownership: null,
+      installedAt: null,
+      detectedAt: '2026-08-08T00:00:00.000Z',
+    }, { ...settings, language: 'yue' });
+    expect(markup).toContain('有更新');
+    expect(markup).toContain('偵測到外部安裝');
+    expect(markup).not.toContain('Update available');
   });
 });

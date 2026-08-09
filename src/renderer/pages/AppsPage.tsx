@@ -41,6 +41,15 @@ function operationPhaseLabel(settings: UserSettings, phase: OperationProgressPha
   return label(settings, en, yue);
 }
 
+function appStatusLabel(settings: UserSettings, status: CatalogApp['updateState']): string {
+  const copy: Record<CatalogApp['updateState'], [string, string]> = {
+    unknown: ['Unknown', '未知'], 'up-to-date': ['Up to date', '已經係最新'], available: ['Update available', '有更新'],
+    unsupported: ['Unsupported', '未支援'], failed: ['Update check failed', '更新檢查失敗'],
+  };
+  const [en, yue] = copy[status];
+  return label(settings, en, yue);
+}
+
 export function AppCard({ app, installedRecord, settings, onAction, onManagedUpdate, onCancelInstall, managedUpdate, operationProgress, searchLabel, runningAction, selected, onSelect }: { app: CatalogApp; installedRecord: InstalledAppRecord | undefined; settings: UserSettings; onAction: (kind: ActionKind, app: CatalogApp, trigger: HTMLButtonElement) => void; onManagedUpdate: (kind: 'download' | 'cancel' | 'restart', app: CatalogApp, trigger: HTMLButtonElement) => void; onCancelInstall: (app: CatalogApp, trigger: HTMLButtonElement) => void; managedUpdate: ManagedUpdateState | undefined; operationProgress: OperationProgressEvent | undefined; searchLabel: ReactNode; runningAction: RunningAction | null; selected: boolean; onSelect(checked: boolean, shiftKey: boolean): void }) {
   const management = installationManagementState(installedRecord);
   const managed = management === 'store-managed';
@@ -54,12 +63,12 @@ export function AppCard({ app, installedRecord, settings, onAction, onManagedUpd
     : operationBusy ? label(settings, 'Wait for the current installation to finish before starting another action.', '等目前安裝操作完成先做下一步。') : undefined;
   return (
     <article className="app-card" {...el('app-card')}>
-      <label className="selection-check app-selection"><input type="checkbox" checked={selected} onClick={(event) => onSelect(event.currentTarget.checked, event.shiftKey)} onChange={() => undefined} /><span className="visually-hidden">Select {app.name}</span></label>
+      <label className="selection-check app-selection"><input type="checkbox" checked={selected} onClick={(event) => onSelect(event.currentTarget.checked, event.shiftKey)} onChange={() => undefined} /><span className="visually-hidden">{label(settings, `Select ${app.name}`, `揀選 ${app.name}`)}</span></label>
       <div className="app-avatar" aria-hidden="true">{app.name.slice(0, 2).toUpperCase()}</div>
       <div className="app-copy">
-        <div className="card-heading"><h3 {...el('app-card-title')}>{searchLabel}</h3><span className={`status-pill ${app.updateState}`} {...el('status-pill')}>{app.updateState.replaceAll('-', ' ')}</span></div>
+        <div className="card-heading"><h3 {...el('app-card-title')}>{searchLabel}</h3><span className={`status-pill ${app.updateState}`} {...el('status-pill')}>{appStatusLabel(settings, app.updateState)}</span></div>
         <p {...el('app-card-description')}>{app.description}</p>
-        <div className="meta"><span><Icon>deployed_code</Icon>{app.latestVersion ?? 'No stable release'}</span><span><Icon>download</Icon>{app.packageType}</span><span><Icon>star</Icon>{app.stars}</span>{installedRecord && <span><Icon>{managed ? 'verified_user' : 'visibility'}</Icon>{managed ? label(settings, 'Managed by App Store', '由 App Store 管理') : label(settings, 'Detected outside App Store', '偵測到外部安裝')}</span>}</div>
+        <div className="meta"><span><Icon>deployed_code</Icon>{app.latestVersion ?? label(settings, 'No stable release', '冇穩定版本')}</span><span><Icon>download</Icon>{app.packageType}</span><span><Icon>star</Icon>{app.stars}</span>{installedRecord && <span><Icon>{managed ? 'verified_user' : 'visibility'}</Icon>{managed ? label(settings, 'Managed by App Store', '由 App Store 管理') : label(settings, 'Detected outside App Store', '偵測到外部安裝')}</span>}</div>
         {discoveryOnly && <p className="operation-status warning" role="status">{label(settings, `Detected ${installedRecord?.version ?? 'unknown version'} from the reviewed ${installedRecord?.source ?? 'registry'} identity. This App Store did not install it, so install, update, and uninstall actions stay unavailable.`, `由已審核嘅 ${installedRecord?.source ?? 'registry'} 身份偵測到版本 ${installedRecord?.version ?? '不明'}。唔係呢個 App Store 安裝，所以安裝、更新同解除安裝操作都唔會開放。`)}</p>}
         <div className="card-actions">
           {app.availability === 'installable' && !discoveryOnly && <button className="filled-button" data-install-action={app.id} {...el('button-filled')} disabled={operationBusy} aria-busy={installBusy} title={busyExplanation} onClick={(event) => onAction('install', app, event.currentTarget)}><Icon>download</Icon>{installBusy ? label(settings, 'Installing…', '安裝緊…') : label(settings, managed ? 'Reinstall' : 'Install', managed ? '重新安裝' : '安裝')}</button>}
@@ -70,12 +79,12 @@ export function AppCard({ app, installedRecord, settings, onAction, onManagedUpd
           {installProgress?.final && installProgress.phase === 'unknown' && <span className="operation-status warning" role="alert" tabIndex={-1} data-operation-status={app.id}>{operationPhaseLabel(settings, installProgress.phase)}</span>}
           {managed && app.updateState === 'available' && app.installedVersion && managedUpdate?.status !== 'ready' && (
             <button className="tonal-button" disabled={operationBusy} aria-busy={managedUpdate?.status === 'downloading'} title={managedUpdate?.status === 'offline' ? managedUpdate.message : 'Download and verify this stable release. Installation starts only after you choose Restart to install update.'} onClick={(event) => onManagedUpdate('download', app, event.currentTarget)}>
-              <Icon>download_for_offline</Icon>{managedUpdate?.status === 'downloading' ? `Downloading ${managedUpdate.progress}%` : managedUpdate?.status === 'failed' || managedUpdate?.status === 'cancelled' ? 'Retry update' : 'Download update'}
+              <Icon>download_for_offline</Icon>{managedUpdate?.status === 'downloading' ? label(settings, `Downloading ${managedUpdate.progress}%`, `下載緊 ${managedUpdate.progress}%`) : managedUpdate?.status === 'failed' || managedUpdate?.status === 'cancelled' ? label(settings, 'Retry update', '再試更新') : label(settings, 'Download update', '下載更新')}
             </button>
           )}
-          {managed && managedUpdate?.status === 'downloading' && managedUpdate.appId === app.id && <button className="text-button" onClick={(event) => onManagedUpdate('cancel', app, event.currentTarget)}>Cancel</button>}
-          {managed && managedUpdate?.status === 'ready' && managedUpdate.appId === app.id && <button className="filled-button" disabled={operationBusy} onClick={(event) => onManagedUpdate('restart', app, event.currentTarget)} title="The verified installer is staged. Choose this explicit action to install it; no discovery path launches an installer."><Icon>restart_alt</Icon>Restart to install update</button>}
-          {managed && managedUpdate?.status === 'ready' && managedUpdate.releaseNotesUrl && <a className="text-button" href={managedUpdate.releaseNotesUrl} target="_blank" rel="noreferrer">Release notes</a>}
+          {managed && managedUpdate?.status === 'downloading' && managedUpdate.appId === app.id && <button className="text-button" onClick={(event) => onManagedUpdate('cancel', app, event.currentTarget)}>{label(settings, 'Cancel', '取消')}</button>}
+          {managed && managedUpdate?.status === 'ready' && managedUpdate.appId === app.id && <button className="filled-button" disabled={operationBusy} onClick={(event) => onManagedUpdate('restart', app, event.currentTarget)} title={label(settings, 'The verified installer is staged. Choose this explicit action to install it; no discovery path launches an installer.', '已驗證安裝程式已暫存。揀呢個明確操作先會安裝；偵測路徑永遠唔會啟動安裝程式。')}><Icon>restart_alt</Icon>{label(settings, 'Restart to install update', '重新啟動以安裝更新')}</button>}
+          {managed && managedUpdate?.status === 'ready' && managedUpdate.releaseNotesUrl && <a className="text-button" href={managedUpdate.releaseNotesUrl} target="_blank" rel="noreferrer">{label(settings, 'Release notes', '發行說明')}</a>}
           <button className="text-button" {...el('button-text')} onClick={() => window.document.getElementById(`docs-${app.id}`)?.focus()}><Icon>menu_book</Icon>{label(settings, 'Docs', '文件')}</button>
         </div>
         {installBusy && installProgress && <div className="operation-progress" role="status" aria-live="polite">
@@ -145,22 +154,22 @@ export function AppsPage({ mode, apps, installed, settings, loading, onAction, o
   return (
     <>
       <SearchBox surface={mode} settings={settings} placeholder={label(settings, 'Search apps, descriptions, and repositories', '搵 app、描述同 repository')} openBuilder={openRegex} onBuilderHandled={onRegexHandled} />
-      <div className="bulk-toolbar" aria-label={`${mode} bulk actions`}>
-        <strong aria-live="polite">{selectedApps.length} selected · {shown.length} shown · {scoped.length} total</strong>
-        {runningAction && <span className="bulk-progress" role="status" aria-live="polite"><progress max={runningAction.total} value={runningAction.completed} /> {runningAction.completed} of {runningAction.total} finished{operationProgress[runningAction.appId] ? ` · ${operationPhaseLabel(settings, operationProgress[runningAction.appId].phase)}` : ''}</span>}
-        <button className="text-button" disabled={!shown.length} onClick={() => setSelected(new Set(shown.map((app) => app.id)))}>Select all shown</button>
-        <button className="text-button" disabled={!shown.length} onClick={() => setSelected((current) => new Set(shown.filter((app) => !current.has(app.id)).map((app) => app.id)))}>Invert shown</button>
-        <button className="text-button" disabled={!selected.size} onClick={() => setSelected(new Set())}>Clear</button>
-        <button className="tonal-button" disabled={!installable.length || runningAction !== null} onClick={(event) => onBulkAction('install', installable, event.currentTarget)}>Install {installable.length}</button>
-        <button className="tonal-button" disabled={!sourceBuilds.length || runningAction !== null} onClick={(event) => onBulkAction('build', sourceBuilds, event.currentTarget)}>Build {sourceBuilds.length}</button>
-        <button className="text-button danger" disabled={!installedApps.length || runningAction !== null} onClick={(event) => onBulkAction('uninstall', installedApps, event.currentTarget)}>Uninstall {installedApps.length}</button>
-        <button className="text-button" disabled={!shown.length} onClick={() => void exportSelection(false)}><Icon>download</Icon>Export {selectedApps.length || shown.length}</button>
-        <button className="text-button" disabled={!shown.length || !isExternalEditorBridgeAvailable()} title={isExternalEditorBridgeAvailable() ? undefined : 'Unavailable: this build has no reviewed Visual Studio Code adapter.'} onClick={() => void exportSelection(true)}><Icon>code</Icon>{isExternalEditorBridgeAvailable() ? 'Open in VS Code' : 'VS Code unavailable'}</button>
+      <div className="bulk-toolbar" aria-label={label(settings, `${mode} bulk actions`, `${mode} 批量操作`)}>
+        <strong aria-live="polite">{label(settings, `${selectedApps.length} selected · ${shown.length} shown · ${scoped.length} total`, `揀咗 ${selectedApps.length} · 顯示 ${shown.length} · 總共 ${scoped.length}`)}</strong>
+          {runningAction && <span className="bulk-progress" role="status" aria-live="polite"><progress max={runningAction.total} value={runningAction.completed} aria-label={label(settings, 'Bulk operation progress', '批量操作進度')} /> {label(settings, `${runningAction.completed} of ${runningAction.total} finished`, `完成 ${runningAction.completed}／${runningAction.total}`)}{operationProgress[runningAction.appId] ? ` · ${operationPhaseLabel(settings, operationProgress[runningAction.appId].phase)}` : ''}</span>}
+        <button className="text-button" disabled={!shown.length} onClick={() => setSelected(new Set(shown.map((app) => app.id)))}>{label(settings, 'Select all shown', '揀晒目前顯示')}</button>
+        <button className="text-button" disabled={!shown.length} onClick={() => setSelected((current) => new Set(shown.filter((app) => !current.has(app.id)).map((app) => app.id)))}>{label(settings, 'Invert shown', '反轉目前顯示')}</button>
+        <button className="text-button" disabled={!selected.size} onClick={() => setSelected(new Set())}>{label(settings, 'Clear', '清除')}</button>
+        <button className="tonal-button" disabled={!installable.length || runningAction !== null} onClick={(event) => onBulkAction('install', installable, event.currentTarget)}>{label(settings, `Install ${installable.length}`, `安裝 ${installable.length}`)}</button>
+        <button className="tonal-button" disabled={!sourceBuilds.length || runningAction !== null} onClick={(event) => onBulkAction('build', sourceBuilds, event.currentTarget)}>{label(settings, `Build ${sourceBuilds.length}`, `建置 ${sourceBuilds.length}`)}</button>
+        <button className="text-button danger" disabled={!installedApps.length || runningAction !== null} onClick={(event) => onBulkAction('uninstall', installedApps, event.currentTarget)}>{label(settings, `Uninstall ${installedApps.length}`, `解除安裝 ${installedApps.length}`)}</button>
+        <button className="text-button" disabled={!shown.length} onClick={() => void exportSelection(false)}><Icon>download</Icon>{label(settings, `Export ${selectedApps.length || shown.length}`, `匯出 ${selectedApps.length || shown.length}`)}</button>
+        <button className="text-button" disabled={!shown.length || !isExternalEditorBridgeAvailable()} title={isExternalEditorBridgeAvailable() ? undefined : label(settings, 'Unavailable: this build has no reviewed Visual Studio Code adapter.', '未能使用：呢個版本冇已審核嘅 Visual Studio Code 適配器。')} onClick={() => void exportSelection(true)}><Icon>code</Icon>{isExternalEditorBridgeAvailable() ? label(settings, 'Open in VS Code', '喺 VS Code 開') : label(settings, 'VS Code unavailable', 'VS Code 未能使用')}</button>
       </div>
-      {loading && <div className="loading-grid" aria-label="Loading catalog">{Array.from({ length: 6 }, (_, index) => <div className="skeleton" key={index} />)}</div>}
+      {loading && <div className="loading-grid" aria-label={label(settings, 'Loading catalog', '載入緊目錄')}>{Array.from({ length: 6 }, (_, index) => <div className="skeleton" key={index} />)}</div>}
       {!loading && (shown.length
         ? <section className="app-grid">{shown.map((app, index) => <AppCard key={app.id} app={app} installedRecord={installedById.get(app.id)} settings={settings} onAction={onAction} onManagedUpdate={onManagedUpdate} onCancelInstall={onCancelInstall} managedUpdate={managedUpdates[app.id]} operationProgress={operationProgress[app.id]} runningAction={runningAction} searchLabel={highlight(search.state, app.name)} selected={selected.has(app.id)} onSelect={(checked, shiftKey) => selectAt(index, checked, shiftKey)} />)}</section>
-        : <div className="empty-state" {...el('empty-state')}><Icon>search_off</Icon><h2>No matching apps</h2><p>The current search and tab filters found nothing. Clear the query or refresh the catalog.</p></div>)}
+        : <div className="empty-state" {...el('empty-state')}><Icon>search_off</Icon><h2>{label(settings, 'No matching apps', '冇符合嘅 app')}</h2><p>{label(settings, 'The current search and tab filters found nothing. Clear the query or refresh the catalog.', '目前搜尋同分頁篩選冇搵到結果。清除搜尋或者重新整理目錄。')}</p></div>)}
     </>
   );
 }
