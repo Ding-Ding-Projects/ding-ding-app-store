@@ -20,6 +20,10 @@ const MAX_CREDENTIAL = 512;
 const credentialSchema = z.string().min(4).max(MAX_CREDENTIAL);
 const nameSchema = z.string().trim().min(1).max(MAX_NAME);
 const unlockKindSchema = z.enum(['pin', 'password', 'passkey']);
+const configureRequestSchema = z.strictObject({ displayName: nameSchema, unlockKind: unlockKindSchema, credential: credentialSchema });
+const renameRequestSchema = z.strictObject({ displayName: nameSchema, credential: credentialSchema.optional() });
+const toggleRequestSchema = z.strictObject({ enabled: z.boolean(), credential: credentialSchema.optional() });
+const verifyRequestSchema = z.strictObject({ credential: credentialSchema });
 const recordSchema = z.strictObject({
   schemaVersion: z.literal(1),
   enabled: z.boolean(),
@@ -64,9 +68,10 @@ export class SchoolModeService {
 
   async configure(request: SchoolModeConfigureRequest): Promise<SchoolModeMutationResult> {
     await this.ensureLoaded();
-    const displayName = nameSchema.parse(request.displayName);
-    const unlockKind = unlockKindSchema.parse(request.unlockKind);
-    const credential = credentialSchema.parse(request.credential);
+    const parsedRequest = configureRequestSchema.parse(request);
+    const displayName = parsedRequest.displayName;
+    const unlockKind = parsedRequest.unlockKind;
+    const credential = parsedRequest.credential;
     if (this.record?.unlockKind && this.record.verifier && !this.matches(credential, this.record)) return this.failure(`The ${this.record.displayName} unlock credential was not accepted.`);
     const salt = randomBytes(16);
     this.record = { schemaVersion: 1, enabled: true, displayName, unlockKind, salt: encode(salt), verifier: encode(verifier(credential, salt)) };
@@ -76,8 +81,9 @@ export class SchoolModeService {
 
   async rename(request: SchoolModeRenameRequest): Promise<SchoolModeMutationResult> {
     await this.ensureLoaded();
-    const displayName = nameSchema.parse(request.displayName);
-    if (this.record?.verifier && this.record.enabled && (!request.credential || !this.matches(request.credential, this.record))) return this.failure(`The ${this.record.displayName} unlock credential was not accepted; the name was not changed.`);
+    const parsedRequest = renameRequestSchema.parse(request);
+    const displayName = parsedRequest.displayName;
+    if (this.record?.verifier && this.record.enabled && (!parsedRequest.credential || !this.matches(parsedRequest.credential, this.record))) return this.failure(`The ${this.record.displayName} unlock credential was not accepted; the name was not changed.`);
     if (!this.record) {
       // Keep the setting useful before first credential setup; enabling still
       // requires configure(), so this cannot create an unlocked enabled state.
@@ -89,16 +95,18 @@ export class SchoolModeService {
 
   async setEnabled(request: SchoolModeToggleRequest): Promise<SchoolModeMutationResult> {
     await this.ensureLoaded();
+    const parsedRequest = toggleRequestSchema.parse(request);
     if (!this.record || !this.record.unlockKind || !this.record.verifier) return this.failure(`Configure a local ${this.record?.displayName ?? DEFAULT_NAME} unlock credential before enabling the mode.`);
-    if (!request.enabled && (!request.credential || !this.matches(request.credential, this.record))) return this.failure(`The ${this.record.displayName} unlock credential was not accepted; the mode remains enabled.`);
-    this.record.enabled = request.enabled;
+    if (!parsedRequest.enabled && (!parsedRequest.credential || !this.matches(parsedRequest.credential, this.record))) return this.failure(`The ${this.record.displayName} unlock credential was not accepted; the mode remains enabled.`);
+    this.record.enabled = parsedRequest.enabled;
     await this.persist();
-    return { ok: true, state: publicState(this.record), message: request.enabled ? `${this.record.displayName} is enabled.` : `${this.record.displayName} is disabled and the previous language and voice choices are available again.` };
+    return { ok: true, state: publicState(this.record), message: parsedRequest.enabled ? `${this.record.displayName} is enabled.` : `${this.record.displayName} is disabled and the previous language and voice choices are available again.` };
   }
 
   async verify(request: SchoolModeVerifyRequest): Promise<boolean> {
     await this.ensureLoaded();
-    return Boolean(this.record?.verifier && this.matches(request.credential, this.record));
+    const parsedRequest = verifyRequestSchema.parse(request);
+    return Boolean(this.record?.verifier && this.matches(parsedRequest.credential, this.record));
   }
 
   private async ensureLoaded(): Promise<void> {
