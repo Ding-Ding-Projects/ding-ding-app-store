@@ -45,6 +45,7 @@ const articles = [
   ['appearance-editor', 'Appearance editor', '外觀編輯器', 'experience', 'Appearance-Editor', 'limited', ['settings-language-and-display-name', 'tab-navigation', 'privacy-and-security']],
   ['notifications-and-status', 'Notifications and operation status', '通知同操作狀態', 'experience', 'Notifications-and-Status', 'limited', ['activity-history', 'app-store-self-updater', 'update-schedule']],
   ['dim-sum-surprise', 'Dim-sum startup surprise', '開機點心驚喜', 'experience', 'Dim-Sum-Surprise', 'shipped', ['update-schedule', 'notifications-and-status', 'privacy-and-security']],
+  ['changelog-viewer', 'Changelog viewer', '更新記錄瀏覽器', 'experience', 'Changelog-Viewer', 'shipped', ['command-palette', 'external-editor-exports', 'verification']],
   ['offline-documentation-browser', 'Offline documentation browser', '離線文件瀏覽器', 'documentation', 'Offline-Documentation-Browser', 'shipped', ['search-and-regex-builder', 'command-palette', 'verification']],
   ['privacy-and-security', 'Privacy and security', '私隱同安全', 'security', 'Privacy-and-Security', 'shipped', ['verified-installer-operations', 'source-build-security', 'verification']],
   ['verification', 'Verification and evidence', '驗證同證據', 'verification', 'Verification', 'shipped', ['catalog-discovery', 'offline-documentation-browser', 'app-store-self-updater']],

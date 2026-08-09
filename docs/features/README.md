@@ -72,6 +72,7 @@ Tabs, search, command palette, settings, appearance, and notifications.
 - [Appearance editor](./experience/appearance-editor.md) — **limited** — Registers shell elements for validated live CSS-variable overrides with a bidirectional colour translator, Word-depth typography controls, reset, import, and export.
 - [Notifications and operation status](./experience/notifications-and-status.md) — **limited** — Stacks corner snackbars, retains searchable notification history, optionally narrates new notices, and keeps destructive decisions behind native super-confirmation.
 - [Dim-sum startup surprise](./experience/dim-sum-surprise.md) — **shipped** — Gives later launches a small non-blocking dim-sum card using only metadata and a published public catalog photo URL.
+- [Changelog viewer](./experience/changelog-viewer.md) — **shipped** — Browses every released version with searchable commit links, typed date filters, an anchored month-jump range calendar, presets, and filtered copy/export actions.
 
 ## Documentation
 
