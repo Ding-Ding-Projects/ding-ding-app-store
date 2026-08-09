@@ -178,6 +178,7 @@ export function SettingsPage({ settings, settingsProvenance, onSave, workspace, 
       </div>
       <SearchBox
         surface={subTab}
+        settings={viewSettings}
         placeholder={label(viewSettings, 'Search every setting on this section', '搵呢個分類嘅設定')}
         openBuilder={regexRequest === subTab}
         onBuilderHandled={onRegexHandled}

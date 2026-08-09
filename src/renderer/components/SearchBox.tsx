@@ -5,6 +5,8 @@ import { Icon } from '../icons';
 import { useSurfaceSearch } from '../search';
 import type { SurfaceId } from '../search';
 import { RegexBuilder } from './RegexBuilder';
+import type { UserSettings } from '../../shared/contracts';
+import { DEFAULT_USER_SETTINGS } from '../../shared/contracts';
 
 export const searchInputId = (surface: SurfaceId): string => `search-${surface.replace('.', '-')}`;
 
@@ -12,9 +14,10 @@ export const searchInputId = (surface: SurfaceId): string => `search-${surface.r
  * One search field per surface, each with its own state and its own full regex builder.
  * `openBuilder` lets a palette command open the builder for a named surface.
  */
-export function SearchBox({ surface, placeholder, openBuilder, onBuilderHandled, className, autoFocusInput, activeDescendant, controls, ariaKeyShortcuts, onInputKeyDown }: {
+export function SearchBox({ surface, placeholder, settings = DEFAULT_USER_SETTINGS, openBuilder, onBuilderHandled, className, autoFocusInput, activeDescendant, controls, ariaKeyShortcuts, onInputKeyDown }: {
   surface: SurfaceId;
   placeholder: string;
+  settings?: UserSettings;
   openBuilder?: boolean;
   onBuilderHandled?: () => void;
   className?: string;
@@ -59,7 +62,7 @@ export function SearchBox({ surface, placeholder, openBuilder, onBuilderHandled,
       {state.regex && <span className="regex-chip">/{state.regex.flags}</span>}
       {state.query && <button className="icon-button" {...el('icon-button')} aria-label={`Clear search in ${surface}`} onClick={() => { setQuery(''); setRegex(null); }}><Icon>close</Icon></button>}
       <button className="icon-button" {...el('icon-button')} aria-label="Open full regex builder" aria-expanded={builderOpen} onClick={() => builderOpen ? closeBuilder() : setBuilderOpen(true)}><Icon>regular_expression</Icon></button>
-      {builderOpen && <RegexBuilder query={state.query} onClose={closeBuilder} onApply={(pattern, flags) => { setQuery(pattern); setRegex({ pattern, flags }); closeBuilder(); }} />}
+      {builderOpen && <RegexBuilder query={state.query} settings={settings} onClose={closeBuilder} onApply={(pattern, flags) => { setQuery(pattern); setRegex({ pattern, flags }); closeBuilder(); }} />}
     </div>
   );
 }

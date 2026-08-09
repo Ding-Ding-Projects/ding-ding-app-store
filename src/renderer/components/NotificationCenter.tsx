@@ -11,6 +11,7 @@ import { openExportInVsCode } from '../external-editor';
 import { isExternalEditorBridgeAvailable } from '../external-editor';
 import { recoveryActionLabel } from './SnackbarStack';
 import { serializeStructuredExport } from '../../shared/export-registry';
+import { dialogCopy } from '../dialog-emoji';
 
 type NotificationFilter = 'all' | 'unread' | 'dismissed' | 'errors';
 
@@ -96,8 +97,8 @@ export function NotificationCenter({ records, settings, persistenceAvailable, on
   return (
     <>
       <aside ref={panelRef} className="notification-center" role="dialog" aria-modal="false" aria-labelledby="notification-centre-title" tabIndex={-1}>
-        <header><div><span className="eyebrow">HISTORY</span><h2 id="notification-centre-title">{label(settings, 'Notification centre', '通知中心')}</h2></div><button className="icon-button" onClick={onClose} aria-label="Close notification centre"><Icon>close</Icon></button></header>
-        <SearchBox surface="notifications" placeholder={label(settings, 'Search notification titles and messages', '搵通知標題同內容')} openBuilder={openRegex} onBuilderHandled={onRegexHandled} />
+        <header><div><span className="eyebrow">HISTORY</span><h2 id="notification-centre-title">{dialogCopy(settings, label(settings, 'Notification centre', '通知中心'), '🔔')}</h2></div><button className="icon-button" onClick={onClose} aria-label="Close notification centre"><Icon>close</Icon></button></header>
+        <SearchBox surface="notifications" settings={settings} placeholder={label(settings, 'Search notification titles and messages', '搵通知標題同內容')} openBuilder={openRegex} onBuilderHandled={onRegexHandled} />
         {!persistenceAvailable && <div className="notice warning" role="alert"><Icon>error</Icon>Notification history could not be saved in this profile. Current snackbars still work, but retained history may be lost after restart.</div>}
         <div className="chip-row" role="group" aria-label="Filter notifications">{(['all', 'unread', 'dismissed', 'errors'] as const).map((value) => <button key={value} aria-pressed={filter === value} onClick={() => setFilter(value)}>{value}</button>)}</div>
         <div className="bulk-toolbar" aria-label="Notification bulk actions">

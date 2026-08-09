@@ -14,7 +14,7 @@ Settings is divided into General, Appearance, Schedule, and About browser-style 
 
 Every control has a keyboard-reachable **What this controls** disclosure. It explains the real effect in the active language mode and places a provenance line beside it: a validated `settings.v1.json` value is labelled persisted, while a missing, malformed, or incomplete file is labelled compiled fallback with the exact value (`bilingual`, `2`, `4`, `true`, `system`, `comfortable`, `#6750A4`, `Ding Ding App Store`, or `false`). The registry keeps a hand-written completeness list so a new setting cannot silently ship without both pieces of copy.
 
-General settings also expose **Show emojis in dialogs and message boxes**. It is persisted and enabled by default. When enabled, a small non-semantic emoji decorates destructive-dialog and command-palette title/body copy; when disabled, the same factual text remains without decoration. Emoji never enters button text, field labels, accessible names, exports, history, or the spoken narrator.
+General settings also expose **Show emojis in dialogs and message boxes**. It is persisted and enabled by default. When enabled, a small non-semantic emoji decorates visible title/body copy across destructive dialogs, the command palette, notification centre, appearance editor, regex builder, tab overflow, and group-picker surfaces; when disabled, the same factual text remains without decoration. Emoji never enters button text, field labels, accessible names, exports, history, or the spoken narrator. Every search builder receives the same setting, so a preference change does not silently apply to only one overlay.
 
 About includes a searchable in-app changelog for every existing release tag in the baseline, preserving real tag gaps and duplicate target commits. Typed or native-calendar start/end filters compose with text or regex search; selected or filtered entries can be copied or exported with full commit SHAs. Validation rejects missing or shortened SHAs instead of rendering an unverifiable link.
 
@@ -38,7 +38,7 @@ Only enumerated settings, bounded funny levels, narrator choices, a validated HE
 
 ## Verification
 
-Schemas, the shared default object, the continuous color translator, the hand-written explanation lists, and the emoji-on/off copy boundary are covered by `tests/settings-provenance.test.ts`, `tests/dialog-emoji.test.ts`, `tests/color-translator.test.ts`, `tests/ui-completion.test.ts`, plus type/contract checks. Renderer code applies theme, density, accent, display name, language settings, dialog decoration, and the optional narrator queue. Runtime verification should still capture all three language modes at narrow width and demonstrate that both funny-level controls change representative copy at every level.
+Schemas, the shared default object, the continuous color translator, the hand-written explanation lists, and the emoji-on/off copy boundary across every dialog surface are covered by `tests/settings-provenance.test.ts`, `tests/dialog-emoji.test.ts`, `tests/color-translator.test.ts`, `tests/ui-completion.test.ts`, plus type/contract checks. Renderer code applies theme, density, accent, display name, language settings, dialog decoration, and the optional narrator queue. Runtime verification should still capture all three language modes at narrow width and demonstrate that both funny-level controls change representative copy at every level.
 
 ## Suggested articles
 

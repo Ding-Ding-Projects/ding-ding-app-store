@@ -12,6 +12,7 @@ import { makeMatcher, useSurfaceSearch } from '../search';
 import type { AppearanceApi } from '../state/use-appearance';
 import { SearchBox } from './SearchBox';
 import { ColorTranslatorControl } from './ColorTranslatorControl';
+import { dialogCopy } from '../dialog-emoji';
 
 const ON_LIGHT = '#1d1b20';
 const ON_DARK = '#ffffff';
@@ -292,7 +293,7 @@ export function AppearancePanel({ appearance, settings, notify, onClose }: {
   if (!selected || !definition) {
     return (
       <aside className="appearance-panel" role="dialog" aria-label={label(settings, 'Appearance editor', '外觀編輯器')}>
-        <header><strong>{label(settings, 'Appearance editor', '外觀編輯器')}</strong><button className="icon-button" onClick={onClose} aria-label="Close appearance panel"><Icon>close</Icon></button></header>
+        <header><strong>{dialogCopy(settings, label(settings, 'Appearance editor', '外觀編輯器'), '🎨')}</strong><button className="icon-button" onClick={onClose} aria-label="Close appearance panel"><Icon>close</Icon></button></header>
         <p className="supporting">{label(settings, 'Turn on edit mode, then choose any element on screen. Keyboard users can Tab to an element and it is selected automatically.', '開編輯模式，然後撳畫面上任何一個元素。用鍵盤 Tab 過去都會自動選中。')}</p>
       </aside>
     );
@@ -311,12 +312,12 @@ export function AppearancePanel({ appearance, settings, notify, onClose }: {
               </button>
             ))}
           </nav>
-          <strong>{label(settings, definition.en, definition.yue)}</strong>
+          <strong>{dialogCopy(settings, label(settings, definition.en, definition.yue), '🎨')}</strong>
         </div>
         <button className="icon-button" onClick={onClose} aria-label="Close appearance panel"><Icon>close</Icon></button>
       </header>
       {!onScreen && <p className="notice" role="status"><Icon>info</Icon>{label(settings, 'This element is not currently on screen. You can still edit it.', '呢個元素而家唔喺畫面度，一樣改得。')}</p>}
-      <SearchBox surface="appearance.elements" placeholder={label(settings, 'Search appearance controls', '搵外觀設定')} />
+      <SearchBox surface="appearance.elements" settings={settings} placeholder={label(settings, 'Search appearance controls', '搵外觀設定')} />
       <div className="sub-tab-row" role="tablist" aria-label={label(settings, 'Appearance sections', '外觀分類')}>
         {TOKEN_SECTIONS.map((row) => (
           <button

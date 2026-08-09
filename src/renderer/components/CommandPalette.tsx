@@ -126,6 +126,7 @@ export function CommandPalette({ settings, entries, onAction, onClose, openRegex
         </header>
         <SearchBox
           surface="palette"
+          settings={settings}
           placeholder={label(settings, 'Search commands, pages, settings, appearance, and apps', '搵指令、頁面、設定、外觀同 apps')}
           autoFocusInput
           controls="palette-list"
