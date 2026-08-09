@@ -433,15 +433,18 @@ export function buildRegistry(context: RegistryContext): Entry[] {
   }
 
   for (const article of GENERATED_DOCS) {
-    if ((schoolModeEnabled || schoolModeName !== 'School mode') && (article.id === 'school-mode' || schoolHiddenText(`${article.id} ${article.title} ${article.titleYue} ${article.category}`))) continue;
+    if ((schoolModeEnabled && article.id === 'school-mode') || (schoolModeEnabled && schoolHiddenText(`${article.id} ${article.title} ${article.titleYue} ${article.category}`))) continue;
+    const visibleArticle = article.id === 'school-mode' && schoolModeName !== 'School mode'
+      ? { ...article, title: article.title.replaceAll('School mode', schoolModeName), titleYue: article.titleYue.replaceAll('School mode', schoolModeName) }
+      : article;
     entries.push(command(
-      `open-doc:${article.id}`,
-      `Open article: ${article.title}`,
-      `開文章：${article.titleYue}`,
+      `open-doc:${visibleArticle.id}`,
+      `Open article: ${visibleArticle.title}`,
+      `開文章：${visibleArticle.titleYue}`,
       'menu_book',
-      [article.id, article.catalogAppId ?? '', article.category, article.status, article.source ?? 'canonical', ...article.related],
+      [visibleArticle.id, visibleArticle.catalogAppId ?? '', visibleArticle.category, visibleArticle.status, visibleArticle.source ?? 'canonical', ...visibleArticle.related],
       'Pages',
-      { surface: 'docs', articleId: article.id, focusId: `docs-tab-${article.id}` },
+      { surface: 'docs', articleId: visibleArticle.id, focusId: `docs-tab-${visibleArticle.id}` },
     ));
   }
 
