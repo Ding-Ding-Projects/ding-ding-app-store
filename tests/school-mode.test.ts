@@ -51,6 +51,9 @@ describe('School mode local shared state', () => {
       const raw = await readFile(file, 'utf8');
       expect(raw).not.toContain('1234');
       expect(raw).toContain('verifier');
+      // The public mutation result is the only object the renderer can export;
+      // it contains the name/state projection, never the credential.
+      expect(JSON.stringify(configured.state)).not.toContain('1234');
       expect(await service.verify({ credential: '1234' })).toBe(true);
       expect(await service.verify({ credential: '9999' })).toBe(false);
     } finally { await rm(root, { recursive: true, force: true }); }
