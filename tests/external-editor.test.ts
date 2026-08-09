@@ -1,6 +1,15 @@
 import { readFile } from 'node:fs/promises';
-import { describe, expect, it } from 'vitest';
-import { externalEditorOpenRequestSchema, externalEditorPreferenceSchema } from '../src/shared/contracts';
+import { rm } from 'node:fs/promises';
+import { describe, expect, it, vi } from 'vitest';
+import { createHistoryArchive } from '../src/main/history-archive';
+import { extractZipSafe } from '../src/main/safe-zip';
+import { externalEditorOpenArchiveRequestSchema, externalEditorOpenRequestSchema, externalEditorPreferenceSchema } from '../src/shared/contracts';
+
+const electronDataRoot = vi.hoisted(() => `${process.env.TEMP ?? process.env.TMP ?? 'C:\\Windows\\Temp'}\\ding-ding-editor-test`);
+vi.mock('electron', () => ({
+  app: { getPath: () => electronDataRoot },
+  dialog: { showOpenDialog: async () => ({ canceled: true, filePaths: [] }) },
+}));
 
 const read = (file: string) => readFile(new URL(`../${file}`, import.meta.url), 'utf8');
 
@@ -17,6 +26,15 @@ describe('external editor and export boundary', () => {
     expect(externalEditorPreferenceSchema.safeParse({ editor: 'vscode', edition: 'custom', path: 'C:/anything.exe' }).success).toBe(false);
   });
 
+  it('accepts only bounded activity ZIP archives and rejects renderer-controlled paths', () => {
+    const valid = { editor: 'vscode', recordKind: 'activity', suggestedName: 'history.zip', mime: 'application/zip', base64: 'UEsDBAo=' };
+    expect(externalEditorOpenArchiveRequestSchema.safeParse(valid).success).toBe(true);
+    expect(externalEditorOpenArchiveRequestSchema.safeParse({ ...valid, suggestedName: '../history.zip' }).success).toBe(false);
+    expect(externalEditorOpenArchiveRequestSchema.safeParse({ ...valid, recordKind: 'tabs' }).success).toBe(false);
+    expect(externalEditorOpenArchiveRequestSchema.safeParse({ ...valid, base64: 'not base64!' }).success).toBe(false);
+    expect(externalEditorOpenArchiveRequestSchema.safeParse({ ...valid, base64: 'abc' }).success).toBe(false);
+  });
+
   it('keeps the privileged adapter shell-free and path-free in renderer IPC', async () => {
     const [service, main, preload, renderer] = await Promise.all([
       read('src/main/external-editor-service.ts'), read('src/main/main.ts'), read('src/preload/index.ts'), read('src/renderer/external-editor.ts'),
@@ -27,9 +45,42 @@ describe('external editor and export boundary', () => {
     expect(service).toContain("dialog.showOpenDialog");
     expect(service).toContain("Code - Insiders.exe");
     expect(main).toContain("ipcMain.handle('external-editor:open-export'");
+    expect(main).toContain("ipcMain.handle('external-editor:open-archive'");
     expect(preload).toContain("ipcRenderer.invoke('external-editor:open-export', request)");
+    expect(preload).toContain("ipcRenderer.invoke('external-editor:open-archive', request)");
+    expect(service).toContain('extractZipSafe');
+    expect(service).toContain("['--reuse-window', workspace]");
     expect(renderer).not.toContain('executable');
     expect(renderer).not.toContain('filePath');
+  });
+
+  it('invokes the real archive service seam and fails closed on malformed ZIP data', async () => {
+    const { ExternalEditorService } = await import('../src/main/external-editor-service');
+    const service = new ExternalEditorService();
+    (service as unknown as { detectPaths: () => Promise<Set<string>> }).detectPaths = async () => new Set([process.execPath]);
+    const archive = await createHistoryArchive([{
+      id: 'f6a5dd12-70f1-4f4a-9f1b-1d9c8a7d6e5c', appId: 'sample-app', displayName: 'Sample App', kind: 'install', ok: true,
+      message: 'Installed successfully.', occurredAt: '2026-08-08T16:00:00.000Z',
+    }]);
+    try {
+      const archiveRoot = `${electronDataRoot}\\direct`;
+      const { mkdir, writeFile } = await import('node:fs/promises');
+      await mkdir(archiveRoot, { recursive: true });
+      const archivePath = `${archiveRoot}\\history.zip`;
+      await writeFile(archivePath, Buffer.from(archive.base64, 'base64'));
+      await extractZipSafe(archivePath, `${archiveRoot}\\workspace`, undefined, {
+        maxEntries: 4,
+        maxBytes: 32 * 1024 * 1024,
+        allowedNames: new Set(['README.txt', 'history.json', 'history.jsonl', 'manifest.json']),
+        requiredNames: new Set(['README.txt', 'history.json', 'history.jsonl', 'manifest.json']),
+      });
+      const opened = await service.openArchive({ editor: 'vscode', recordKind: 'activity', suggestedName: archive.filename, mime: archive.mime, base64: archive.base64 });
+      expect(opened).toEqual({ ok: true, editor: 'vscode' });
+      const rejected = await service.openArchive({ editor: 'vscode', recordKind: 'activity', suggestedName: archive.filename, mime: archive.mime, base64: Buffer.from('not a zip').toString('base64') });
+      expect(rejected).toMatchObject({ ok: false, reason: 'write-failed' });
+    } finally {
+      await rm(electronDataRoot, { recursive: true, force: true });
+    }
   });
 });
 

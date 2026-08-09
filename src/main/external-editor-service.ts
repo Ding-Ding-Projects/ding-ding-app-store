@@ -1,5 +1,5 @@
 import { execFile, spawn } from 'node:child_process';
-import { mkdir, realpath, stat, writeFile } from 'node:fs/promises';
+import { mkdir, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -12,12 +12,14 @@ import type {
   ExternalEditorPreference,
   ExternalEditorResult,
 } from '../shared/contracts.js';
-import { externalEditorOpenRequestSchema, externalEditorPreferenceSchema } from '../shared/contracts.js';
+import { externalEditorOpenArchiveRequestSchema, externalEditorOpenRequestSchema, externalEditorPreferenceSchema } from '../shared/contracts.js';
 import { readJson, writeJsonAtomic } from './json-store.js';
+import { extractZipSafe } from './safe-zip.js';
 
 const execFileAsync = promisify(execFile);
 const PREFERENCE_VERSION = 1 as const;
 const MAX_EXPORT_BYTES = 256_000;
+const MAX_ARCHIVE_BASE64_LENGTH = 23_000_000;
 const DEFAULT_PREFERENCE: ExternalEditorPreference = { editor: 'vscode', edition: 'stable' };
 const internalPreferenceSchema = z.strictObject({
   schemaVersion: z.literal(PREFERENCE_VERSION),
@@ -190,6 +192,48 @@ export class ExternalEditorService {
     if (!launched) {
       return { ok: false, reason: 'launch-failed', message: 'Visual Studio Code was found, but Windows did not start it. The export remains in the app-owned workspace and can still be downloaded.' };
     }
+    return { ok: true, editor: 'vscode' };
+  }
+
+  async openArchive(input: unknown): Promise<ExternalEditorResult> {
+    const parsed = externalEditorOpenArchiveRequestSchema.safeParse(input);
+    if (!parsed.success || parsed.data.base64.length > MAX_ARCHIVE_BASE64_LENGTH || parsed.data.base64.length % 4 === 1) {
+      return { ok: false, reason: 'write-failed', message: 'The archive was rejected because its filename, format, or size is not supported.' };
+    }
+    const stored = await this.loadInternal();
+    const candidates = await this.detectPaths();
+    const executable = stored.edition === 'portable' && stored.customPath && candidates.has(path.resolve(stored.customPath))
+      ? stored.customPath
+      : [...candidates].find((candidate) => inferEdition(candidate) === stored.edition) ?? [...candidates][0];
+    if (!executable) return { ok: false, reason: 'not-installed', message: 'Visual Studio Code is not installed or no validated executable is available. The archive is still available as a download.' };
+    const folder = path.join(this.exportRoot, `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`);
+    const archivePath = path.join(folder, parsed.data.suggestedName);
+    const workspace = path.join(folder, 'workspace');
+    try {
+      const archive = Buffer.from(parsed.data.base64, 'base64');
+      if (!archive.length || archive.length > 16 * 1024 * 1024) throw new Error('Archive exceeds the supported 16 MiB limit.');
+      await mkdir(folder, { recursive: true });
+      await writeFile(archivePath, archive, { mode: 0o600, flag: 'wx' });
+      await extractZipSafe(archivePath, workspace, undefined, {
+        maxEntries: 4,
+        maxBytes: 32 * 1024 * 1024,
+        allowedNames: new Set(['README.txt', 'history.json', 'history.jsonl', 'manifest.json']),
+        requiredNames: new Set(['README.txt', 'history.json', 'history.jsonl', 'manifest.json']),
+      });
+    } catch {
+      await rm(folder, { recursive: true, force: true }).catch(() => undefined);
+      return { ok: false, reason: 'write-failed', message: 'The ZIP archive could not be validated and extracted into the app-owned workspace.' };
+    }
+    const launched = await new Promise<boolean>((resolve) => {
+      const child = spawn(executable, ['--reuse-window', workspace], { detached: true, windowsHide: true, shell: false, stdio: 'ignore' });
+      let settled = false;
+      const finish = (value: boolean) => { if (settled) return; settled = true; resolve(value); };
+      child.once('spawn', () => finish(true));
+      child.once('error', () => finish(false));
+      setTimeout(() => finish(true), 2_000).unref();
+      child.unref();
+    });
+    if (!launched) return { ok: false, reason: 'launch-failed', message: 'Visual Studio Code was found, but Windows did not start it. The extracted archive remains in the app-owned workspace.' };
     return { ok: true, editor: 'vscode' };
   }
 

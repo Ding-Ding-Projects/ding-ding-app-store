@@ -1,4 +1,4 @@
-import type { ExternalEditorCandidate, ExternalEditorEdition, ExternalEditorOpenRequest, ExternalEditorPreference, ExternalEditorResult } from '../shared/contracts';
+import type { ExternalEditorCandidate, ExternalEditorEdition, ExternalEditorOpenArchiveRequest, ExternalEditorOpenRequest, ExternalEditorPreference, ExternalEditorResult } from '../shared/contracts';
 
 export const EXTERNAL_EDITOR_PREFERENCE_KEY = 'ding-ding-app-store.external-editor.v1';
 
@@ -40,4 +40,12 @@ export async function openExportInVsCode(request: Omit<ExternalEditorOpenRequest
     return { ok: false, reason: 'bridge-unavailable', message: 'Opening exports in Visual Studio Code is unavailable in this build. The privileged adapter has not been implemented, so no path or command was guessed.' };
   }
   return bridge.openExport({ ...request, editor: 'vscode' });
+}
+
+export async function openArchiveInVsCode(request: Omit<ExternalEditorOpenArchiveRequest, 'editor'>): Promise<ExternalEditorResult> {
+  const bridge = window.dingDingStore.externalEditor;
+  if (!bridge) {
+    return { ok: false, reason: 'bridge-unavailable', message: 'Opening ZIP exports in Visual Studio Code is unavailable in this build. The archive remains available as a download.' };
+  }
+  return bridge.openArchive({ ...request, editor: 'vscode' });
 }

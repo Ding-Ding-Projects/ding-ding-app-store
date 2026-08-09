@@ -6,6 +6,7 @@ import type {
   ElementKey,
   ElementOverride,
   ExternalEditorOpenRequest,
+  ExternalEditorOpenArchiveRequest,
   ExternalEditorPreference,
   HistoryArchiveExport,
   HistoryArchiveRequest,
@@ -203,6 +204,7 @@ const api: DingDingStoreApi = {
     setPreference: (preference: ExternalEditorPreference) => ipcRenderer.invoke('external-editor:set-preference', preference),
     addValidated: () => ipcRenderer.invoke('external-editor:add-validated'),
     openExport: (request: ExternalEditorOpenRequest) => ipcRenderer.invoke('external-editor:open-export', request),
+    openArchive: (request: ExternalEditorOpenArchiveRequest) => ipcRenderer.invoke('external-editor:open-archive', request),
   },
   window: {
     minimize: () => ipcRenderer.send('window:minimize'),

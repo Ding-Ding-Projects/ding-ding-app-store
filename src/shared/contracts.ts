@@ -228,6 +228,14 @@ export interface ExternalEditorOpenRequest {
   content: string;
 }
 
+export interface ExternalEditorOpenArchiveRequest {
+  editor: ExternalEditorId;
+  recordKind: 'activity';
+  suggestedName: string;
+  mime: 'application/zip';
+  base64: string;
+}
+
 export const externalEditorPreferenceSchema = z.strictObject({
   editor: z.literal('vscode'),
   edition: z.enum(['stable', 'insiders', 'portable', 'unknown']),
@@ -241,7 +249,16 @@ export const externalEditorOpenRequestSchema = z.strictObject({
   content: z.string().max(256_000),
 });
 
+export const externalEditorOpenArchiveRequestSchema = z.strictObject({
+  editor: z.literal('vscode'),
+  recordKind: z.literal('activity'),
+  suggestedName: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,96}\.zip$/).refine((value) => !value.includes('..'), 'Suggested filename cannot contain repeated dots.'),
+  mime: z.literal('application/zip'),
+  base64: z.string().min(4).max(23_000_000).regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/, 'Archive content must be base64.'),
+});
+
 export type ExternalEditorOpenRequestInput = z.infer<typeof externalEditorOpenRequestSchema>;
+export type ExternalEditorOpenArchiveRequestInput = z.infer<typeof externalEditorOpenArchiveRequestSchema>;
 
 export type ExternalEditorResult =
   | { ok: true; editor: ExternalEditorId }
@@ -1063,6 +1080,7 @@ export interface DingDingStoreApi {
     setPreference(preference: ExternalEditorPreference): Promise<ExternalEditorPreference>;
     addValidated(): Promise<ExternalEditorCandidate | null>;
     openExport(request: ExternalEditorOpenRequest): Promise<ExternalEditorResult>;
+    openArchive(request: ExternalEditorOpenArchiveRequest): Promise<ExternalEditorResult>;
   };
   catalog: {
     list(): Promise<CatalogSnapshot>;

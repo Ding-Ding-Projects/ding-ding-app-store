@@ -8,6 +8,13 @@ import yauzl, { type Entry, type ZipFile } from 'yauzl';
 export const MAX_ARCHIVE_ENTRIES = 50_000;
 export const MAX_EXTRACTED_BYTES = 3_000_000_000;
 
+export interface SafeZipLimits {
+  maxEntries?: number;
+  maxBytes?: number;
+  allowedNames?: ReadonlySet<string>;
+  requiredNames?: ReadonlySet<string>;
+}
+
 export function validateArchiveEntryName(name: string): string {
   if (!name || name.length > 2_048 || name.includes('\0') || name.includes('\\')) {
     throw new Error('Portable archive contains an invalid entry name.');
@@ -58,7 +65,7 @@ function openEntry(zip: ZipFile, entry: Entry): Promise<NodeJS.ReadableStream> {
   });
 }
 
-export async function extractZipSafe(archivePath: string, destinationRoot: string, signal?: AbortSignal): Promise<{ entries: number; bytes: number }> {
+export async function extractZipSafe(archivePath: string, destinationRoot: string, signal?: AbortSignal, limits: SafeZipLimits = {}): Promise<{ entries: number; bytes: number }> {
   if (signal?.aborted) throw new Error('Installation cancelled before archive extraction.');
   const root = path.resolve(destinationRoot);
   await mkdir(root, { recursive: true });
@@ -66,6 +73,8 @@ export async function extractZipSafe(archivePath: string, destinationRoot: strin
   let entries = 0;
   let extractedBytes = 0;
   const seenNames = new Set<string>();
+  const maxEntries = limits.maxEntries ?? MAX_ARCHIVE_ENTRIES;
+  const maxBytes = limits.maxBytes ?? MAX_EXTRACTED_BYTES;
 
   return await new Promise((resolve, reject) => {
     let settled = false;
@@ -93,34 +102,43 @@ export async function extractZipSafe(archivePath: string, destinationRoot: strin
     zip.once('error', fail);
     signal?.addEventListener('abort', abort, { once: true });
     zip.once('end', () => {
-      if (!settled) {
+      const finish = () => {
+        if (settled || settling) return;
+        if (limits.requiredNames && [...limits.requiredNames].some((name) => !seenNames.has(name.normalize('NFKC').toLocaleLowerCase()))) {
+          fail(new Error('Portable archive is missing a required member.'));
+          return;
+        }
         settled = true;
         signal?.removeEventListener('abort', abort);
         resolve({ entries, bytes: extractedBytes });
-      }
+      };
+      if (activeTask) void activeTask.then(finish).catch(() => undefined);
+      else finish();
     });
     zip.on('entry', (entry) => {
       const task = (async () => {
         if (signal?.aborted) throw new Error('Installation cancelled during archive extraction.');
         entries += 1;
-        if (entries > MAX_ARCHIVE_ENTRIES) throw new Error(`Portable archive exceeds ${MAX_ARCHIVE_ENTRIES} entries.`);
+        if (entries > maxEntries) throw new Error(`Portable archive exceeds ${maxEntries} entries.`);
         const relative = validateArchiveEntryName(entry.fileName);
         if (!relative) {
           zip.readEntry();
           return;
         }
         const collisionKey = relative.normalize('NFKC').toLocaleLowerCase();
+        if (limits.allowedNames && !limits.allowedNames.has(relative)) throw new Error(`Portable archive member is not allowed: ${relative}`);
         if (seenNames.has(collisionKey)) throw new Error(`Portable archive contains a duplicate Windows path: ${entry.fileName}`);
         seenNames.add(collisionKey);
         const target = path.resolve(root, ...relative.split('/'));
         if (target !== root && !target.startsWith(`${root}${path.sep}`)) throw new Error(`Portable archive entry escaped its destination: ${entry.fileName}`);
         const kind = entryKind(entry);
+        if (limits.allowedNames && kind === 'directory') throw new Error(`Portable archive allowlist accepts files only: ${entry.fileName}`);
         if (kind === 'directory') {
           await mkdir(target, { recursive: true });
           zip.readEntry();
           return;
         }
-        if (entry.uncompressedSize < 0 || entry.uncompressedSize > MAX_EXTRACTED_BYTES - extractedBytes) {
+        if (entry.uncompressedSize < 0 || entry.uncompressedSize > maxBytes - extractedBytes) {
           throw new Error('Portable archive exceeds the extracted-size safety limit.');
         }
         await mkdir(path.dirname(target), { recursive: true });
@@ -135,7 +153,7 @@ export async function extractZipSafe(archivePath: string, destinationRoot: strin
             }
             entryBytes += chunk.byteLength;
             extractedBytes += chunk.byteLength;
-            if (entryBytes > entry.uncompressedSize || extractedBytes > MAX_EXTRACTED_BYTES) {
+            if (entryBytes > entry.uncompressedSize || extractedBytes > maxBytes) {
               callback(new Error('Portable archive expanded beyond its declared size.'));
             } else callback(null, chunk);
           },

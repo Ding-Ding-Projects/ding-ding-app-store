@@ -52,6 +52,7 @@ import { useNotifications } from './state/use-notifications';
 import { useNarrator } from './state/use-narrator';
 import { newGroupId, orderedTabIds, useWorkspace } from './state/use-workspace';
 import type { Notice, RecoveryAction } from './notify';
+import { openExportInVsCode } from './external-editor';
 
 const PAGE_SUBTITLE: Partial<Record<TabId, { en: string; yue: string }>> = {
   catalog: { en: 'Trusted apps, their releases, and their complete documentation in one place.', yue: '可信 apps、release 同完整文件，一個位睇晒。' },
@@ -599,7 +600,11 @@ export function App() {
       case 'collapse-all-groups': workspace.dispatch({ type: 'group-collapse-all' }); return;
       case 'show-overflow': setOverflowRequest(true); return;
       case 'reset-tabs': void workspace.reset(); return;
-      case 'export-tabs': void workspace.exportLayout().then((content) => downloadText('ding-ding-app-store-tabs.json', content, 'application/json')); return;
+      case 'export-tabs': void workspace.exportLayout().then((content) => downloadText('ding-ding-app-store-tabs.json', content, 'application/json')).catch((error) => notify({ ok: false, message: (error as Error).message })); return;
+      case 'open-tabs-in-code': void workspace.exportLayout().then(async (content) => {
+        const result = await openExportInVsCode({ recordKind: 'tabs', suggestedName: 'ding-ding-app-store-tabs.json', mime: 'application/json', content });
+        notify({ ok: result.ok, message: result.ok ? 'Tab layout export opened in Visual Studio Code.' : result.message });
+      }).catch((error) => notify({ ok: false, message: (error as Error).message })); return;
       case 'import-tabs': void pickTextFile().then((picked) => { if (!picked) return; if (!picked.ok) { notify({ ok: false, message: picked.message.slice(0, 200) }); return; } void workspace.importLayout(picked.text); }); return;
       case 'rail-side': railPatch({ side: arg as TabRailLayout['side'] }); return;
       case 'label-mode': railPatch({ labelMode: arg as TabRailLayout['labelMode'] }); return;
@@ -612,7 +617,11 @@ export function App() {
       case 'edit-element': selectElement(arg as ElementKey); return;
       case 'reset-element': appearance.resetElement(arg as ElementKey); return;
       case 'reset-appearance-all': appearance.resetAll(); return;
-      case 'export-appearance': void appearance.exportDocument().then((content) => downloadText('ding-ding-app-store-appearance.json', content, 'application/json')); return;
+      case 'export-appearance': void appearance.exportDocument().then((content) => downloadText('ding-ding-app-store-appearance.json', content, 'application/json')).catch((error) => notify({ ok: false, message: (error as Error).message })); return;
+      case 'open-appearance-in-code': void appearance.exportDocument().then(async (content) => {
+        const result = await openExportInVsCode({ recordKind: 'appearance', suggestedName: 'ding-ding-app-store-appearance.json', mime: 'application/json', content });
+        notify({ ok: result.ok, message: result.ok ? 'Appearance export opened in Visual Studio Code.' : result.message });
+      }).catch((error) => notify({ ok: false, message: (error as Error).message })); return;
       case 'import-appearance': void pickTextFile().then((picked) => { if (!picked) return; if (!picked.ok) { notify({ ok: false, message: picked.message.slice(0, 200) }); return; } void appearance.importDocument(picked.text); }); return;
       case 'open-schedule': openSurface('settings.schedule'); return;
       case 'check-store-update': void schedule.runNow('self-update'); return;
