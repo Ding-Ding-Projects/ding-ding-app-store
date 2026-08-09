@@ -47,6 +47,7 @@ const articles = [
   ['notifications-and-status', 'Notifications and operation status', '通知同操作狀態', 'experience', 'Notifications-and-Status', 'limited', ['activity-history', 'app-store-self-updater', 'update-schedule']],
   ['dim-sum-surprise', 'Dim-sum startup surprise', '開機點心驚喜', 'experience', 'Dim-Sum-Surprise', 'shipped', ['update-schedule', 'notifications-and-status', 'privacy-and-security']],
   ['changelog-viewer', 'Changelog viewer', '更新記錄瀏覽器', 'experience', 'Changelog-Viewer', 'shipped', ['command-palette', 'external-editor-exports', 'verification']],
+  ['catalog-language', 'Catalog language coverage', '目錄語言覆蓋', 'experience', 'Catalog-Language', 'shipped', ['catalog-discovery', 'settings-language-and-display-name', 'verified-installer-operations', 'search-and-regex-builder']],
   ['offline-documentation-browser', 'Offline documentation browser', '離線文件瀏覽器', 'documentation', 'Offline-Documentation-Browser', 'shipped', ['search-and-regex-builder', 'command-palette', 'verification']],
   ['status-hub', 'Shared Status Hub', '共用 Status Hub', 'memory-sync', 'Status-Hub', 'limited', ['convenience-skills', 'offline-documentation-browser', 'privacy-and-security', 'verification']],
   ['convenience-skills', 'Shared convenience skills', '共用便利技能', 'memory-sync', 'Convenience-Skills', 'limited', ['status-hub', 'privacy-and-security', 'source-build-security', 'verification']],
