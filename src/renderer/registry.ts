@@ -60,7 +60,7 @@ const STATIC_COMMANDS = [
   'check-store-update', 'refresh-catalog-now', 'toggle-self-update-repeat', 'toggle-catalog-refresh',
   'toggle-quiet-hours', 'apply-quiet-night', 'show-next-runs', 'toggle-badges', 'toggle-color-bar',
   'toggle-pinned-icon-only', 'save-schedule', 'reset-schedule',
-  'open-notifications', 'open-changelog',
+  'open-notifications', 'open-changelog', 'open-school-mode',
 ] as const;
 
 export type StaticCommandId = (typeof STATIC_COMMANDS)[number];
@@ -324,6 +324,9 @@ export interface RegistryContext {
   appearance: Partial<Record<ElementKey, ElementOverride>>;
   schedule: ScheduleConfig;
   apps: CatalogApp[];
+  /** School mode keeps its own English route but omits hidden language/voice and dim-sum discoverability. */
+  schoolModeEnabled?: boolean;
+  schoolModeName?: string;
 }
 
 const command = (id: CommandId, en: string, yue: string, icon: string, keywords: string[], group: EntryGroup, target?: EntryTarget): Entry => ({
@@ -412,8 +415,14 @@ const appearanceControl = (token: TokenId, override: ElementOverride | undefined
 };
 
 export function buildRegistry(context: RegistryContext): Entry[] {
-  const { settings, workspace, appearance, schedule, apps } = context;
+  const { settings, workspace, appearance, schedule, apps, schoolModeEnabled = false, schoolModeName = 'School mode' } = context;
   const entries: Entry[] = [];
+
+  const schoolHiddenSetting = (field: SettingField) => schoolModeEnabled && (
+    field.key === 'language' || field.key === 'englishFunnyLevel' || field.key === 'cantoneseFunnyLevel' ||
+    field.key === 'narratorLanguage' || field.key === 'narratorEnabled' || field.key === 'narratorReducedSound'
+  );
+  const schoolHiddenText = (value: string) => /dim[ -]?sum|personal[ -]?vocab|cantonese|bilingual|funny level|幽默|粵語|點心/i.test(value);
 
   for (const surface of SURFACES) {
     entries.push({
@@ -424,18 +433,23 @@ export function buildRegistry(context: RegistryContext): Entry[] {
   }
 
   for (const article of GENERATED_DOCS) {
+    if ((schoolModeEnabled && article.id === 'school-mode') || (schoolModeEnabled && schoolHiddenText(`${article.id} ${article.title} ${article.titleYue} ${article.category}`))) continue;
+    const visibleArticle = article.id === 'school-mode' && schoolModeName !== 'School mode'
+      ? { ...article, title: article.title.replaceAll('School mode', schoolModeName), titleYue: article.titleYue.replaceAll('School mode', schoolModeName) }
+      : article;
     entries.push(command(
-      `open-doc:${article.id}`,
-      `Open article: ${article.title}`,
-      `開文章：${article.titleYue}`,
+      `open-doc:${visibleArticle.id}`,
+      `Open article: ${visibleArticle.title}`,
+      `開文章：${visibleArticle.titleYue}`,
       'menu_book',
-      [article.id, article.catalogAppId ?? '', article.category, article.status, article.source ?? 'canonical', ...article.related],
+      [visibleArticle.id, visibleArticle.catalogAppId ?? '', visibleArticle.category, visibleArticle.status, visibleArticle.source ?? 'canonical', ...visibleArticle.related],
       'Pages',
-      { surface: 'docs', articleId: article.id, focusId: `docs-tab-${article.id}` },
+      { surface: 'docs', articleId: visibleArticle.id, focusId: `docs-tab-${visibleArticle.id}` },
     ));
   }
 
   for (const field of SETTING_FIELDS) {
+    if (schoolHiddenSetting(field)) continue;
     entries.push({
       id: `set:${field.key}`, kind: 'setting', group: 'Settings', icon: 'settings',
       en: `Setting: ${field.en}`, yue: `設定：${field.yue}`, keywords: [field.key, ...field.keywords],
@@ -482,6 +496,7 @@ export function buildRegistry(context: RegistryContext): Entry[] {
     command('open-changelog', 'Open the changelog viewer', '開更新記錄', 'history', ['release', 'version', 'commit'], 'Pages'),
     command('clear-all-searches', 'Clear all searches', '清除所有搜尋', 'search_off', ['reset', 'filter'], 'Search'),
     command('focus-tab-search', 'Focus tab search', '跳去分頁搜尋', 'search', ['tabs', 'filter', 'ctrl shift k'], 'Search'),
+    command('open-school-mode', `Open ${schoolModeName} settings`, `開 ${schoolModeName} 設定`, 'settings', [schoolModeName, 'school', 'mode', 'unlock', 'credential', 'reset'], 'Settings', { surface: 'settings.general', focusId: 'school-mode-title' }),
   );
 
   for (const surface of SURFACES) {
@@ -557,6 +572,7 @@ export function buildRegistry(context: RegistryContext): Entry[] {
   }
 
   for (const app of apps) {
+    if (schoolModeEnabled && schoolHiddenText(`${app.id} ${app.name} ${app.repository}`)) continue;
     entries.push({
       id: `app:${app.id}`, kind: 'app', group: 'Apps', icon: 'deployed_code',
       en: app.name, yue: app.name, keywords: [app.repository, app.packageType, app.updateState],

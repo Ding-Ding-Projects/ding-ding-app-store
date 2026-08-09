@@ -12,7 +12,7 @@ These articles describe the current application at the exact boundary implemente
 - **Installation and removal:** Verified installer operations (limited), One-click installation and adapter coverage (limited), Source-build security (limited), Protected uninstall (shipped), Automatic repair and universal adapters (limited)
 - **Installed apps and history:** Installed app discovery (shipped), Activity history and export (shipped), Local history and version restore (limited)
 - **Updates and schedules:** Per-app update checker (limited), App Store self-updater (limited), Update schedule (shipped)
-- **Workspace and customization:** Tab workspace (shipped), Search and regex builder (shipped), Command palette (shipped), Settings, language, and display name (shipped), Optional spoken narrator (shipped), External editor exports (shipped), Appearance editor (limited), Notifications and operation status (limited), Dim-sum startup surprise (shipped)
+- **Workspace and customization:** Tab workspace (shipped), Search and regex builder (shipped), Command palette (shipped), Settings, language, and display name (shipped), Universal School mode (shipped), Optional spoken narrator (shipped), External editor exports (shipped), Appearance editor (limited), Notifications and operation status (limited), Dim-sum startup surprise (shipped)
 - **Documentation:** Offline documentation browser (shipped)
 - **Security and privacy:** Privacy and security (shipped)
 - **Verification:** Verification and evidence (shipped)

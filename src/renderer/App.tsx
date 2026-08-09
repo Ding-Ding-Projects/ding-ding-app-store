@@ -20,6 +20,7 @@ import type {
   DimSumSurprise,
 } from '../shared/contracts';
 import { resolveScheduledSettings } from '../shared/scheduled-settings';
+import { applySchoolModePresentation } from '../shared/school-mode';
 import { ActionDialog } from './components/ActionDialog';
 import type { ActionKind, ImmediateActionKind } from './components/ActionDialog';
 import { AppearancePanel } from './components/AppearancePanel';
@@ -44,6 +45,7 @@ import type { SurfaceId } from './search';
 import { useAppearance, useAppearanceVars } from './state/use-appearance';
 import { useSchedule } from './state/use-schedule';
 import { useSettings } from './state/use-settings';
+import { useSchoolMode } from './state/use-school-mode';
 import { useNotifications } from './state/use-notifications';
 import { useNarrator } from './state/use-narrator';
 import { newGroupId, orderedTabIds, useWorkspace } from './state/use-workspace';
@@ -62,6 +64,7 @@ export function App() {
   const notify = notifications.notify;
 
   const { settings: baseSettings, provenance: settingsProvenance, reload: reloadSettings, save: saveSettings, patch: patchSetting } = useSettings(notify);
+  const schoolMode = useSchoolMode(notify);
   const workspace = useWorkspace(notify);
   const appearance = useAppearance(notify);
   const schedule = useSchedule(notify);
@@ -73,7 +76,12 @@ export function App() {
   const externalOverrides = useMemo(() => Object.fromEntries((schedule.status?.externalSources ?? [])
     .filter((source) => source.state === 'active' && source.values)
     .map((source) => [source.ruleId, source.values!])), [schedule.status?.externalSources]);
-  const settings = useMemo(() => resolveScheduledSettings(baseSettings, schedule.draft, new Date(), externalOverrides), [baseSettings, schedule.draft, scheduleClock, externalOverrides]);
+  const settings = useMemo(() => {
+    const resolved = resolveScheduledSettings(baseSettings, schedule.draft, new Date(), externalOverrides);
+    // School mode is an explicit presentation lock. The user's base language
+    // and funny-level choices remain untouched and return when it is disabled.
+    return applySchoolModePresentation(resolved, schoolMode.state.enabled);
+  }, [baseSettings, schedule.draft, scheduleClock, externalOverrides, schoolMode.state.enabled]);
   useNarrator(settings, schedule.draft, notifications.active);
   const search = useSearchStates();
   useAppearanceVars(appearance.elements);
@@ -118,7 +126,9 @@ export function App() {
   const dimSumAttempted = useRef(false);
 
   useEffect(() => {
-    if (dimSumAttempted.current || loading || !catalog || catalog.warning || ['available', 'downloading', 'ready', 'failed'].includes(updateState.status)) return;
+    // Do not draw the opt-out-free surprise until the shared mode record has
+    // loaded; a slow IPC response must not leak a dim-sum surface first.
+    if (schoolMode.loading || schoolMode.state.enabled || dimSumAttempted.current || loading || !catalog || catalog.warning || ['available', 'downloading', 'ready', 'failed'].includes(updateState.status)) return;
     let firstRun = false;
     try {
       firstRun = window.localStorage.getItem('ding-ding-first-run-complete') !== '1';
@@ -131,7 +141,7 @@ export function App() {
       void window.dingDingStore.dimSum.startup().then((result) => { if (result.available) setDimSum(result); });
     }, 6_000);
     return () => window.clearTimeout(timer);
-  }, [catalog, loading, updateState.status]);
+  }, [catalog, loading, schoolMode.loading, schoolMode.state.enabled, updateState.status]);
 
   const activeTab = workspace.workspace.activeTabId;
   const announce = useCallback((message: string) => setAnnouncement(message), []);
@@ -554,6 +564,7 @@ export function App() {
       case 'refresh-catalog': case 'refresh-catalog-now': void loadCatalog(true); return;
       case 'open-notifications': setNotificationCenterOpen(true); return;
       case 'open-changelog': openSurface('settings.about'); focusLater('changelog-title'); return;
+      case 'open-school-mode': openSurface('settings.general'); focusLater('school-mode-title'); return;
       case 'clear-all-searches': search.dispatch({ type: 'clear-all' }); announce('All searches cleared'); return;
       case 'focus-tab-search': focusLater('search-tabs'); return;
       case 'open-regex': openSurface(arg as SurfaceId); setRegexRequest(arg as SurfaceId); return;
@@ -765,7 +776,9 @@ export function App() {
     appearance: appearance.document.elements,
     schedule: schedule.draft ?? DEFAULT_SCHEDULE,
     apps: catalog?.apps ?? [],
-  }), [settings, workspace.workspace, appearance.document, schedule.draft, catalog]);
+    schoolModeEnabled: schoolMode.state.enabled,
+    schoolModeName: schoolMode.state.displayName,
+  }), [settings, workspace.workspace, appearance.document, schedule.draft, catalog, schoolMode.state.enabled, schoolMode.state.displayName]);
 
   const meta = TAB_META[activeTab];
   const subtitle = PAGE_SUBTITLE[activeTab];
@@ -858,7 +871,7 @@ export function App() {
               onRegexHandled={() => setRegexRequest(null)}
             />
           )}
-          {activeTab === 'docs' && <DocsPage settings={settings} notify={notify} openRegex={regexRequest === 'docs'} onRegexHandled={() => setRegexRequest(null)} articleRequest={docRequest} onArticleHandled={() => setDocRequest(null)} />}
+          {activeTab === 'docs' && <DocsPage settings={settings} schoolModeEnabled={schoolMode.state.enabled} schoolModeName={schoolMode.state.displayName} notify={notify} openRegex={regexRequest === 'docs'} onRegexHandled={() => setRegexRequest(null)} articleRequest={docRequest} onArticleHandled={() => setDocRequest(null)} />}
           {activeTab === 'activity' && <ActivityPage entries={history} revisions={historyRevisions} loading={historyLoading} settings={settings} openRegex={regexRequest === 'activity'} onRegexHandled={() => setRegexRequest(null)} notify={notify} onHistoryChanged={reloadHistoryAndSettings} />}
           {activeTab === 'settings' && (
             <SettingsPage
@@ -868,6 +881,7 @@ export function App() {
               workspace={workspace}
               appearance={appearance}
               schedule={schedule}
+              schoolMode={schoolMode}
               notify={notify}
               subTab={subTab}
               onSubTab={setSubTab}
@@ -907,7 +921,7 @@ export function App() {
 
         <SnackbarStack notices={notifications.active} settings={settings} onDismiss={notifications.dismiss} />
 
-        {dimSum && (
+        {dimSum && !schoolMode.state.enabled && (
           <aside className="dim-sum-surprise" role="status" aria-live="polite">
             <img src={dimSum.photoUrl} alt={`${dimSum.alt ?? dimSum.nameEn ?? 'Dim sum'} · ${dimSum.nameZhHant ?? ''}`} />
             <div><strong>{label(settings, 'A little dim sum surprise', '有少少點心驚喜')}</strong><span>{label(settings, `${dimSum.nameEn} · ${dimSum.nameZhHant}`, `${dimSum.nameZhHant} · ${dimSum.nameEn}`)}</span></div>

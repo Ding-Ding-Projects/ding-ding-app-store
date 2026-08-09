@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { SettingsProvenance, UserSettings } from '../../shared/contracts';
+import type { SchoolUnlockKind, SettingsProvenance, UserSettings } from '../../shared/contracts';
 import { SearchBox } from '../components/SearchBox';
 import { ExternalEditorSettings } from '../components/ExternalEditorSettings';
 import { el } from '../el';
@@ -12,6 +12,7 @@ import { makeMatcher, useSurfaceSearch } from '../search';
 import type { SurfaceId } from '../search';
 import type { AppearanceApi } from '../state/use-appearance';
 import type { ScheduleApi } from '../state/use-schedule';
+import type { SchoolModeApi } from '../state/use-school-mode';
 import { defaultSettings } from '../state/use-settings';
 import type { WorkspaceApi } from '../state/use-workspace';
 import { AppearanceEditor } from './AppearanceEditor';
@@ -49,21 +50,34 @@ function SettingExplanation({ settings, field, provenance }: { settings: UserSet
   );
 }
 
-export function SettingsPage({ settings, settingsProvenance, onSave, workspace, appearance, schedule, notify, subTab, onSubTab, regexRequest, onRegexHandled }: {
+export function SettingsPage({ settings, settingsProvenance, onSave, workspace, appearance, schedule, schoolMode, notify, subTab, onSubTab, regexRequest, onRegexHandled }: {
   settings: UserSettings;
   settingsProvenance: SettingsProvenance;
   onSave(next: UserSettings): void;
   workspace: WorkspaceApi;
   appearance: AppearanceApi;
   schedule: ScheduleApi;
+  schoolMode: SchoolModeApi;
   notify: Notify;
   subTab: SettingsSubTabId;
   onSubTab(id: SettingsSubTabId): void;
   regexRequest: SurfaceId | null;
   onRegexHandled(): void;
 }) {
+  const schoolEnabled = schoolMode.state.enabled;
+  const schoolLabel = schoolMode.state.displayName || 'School mode';
+  const viewSettings = schoolEnabled ? { ...settings, language: 'en' as const, englishFunnyLevel: 1, cantoneseFunnyLevel: 1 } : settings;
   const [draft, setDraft] = useState(settings);
+  const [schoolName, setSchoolName] = useState(schoolMode.state.displayName);
+  const [schoolCredential, setSchoolCredential] = useState('');
+  const [schoolCredentialConfirm, setSchoolCredentialConfirm] = useState('');
+  const [schoolUnlockKind, setSchoolUnlockKind] = useState<SchoolUnlockKind>(schoolMode.state.unlockKind ?? 'pin');
   useEffect(() => setDraft(settings), [settings]);
+  useEffect(() => {
+    setSchoolName(schoolMode.state.displayName);
+    setSchoolUnlockKind(schoolMode.state.unlockKind ?? 'pin');
+    if (!schoolEnabled) { setSchoolCredential(''); setSchoolCredentialConfirm(''); }
+  }, [schoolEnabled, schoolMode.state.displayName, schoolMode.state.unlockKind]);
   const set = <K extends keyof UserSettings>(key: K, value: UserSettings[K]) => setDraft((current) => ({ ...current, [key]: value }));
   const settingsExport = () => serializeStructuredExport({ kind: 'ding-ding-app-store.settings', schemaVersion: 1, exportedAt: new Date().toISOString(), settings: draft });
   const downloadSettings = () => { downloadText('ding-ding-app-store-settings.json', settingsExport(), 'application/json'); notify({ ok: true, message: 'Settings export downloaded.' }); };
@@ -80,35 +94,57 @@ export function SettingsPage({ settings, settingsProvenance, onSave, workspace, 
   const active = states[subTab];
   const matcher = useMemo(() => makeMatcher(active.state), [active.state]);
 
+  const isSchoolHidden = (field: (typeof SETTING_FIELDS)[number]) => schoolEnabled && (
+    field.key === 'language' || field.key === 'englishFunnyLevel' || field.key === 'cantoneseFunnyLevel' ||
+    field.key === 'narratorLanguage' || field.key === 'narratorEnabled' || field.key === 'narratorReducedSound'
+  );
   const counts = useMemo(() => ({
-    'settings.general': SETTING_FIELDS.filter((field) => field.section === 'general' && matcher(`${field.en}\n${field.yue}\n${field.keywords.join(' ')}`)).length,
+    'settings.general': SETTING_FIELDS.filter((field) => !isSchoolHidden(field) && field.section === 'general' && matcher(`${field.en}\n${field.yue}\n${field.keywords.join(' ')}`)).length
+      + (matcher(`${schoolLabel} school mode school name unlock credential PIN password passkey local reset`) ? 1 : 0),
     'settings.appearance': SETTING_FIELDS.filter((field) => field.section === 'appearance' && matcher(`${field.en}\n${field.yue}\n${field.keywords.join(' ')}`)).length
       + (matcher('rail tabs layout appearance element override') ? 1 : 0),
     'settings.schedule': SCHEDULE_FIELDS.filter((field) => matcher(`${field.en}\n${field.yue}\n${field.keywords.join(' ')}`)).length,
     'settings.about': ABOUT_ROWS.filter((row) => matcher(`${row.en}\n${row.yue}\n${aboutRowBody(row, settings.displayName)}`)).length
       + (matcher('external editor Visual Studio Code VS Code exports') ? 1 : 0)
       + (matcher('changelog releases versions dates commits') ? 1 : 0),
-  }), [matcher, settings.displayName]);
+  // Keep the display-name dependency explicit for the existing settings
+  // provenance contract: }), [matcher, settings.displayName]);
+  }), [matcher, schoolEnabled, schoolLabel, settings.displayName]);
 
-  const fieldsFor = (section: SettingField['section']) => SETTING_FIELDS.filter((field) => field.section === section && matcher(`${field.en}\n${field.yue}\n${field.keywords.join(' ')}`));
+  const fieldsFor = (section: SettingField['section']) => SETTING_FIELDS.filter((field) => !isSchoolHidden(field) && field.section === section && matcher(`${field.en}\n${field.yue}\n${field.keywords.join(' ')}`));
 
   const renderField = (field: SettingField) => {
     const id = `setting-${field.key}`;
-    const text = label(settings, field.en, field.yue);
-    const explanation = <SettingExplanation settings={settings} field={field} provenance={settingsProvenance} />;
+    const text = label(viewSettings, field.en, field.yue);
+    const explanation = <SettingExplanation settings={viewSettings} field={field} provenance={settingsProvenance} />;
     if (field.kind === 'select') {
-      return <div className="setting-field" key={field.key}><label htmlFor={id}>{text}<select id={id} value={String(draft[field.key])} onChange={(event) => set(field.key, event.target.value as UserSettings[typeof field.key])}>{(field.options ?? []).map((option) => <option key={option.value} value={option.value}>{label(settings, option.en, option.yue)}</option>)}</select></label>{explanation}</div>;
+      return <div className="setting-field" key={field.key}><label htmlFor={id}>{text}<select id={id} value={String(draft[field.key])} onChange={(event) => set(field.key, event.target.value as UserSettings[typeof field.key])}>{(field.options ?? []).map((option) => <option key={option.value} value={option.value}>{label(viewSettings, option.en, option.yue)}</option>)}</select></label>{explanation}</div>;
     }
     if (field.kind === 'range') {
       return <div className="setting-field" key={field.key}><label htmlFor={id}>{text} <span>{String(draft[field.key])}</span><input id={id} type="range" min={field.min} max={field.max} value={Number(draft[field.key])} onChange={(event) => set(field.key, Number(event.target.value) as UserSettings[typeof field.key])} /></label>{explanation}</div>;
     }
     if (field.kind === 'color') {
-      return <div className="setting-field" key={field.key}><ColorTranslatorControl id={id} settings={settings} value={String(draft[field.key])} labelText={text} onChange={(next) => set(field.key, next as UserSettings[typeof field.key])} />{explanation}</div>;
+      return <div className="setting-field" key={field.key}><ColorTranslatorControl id={id} settings={viewSettings} value={String(draft[field.key])} labelText={text} onChange={(next) => set(field.key, next as UserSettings[typeof field.key])} />{explanation}</div>;
     }
     if (field.kind === 'switch') {
       return <div className="setting-field" key={field.key}><label htmlFor={id} className="switch-row"><input id={id} type="checkbox" checked={Boolean(draft[field.key])} onChange={(event) => set(field.key, event.target.checked as UserSettings[typeof field.key])} /><span>{text}</span></label>{explanation}</div>;
     }
     return <div className="setting-field" key={field.key}><label htmlFor={id}>{text}<input id={id} value={String(draft[field.key])} maxLength={64} onChange={(event) => set(field.key, event.target.value as UserSettings[typeof field.key])} /></label>{explanation}</div>;
+  };
+
+  const configureSchoolMode = async () => {
+    if (schoolCredential !== schoolCredentialConfirm) { notify({ ok: false, message: 'The two local School mode credentials do not match.' }); return; }
+    if (!schoolName.trim()) { notify({ ok: false, message: 'Choose a name for School mode before saving it.' }); return; }
+    await schoolMode.configure({ displayName: schoolName.trim(), unlockKind: schoolUnlockKind, credential: schoolCredential });
+    setSchoolCredential(''); setSchoolCredentialConfirm('');
+  };
+  const renameSchoolMode = async () => {
+    const result = await schoolMode.rename({ displayName: schoolName.trim(), credential: schoolEnabled ? schoolCredential : undefined });
+    if (result.ok) setSchoolCredential('');
+  };
+  const toggleSchoolMode = async () => {
+    const result = await schoolMode.setEnabled({ enabled: !schoolEnabled, credential: schoolEnabled ? schoolCredential : undefined });
+    if (result.ok) setSchoolCredential('');
   };
 
   const moveSubTab = (delta: number) => {
@@ -120,7 +156,7 @@ export function SettingsPage({ settings, settingsProvenance, onSave, workspace, 
 
   return (
     <>
-      <div className="sub-tab-row" role="tablist" aria-label={label(settings, 'Settings sections', '設定分類')}>
+      <div className="sub-tab-row" role="tablist" aria-label={label(viewSettings, 'Settings sections', '設定分類')}>
         {SETTINGS_SUB_TABS.map((row) => (
           <button
             key={row.id}
@@ -136,29 +172,44 @@ export function SettingsPage({ settings, settingsProvenance, onSave, workspace, 
               if (event.key === 'ArrowLeft') { event.preventDefault(); moveSubTab(-1); }
             }}
           >
-            <Icon>{row.icon}</Icon>{label(settings, row.en, row.yue)}
+            <Icon>{row.icon}</Icon>{label(viewSettings, row.en, row.yue)}
           </button>
         ))}
       </div>
       <SearchBox
         surface={subTab}
-        placeholder={label(settings, 'Search every setting on this section', '搵呢個分類嘅設定')}
+        placeholder={label(viewSettings, 'Search every setting on this section', '搵呢個分類嘅設定')}
         openBuilder={regexRequest === subTab}
         onBuilderHandled={onRegexHandled}
       />
       <div id="settings-panel" role="tabpanel" aria-labelledby={`sub-tab-${subTab}`}>
         {counts[subTab] === 0 && (
-          <div className="empty-state" {...el('empty-state')}><Icon>search_off</Icon><h2>{label(settings, 'No matching setting', '冇配到嘅設定')}</h2><p>{label(settings, 'Clear this section search to see every control again.', '清除呢個分類嘅搜尋就會再見到所有設定。')}</p></div>
+          <div className="empty-state" {...el('empty-state')}><Icon>search_off</Icon><h2>{label(viewSettings, 'No matching setting', '冇配到嘅設定')}</h2><p>{label(viewSettings, 'Clear this section search to see every control again.', '清除呢個分類嘅搜尋就會再見到所有設定。')}</p></div>
         )}
         {subTab === 'settings.general' && counts[subTab] > 0 && (
           <section className="settings-grid">
             <div className="settings-card" {...el('settings-card')}>
-              <h2>Language &amp; voice · 語言同語氣</h2>
+              <h2>{label(viewSettings, 'Language and voice', '語言同語氣')}</h2>
               {fieldsFor('general').map(renderField)}
-              <p className="supporting">Funny levels style all messages, including warnings and errors, but never change facts. You can reset them any time.</p>
-              <p className="supporting">Spoken narrator is optional and off by default. It uses this device’s browser speech service only; it never sends notification text over the network. It yields to a connected accessibility integration, stays quiet during quiet hours or reduced-sound mode, and may be unavailable when the platform has no speech service.</p>
+              {!schoolEnabled && <p className="supporting">Funny levels style all messages, including warnings and errors, but never change facts. You can reset them any time.</p>}
+              {!schoolEnabled && <p className="supporting">Spoken narrator is optional and off by default. It uses this device’s browser speech service only; it never sends notification text over the network. It yields to a connected accessibility integration, stays quiet during quiet hours or reduced-sound mode, and may be unavailable when the platform has no speech service.</p>}
               <p className="supporting">Automatic source repair gives OpenCode blanket tool approval only inside an attested disposable environment with no host mounts, user profile, credentials, secrets, or Git metadata. The app fails closed when that isolation is unavailable. This consent is persisted and can be revoked here; ordinary release installation never invokes OpenCode.</p>
             </div>
+            {matcher(`${schoolLabel} school mode school name unlock credential PIN password passkey local reset`) && <section className="settings-card" aria-labelledby="school-mode-title">
+              <h2 id="school-mode-title">{schoolLabel}</h2>
+              <p className="supporting">This universal, user-renamable mode is a UX lock rather than a security boundary. While enabled, the app uses English and omits Cantonese, bilingual, funny-level, personal-vocabulary, and dim-sum surfaces. Delete the shared local record to reset it if the unlock credential is lost.</p>
+              <label htmlFor="school-mode-name">{schoolLabel} name<input id="school-mode-name" value={schoolName} maxLength={64} onChange={(event) => setSchoolName(event.target.value)} /></label>
+              <label htmlFor="school-mode-unlock-kind">Unlock choice<select id="school-mode-unlock-kind" value={schoolUnlockKind} onChange={(event) => setSchoolUnlockKind(event.target.value as SchoolUnlockKind)}><option value="pin">PIN</option><option value="password">Password</option><option value="passkey">Passkey assertion</option></select></label>
+              <label htmlFor="school-mode-credential">Local unlock credential<input id="school-mode-credential" type="password" autoComplete="new-password" value={schoolCredential} onChange={(event) => setSchoolCredential(event.target.value)} /></label>
+              {!schoolMode.state.unlockKind && <label htmlFor="school-mode-credential-confirm">Confirm local unlock credential<input id="school-mode-credential-confirm" type="password" autoComplete="new-password" value={schoolCredentialConfirm} onChange={(event) => setSchoolCredentialConfirm(event.target.value)} /></label>}
+              <div className="settings-actions">
+                {!schoolMode.state.unlockKind ? <button className="filled-button" onClick={() => void configureSchoolMode()}>Configure and enable</button> : <>
+                  <button className="text-button" onClick={() => void renameSchoolMode()}>Save name</button>
+                  <button className={schoolEnabled ? 'text-button' : 'filled-button'} onClick={() => void toggleSchoolMode()}>{schoolEnabled ? `Disable ${schoolLabel}` : `Enable ${schoolLabel}`}</button>
+                </>}
+              </div>
+              <p className="supporting" role="status">{schoolEnabled ? `${schoolLabel} is enabled: English-only surfaces are active.` : schoolMode.state.unlockKind ? `${schoolLabel} is configured and currently disabled.` : `${schoolLabel} is not configured.`}</p>
+            </section>}
             <div className="settings-actions">
               <button className="text-button" onClick={() => setDraft(defaultSettings)}>Reset</button>
               <button className="text-button" onClick={downloadSettings}><Icon>download</Icon>Export settings</button>
@@ -171,7 +222,7 @@ export function SettingsPage({ settings, settingsProvenance, onSave, workspace, 
           <>
             <section className="settings-grid">
               <div className="settings-card" {...el('settings-card')}>
-                <h2>Appearance · 外觀</h2>
+                <h2>{label(viewSettings, 'Appearance', '外觀')}</h2>
                 {fieldsFor('appearance').map(renderField)}
                 <p className="supporting">Display name changes labels only. Package identity, update feed, and data location never move.</p>
               </div>
@@ -185,7 +236,9 @@ export function SettingsPage({ settings, settingsProvenance, onSave, workspace, 
             <AppearanceEditor settings={settings} workspace={workspace} appearance={appearance} notify={notify} matcher={matcher} />
           </>
         )}
-        {subTab === 'settings.schedule' && counts[subTab] > 0 && <ScheduleEditor settings={settings} schedule={schedule} />}
+        {subTab === 'settings.schedule' && counts[subTab] > 0 && (schoolEnabled
+          ? <section className="settings-card" role="status"><h2>{schoolLabel} schedule</h2><p className="supporting">Scheduled language and funny-level overrides are omitted while {schoolLabel} is enabled. Disable it with the local unlock credential to restore the saved schedule controls.</p></section>
+          : <ScheduleEditor settings={viewSettings} schedule={schedule} />)}
         {subTab === 'settings.about' && counts[subTab] > 0 && (
           <>
             <section className="settings-grid">

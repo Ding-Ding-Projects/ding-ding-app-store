@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, ipcMain, session } from 'electron';
 import squirrelStartup from 'electron-squirrel-startup';
 import { z } from 'zod';
-import type { ElementKey, ElementOverride, ExternalEditorOpenRequest, ExternalEditorPreference, HistoryExportFormat, InstallCancelRequest, OperationRequest, SourceJobCancelRequest, SourceJobRequest, TabWorkspace, UserSettings } from '../shared/contracts.js';
+import type { ElementKey, ElementOverride, ExternalEditorOpenRequest, ExternalEditorPreference, HistoryExportFormat, InstallCancelRequest, OperationRequest, SchoolModeConfigureRequest, SchoolModeRenameRequest, SchoolModeToggleRequest, SchoolModeVerifyRequest, SourceJobCancelRequest, SourceJobRequest, TabWorkspace, UserSettings } from '../shared/contracts.js';
 import { AppearanceService } from './appearance-service.js';
 import { CatalogService } from './catalog-service.js';
 import { HistoryService } from './history-service.js';
@@ -20,6 +20,7 @@ import { WorkspaceService } from './workspace-service.js';
 import { ExternalEditorService } from './external-editor-service.js';
 import { ExternalScheduledSettingsService } from './external-scheduled-settings-service.js';
 import { HomeAssistantVault } from './home-assistant-vault.js';
+import { SchoolModeService } from './school-mode-service.js';
 
 const scheduleTaskSchema = z.enum(['self-update', 'catalog-refresh']);
 
@@ -77,6 +78,7 @@ void app.whenReady().then(async () => {
     try { contents.send('operations:progress', event); } catch { /* Renderer teardown must never interrupt a privileged install. */ }
   });
   const settings = new SettingsService();
+  const schoolMode = new SchoolModeService();
   const sourceJobs = new SourceJobService(
     catalog,
     history,
@@ -144,6 +146,11 @@ void app.whenReady().then(async () => {
   ipcMain.handle('settings:load', () => settings.load());
   ipcMain.handle('settings:provenance', () => settings.provenance());
   ipcMain.handle('settings:save', (_event, value: UserSettings) => settings.save(value));
+  ipcMain.handle('school-mode:load', (event) => event.sender === mainWindow?.webContents ? schoolMode.load() : Promise.reject(new Error('Blocked School mode request from an unknown renderer.')));
+  ipcMain.handle('school-mode:configure', (event, request: SchoolModeConfigureRequest) => event.sender === mainWindow?.webContents ? schoolMode.configure(request) : Promise.reject(new Error('Blocked School mode request from an unknown renderer.')));
+  ipcMain.handle('school-mode:rename', (event, request: SchoolModeRenameRequest) => event.sender === mainWindow?.webContents ? schoolMode.rename(request) : Promise.reject(new Error('Blocked School mode request from an unknown renderer.')));
+  ipcMain.handle('school-mode:set-enabled', (event, request: SchoolModeToggleRequest) => event.sender === mainWindow?.webContents ? schoolMode.setEnabled(request) : Promise.reject(new Error('Blocked School mode request from an unknown renderer.')));
+  ipcMain.handle('school-mode:verify', (event, request: SchoolModeVerifyRequest) => event.sender === mainWindow?.webContents ? schoolMode.verify(request) : false);
   ipcMain.handle('history:list', () => history.list());
   ipcMain.handle('history:export', (_event, format: HistoryExportFormat) => history.export(format));
   ipcMain.handle('history:archive', (event, request: unknown) => event.sender === mainWindow?.webContents

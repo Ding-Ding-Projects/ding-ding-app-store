@@ -14,8 +14,10 @@ import type { Notify } from '../notify';
 
 export const docs = GENERATED_DOCS;
 
-export function DocsPage({ settings, notify, openRegex, onRegexHandled, articleRequest, onArticleHandled }: {
+export function DocsPage({ settings, schoolModeEnabled = false, schoolModeName = 'School mode', notify, openRegex, onRegexHandled, articleRequest, onArticleHandled }: {
   settings: UserSettings;
+  schoolModeEnabled?: boolean;
+  schoolModeName?: string;
   openRegex: boolean;
   onRegexHandled(): void;
   articleRequest?: string | null;
@@ -24,9 +26,16 @@ export function DocsPage({ settings, notify, openRegex, onRegexHandled, articleR
 }) {
   const search = useSurfaceSearch('docs');
   const matcher = useMemo(() => makeMatcher(search.state), [search.state]);
-  const shown = useMemo(() => docs.filter((article) => matcher(`${article.title}\n${article.titleYue}\n${article.category}\n${article.status}\n${article.summary}\n${article.body}`)), [matcher]);
-  const knownIds = useMemo(() => new Set(docs.map((article) => article.id)), []);
-  const [activeId, setActiveId] = useState(docs[0]?.id ?? '');
+  const availableDocs = useMemo(() => docs
+    .filter((article) => !(schoolModeEnabled && article.id === 'school-mode'))
+    .map((article) => {
+      if (schoolModeName === 'School mode' || article.id !== 'school-mode') return article;
+      const replace = (value: string) => value.replaceAll('School mode', schoolModeName).replaceAll('school mode', schoolModeName);
+      return { ...article, title: replace(article.title), titleYue: replace(article.titleYue), summary: replace(article.summary), body: replace(article.body) };
+    }), [schoolModeEnabled, schoolModeName]);
+  const shown = useMemo(() => availableDocs.filter((article) => matcher(`${article.title}\n${article.titleYue}\n${article.category}\n${article.status}\n${article.summary}\n${article.body}`)), [availableDocs, matcher]);
+  const knownIds = useMemo(() => new Set(availableDocs.map((article) => article.id)), [availableDocs]);
+  const [activeId, setActiveId] = useState(availableDocs[0]?.id ?? '');
   const active = shown.find((article) => article.id === activeId) ?? (knownIds.has(activeId) ? shown[0] ?? null : null);
   const exportArticle = async (openInCode: boolean) => {
     if (!active) return;
@@ -37,11 +46,11 @@ export function DocsPage({ settings, notify, openRegex, onRegexHandled, articleR
   };
 
   useEffect(() => {
-    if (!articleRequest || !docs.some((article) => article.id === articleRequest)) return;
+    if (!articleRequest || !availableDocs.some((article) => article.id === articleRequest)) return;
     search.clear();
     setActiveId(articleRequest);
     onArticleHandled?.();
-  }, [articleRequest, onArticleHandled, search]);
+  }, [articleRequest, availableDocs, onArticleHandled, search]);
 
   useEffect(() => {
     if (shown.length && !shown.some((article) => article.id === activeId)) setActiveId(shown[0].id);
