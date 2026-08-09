@@ -1,5 +1,10 @@
 # Handoff
 
+## 2026-08-09 NotificationCenter bulk recovery details
+
+- NotificationCenter now offers Recovery details for selected records and summarizes their typed recovery kinds in the active language mode. Persisted history remains callback-free and operation-ID-free, so the panel explicitly refuses to invent a bulk retry after restart and directs users back to the originating surface.
+- Focused coverage is in `tests/ui-completion.test.ts`; the canonical notifications article and generated site/wiki/offline mirrors must be refreshed before the final commit. No notification persistence schema or privileged execution authority changed.
+
 ## 2026-08-09 source-isolation status discoverability
 
 - Settings → General now renders the typed Source execution isolation status card without requiring an internal search phrase. The existing read-only card still reports provider, fail-closed reason, bounded evidence, remediation, and last check time; it never launches host source or OpenCode execution.
