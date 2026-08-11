@@ -1,0 +1,41 @@
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { describe, expect, it } from 'vitest';
+
+const root = path.resolve(import.meta.dirname, '..');
+const read = (file: string) => readFile(path.join(root, file), 'utf8');
+
+describe('fresh-machine build entry points', () => {
+  it('exposes silent and interactive Windows wrappers', async () => {
+    const build = await read('build.bat');
+    const installer = await read('build-installer.bat');
+    for (const wrapper of [build, installer]) {
+      expect(wrapper).toContain('powershell.exe -NoProfile -ExecutionPolicy Bypass');
+      expect(wrapper).toContain('/s');
+      expect(wrapper).toContain('--silent');
+      expect(wrapper).toContain('SILENT');
+      expect(wrapper).toContain('exit /b %ERRORLEVEL%');
+    }
+    expect(build).toContain('scripts\\build-local.ps1');
+    expect(installer).toContain('scripts\\build-installer.ps1');
+  });
+
+  it('builds from the lockfile and verifies the unsigned Squirrel artifact', async () => {
+    const common = await read('scripts/build-common.ps1');
+    const local = await read('scripts/build-local.ps1');
+    const installer = await read('scripts/build-installer.ps1');
+    expect(common).toContain('npm ci');
+    expect(common).toContain("@('run', 'build')");
+    expect(common).toContain('https://nodejs.org/dist/');
+    expect(common).toContain('Get-FileHash');
+    expect(common).toContain('electron-builder');
+    expect(common).toContain("'--win', 'squirrel', '--publish', 'never'");
+    expect(common).toContain('Get-AuthenticodeSignature');
+    expect(common).toContain("Status -ne 'NotSigned'");
+    expect(common).toContain('local-installer.v1');
+    expect(common).not.toMatch(/gh\s+release|git\s+(?:push|tag)|forceCodeSigning\s*=\s*\$true/i);
+    expect(local).toContain('param([switch]$Silent)');
+    expect(installer).toContain('param([switch]$Silent)');
+    expect(installer).toContain('Invoke-ProjectInstaller');
+  });
+});
