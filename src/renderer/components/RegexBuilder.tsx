@@ -7,9 +7,9 @@ import type { UserSettings } from '../../shared/contracts';
 import { dialogCopy } from '../dialog-emoji';
 
 /** The one guided regex builder. Every search surface in the app renders this exact component. */
-export function RegexBuilder({ query, settings, onApply, onClose }: { query: string; settings: UserSettings; onApply: (pattern: string, flags: string) => void; onClose: () => void }) {
-  const [pattern, setPattern] = useState(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  const [flags, setFlags] = useState('iu');
+export function RegexBuilder({ query, settings, onApply, onClose, initialPattern, initialFlags }: { query: string; settings: UserSettings; onApply: (pattern: string, flags: string) => void; onClose: () => void; initialPattern?: string; initialFlags?: string }) {
+  const [pattern, setPattern] = useState(initialPattern ?? query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const [flags, setFlags] = useState(initialFlags ?? 'iu');
   const [sample, setSample] = useState('Material BlueMap\nDesktop Material\nWimForge');
   const [result, setResult] = useState<{ error: string; matches: Array<{ text: string; groups: string[] }>; pending: boolean }>({ error: '', matches: [], pending: true });
   const evaluationId = useRef(0);

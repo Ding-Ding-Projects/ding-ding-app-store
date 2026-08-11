@@ -72,7 +72,8 @@ function AuthenticatorPicker({ id, labelText, settings, value, options, disabled
     }
   };
   const onListKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    if (event.key === 'Escape') { event.preventDefault(); close(); return; }
+    if (event.target instanceof HTMLElement && event.target.closest('.regex-builder')) return;
+    if (event.key === 'Escape') { event.preventDefault(); setQuery(''); setRegex(null); close(); return; }
     if (!visibleOptions.length) return;
     if (event.key === 'ArrowDown' || event.key === 'ArrowRight') { event.preventDefault(); setActiveIndex((index) => (index + 1) % visibleOptions.length); return; }
     if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') { event.preventDefault(); setActiveIndex((index) => (index - 1 + visibleOptions.length) % visibleOptions.length); return; }
@@ -112,7 +113,7 @@ function AuthenticatorPicker({ id, labelText, settings, value, options, disabled
           onChange={(event) => { setQuery(event.target.value); if (regex) setRegex({ ...regex, pattern: event.target.value }); }}
         />
         <button className="icon-button" type="button" aria-label={label(settings, `Open regex builder for ${labelText}`, `開啟${labelText}正則建造器`)} aria-expanded={builderOpen} onClick={() => setBuilderOpen((current) => !current)}><Icon>regular_expression</Icon></button>
-        {builderOpen && <RegexBuilder query={query} settings={settings} onClose={() => { setBuilderOpen(false); window.setTimeout(() => inputRef.current?.focus(), 0); }} onApply={(pattern, flags) => { setQuery(pattern); setRegex({ pattern, flags }); setBuilderOpen(false); window.setTimeout(() => inputRef.current?.focus(), 0); }} />}
+        {builderOpen && <RegexBuilder query={query} initialPattern={regex?.pattern} initialFlags={regex?.flags} settings={settings} onClose={() => { setBuilderOpen(false); window.setTimeout(() => inputRef.current?.focus(), 0); }} onApply={(pattern, flags) => { setQuery(pattern); setRegex({ pattern, flags }); setBuilderOpen(false); window.setTimeout(() => inputRef.current?.focus(), 0); }} />}
       </div>
       <div id={`${id}-options`} className="authenticator-picker-list" role="listbox" aria-label={labelText}>
         {visibleOptions.length === 0 ? <p className="empty-state compact" role="status">{label(settings, 'No matching options.', '冇配到嘅選項。')}</p> : visibleOptions.map((option, index) => <button
