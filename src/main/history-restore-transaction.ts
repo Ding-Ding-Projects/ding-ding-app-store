@@ -206,7 +206,11 @@ export async function rollbackRestoreTransaction(transactionRoot: string, target
     else {
       await verifyDurable(path.join(transactionRoot, file.previousName), file.previousBytes as number, file.previousSha256 as string);
       const previous = await readFile(path.join(transactionRoot, file.previousName), 'utf8');
-      const temporary = path.join(targetRoot, `.${file.targetName}.${process.pid}.${randomUUID()}.restore.tmp`);
+      // Keep the rollback staging byte stream inside the journal root so an
+      // interrupted process cannot leave an orphaned state-looking file in
+      // the live application-data directory. The journal is removed during
+      // normal completion and startup recovery.
+      const temporary = path.join(transactionRoot, `rollback-${file.targetName}-${process.pid}-${randomUUID()}.tmp`);
       try {
         await writeDurable(temporary, previous);
         await replaceFromStage(temporary, target);

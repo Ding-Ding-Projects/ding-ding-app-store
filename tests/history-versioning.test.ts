@@ -58,6 +58,8 @@ describe('local history/version browser contract', () => {
     expect(transaction).toContain('MAX_MANIFEST_BYTES');
     expect(transaction).toContain('markRestoreTransactionRecording');
     expect(transaction).toContain('recoverRestoreTransaction');
+    expect(transaction).toContain('path.join(transactionRoot, `rollback-${file.targetName}-');
+    expect(transaction).not.toContain('path.join(targetRoot, `.${file.targetName}.');
     expect(transaction).toContain('await handle.sync()');
     expect(service).toContain('restore-transaction');
     expect(service).toContain('automatic rollback was incomplete');
