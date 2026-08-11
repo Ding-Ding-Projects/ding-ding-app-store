@@ -4,13 +4,34 @@ import type { TabState, TabWorkspace } from '../shared/contracts.js';
 import { DEFAULT_TAB_WORKSPACE, MAX_DOCUMENT_BYTES, MAX_TAB_GROUPS, TAB_IDS, tabWorkspaceSchema } from '../shared/contracts.js';
 import { readJson, writeJsonAtomic } from './json-store.js';
 
+/** Add newly shipped tabs to the v1 document before the exact-length schema runs. */
+export function migrateWorkspaceDocument(candidate: unknown): unknown {
+  if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return candidate;
+  const record = candidate as Record<string, unknown>;
+  if (!Array.isArray(record.tabs)) return candidate;
+  const tabs = record.tabs;
+  const ids = new Set(tabs.filter((tab): tab is Record<string, unknown> => Boolean(tab && typeof tab === 'object' && !Array.isArray(tab))).map((tab) => tab.id));
+  const missing = TAB_IDS.filter((id) => !ids.has(id)).map((id) => ({ id, open: true, pinned: false, groupId: null, previousGroupId: null, order: TAB_IDS.indexOf(id) }));
+  if (!missing.length) return candidate;
+  const migrated = [...tabs];
+  for (const tab of missing) {
+    const canonicalIndex = TAB_IDS.indexOf(tab.id as (typeof TAB_IDS)[number]);
+    const insertAt = migrated.findIndex((existing) => {
+      const existingId = existing && typeof existing === 'object' && !Array.isArray(existing) ? (existing as Record<string, unknown>).id : null;
+      return typeof existingId === 'string' && TAB_IDS.indexOf(existingId as (typeof TAB_IDS)[number]) > canonicalIndex;
+    });
+    if (insertAt < 0) migrated.push(tab); else migrated.splice(insertAt, 0, tab);
+  }
+  return { ...record, tabs: migrated };
+}
+
 export class WorkspaceService {
   private readonly filePath = path.join(app.getPath('userData'), 'workspace.v1.json');
 
   async load(): Promise<TabWorkspace> {
     try {
       const stored = await readJson<unknown>(this.filePath, DEFAULT_TAB_WORKSPACE);
-      const parsed = tabWorkspaceSchema.safeParse(stored);
+      const parsed = tabWorkspaceSchema.safeParse(migrateWorkspaceDocument(stored));
       return parsed.success ? this.normalize(parsed.data) : DEFAULT_TAB_WORKSPACE;
     } catch {
       return DEFAULT_TAB_WORKSPACE;
@@ -42,7 +63,7 @@ export class WorkspaceService {
     } catch {
       throw new Error('Tab layout file is not valid JSON.');
     }
-    const parsed = tabWorkspaceSchema.safeParse(candidate);
+    const parsed = tabWorkspaceSchema.safeParse(migrateWorkspaceDocument(candidate));
     if (!parsed.success) throw new Error('Tab layout file does not match the supported layout format.');
     return this.save(parsed.data);
   }

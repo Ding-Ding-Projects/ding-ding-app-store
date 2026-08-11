@@ -93,6 +93,7 @@ export interface TabRailProps {
   onTabRegexHandled(): void;
   renameGroupId: string | null;
   onRenameHandled(): void;
+  schoolModeEnabled?: boolean;
 }
 
 type HeaderProps = ComponentPropsWithRef<'button'> & {
@@ -281,8 +282,8 @@ type BulkCloseMode = 'containing' | 'not-containing';
  * pinned tabs are protected unless the user explicitly includes them. A second, plain-language
  * confirmation click is used instead of a type-to-confirm gate, and every closed tab can be reopened.
  */
-export function TabBulkClosePanel({ workspace, settings, dispatch, announce }: {
-  workspace: TabWorkspace; settings: UserSettings; dispatch(action: WorkspaceAction): void; announce(message: string): void;
+export function TabBulkClosePanel({ workspace, settings, dispatch, announce, schoolModeEnabled = false }: {
+  workspace: TabWorkspace; settings: UserSettings; dispatch(action: WorkspaceAction): void; announce(message: string): void; schoolModeEnabled?: boolean;
 }) {
   const search = useSurfaceSearch('tabs.bulk-close');
   const matcher = useMemo(() => makeMatcher(search.state), [search.state]);
@@ -290,8 +291,8 @@ export function TabBulkClosePanel({ workspace, settings, dispatch, announce }: {
   const [mode, setMode] = useState<BulkCloseMode | null>(null);
   const [includePinned, setIncludePinned] = useState(false);
   const [armed, setArmed] = useState(false);
-  const openTabs = workspace.tabs.filter((tab) => tab.open);
-  const closedTabs = workspace.tabs.filter((tab) => !tab.open);
+  const openTabs = workspace.tabs.filter((tab) => tab.open && !(schoolModeEnabled && tab.id === 'authenticator'));
+  const closedTabs = workspace.tabs.filter((tab) => !tab.open && !(schoolModeEnabled && tab.id === 'authenticator'));
   const candidates = useMemo(() => openTabs.filter((tab) => {
     const text = `${TAB_META[tab.id].en}\n${TAB_META[tab.id].yue}\n${tab.id}`;
     const hit = matcher(text);
@@ -347,7 +348,7 @@ export function TabBulkClosePanel({ workspace, settings, dispatch, announce }: {
   );
 }
 
-export function TabRail({ settings, workspace, dispatch, updatesBadge, onOpenPalette, announce, openOverflow, onOverflowHandled, openTabRegex, onTabRegexHandled, renameGroupId: renameRequest, onRenameHandled }: TabRailProps) {
+export function TabRail({ settings, workspace, dispatch, updatesBadge, onOpenPalette, announce, openOverflow, onOverflowHandled, openTabRegex, onTabRegexHandled, renameGroupId: renameRequest, onRenameHandled, schoolModeEnabled = false }: TabRailProps) {
   const search = useSurfaceSearch('tabs');
   const groupNames = useSurfaceSearch('tabs.groups');
   const master = useSurfaceSearch('tabs.master');
@@ -376,6 +377,7 @@ export function TabRail({ settings, workspace, dispatch, updatesBadge, onOpenPal
       const groupSearchState = region.group ? (searchContext?.states[`tabs.group.${region.group.id}`] ?? EMPTY_SEARCH) : EMPTY_SEARCH;
       const groupMatcher = region.group ? makeMatcher(groupSearchState) : () => true;
       const visible = region.tabs.filter((tab) => {
+        if (schoolModeEnabled && tab.id === 'authenticator') return false;
         const text = `${TAB_META[tab.id].en}\n${TAB_META[tab.id].yue}\n${tab.id}\n${region.group?.name ?? ''}`;
         const hit = matcher(text) && groupMatcher(text) && masterMatcher(text);
         if (hit) matched += 1;
@@ -393,7 +395,7 @@ export function TabRail({ settings, workspace, dispatch, updatesBadge, onOpenPal
       }
     }
     return { rows: built, matchCount: matched };
-  }, [workspace, matcher, groupNameMatcher, masterMatcher, searchContext?.states]);
+  }, [workspace, matcher, groupNameMatcher, masterMatcher, searchContext?.states, schoolModeEnabled]);
 
   const capacity = useTabOverflow(stripRef, ROW_HEIGHT[workspace.rail.tabHeight], rows.length, horizontal);
   const overflowing = workspace.rail.overflowMode === 'menu' && rows.length > capacity;
@@ -420,6 +422,9 @@ export function TabRail({ settings, workspace, dispatch, updatesBadge, onOpenPal
 
   useEffect(() => { if (openOverflow) { setOverflowOpen(true); onOverflowHandled(); } }, [openOverflow, onOverflowHandled]);
   useEffect(() => { if (renameRequest) { setRenamingGroupId(renameRequest); onRenameHandled(); } }, [renameRequest, onRenameHandled]);
+  useEffect(() => {
+    if (schoolModeEnabled && menu?.kind === 'tab' && menu.id === 'authenticator') setMenu(null);
+  }, [menu, schoolModeEnabled]);
 
   useEffect(() => {
     if (!menu && !overflowOpen && !movePickerTabId) return;
@@ -632,7 +637,7 @@ export function TabRail({ settings, workspace, dispatch, updatesBadge, onOpenPal
         <SearchBox surface="tabs.master" settings={settings} placeholder={label(settings, 'Search every open tab', '搜尋所有開啟分頁')} />
         <p className="supporting">{label(settings, 'Use the strip search for this rail, group search inside each group, group search for names, or master search across every open tab.', '分頁列搜尋查呢條列；分組搜尋查組內；分頁組搜尋查組名；主搜尋查所有開啟分頁。')}</p>
       </details>
-      <TabBulkClosePanel workspace={workspace} settings={settings} dispatch={dispatch} announce={announce} />
+      <TabBulkClosePanel workspace={workspace} settings={settings} dispatch={dispatch} announce={announce} schoolModeEnabled={schoolModeEnabled} />
       <div className="tab-strip" ref={stripRef}>
         {blocks}
         {Boolean(search.state.query) && matchCount === 0 && (

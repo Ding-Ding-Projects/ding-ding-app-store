@@ -38,6 +38,7 @@ import { formatAbsolute, label } from './i18n';
 import { AppsPage } from './pages/AppsPage';
 import type { RunningAction } from './pages/AppsPage';
 import { ActivityPage } from './pages/ActivityPage';
+import { AuthenticatorPage } from './pages/AuthenticatorPage';
 import { DocsPage } from './pages/DocsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { buildRegistry, SETTING_FIELDS, TAB_META } from './registry';
@@ -48,6 +49,7 @@ import { useAppearance, useAppearanceVars } from './state/use-appearance';
 import { useSchedule } from './state/use-schedule';
 import { useSettings } from './state/use-settings';
 import { useSchoolMode } from './state/use-school-mode';
+import { useAuthenticator } from './state/use-authenticator';
 import { useNotifications } from './state/use-notifications';
 import { useNarrator } from './state/use-narrator';
 import { newGroupId, orderedTabIds, useWorkspace } from './state/use-workspace';
@@ -57,6 +59,7 @@ import { openExportInVsCode } from './external-editor';
 const PAGE_SUBTITLE: Partial<Record<TabId, { en: string; yue: string }>> = {
   catalog: { en: 'Trusted apps, their releases, and their complete documentation in one place.', yue: '可信 apps、release 同完整文件，一個位睇晒。' },
   updates: { en: 'Check every installed app and the store itself without surprise restarts.', yue: '檢查所有已安裝 app 同商店自己，唔會突然重開。' },
+  authenticator: { en: 'Calculate local RFC 6238 one-time codes without storing secrets.', yue: '本機計算 RFC 6238 一次性驗證碼，唔會儲存秘密。' },
   activity: { en: 'Every install, build, and uninstall you ran, with exact results and export.', yue: '你做過嘅安裝、build 同解除安裝，連結果同匯出都齊。' },
   docs: { en: 'Every shipped feature has an offline article, including tabs, appearance, and the schedule.', yue: '每個功能都有離線文章，分頁、外觀同排程都有。' },
   settings: { en: 'Every section has its own search, its own tab navigation, and its own reset.', yue: '每個分類都有自己嘅搜尋、分頁同重設。' },
@@ -68,6 +71,7 @@ export function App() {
 
   const { settings: baseSettings, provenance: settingsProvenance, reload: reloadSettings, save: saveSettings, patch: patchSetting } = useSettings(notify);
   const schoolMode = useSchoolMode(notify);
+  const authenticator = useAuthenticator(!schoolMode.loading && !schoolMode.state.enabled);
   const workspace = useWorkspace(notify);
   const appearance = useAppearance(notify);
   const schedule = useSchedule(notify);
@@ -149,6 +153,9 @@ export function App() {
   }, [catalog, loading, schoolMode.loading, schoolMode.state.enabled, updateState.status]);
 
   const activeTab = workspace.workspace.activeTabId;
+  useEffect(() => {
+    if (schoolMode.state.enabled && activeTab === 'authenticator') workspace.dispatch({ type: 'activate', id: 'catalog' });
+  }, [activeTab, schoolMode.state.enabled, workspace]);
   const announce = useCallback((message: string) => setAnnouncement(message), []);
   const closeNotificationCenter = useCallback(() => {
     setNotificationCenterOpen(false);
@@ -500,6 +507,7 @@ export function App() {
 
   const openSurface = useCallback((surface: SurfaceId) => {
     if (surface === 'notifications') { setNotificationCenterOpen(true); return; }
+    if (schoolMode.state.enabled && surface === 'authenticator') return;
     if (surface === 'changelog') {
       workspace.dispatch({ type: 'activate', id: 'settings' });
       setSubTab('settings.about');
@@ -512,7 +520,7 @@ export function App() {
     }
     if (surface === 'tabs' || surface === 'palette' || surface === 'appearance.elements') return;
     workspace.dispatch({ type: 'activate', id: surface as TabId });
-  }, [workspace]);
+  }, [schoolMode.state.enabled, workspace]);
 
   const focusLater = (id: string) => window.setTimeout(() => window.document.getElementById(id)?.focus(), 0);
 
@@ -529,6 +537,7 @@ export function App() {
    */
   const applyPaletteTarget = useCallback((target?: EntryTarget) => {
     if (!target) return;
+    if (schoolMode.state.enabled && (target.surface === 'authenticator' || target.tabId === 'authenticator')) return;
     if (target.surface) openSurface(target.surface);
     if (target.tabId) workspace.dispatch({ type: 'activate', id: target.tabId });
     if (target.element) selectElement(target.element);
@@ -540,7 +549,7 @@ export function App() {
       node.setAttribute('data-palette-highlight', 'true');
       window.setTimeout(() => node.removeAttribute('data-palette-highlight'), 1_200);
     }, 0);
-  }, [openSurface, selectElement, workspace]);
+  }, [openSurface, schoolMode.state.enabled, selectElement, workspace]);
 
   const railPatch = useCallback((patch: Partial<TabRailLayout>) => workspace.dispatch({ type: 'rail', patch }), [workspace]);
 
@@ -578,6 +587,7 @@ export function App() {
     const [verb, ...rest] = command.split(':');
     const arg = rest.join(':');
     const [first, second] = rest;
+    if (schoolMode.state.enabled && (arg === 'authenticator' || first === 'authenticator')) return;
     switch (verb) {
       case 'refresh-catalog': case 'refresh-catalog-now': void loadCatalog(true); return;
       case 'open-notifications': setNotificationCenterOpen(true); return;
@@ -658,7 +668,7 @@ export function App() {
       }
       default: return;
     }
-  }, [loadCatalog, search, openSurface, workspace, deleteGroup, createGroup, notify, railPatch, appearance, selectElement, schedule, patchSetting, catalog]);
+  }, [loadCatalog, search, openSurface, workspace, deleteGroup, createGroup, notify, railPatch, appearance, selectElement, schedule, patchSetting, catalog, schoolMode.state.enabled]);
 
   const dispatchAction = useCallback((next: Action) => {
     if (next.type === 'command') applyPaletteTarget(next.target);
@@ -704,15 +714,17 @@ export function App() {
       if (event.ctrlKey && event.shiftKey && key === 'e') { event.preventDefault(); runCommand('toggle-appearance-edit'); return; }
       if (event.ctrlKey && event.key === 'Tab') {
         event.preventDefault();
-        const order = orderedTabIds(workspace.workspace);
-        const index = order.indexOf(activeTab);
+        const order = orderedTabIds(workspace.workspace).filter((id) => !(schoolMode.state.enabled && id === 'authenticator'));
+        const index = Math.max(0, order.indexOf(activeTab));
         const target = order[(index + (event.shiftKey ? -1 : 1) + order.length) % order.length];
-        workspace.dispatch({ type: 'activate', id: target });
-        announce(`${TAB_META[target].en} tab`);
+        if (target) {
+          workspace.dispatch({ type: 'activate', id: target });
+          announce(`${TAB_META[target].en} tab`);
+        }
         return;
       }
-      if (event.ctrlKey && !event.shiftKey && /^[1-6]$/.test(event.key)) {
-        const order = orderedTabIds(workspace.workspace);
+      if (event.ctrlKey && !event.shiftKey && /^[1-7]$/.test(event.key)) {
+        const order = orderedTabIds(workspace.workspace).filter((id) => !(schoolMode.state.enabled && id === 'authenticator'));
         const target = order[Number(event.key) - 1];
         if (target) { event.preventDefault(); workspace.dispatch({ type: 'activate', id: target }); announce(`${TAB_META[target].en} tab`); }
         return;
@@ -728,7 +740,7 @@ export function App() {
     };
     window.addEventListener('keydown', listener);
     return () => window.removeEventListener('keydown', listener);
-  }, [activeTab, workspace, runCommand, createGroup, announce, paletteOpen, action, closeAction, panelOpen, notificationCenterOpen, closeNotificationCenter, appearance, search]);
+  }, [activeTab, workspace, runCommand, createGroup, announce, paletteOpen, action, closeAction, panelOpen, notificationCenterOpen, closeNotificationCenter, appearance, search, schoolMode.state.enabled]);
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -846,6 +858,7 @@ export function App() {
           onTabRegexHandled={() => setRegexRequest(null)}
           renameGroupId={renameRequest}
           onRenameHandled={() => setRenameRequest(null)}
+          schoolModeEnabled={schoolMode.state.enabled}
         />
 
         <main className="content" id="surface-panel" role="tabpanel" aria-labelledby={`tab-${activeTab}`} {...el('content-surface')}>
@@ -898,6 +911,7 @@ export function App() {
               onRegexHandled={() => setRegexRequest(null)}
             />
           )}
+          {activeTab === 'authenticator' && !schoolMode.state.enabled && <AuthenticatorPage settings={settings} authenticator={authenticator} notify={notify} openRegex={regexRequest === 'authenticator'} onRegexHandled={() => setRegexRequest(null)} />}
           {activeTab === 'docs' && <DocsPage settings={settings} schoolModeEnabled={schoolMode.state.enabled} schoolModeName={schoolMode.state.displayName} notify={notify} openRegex={regexRequest === 'docs'} onRegexHandled={() => setRegexRequest(null)} articleRequest={docRequest} onArticleHandled={() => setDocRequest(null)} />}
           {activeTab === 'activity' && <ActivityPage entries={history} revisions={historyRevisions} loading={historyLoading} settings={settings} openRegex={regexRequest === 'activity'} onRegexHandled={() => setRegexRequest(null)} notify={notify} onHistoryChanged={reloadHistoryAndSettings} />}
           {activeTab === 'settings' && (

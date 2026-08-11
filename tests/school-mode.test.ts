@@ -25,6 +25,7 @@ describe('School mode local shared state', () => {
     const entries = buildRegistry({ settings: DEFAULT_USER_SETTINGS, workspace: structuredClone(DEFAULT_TAB_WORKSPACE), appearance: {}, schedule: structuredClone(DEFAULT_SCHEDULE), apps: [{ id: 'dim-sum-atlas', name: 'Dim Sum Atlas', repository: 'dim-sum-atlas', description: '', homepageUrl: null, repositoryUrl: '', defaultBranch: 'main', topics: [], stars: 0, updatedAt: '', latestVersion: null, latestReleaseUrl: null, availability: 'documentation-only', packageType: 'unsupported', installedVersion: null, updateState: 'unknown', docsAvailable: true }], schoolModeEnabled: true });
     const text = entries.map((entry) => `${entry.id} ${entry.en} ${entry.yue} ${entry.keywords.join(' ')}`).join('\n');
     expect(text).not.toMatch(/language mode|funny level|粵語 funny|dim sum atlas|點心/i);
+    expect(text).not.toMatch(/authenticator|驗證器|RFC 6238|TOTP/i);
     expect(text).toContain('School');
   });
 
@@ -39,6 +40,8 @@ describe('School mode local shared state', () => {
     const appSource = await readFile(path.resolve('src/renderer/App.tsx'), 'utf8');
     expect(appSource).toContain('schoolMode.loading || schoolMode.state.enabled');
     expect(appSource).toContain('schoolMode.loading, schoolMode.state.enabled');
+    expect(appSource).toContain('useAuthenticator(!schoolMode.loading && !schoolMode.state.enabled)');
+    expect(appSource).toContain("activeTab === 'authenticator' && !schoolMode.state.enabled");
   });
 
   it('persists a renamed enabled mode without persisting the raw credential', async () => {

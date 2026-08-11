@@ -1,5 +1,13 @@
 # Handoff
 
+## 2026-08-11 bounded authenticator preview
+
+- Added a real top-level Authenticator destination with a local RFC 6238 core covering SHA-1, SHA-256, and SHA-512, 6–8 digits, bounded periods, canonical Base32 validation, rollover countdown, and all published Appendix B vectors.
+- The service is intentionally one-shot and memory-only. It reports the operating-system credential vault as unavailable, clears the submitted secret, keeps secrets out of history/exports/logs/notifications, validates preload response shapes, rejects unknown renderer senders, and strips the test-only clock override at the IPC boundary.
+- School mode removes the tab, generated article/palette entries, notifications, and keyboard activation, and migrates legacy six-tab workspaces by inserting Authenticator at its canonical position without losing existing order, pins, or groups.
+- Documentation is mirrored into the offline bundle, static site, wiki, and memory-sync index. Full authenticator follow-up work—vault persistence, QR/`otpauth://` registration and pairing, saved entries, next-code peek, and protected secret history—remains explicitly pending.
+- Verification for this lane: `npm run check` (45 root files / 293 root tests plus workspace typecheck and package tests), `npm run build`, and `npm run docs:check` are green. No packaged hidden-desktop capture or vault-backed runtime is claimed.
+
 ## 2026-08-11 Catalog and shared-contract expansion
 
 - Added the reviewed `material-minecraft-map-editor` catalog record as `Amulet Map Editor` with its Squirrel adapter, pinned packaging evidence, and public release `0.10.0-dev.567`. The release body reports `1256 passed, 8 skipped, 1 warning, 24 errors, 332 subtests passed`; this catalog slice records that result as non-green upstream evidence and does not claim clean-machine installation or UI proof.

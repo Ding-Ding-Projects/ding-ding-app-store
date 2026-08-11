@@ -37,7 +37,7 @@ describe('tab workspace contract', () => {
   it('round-trips the shipped default workspace', () => {
     const parsed = tabWorkspaceSchema.parse(clone(DEFAULT_TAB_WORKSPACE));
     expect(parsed).toEqual(DEFAULT_TAB_WORKSPACE);
-    expect(parsed.tabs.map((tab) => tab.order)).toEqual([0, 1, 2, 3, 4, 5]);
+    expect(parsed.tabs.map((tab) => tab.order)).toEqual([0, 1, 2, 3, 4, 5, 6]);
   });
 
   it('rejects unknown and duplicated tab ids', () => {
