@@ -63,7 +63,6 @@ describe('School mode presentation', () => {
     expect(entries[0].changes).toEqual(['Shared mode renamed in one place.']);
     expect(schoolModeDisplayText('School mode is enabled.', '$& classroom')).toBe('$& classroom is enabled.');
   });
-
   it('uses an explicit restricted allowlist for persisted notifications and activity', () => {
     expect(schoolModeAllowsNotification({ message: 'An old custom name is enabled.' }, true)).toBe(false);
     expect(schoolModeAllowsNotification({ schoolModeCode: 'enabled' }, true)).toBe(true);

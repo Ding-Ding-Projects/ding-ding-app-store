@@ -173,7 +173,6 @@ function parseAuthenticatorList(value: unknown): AuthenticatorListResult {
   if (new Set(entries.map((entry) => entry.id)).size !== entries.length) throw new Error('The authenticator list response was invalid.');
   return Object.freeze({ entries, storage: result.storage as AuthenticatorListResult['storage'], message: result.message, messageYue: result.messageYue });
 }
-
 function parseSourceIsolationStatus(value: unknown): SourceIsolationStatus {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('The source isolation status response was invalid.');
   const status = value as Record<string, unknown>;

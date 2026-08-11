@@ -1,5 +1,11 @@
 # Handoff
 
+## 2026-08-11 shared School-mode live synchronization
+
+- Integrated the revisioned shared School-mode record with parent-directory observation, bounded polling reconciliation, strict schema-v2/record-epoch migration, stale-writer compare-and-swap, atomic writes, and fail-closed unavailable states. Running app instances now receive enabled-state, chosen-name, and credential-record changes without restart; invalid or unwatched state keeps restricted English presentation.
+- The renderer bridge validates every snapshot and mutation reply, orders live observations by sequence, projects hidden catalog/changelog/notification/update text, suppresses the Authenticator and dim-sum surfaces, and moves active content back to a safe visible destination during restriction transitions. The existing authenticator, picker, lock, and Support Ticket surfaces remain preserved in this integration.
+- Verification from the School jer: focused School suites 42/42; isolated root Vitest 319/319 across 45 files; workspace checks, docs generation/check, main/renderer/preload builds, and diff checks green. PID-reuse identity, recovery after eight dead claimant successors, and packaged hidden-desktop capture remain explicit follow-up evidence boundaries; Cheap Lowlevel was unavailable.
+
 ## 2026-08-11 authenticator searchable picker follow-up
 
 - Replaced the Authenticator registration source, algorithm, and digits native selects with bounded keyboard-first listbox pickers. Each picker owns local plain-text and optional regex state, opens the shared anchored `RegexBuilder`, supports Arrow/Home/End/Enter/Escape navigation, reports no matches, and restores focus to its trigger. The source picker preserves its existing preview/secret/URI reset semantics, and all three pickers disable during an active pairing preview; School mode continues to suppress the whole Authenticator surface.
