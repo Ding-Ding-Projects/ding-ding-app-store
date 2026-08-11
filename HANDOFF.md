@@ -1,9 +1,15 @@
 # Handoff
 
+## 2026-08-11 authenticator visible-range selection
+
+- Saved authenticator entries now support ordinary checkbox toggles plus Shift-click and Shift+Space keyboard selection across the currently visible/search-filtered range. Forward and reverse ranges include both endpoints, preserve existing selected IDs, never reach hidden rows, and clear the anchor after filtering, refresh, or deletion so an old row cannot unexpectedly select a new one.
+- The new helper is renderer-only and secret-free; no IPC, vault, metadata, or bridge contract changes are involved. The canonical authenticator article, README, ROADMAP, and generated offline/site/wiki mirrors are being refreshed together.
+- Focused selection and authenticator management tests are green (9/9 selection-management tests; 37/37 combined registration and management tests), renderer typecheck and renderer build are green, and docs synchronization is green. Commit, dew, cloud release, and default-jer integration evidence remain pending for this in-progress slice. The tests prove helper semantics and source wiring rather than a mounted DOM event harness. Packaged hidden-desktop interaction capture remains an explicit boundary because the sanctioned route is unavailable.
+
 ## 2026-08-11 authenticator next-code rollover peek
 
 - Saved authenticator entries now return a privileged, secret-free `nextCode` calculated at the exact next TOTP period boundary. The renderer shows it beside the numeric rollover countdown and promotes that peek to the current display at zero seconds without placing the countdown in the live code announcement region; unsupported clock boundaries and unavailable vault secrets return `null` rather than guessing.
-- The typed shared contract, preload validator, metadata-only export omission list, Authenticator page copy, README, ROADMAP, canonical memory-sync article, and generated documentation are updated together. QR image/clipboard/camera import, deliberate secret export, stable groups, shift-range selection, and protected authenticator history remain explicitly deferred.
+- The typed shared contract, preload validator, metadata-only export omission list, Authenticator page copy, README, ROADMAP, canonical memory-sync article, and generated documentation are updated together. QR image/clipboard/camera import, deliberate secret export, stable groups, and protected authenticator history remain explicitly deferred.
 - Focused verification so far: authenticator registration/management/authenticator tests 41/41; main and renderer TypeScript checks green. Full repository Chuts, docs generation/check, build, commit, dew, and cloud release evidence remain pending for this slice.
 
 ## 2026-08-11 Local versions revision parity
@@ -46,7 +52,7 @@
 
 - Extended the top-level Authenticator destination with strict local `otpauth://totp/` and manual Base32 metadata parsing, in-process QR matrices, current-code pairing confirmation, and safeStorage-backed per-entry ciphertext plus metadata-only responses. RFC 6238 SHA-1/SHA-256/SHA-512 vectors, 6–8 digits, bounded periods, canonical Base32 validation, and rollover countdown remain covered.
 - Pairing previews stay in memory until a current code is confirmed; a ten-minute expiry timer, five-attempt cap, explicit reveal reset, serialized vault saves, metadata/ciphertext rollback, clock-range failures, preload response guards, and live main-process School-mode suppression keep the boundary fail-closed. Secrets never enter history, exports, logs, notifications, QR output, or renderer responses.
-- The slice intentionally does not claim QR image/clipboard/camera import, deliberate secret export, stable group entities, shift-range selection, or protected authenticator history/restore. It now provides metadata-only rename/reorder, per-entry label-only groups, checkbox selection, destructive single/bulk delete, current and next-code rollover display, redacted JSON/CSV/Markdown export, and an optional VS Code handoff. Authenticator metadata is not yet in the local history snapshot allowlist, so ordinary history exports remain secret-free but cannot restore entries or audit these mutations.
+- The slice intentionally does not claim QR image/clipboard/camera import, deliberate secret export, stable group entities, or protected authenticator history/restore. It now provides metadata-only rename/reorder, per-entry label-only groups, checkbox plus Shift-click/Shift+Space visible-range selection, destructive single/bulk delete, current and next-code rollover display, redacted JSON/CSV/Markdown export, and an optional VS Code handoff. Authenticator metadata is not yet in the local history snapshot allowlist, so ordinary history exports remain secret-free but cannot restore entries or audit these mutations.
 - Documentation is mirrored into the offline bundle, static site, wiki, and memory-sync index. Verification for this lane is recorded with the focused registration/authenticator/contracts/School Chuts, main/renderer/preload builds, and docs checks; no packaged hidden-desktop capture or real OS-vault runtime is claimed.
 
 ## 2026-08-11 Workflow and local build entry points

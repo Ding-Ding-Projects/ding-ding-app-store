@@ -9,6 +9,7 @@ import type { AuthenticatorEntryMetadata } from '../src/shared/contracts.js';
 import type { AuthenticatorVault, AuthenticatorVaultMetadataWriteOptions, AuthenticatorVaultSaveOptions } from '../src/main/authenticator-vault-contract.js';
 import { parseAuthenticatorBulkDelete, parseAuthenticatorDelete, parseAuthenticatorExport } from '../src/preload/index.js';
 import { generateTotp } from '../src/main/totp.js';
+import { selectAuthenticatorRange, toggleAuthenticatorSelection } from '../src/renderer/authenticator-selection.js';
 
 vi.mock('electron', () => ({
   app: { getPath: () => os.tmpdir() },
@@ -166,5 +167,28 @@ describe('saved authenticator-entry management boundary', () => {
     expect(registry).toContain("command('authenticator-export'");
     expect(registry).toContain("command('authenticator-bulk-delete'");
     expect(app).toContain("case 'authenticator-rename'");
+  });
+
+  it('selects forward and reverse visible ranges without touching hidden ids', () => {
+    const visibleIds = ['a', 'b', 'c', 'd'];
+    const hiddenSelection = new Set(['hidden']);
+    const forward = selectAuthenticatorRange(visibleIds, 'b', 'd', hiddenSelection);
+    expect([...forward]).toEqual(['hidden', 'b', 'c', 'd']);
+    const reverse = selectAuthenticatorRange(visibleIds, 'd', 'b', hiddenSelection);
+    expect([...reverse]).toEqual(['hidden', 'b', 'c', 'd']);
+    const firstKeyboardRange = selectAuthenticatorRange(visibleIds, null, 'c', hiddenSelection);
+    expect([...firstKeyboardRange]).toEqual(['hidden', 'c']);
+    expect([...toggleAuthenticatorSelection(firstKeyboardRange, 'c', false)]).toEqual(['hidden']);
+  });
+
+  it('wires Shift-click and Shift+Space to visible-range selection and resets stale anchors', async () => {
+    const page = await readFile(new URL('../src/renderer/pages/AuthenticatorPage.tsx', import.meta.url), 'utf8');
+    expect(page).toContain("const [selectionAnchorId, setSelectionAnchorId] = useState<string | null>(null);");
+    expect(page).toContain('selectAuthenticatorRange');
+    expect(page).toContain('event.shiftKey');
+    expect(page).toContain("event.key === ' '");
+    expect(page).toContain('Shift+Space');
+    expect(page).toContain('aria-keyshortcuts="Shift+Space"');
+    expect(page).toContain('setSelectionAnchorId(null)');
   });
 });
