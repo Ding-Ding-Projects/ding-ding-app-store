@@ -1,5 +1,10 @@
 # Handoff
 
+## 2026-08-11 crash-recoverable history restore transaction
+
+- Restore now stages all seven state files plus their prior bytes beneath a fixed application-data `restore-transaction` journal. Staged files and the manifest are flushed before replacement; an `applying`/`applied`/`recording`/rollback-phase journal left by an interrupted process is recovered on startup before state services read application data. The recording phase carries the exact expected restore commit subject, so startup keeps applied bytes only when that commit is present; otherwise it rolls them back. Invalid, oversized, duplicate, or non-allowlisted manifest entries fail closed, and normal completion removes the journal after the restore revision is recorded.
+- Added focused recovery tests for partial replacement, recorded-transaction cleanup, and manifest traversal rejection. The linked checkout still needs its final full Chut/build run, commit, integration, and cloud release verification; no packaged Activity HuiShot is claimed because the sanctioned hidden-desktop route remains unavailable.
+
 ## 2026-08-11 restore write fencing follow-up
 
 - Added a privileged `StateMutationQueue` around renderer-originated settings, workspace, appearance, schedule, external-editor, operation, and update writes plus local-history restore. Restore now waits for an already-started write, and later writes wait until the restored files and live projections are ready; validated external-editor registration writes are included in the same boundary. The post-restore installed-state read disables registry discovery so it cannot immediately overwrite the historical installed snapshot.

@@ -1,11 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { appendFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { app } from 'electron';
 import { historyArchiveRequestSchema, type HistoryArchiveExport, type HistoryArchiveRequest, type HistoryEntry, type HistoryExportFormat, type HistoryMutationResult, type HistoryRevision, type OperationKind } from '../shared/contracts.js';
 import { serializeHistoryEntries } from '../shared/export-registry.js';
 import { createHistoryArchive } from './history-archive.js';
+import { applyRestoreTransaction, cleanupRestoreTransaction, markRestoreTransactionRecorded, markRestoreTransactionRecording, prepareRestoreTransaction, recoverRestoreTransaction, rollbackRestoreTransaction, type RestoreTransactionManifest } from './history-restore-transaction.js';
 
 const MAX_HISTORY_BYTES = 10_000_000;
 const MAX_HISTORY_ENTRIES = 10_000;
@@ -112,7 +113,17 @@ export class HistoryService {
   private readonly root = path.join(app.getPath('userData'), 'history');
   private readonly logPath = path.join(this.root, 'operations.v1.jsonl');
   private readonly repositoryPath = path.join(this.root, 'repository');
+  private readonly restoreTransactionPath = path.join(this.root, 'restore-transaction');
   private stateQueue: Promise<void> = Promise.resolve();
+
+  /** Repairs an interrupted restore before any state service reads application data. */
+  async recoverPendingRestore(): Promise<void> {
+    await this.enqueueState(() => recoverRestoreTransaction(this.restoreTransactionPath, app.getPath('userData'), async (manifest) => {
+      const label = manifest.recordLabel;
+      if (!label) return false;
+      return (await gitText(this.repositoryPath, ['log', '-1', '--format=%s', 'HEAD'], 256))?.trim() === label;
+    }));
+  }
 
   async list(): Promise<HistoryEntry[]> {
     try {
@@ -235,19 +246,36 @@ export class HistoryService {
     // Preserve the current state before applying the requested revision. This
     // makes restore an append-only operation that can itself be undone.
     if (!await this.snapshotUnlocked(`before restore: ${id}`)) return { ok: false, message: 'The current state could not be preserved in local history; no files were changed.' };
+    let transaction: RestoreTransactionManifest | null = null;
     try {
-      for (const [target, content] of restored) {
-        await mkdir(path.dirname(target), { recursive: true });
-        await writeFile(target, content, { encoding: 'utf8', mode: 0o600 });
-      }
+      transaction = await prepareRestoreTransaction(this.restoreTransactionPath, restored.map(([target, content], index) => ({
+        targetName: path.basename(target),
+        content,
+        previous: previous[index]?.[1] ?? null,
+      })));
+      transaction = await applyRestoreTransaction(this.restoreTransactionPath, app.getPath('userData'), transaction);
     } catch {
-      const rolledBack = await this.rollbackPrevious(previous);
+      const rolledBack = await this.rollbackRestoreTransaction(transaction ?? null);
       return { ok: false, message: rolledBack ? 'The selected App Store state could not be written safely; the prior state was reinstated.' : 'The selected App Store state could not be written safely, and automatic rollback was incomplete; open local versions to recover the last recorded state.' };
     }
-    if (!await this.snapshotUnlocked(`restore: ${id}`, true)) {
-      const rolledBack = await this.rollbackPrevious(previous);
+    const restoreLabel = `restore: ${id} (${randomUUID()})`;
+    try {
+      transaction = await markRestoreTransactionRecording(this.restoreTransactionPath, transaction, restoreLabel);
+    } catch {
+      const rolledBack = await this.rollbackRestoreTransaction(transaction);
+      return { ok: false, message: rolledBack ? 'The restored state could not begin its durable history record; the prior state was reinstated.' : 'The restored state could not begin its durable history record and automatic rollback was incomplete; open local versions to recover the last recorded state.' };
+    }
+    if (!await this.snapshotUnlocked(restoreLabel, true)) {
+      const rolledBack = await this.rollbackRestoreTransaction(transaction);
       return { ok: false, message: rolledBack ? 'The restored state could not be recorded as a new local revision; the prior state was reinstated.' : 'The restored state could not be recorded and automatic rollback was incomplete; open local versions to recover the last recorded state.' };
     }
+    try {
+      await markRestoreTransactionRecorded(this.restoreTransactionPath, transaction);
+    } catch {
+      const rolledBack = await this.rollbackRestoreTransaction(transaction);
+      return { ok: false, message: rolledBack ? 'The restored state could not finish its durable transaction; the prior state was reinstated.' : 'The restored state could not finish its durable transaction and automatic rollback was incomplete; open local versions to recover the last recorded state.' };
+    }
+    await cleanupRestoreTransaction(this.restoreTransactionPath).catch(() => undefined);
     return { ok: true, message: `Restored local App Store state from ${id.slice(0, 12)}.` };
   }
 
@@ -292,17 +320,14 @@ export class HistoryService {
     return next;
   }
 
-  private async rollbackPrevious(previous: Array<[string, string | null]>): Promise<boolean> {
-    let ok = true;
-    for (const [target, content] of previous) {
-      try {
-        if (content === null) await rm(target, { force: true });
-        else await writeFile(target, content, { encoding: 'utf8', mode: 0o600 });
-      } catch {
-        ok = false;
-      }
+  private async rollbackRestoreTransaction(transaction: RestoreTransactionManifest | null): Promise<boolean> {
+    try {
+      if (transaction) await rollbackRestoreTransaction(this.restoreTransactionPath, app.getPath('userData'), transaction);
+      else await recoverRestoreTransaction(this.restoreTransactionPath, app.getPath('userData'));
+      return true;
+    } catch {
+      return false;
     }
-    return ok;
   }
 
   private async snapshotUnlocked(label: string, force = false): Promise<boolean> {

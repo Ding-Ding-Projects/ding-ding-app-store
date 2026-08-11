@@ -91,6 +91,9 @@ void app.whenReady().then(async () => {
 
   const catalog = new CatalogService();
   const history = new HistoryService();
+  // Recover a restore interrupted between per-file replacements before any
+  // state service can read the application-data files.
+  await history.recoverPendingRestore();
   const installed = new InstalledService(catalog);
   catalog.setInstalledProvider(async () => await installed.list(true));
   const operations = new OperationService(catalog, history, installed, (event) => {
