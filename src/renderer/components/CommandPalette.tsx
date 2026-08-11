@@ -46,7 +46,7 @@ export function CommandPalette({ settings, entries, onAction, onClose, openRegex
     const limit = search.state.query ? SEARCH_LIMIT : BROWSE_LIMIT;
     const rows: Entry[] = [];
     for (const group of GROUP_ORDER) {
-      rows.push(...entries.filter((entry) => entry.group === group && matcher(`${entry.en}\n${entry.yue}\n${entry.keywords.join(' ')}\n${entry.id}`)).slice(0, limit));
+      rows.push(...entries.filter((entry) => entry.group === group && matcher(`${entry.en}\n${entry.yue}\n${entry.keywords.join(' ')}`)).slice(0, limit));
     }
     return rows;
   }, [entries, matcher, search.state.query]);
@@ -161,7 +161,7 @@ export function CommandPalette({ settings, entries, onAction, onClose, openRegex
                       <Icon>{entry.icon}</Icon>
                       <span>
                         <strong>{highlight(search.state, label(settings, entry.en, entry.yue))}</strong>
-                        <small>{entry.kind} · {entry.id}</small>
+                        <small>{entry.kind}</small>
                       </span>
                       {renderControl(entry)}
                       <Icon>arrow_forward</Icon>

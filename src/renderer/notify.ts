@@ -1,4 +1,5 @@
 import type { NarratorCategory } from './narrator';
+import type { SchoolModeMutationCode } from '../shared/contracts';
 
 /**
  * Recovery is deliberately a small typed vocabulary. A notification may offer
@@ -35,6 +36,8 @@ export interface Notice {
   operationId?: string;
   undo?: { label: string; run: () => void };
   recovery?: RecoveryAction;
+  /** Semantic School mutation evidence; rendered against the current shared name. */
+  schoolModeCode?: SchoolModeMutationCode;
 }
 
 export type Notify = (notice: Notice) => void;
@@ -49,6 +52,7 @@ export interface NotificationRecord {
   category?: NarratorCategory;
   operationId?: string;
   recovery?: RecoveryActionMetadata;
+  schoolModeCode?: SchoolModeMutationCode;
 }
 
 export interface ActiveNotice extends NotificationRecord {
