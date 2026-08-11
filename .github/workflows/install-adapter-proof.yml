@@ -86,7 +86,9 @@ jobs:
           if ($proof.verdict -ne $true) { throw 'The selected adapter proof did not reach its expected verdict.' }
       - uses: actions/upload-artifact@v4
         if: always()
+        continue-on-error: true
         with:
           name: install-adapter-proof-${{ inputs.app_id }}-${{ github.run_id }}
           path: proof-output/install-proof.json
-          if-no-files-found: ignore
+          if-no-files-found: warn
+          retention-days: 7

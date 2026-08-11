@@ -28,6 +28,25 @@ describe('GitHub-hosted workflow and bootstrap contract', () => {
     expect(workflow).toContain('cancel-in-progress: true');
   });
 
+  it('keeps Actions build and release paths free of test, lint, and typecheck gates', async () => {
+    const ci = await read('.github/workflows/ci.yml');
+    const release = await read('.github/workflows/release.yml');
+    const proof = await read('.github/workflows/install-adapter-proof.yml');
+    for (const workflow of [ci, release, proof]) {
+      expect(workflow).not.toMatch(/npm run (?:check|test)|npm test|vitest|tsc\s+-p|eslint|lint/i);
+      expect(workflow).toContain('npm ci');
+      expect(workflow).toContain('if: always()');
+      expect(workflow).toContain('continue-on-error: true');
+      expect(workflow).toContain('if-no-files-found: warn');
+      expect(workflow).toContain('retention-days: 7');
+    }
+    expect(ci).toContain('npm run build');
+    expect(release).toContain('\n  prepare:\n');
+    expect(release).not.toContain('\n  test:\n');
+    expect(release).not.toContain('needs: test');
+    expect(release).toContain('npx electron-builder --win squirrel --publish never');
+  });
+
   it('runs releases for ordinary branch pushes and manual dispatch, never generated release tags', async () => {
     const workflow = await read('.github/workflows/release.yml');
     expect(workflow).toMatch(/^on:\s*\n\s+push:\s*\n\s+branches:\s*\n\s+- '\*\*'\s*$/m);
