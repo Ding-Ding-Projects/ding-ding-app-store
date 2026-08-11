@@ -54,13 +54,23 @@ function AuthenticatorPicker({ id, labelText, settings, value, options, disabled
     // continue filtering after an option list update; parent rerenders alone do
     // not steal focus.
   }, [open, value, query, regex]);
+  useEffect(() => {
+    if (!disabled || !open) return;
+    setOpen(false);
+    setBuilderOpen(false);
+  }, [disabled, open]);
 
   const close = () => {
     setOpen(false);
     setBuilderOpen(false);
     window.setTimeout(() => triggerRef.current?.focus(), 0);
   };
+  const toggleOpen = () => {
+    if (open) setBuilderOpen(false);
+    setOpen((current) => !current);
+  };
   const choose = (option: PickerOption) => {
+    if (disabled) return;
     onChange(option.value);
     close();
   };
@@ -72,8 +82,12 @@ function AuthenticatorPicker({ id, labelText, settings, value, options, disabled
     }
   };
   const onListKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    if (event.target instanceof HTMLElement && event.target.closest('.regex-builder')) return;
+    if (disabled) return;
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    if (target?.closest('.regex-builder')) return;
     if (event.key === 'Escape') { event.preventDefault(); setQuery(''); setRegex(null); close(); return; }
+    const targetRole = target?.getAttribute('role');
+    if (targetRole !== 'option' && targetRole !== 'listbox') return;
     if (!visibleOptions.length) return;
     if (event.key === 'ArrowDown' || event.key === 'ArrowRight') { event.preventDefault(); setActiveIndex((index) => (index + 1) % visibleOptions.length); return; }
     if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') { event.preventDefault(); setActiveIndex((index) => (index - 1 + visibleOptions.length) % visibleOptions.length); return; }
@@ -90,15 +104,15 @@ function AuthenticatorPicker({ id, labelText, settings, value, options, disabled
       type="button"
       className="authenticator-picker-trigger"
       disabled={disabled}
-      aria-haspopup="listbox"
+      aria-haspopup="dialog"
       aria-expanded={open}
-      aria-labelledby={`${id}-label`}
-      onClick={() => setOpen((current) => !current)}
+      aria-label={label(settings, `${labelText}: ${selected?.label ?? ''}`, `${labelText}：${selected?.label ?? ''}`)}
+      onClick={toggleOpen}
       onKeyDown={onTriggerKeyDown}
     >
       <span>{selected?.label ?? ''}</span><Icon>expand_more</Icon>
     </button>
-    {open && <section className="popover authenticator-picker-popover" role="dialog" aria-label={label(settings, `${labelText} picker`, `${labelText}選擇器`)} onKeyDown={onListKeyDown}>
+    {open && !disabled && <section className="popover authenticator-picker-popover" role="dialog" aria-label={label(settings, `${labelText} picker`, `${labelText}選擇器`)} onKeyDown={onListKeyDown}>
       <div className="authenticator-picker-search">
         <Icon>search</Icon>
         <input
@@ -112,11 +126,14 @@ function AuthenticatorPicker({ id, labelText, settings, value, options, disabled
           aria-activedescendant={visibleOptions[activeIndex] ? `${id}-option-${String(visibleOptions[activeIndex].value)}` : undefined}
           onChange={(event) => { setQuery(event.target.value); if (regex) setRegex({ ...regex, pattern: event.target.value }); }}
         />
+        {(query || regex) && <button type="button" className="icon-button" aria-label={label(settings, `Clear ${labelText.toLocaleLowerCase()} filter`, `清除${labelText}篩選`)} onClick={() => { setQuery(''); setRegex(null); window.setTimeout(() => inputRef.current?.focus(), 0); }}><Icon>close</Icon></button>}
         <button className="icon-button" type="button" aria-label={label(settings, `Open regex builder for ${labelText}`, `開啟${labelText}正則建造器`)} aria-expanded={builderOpen} onClick={() => setBuilderOpen((current) => !current)}><Icon>regular_expression</Icon></button>
         {builderOpen && <RegexBuilder query={query} initialPattern={regex?.pattern} initialFlags={regex?.flags} settings={settings} onClose={() => { setBuilderOpen(false); window.setTimeout(() => inputRef.current?.focus(), 0); }} onApply={(pattern, flags) => { setQuery(pattern); setRegex({ pattern, flags }); setBuilderOpen(false); window.setTimeout(() => inputRef.current?.focus(), 0); }} />}
       </div>
       <div id={`${id}-options`} className="authenticator-picker-list" role="listbox" aria-label={labelText}>
-        {visibleOptions.length === 0 ? <p className="empty-state compact" role="status">{label(settings, 'No matching options.', '冇配到嘅選項。')}</p> : visibleOptions.map((option, index) => <button
+        {visibleOptions.length === 0 ? <p className="empty-state compact" role="status">{label(settings, 'No matching options.', '冇配到嘅選項。')}</p> : <>
+          <p className="supporting authenticator-picker-result-count" role="status">{label(settings, `${visibleOptions.length} matching options`, `有${visibleOptions.length}個配到嘅選項`)}</p>
+          {visibleOptions.map((option, index) => <button
           type="button"
           role="option"
           id={`${id}-option-${String(option.value)}`}
@@ -126,6 +143,7 @@ function AuthenticatorPicker({ id, labelText, settings, value, options, disabled
           onMouseEnter={() => setActiveIndex(index)}
           onClick={() => choose(option)}
         >{option.label}</button>)}
+        </>}
       </div>
     </section>}
   </div>;
