@@ -1445,7 +1445,7 @@ export interface DingDingStoreApi {
     subscribe(listener: (event: Readonly<OperationProgressEvent>) => void): () => void;
     build(request: OperationRequest): Promise<OperationResult>;
     uninstall(request: OperationRequest): Promise<OperationResult>;
-    installed(): Promise<InstalledAppRecord[]>;
+    installed(discover?: boolean): Promise<InstalledAppRecord[]>;
   };
   sourceJobs: {
     start(request: SourceJobRequest): Promise<SourceJobStartResult>;

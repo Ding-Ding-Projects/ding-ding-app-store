@@ -1,5 +1,11 @@
 # Handoff
 
+## 2026-08-11 restore write fencing follow-up
+
+- Added a privileged `StateMutationQueue` around renderer-originated settings, workspace, appearance, schedule, external-editor, operation, and update writes plus local-history restore. Restore now waits for an already-started write, and later writes wait until the restored files and live projections are ready; validated external-editor registration writes are included in the same boundary. The post-restore installed-state read disables registry discovery so it cannot immediately overwrite the historical installed snapshot.
+- Added `Scheduler.reloadFromDisk()` so `schedule:load` reads the restored schedule and run metadata from application data, re-arms timers and external-source refresh, and clears ephemeral status. Scheduled/manual runs use the same mutation queue; timer callbacks retain their pre-restore generation and stale in-flight work cannot publish restored-overwriting run metadata.
+- Verification in the follow-up checkout: restore-fence, scheduler, queue, history, and contract tests are green (48 tests across 4 files), and main plus renderer TypeScript checks are green. Full repository checks, build, exact commit, cloud CI/release, and packaged runtime evidence remain pending until this follow-up is committed and integrated.
+
 ## 2026-08-11 shared School-mode live synchronization
 
 - Integrated the revisioned shared School-mode record with parent-directory observation, bounded polling reconciliation, strict schema-v2/record-epoch migration, stale-writer compare-and-swap, atomic writes, and fail-closed unavailable states. Running app instances now receive enabled-state, chosen-name, and credential-record changes without restart; invalid or unwatched state keeps restricted English presentation.

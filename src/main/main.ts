@@ -25,6 +25,7 @@ import { SchoolModeService } from './school-mode-service.js';
 import { AuthenticatorService } from './authenticator-service.js';
 import { SafeStorageAuthenticatorVault } from './authenticator-vault.js';
 import { LockSupportService } from './lock-support-service.js';
+import { StateMutationQueue } from './state-mutation-queue.js';
 
 const scheduleTaskSchema = z.enum(['self-update', 'catalog-refresh']);
 
@@ -188,10 +189,12 @@ void app.whenReady().then(async () => {
   const dimSum = new DimSumService();
   const externalEditor = new ExternalEditorService();
   const externalNavigation = new ExternalNavigationService(shell);
+  const stateMutationQueue = new StateMutationQueue();
   const scheduler = new Scheduler({
     getWindow: () => mainWindow,
     service: schedule,
     externalSources: externalScheduledSettings,
+    mutate: (operation) => stateMutationQueue.run(operation),
     tasks: {
       'self-update': () => updates.runScheduled('schedule'),
       'catalog-refresh': async () => {
@@ -201,15 +204,17 @@ void app.whenReady().then(async () => {
       },
     },
   });
-
-  ipcMain.handle('catalog:list', () => catalog.list(false));
-  ipcMain.handle('catalog:refresh', () => catalog.list(true));
-  ipcMain.handle('operations:install', (_event, request: OperationRequest) => operations.install(request));
+  ipcMain.handle('catalog:list', () => stateMutationQueue.run(() => catalog.list(false)));
+  ipcMain.handle('catalog:refresh', () => stateMutationQueue.run(() => catalog.list(true)));
+  ipcMain.handle('operations:install', (_event, request: OperationRequest) => stateMutationQueue.run(() => operations.install(request)));
+  // Cancellation must remain an abort-priority path; queueing it behind the
+  // long-running install would let the operation finish before it can see the
+  // user's cancel request.
   ipcMain.handle('operations:cancel-install', (_event, request: InstallCancelRequest) => operations.cancelInstall(request));
   ipcMain.handle('operations:status', (event) => event.sender === mainWindow?.webContents ? operations.listActive() : []);
-  ipcMain.handle('operations:build', (_event, request: OperationRequest) => operations.build(request));
-  ipcMain.handle('operations:uninstall', (_event, request: OperationRequest) => operations.uninstall(request));
-  ipcMain.handle('operations:installed', () => operations.listInstalled());
+  ipcMain.handle('operations:build', (_event, request: OperationRequest) => stateMutationQueue.run(() => operations.build(request)));
+  ipcMain.handle('operations:uninstall', (_event, request: OperationRequest) => stateMutationQueue.run(() => operations.uninstall(request)));
+  ipcMain.handle('operations:installed', (_event, discover: unknown = true) => stateMutationQueue.run(() => operations.listInstalled(discover !== false)));
   ipcMain.handle('source-jobs:start', (event, request: SourceJobRequest) => {
     if (event.sender !== mainWindow?.webContents) return { ok: false, appId: 'invalid', state: 'failed', message: 'Blocked source job request from an unknown renderer.' };
     return sourceJobs.start(request);
@@ -225,19 +230,19 @@ void app.whenReady().then(async () => {
   ipcMain.handle('source-jobs:status', (event) => event.sender === mainWindow?.webContents
     ? sourceJobs.isolationStatus()
     : { available: false, provider: 'windows-sandbox', reason: 'guest-transport-not-connected', checkedAt: new Date().toISOString(), evidence: ['Blocked source status request from an unknown renderer.'], remediation: 'Keep source execution disabled until a reviewed disposable guest transport is connected.' });
-  ipcMain.handle('updates:catalog', () => catalog.list(true));
+  ipcMain.handle('updates:catalog', () => stateMutationQueue.run(() => catalog.list(true)));
   ipcMain.handle('updates:store-check', () => updates.check());
-  ipcMain.handle('updates:store-download', () => updates.download());
-  ipcMain.handle('updates:store-restart', () => updates.restart());
+  ipcMain.handle('updates:store-download', () => stateMutationQueue.run(() => updates.download()));
+  ipcMain.handle('updates:store-restart', () => stateMutationQueue.run(() => updates.restart()));
   ipcMain.handle('updates:store-cancel-download', () => updates.cancelDownload());
   ipcMain.handle('updates:open-release-notes', (_event, url: unknown) => updates.openReleaseNotes(typeof url === 'string' ? url : ''));
   ipcMain.handle('updates:app-check', (event, appId: unknown) => event.sender === mainWindow?.webContents ? managedUpdates.checkApp(typeof appId === 'string' ? appId : 'invalid') : managedUpdates.checkApp('invalid'));
-  ipcMain.handle('updates:app-download', (event, request: unknown) => event.sender === mainWindow?.webContents ? managedUpdates.download(request) : managedUpdates.download({ appId: 'invalid', decision: 'download-update' }));
+  ipcMain.handle('updates:app-download', (event, request: unknown) => stateMutationQueue.run(() => event.sender === mainWindow?.webContents ? managedUpdates.download(request) : managedUpdates.download({ appId: 'invalid', decision: 'download-update' })));
   ipcMain.handle('updates:app-cancel', (event, request: unknown) => event.sender === mainWindow?.webContents ? managedUpdates.cancel(request) : managedUpdates.cancel({ appId: 'invalid', decision: 'cancel-update' }));
-  ipcMain.handle('updates:app-restart', (event, request: unknown) => event.sender === mainWindow?.webContents ? managedUpdates.restart(request) : managedUpdates.restart({ appId: 'invalid', decision: 'restart-to-install' }));
+  ipcMain.handle('updates:app-restart', (event, request: unknown) => stateMutationQueue.run(() => event.sender === mainWindow?.webContents ? managedUpdates.restart(request) : managedUpdates.restart({ appId: 'invalid', decision: 'restart-to-install' })));
   ipcMain.handle('settings:load', () => settings.load());
   ipcMain.handle('settings:provenance', () => settings.provenance());
-  ipcMain.handle('settings:save', (_event, value: UserSettings) => settings.save(value));
+  ipcMain.handle('settings:save', (_event, value: UserSettings) => stateMutationQueue.run(() => settings.save(value)));
   ipcMain.handle('school-mode:load', (event) => event.sender === mainWindow?.webContents ? schoolMode.load() : Promise.reject(new Error('Blocked School mode request from an unknown renderer.')));
   ipcMain.handle('school-mode:configure', (event, request: SchoolModeConfigureRequest) => event.sender === mainWindow?.webContents ? schoolMode.configure(request) : Promise.reject(new Error('Blocked School mode request from an unknown renderer.')));
   ipcMain.handle('school-mode:rename', (event, request: SchoolModeRenameRequest) => event.sender === mainWindow?.webContents ? schoolMode.rename(request) : Promise.reject(new Error('Blocked School mode request from an unknown renderer.')));
@@ -319,30 +324,34 @@ void app.whenReady().then(async () => {
   ipcMain.handle('history:revisions', (event) => event.sender === mainWindow?.webContents ? history.revisions() : []);
   ipcMain.handle('history:diff', (event, revisionId: unknown) => event.sender === mainWindow?.webContents && typeof revisionId === 'string' ? history.diff(revisionId) : '');
   ipcMain.handle('history:label', (event, revisionId: unknown, requestedLabel: unknown) => event.sender === mainWindow?.webContents && typeof revisionId === 'string' && typeof requestedLabel === 'string'
-    ? history.label(revisionId, requestedLabel)
+    ? stateMutationQueue.run(() => history.label(revisionId, requestedLabel))
     : { ok: false, message: 'Blocked local history label request from an unknown renderer.' });
   ipcMain.handle('history:restore', (event, revisionId: unknown) => event.sender === mainWindow?.webContents && typeof revisionId === 'string'
-    ? history.restore(revisionId)
+    ? stateMutationQueue.run(async () => {
+      const result = await history.restore(revisionId);
+      if (result.ok) await scheduler.reloadFromDisk();
+      return result;
+    })
     : { ok: false, message: 'Blocked local history restore request from an unknown renderer.' });
   ipcMain.handle('workspace:load', () => workspace.load());
-  ipcMain.handle('workspace:save', (_event, value: TabWorkspace) => workspace.save(value));
-  ipcMain.handle('workspace:reset', () => workspace.reset());
+  ipcMain.handle('workspace:save', (_event, value: TabWorkspace) => stateMutationQueue.run(() => workspace.save(value)));
+  ipcMain.handle('workspace:reset', () => stateMutationQueue.run(() => workspace.reset()));
   ipcMain.handle('workspace:export', () => workspace.export());
-  ipcMain.handle('workspace:import', (_event, document: string) => workspace.import(document));
-  ipcMain.handle('appearance:load', () => appearance.load());
-  ipcMain.handle('appearance:set-element', (_event, key: ElementKey, override: ElementOverride) => appearance.setElement(key, override));
-  ipcMain.handle('appearance:reset-element', (_event, key: ElementKey) => appearance.resetElement(key));
-  ipcMain.handle('appearance:reset-all', () => appearance.resetAll());
+  ipcMain.handle('workspace:import', (_event, document: string) => stateMutationQueue.run(() => workspace.import(document)));
+  ipcMain.handle('appearance:load', () => stateMutationQueue.run(() => appearance.load()));
+  ipcMain.handle('appearance:set-element', (_event, key: ElementKey, override: ElementOverride) => stateMutationQueue.run(() => appearance.setElement(key, override)));
+  ipcMain.handle('appearance:reset-element', (_event, key: ElementKey) => stateMutationQueue.run(() => appearance.resetElement(key)));
+  ipcMain.handle('appearance:reset-all', () => stateMutationQueue.run(() => appearance.resetAll()));
   ipcMain.handle('appearance:export', () => appearance.export());
-  ipcMain.handle('appearance:import', (_event, payload: string) => appearance.import(payload));
-  ipcMain.handle('schedule:load', () => scheduler.status());
-  ipcMain.handle('schedule:save', (_event, config: unknown) => scheduler.save(config));
+  ipcMain.handle('appearance:import', (_event, payload: string) => stateMutationQueue.run(() => appearance.import(payload)));
+  ipcMain.handle('schedule:load', () => stateMutationQueue.run(() => scheduler.reloadFromDisk()));
+  ipcMain.handle('schedule:save', (_event, config: unknown) => stateMutationQueue.run(() => scheduler.save(config)));
   ipcMain.handle('schedule:run-now', (_event, task: unknown) => scheduler.runNow(scheduleTaskSchema.parse(task)));
   ipcMain.handle('dim-sum:startup', () => dimSum.startup());
   ipcMain.handle('external-editor:detect', (event) => event.sender === mainWindow?.webContents ? externalEditor.detect() : []);
   ipcMain.handle('external-editor:preference', (event) => event.sender === mainWindow?.webContents ? externalEditor.preference() : { editor: 'vscode', edition: 'unknown' as const });
-  ipcMain.handle('external-editor:set-preference', (event, value: ExternalEditorPreference) => event.sender === mainWindow?.webContents ? externalEditor.setPreference(value) : { editor: 'vscode', edition: 'unknown' as const });
-  ipcMain.handle('external-editor:add-validated', (event) => event.sender === mainWindow?.webContents ? externalEditor.addValidated() : null);
+  ipcMain.handle('external-editor:set-preference', (event, value: ExternalEditorPreference) => event.sender === mainWindow?.webContents ? stateMutationQueue.run(() => externalEditor.setPreference(value)) : { editor: 'vscode', edition: 'unknown' as const });
+  ipcMain.handle('external-editor:add-validated', (event) => event.sender === mainWindow?.webContents ? stateMutationQueue.run(() => externalEditor.addValidated()) : null);
   ipcMain.handle('external-editor:open-export', (event, request: ExternalEditorOpenRequest) => event.sender === mainWindow?.webContents ? externalEditor.openExport(request) : { ok: false as const, reason: 'bridge-unavailable' as const, message: 'Blocked external editor request from an unknown renderer.' });
   ipcMain.handle('external-editor:open-archive', (event, request: unknown) => event.sender === mainWindow?.webContents ? externalEditor.openArchive(request) : { ok: false as const, reason: 'bridge-unavailable' as const, message: 'Blocked external editor request from an unknown renderer.' });
   ipcMain.handle('external-navigation:open-commit', (event, commit: unknown) => event.sender === mainWindow?.webContents
@@ -360,11 +369,13 @@ void app.whenReady().then(async () => {
   ipcMain.on('window:close', () => mainWindow?.close());
 
   mainWindow = createWindow();
-  void installed.discover().catch(() => undefined);
+  void stateMutationQueue.run(() => installed.discover()).catch(() => undefined);
   mainWindow.on('closed', () => { mainWindow = null; });
-  await scheduler.start();
+  // ScheduleService may migrate and persist its file during startup. Keep
+  // that write behind the same barrier as history restore and renderer saves.
+  await stateMutationQueue.run(() => scheduler.start());
   await managedUpdates.restore();
-  void managedUpdates.checkAll();
+  void stateMutationQueue.run(() => managedUpdates.checkAll());
   setTimeout(() => void scheduler.runStartupCheck(), 5_000).unref();
 
   app.on('activate', () => {

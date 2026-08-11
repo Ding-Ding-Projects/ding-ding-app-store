@@ -293,7 +293,7 @@ const api: DingDingStoreApi = {
     },
     build: (request: OperationRequest) => ipcRenderer.invoke('operations:build', request),
     uninstall: (request: OperationRequest) => ipcRenderer.invoke('operations:uninstall', request),
-    installed: () => ipcRenderer.invoke('operations:installed'),
+    installed: (discover = true) => ipcRenderer.invoke('operations:installed', discover),
   },
   sourceJobs: {
     start: (request: SourceJobRequest) => ipcRenderer.invoke('source-jobs:start', request),

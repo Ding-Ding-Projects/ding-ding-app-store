@@ -256,15 +256,18 @@ export function App() {
     finally { setHistoryLoading(false); }
   }, []);
 
-  const loadInstalled = useCallback(async () => {
-    try { setInstalled(await window.dingDingStore.operations.installed()); }
+  const loadInstalled = useCallback(async (discover = true) => {
+    try { setInstalled(await window.dingDingStore.operations.installed(discover)); }
     catch (error) { notify({ ok: false, message: projectRuntimeText((error as Error).message) }); }
   }, [notify, projectRuntimeText]);
 
   const reloadHistoryAndSettings = useCallback(async () => {
     await Promise.all([
       loadHistory(),
-      loadInstalled(),
+      // History restore writes the installed snapshot deliberately. Read it
+      // back without registry discovery so the refresh cannot immediately
+      // replace the restored bytes with the current machine projection.
+      loadInstalled(false),
       reloadSettings(),
       workspace.reload(),
       appearance.reload(),

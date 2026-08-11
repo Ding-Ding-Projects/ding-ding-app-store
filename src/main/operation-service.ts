@@ -600,7 +600,7 @@ export class OperationService {
     return this.finish(record, 'uninstall', result);
   }
 
-  async listInstalled(): Promise<InstalledAppRecord[]> {
-    return await this.installed.list(true);
+  async listInstalled(discover = true): Promise<InstalledAppRecord[]> {
+    return await this.installed.list(discover);
   }
 }
