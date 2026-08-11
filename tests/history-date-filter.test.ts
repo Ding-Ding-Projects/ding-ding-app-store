@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dateKey, matchesHistoryDate, parseHistoryDate, presetRange, resolveHistoryDateRange } from '../src/renderer/history-date-filter';
+import { dateKey, formatHistoryCalendarDay, matchesHistoryDate, parseHistoryDate, presetRange, resolveHistoryDateRange } from '../src/renderer/history-date-filter';
 
 describe('history date filter', () => {
   it('accepts ISO and locale-shaped dates while rejecting invalid or partial values', () => {
@@ -25,5 +25,14 @@ describe('history date filter', () => {
     expect(matchesHistoryDate('2026-08-09T00:00:00', range)).toBe(false);
     expect(presetRange('today', new Date(2026, 7, 8))).toEqual({ start: '2026-08-08', end: '2026-08-08' });
     expect(dateKey(new Date(2026, 7, 8))).toBe('2026-08-08');
+  });
+
+  it('formats Activity calendar labels in the persisted language mode', () => {
+    const day = new Date('2026-08-11T00:00:00.000Z');
+    const english = day.toLocaleDateString('en-CA');
+    const cantonese = day.toLocaleDateString('zh-HK');
+    expect(formatHistoryCalendarDay(day, 'en')).toBe(english);
+    expect(formatHistoryCalendarDay(day, 'yue')).toBe(cantonese);
+    expect(formatHistoryCalendarDay(day, 'bilingual')).toBe(`${english} · ${cantonese}`);
   });
 });

@@ -218,6 +218,7 @@ describe('global renderer UI completion', () => {
     expect(activity).toContain("placeholder={label(settings, 'Search activity and local versions'");
     expect(activity).toContain("label(settings, 'Filter by result', '按結果篩選')");
     expect(activity).toContain("label(settings, 'Filter by date', '按日期篩選')");
+    expect(activity).toContain('formatHistoryCalendarDay(day, settings.language)');
     expect(activity).toContain("label(settings, 'Select all shown', '揀晒目前顯示')");
     expect(activity).toContain("label(settings, 'Open in VS Code', '喺 VS Code 開')");
     expect(activity).toContain("actionLabel(entry.kind)");

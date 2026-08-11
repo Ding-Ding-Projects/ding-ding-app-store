@@ -1,6 +1,14 @@
 export type HistoryDatePreset = 'all' | 'today' | '7d' | '30d';
 export type HistoryDateLanguage = 'en' | 'yue' | 'bilingual';
 
+export function formatHistoryCalendarDay(date: Date, language: HistoryDateLanguage): string {
+  const english = date.toLocaleDateString('en-CA');
+  const cantonese = date.toLocaleDateString('zh-HK');
+  if (language === 'yue') return cantonese;
+  if (language === 'bilingual') return `${english} · ${cantonese}`;
+  return english;
+}
+
 export type HistoryDateRange = {
   start: string;
   end: string;

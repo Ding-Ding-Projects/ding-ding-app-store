@@ -10,7 +10,7 @@ import { exportHistoryEntries } from '../history-export';
 import { HISTORY_EXPORT_FORMATS, historyExportFormat } from '../../shared/export-registry';
 import { isExternalEditorBridgeAvailable, openArchiveInVsCode, openExportInVsCode } from '../external-editor';
 import type { Notify } from '../notify';
-import { dateKey, matchesHistoryDate, presetRange, resolveHistoryDateRange } from '../history-date-filter';
+import { dateKey, formatHistoryCalendarDay, matchesHistoryDate, presetRange, resolveHistoryDateRange } from '../history-date-filter';
 import { DestructiveConfirmDialog } from '../components/DestructiveConfirmDialog';
 import { exportHistoryRevisions, HISTORY_REVISION_EXPORT_FORMATS, type HistoryRevisionExportFormat } from '../history-revision-export';
 import { clearRevisionSelection, filterHistoryRevisions, historyMutationMessage, invertRevisionSelection, selectRevisionRange } from '../history-revisions';
@@ -280,8 +280,9 @@ export function ActivityPage({ entries, revisions, loading, settings, openRegex,
           {calendarDays.map((day) => {
             const value = dateKey(day);
             const selectedDay = value === dateStart || value === dateEnd;
-            return <div key={day.toISOString()} role="gridcell" aria-selected={selectedDay} aria-label={day.toLocaleDateString()}>
-              <button type="button" className={day.getMonth() === Number(calendarMonth.slice(5, 7)) - 1 ? '' : 'outside-month'} aria-current={value === dateKey(new Date()) ? 'date' : undefined} aria-pressed={selectedDay} aria-label={day.toLocaleDateString()} onClick={() => chooseCalendarDay(day)}>{day.getDate()}</button>
+            const calendarDayLabel = formatHistoryCalendarDay(day, settings.language);
+            return <div key={day.toISOString()} role="gridcell" aria-selected={selectedDay} aria-label={calendarDayLabel}>
+              <button type="button" className={day.getMonth() === Number(calendarMonth.slice(5, 7)) - 1 ? '' : 'outside-month'} aria-current={value === dateKey(new Date()) ? 'date' : undefined} aria-pressed={selectedDay} aria-label={calendarDayLabel} onClick={() => chooseCalendarDay(day)}>{day.getDate()}</button>
             </div>;
           })}
         </div>
