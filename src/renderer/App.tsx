@@ -169,6 +169,7 @@ export function App() {
   const [renameRequest, setRenameRequest] = useState<string | null>(null);
   const [lockTargetRequest, setLockTargetRequest] = useState<LockTarget | null>(null);
   const [subTab, setSubTab] = useState<SettingsSubTabId>('settings.general');
+  const [settingsReloadKey, setSettingsReloadKey] = useState(0);
   const [docRequest, setDocRequest] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState('');
   const safeFocusRef = useRef<HTMLElement>(null);
@@ -255,15 +256,22 @@ export function App() {
     finally { setHistoryLoading(false); }
   }, []);
 
-  const reloadHistoryAndSettings = useCallback(async () => {
-    await loadHistory();
-    await reloadSettings();
-  }, [loadHistory, reloadSettings]);
-
   const loadInstalled = useCallback(async () => {
     try { setInstalled(await window.dingDingStore.operations.installed()); }
     catch (error) { notify({ ok: false, message: projectRuntimeText((error as Error).message) }); }
   }, [notify, projectRuntimeText]);
+
+  const reloadHistoryAndSettings = useCallback(async () => {
+    await Promise.all([
+      loadHistory(),
+      loadInstalled(),
+      reloadSettings(),
+      workspace.reload(),
+      appearance.reload(),
+      schedule.reload(),
+    ]);
+    setSettingsReloadKey((value) => value + 1);
+  }, [appearance, loadHistory, loadInstalled, reloadSettings, schedule, workspace]);
 
   const refreshSourceIsolation = useCallback(async () => {
     setSourceIsolationLoading(true);
@@ -1074,6 +1082,7 @@ export function App() {
           {activeTab === 'activity' && <ActivityPage entries={visibleHistory} revisions={visibleHistoryRevisions} loading={historyLoading} settings={settings} openRegex={regexRequest === 'activity'} onRegexHandled={() => setRegexRequest(null)} notify={notify} onHistoryChanged={reloadHistoryAndSettings} />}
           {activeTab === 'settings' && (
             <SettingsPage
+              key={settingsReloadKey}
               settings={baseSettings}
               settingsProvenance={settingsProvenance}
               sourceIsolationStatus={sourceIsolationStatus}

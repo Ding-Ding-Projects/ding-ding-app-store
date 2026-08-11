@@ -44,7 +44,7 @@ The lock owner record contains only an opaque token, process ID, and creation ti
 
 `tests/school-mode.test.ts`, `tests/school-mode-live-sync.test.ts`, and `tests/school-mode-bridge.test.ts` cover presentation restriction, name privacy, schema-v1 migration, secret exclusion, credential rotation, two simultaneous services, rename/enable/credential propagation, atomic-rename observation, stale-write conflict/retry, delete-and-recreate ABA defense, malformed/read/watch/write failure states, live-owner lock retention, dead-owner recovery, bounded recovery exhaustion, preload validation, subscription ordering, renderer observation ordering, and lifecycle cleanup. The focused matrix passes 42 tests; the full root matrix passes 319 tests across 45 files, with workspace suites at 11, 20, and 20 tests. Main/preload and renderer TypeScript checks plus the production build pass.
 
-These checks are source and process-level evidence. The required Cheap Lowlevel headless interaction route was unavailable for this lane, so no packaged runtime capture, focus behavior, screen-reader drive, or visible Settings proof is claimed.
+These checks are source and process-level evidence. The required sanctioned headless interaction route was unavailable for this lane, so no packaged runtime capture, focus behavior, screen-reader drive, or visible Settings proof is claimed.
 
 ## Suggested articles
 

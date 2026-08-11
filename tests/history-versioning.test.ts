@@ -1,9 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { readFile } from 'node:fs/promises';
+import { parseHistoryEntry } from '../src/main/history-service';
 
 const read = (file: string) => readFile(new URL(`../${file}`, import.meta.url), 'utf8');
 
 describe('local history/version browser contract', () => {
+  it('quarantines malformed Activity log lines instead of crashing the list', () => {
+    const valid = { id: 'entry-1', appId: 'catalog', displayName: 'Catalog', kind: 'install', ok: true, message: 'Installed', occurredAt: '2026-08-11T13:00:00.000Z' };
+    expect(parseHistoryEntry(valid)).toEqual(valid);
+    expect(parseHistoryEntry({ ...valid, occurredAt: { nope: true } })).toBeNull();
+    expect(parseHistoryEntry({ ...valid, kind: 'unknown' })).toBeNull();
+    expect(parseHistoryEntry({ ...valid, message: 'x'.repeat(20_001) })).toBeNull();
+  });
+
   it('keeps revisions local, bounded, and restricted to every non-secret App Store state file', async () => {
     const service = await read('src/main/history-service.ts');
     expect(service).toContain('MAX_REVISIONS = 200');
@@ -15,9 +24,11 @@ describe('local history/version browser contract', () => {
     expect(service).not.toContain('school-mode');
     expect(service).not.toContain('credential-vault');
     expect(service).toContain("GIT_CONFIG_NOSYSTEM: '1'");
+    expect(service).toContain("GIT_CONFIG_NOGLOBAL: '1'");
     expect(service).toContain("['merge-base', '--is-ancestor', id, 'HEAD']");
     expect(service).toContain("['show', source]");
     expect(service).toContain('JSON.parse(content)');
+    expect(service).toContain('parseHistoryEntry(JSON.parse(line))');
   });
 
   it('preserves all user-facing state while excluding credentials and staged update paths', async () => {
@@ -32,6 +43,8 @@ describe('local history/version browser contract', () => {
   it('records labels and restores as append-only commits with a before snapshot', async () => {
     const service = await read('src/main/history-service.ts');
     expect(service).toContain("state/labels.v1.json");
+    expect(service).toContain('HISTORY_METADATA_FILES');
+    expect(service).toContain('const allowed = new Set([...SNAPSHOT_FILES, ...HISTORY_METADATA_FILES])');
     expect(service).toContain("git(this.repositoryPath, ['commit', '-m', `label: ${label}`])");
     expect(service).toContain("await this.snapshotUnlocked(`before restore: ${id}`)");
     expect(service).toContain("await this.snapshotUnlocked(`restore: ${id}`, true)");
@@ -60,9 +73,18 @@ describe('local history/version browser contract', () => {
     expect(settings).toContain('reload(): Promise<void>');
     expect(settings).toContain('Settings could not be reloaded after the local history change');
     expect(app).toContain('reloadHistoryAndSettings');
+    expect(await read('src/renderer/state/use-workspace.ts')).toContain('reload(): Promise<void>');
+    expect(await read('src/renderer/state/use-appearance.ts')).toContain('reload(): Promise<void>');
+    expect(await read('src/renderer/state/use-schedule.ts')).toContain('reload(): Promise<void>');
+    expect(app).toContain('workspace.reload()');
+    expect(app).toContain('appearance.reload()');
+    expect(app).toContain('schedule.reload()');
+    expect(app).toContain('loadInstalled()');
+    expect(app).toContain('key={settingsReloadKey}');
     expect(activity).toContain('role="gridcell"');
     expect(activity).toContain('aria-selected={selectedDay}');
     expect(activity).toContain('aria-label={label(settings, `${revisionDiffs[revision.id] === undefined ?');
+    expect(activity).toContain('aria-label={label(settings, `Diff for ${revision.label}`');
     expect(activity).toContain('Restore revision ${revision.label}');
   });
 });

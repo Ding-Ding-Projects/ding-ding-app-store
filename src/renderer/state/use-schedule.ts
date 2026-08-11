@@ -14,6 +14,7 @@ function recoveryTaskForNotice(id: string): ScheduleTaskId | null {
 export interface ScheduleApi {
   status: ScheduleStatus | null;
   draft: ScheduleConfig;
+  reload(): Promise<void>;
   dirty: boolean;
   saving: boolean;
   issues: Array<{ field: string; message: string }>;
@@ -52,10 +53,21 @@ export function useSchedule(notify: Notify): ScheduleApi {
     }
   }, [notify]);
 
+  const reload = useCallback(async () => {
+    dirtyRef.current = false;
+    setDirty(false);
+    setIssues([]);
+    try {
+      receive(await window.dingDingStore.schedule.load());
+    } catch (error) {
+      notify({ ok: false, message: `Schedule could not be reloaded after the local history change: ${(error as Error).message.slice(0, 200)}` });
+    }
+  }, [notify, receive]);
+
   useEffect(() => {
-    void window.dingDingStore.schedule.load().then(receive);
+    void reload();
     return window.dingDingStore.schedule.subscribe(receive);
-  }, [receive]);
+  }, [receive, reload]);
 
   const set = useCallback((key: ScheduleFieldKey, value: number | boolean) => {
     dirtyRef.current = true;
@@ -139,5 +151,5 @@ export function useSchedule(notify: Notify): ScheduleApi {
     }
   }, [receive, notify]);
 
-  return { status, draft, dirty, saving, issues, set, setRules, applyNow, save, discard, resetDefaults, runNow, running };
+  return { status, draft, dirty, saving, issues, reload, set, setRules, applyNow, save, discard, resetDefaults, runNow, running };
 }
