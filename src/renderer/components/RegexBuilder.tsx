@@ -5,6 +5,7 @@ import { regexSafetyIssue } from '../search';
 import { evaluateRegexInWorker } from '../regex-evaluator';
 import type { UserSettings } from '../../shared/contracts';
 import { dialogCopy } from '../dialog-emoji';
+import { label } from '../i18n';
 
 /** The one guided regex builder. Every search surface in the app renders this exact component. */
 export function RegexBuilder({ query, settings, onApply, onClose, initialPattern, initialFlags }: { query: string; settings: UserSettings; onApply: (pattern: string, flags: string) => void; onClose: () => void; initialPattern?: string; initialFlags?: string }) {
@@ -39,20 +40,21 @@ export function RegexBuilder({ query, settings, onApply, onClose, initialPattern
     return () => controller.abort();
   }, [pattern, flags, sample]);
   const add = (value: string) => setPattern((current) => `${current}${value}`.slice(0, 160));
+  const matchText = result.matches.map((match) => match.text || label(settings, 'zero-width', '零寬')).join(', ');
 
   return (
-    <section className="popover regex-builder" role="dialog" aria-label="Regex builder" {...el('regex-builder')}>
-      <header><strong>{dialogCopy(settings, 'Regex builder · Regex 建造器', '🔎')}</strong><button className="icon-button" onClick={onClose} aria-label="Close regex builder"><Icon>close</Icon></button></header>
-      <div className="chip-row" aria-label="Guided regex parts">
-        <button {...el('chip')} onClick={() => add('literal')}>Literal</button><button {...el('chip')} onClick={() => add('[A-Za-z]')}>Class</button>
-        <button {...el('chip')} onClick={() => add('^')}>Anchor</button><button {...el('chip')} onClick={() => add('(group)')}>Group</button>
-        <button {...el('chip')} onClick={() => add('|')}>Alternation</button><button {...el('chip')} onClick={() => add('{1,3}')}>Quantifier</button>
+    <section className="popover regex-builder" role="dialog" aria-label={label(settings, 'Regex builder', 'Regex 建造器')} {...el('regex-builder')}>
+      <header><strong>{dialogCopy(settings, label(settings, 'Regex builder', 'Regex 建造器'), '🔎')}</strong><button type="button" className="icon-button" onClick={onClose} aria-label={label(settings, 'Close regex builder', '關閉 Regex 建造器')}><Icon>close</Icon></button></header>
+      <div className="chip-row" aria-label={label(settings, 'Guided regex parts', '引導式 Regex 元件')}>
+        <button type="button" {...el('chip')} onClick={() => add('literal')}>{label(settings, 'Literal', '字面值')}</button><button type="button" {...el('chip')} onClick={() => add('[A-Za-z]')}>{label(settings, 'Class', '字元類別')}</button>
+        <button type="button" {...el('chip')} onClick={() => add('^')}>{label(settings, 'Anchor', '錨點')}</button><button type="button" {...el('chip')} onClick={() => add('(group)')}>{label(settings, 'Group', '群組')}</button>
+        <button type="button" {...el('chip')} onClick={() => add('|')}>{label(settings, 'Alternation', '交替')}</button><button type="button" {...el('chip')} onClick={() => add('{1,3}')}>{label(settings, 'Quantifier', '量詞')}</button>
       </div>
-      <label>Pattern<input autoFocus value={pattern} maxLength={160} onChange={(event) => setPattern(event.target.value)} /></label>
-      <fieldset><legend>Flags</legend>{['i', 'm', 's', 'u'].map((flag) => <label className="flag" key={flag}><input type="checkbox" checked={flags.includes(flag)} onChange={(event) => setFlags((current) => event.target.checked ? `${current}${flag}` : current.replace(flag, ''))} />{flag}</label>)}</fieldset>
-      <label>Sample text<textarea value={sample} maxLength={10_000} onChange={(event) => setSample(event.target.value)} /></label>
-      {result.pending ? <p className="match-result" role="status">Evaluating safely…</p> : result.error ? <p className="field-error" role="alert">{result.error}</p> : <p className="match-result">{result.matches.length} matches · {result.matches.map((match) => match.text || 'zero-width').join(', ') || 'No match'}</p>}
-      <footer><button className="text-button" onClick={() => navigator.clipboard.writeText(`/${pattern}/${flags}`)}>Copy</button><button className="filled-button" disabled={result.pending || Boolean(result.error) || !pattern} onClick={() => onApply(pattern, flags)}>Apply to search</button></footer>
+      <label>{label(settings, 'Pattern', 'Pattern')}<input autoFocus value={pattern} maxLength={160} onChange={(event) => setPattern(event.target.value)} /></label>
+      <fieldset><legend>{label(settings, 'Flags', 'Flags')}</legend>{['i', 'm', 's', 'u'].map((flag) => <label className="flag" key={flag}><input type="checkbox" checked={flags.includes(flag)} onChange={(event) => setFlags((current) => event.target.checked ? `${current}${flag}` : current.replace(flag, ''))} />{flag}</label>)}</fieldset>
+      <label>{label(settings, 'Sample text', '範例文字')}<textarea value={sample} maxLength={10_000} onChange={(event) => setSample(event.target.value)} /></label>
+      {result.pending ? <p className="match-result" role="status">{label(settings, 'Evaluating safely…', '安全評估緊…')}</p> : result.error ? <p className="field-error" role="alert">{result.error}</p> : <p className="match-result">{label(settings, `${result.matches.length} match${result.matches.length === 1 ? '' : 'es'} · ${matchText || 'No match'}`, `${result.matches.length} 個符合 · ${matchText || '冇符合'}`)}</p>}
+      <footer><button type="button" className="text-button" onClick={() => navigator.clipboard.writeText(`/${pattern}/${flags}`)}>{label(settings, 'Copy', '複製')}</button><button type="button" className="filled-button" disabled={result.pending || Boolean(result.error) || !pattern} onClick={() => onApply(pattern, flags)}>{label(settings, 'Apply to search', '套用到搜尋')}</button></footer>
     </section>
   );
 }

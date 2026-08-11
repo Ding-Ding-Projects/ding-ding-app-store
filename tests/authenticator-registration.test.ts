@@ -395,15 +395,30 @@ describe('main-process restricted capability seam', () => {
 
   it('uses independent searchable keyboard pickers for source, algorithm, and digits', async () => {
     const source = (await readFile(path.join(process.cwd(), 'src/renderer/pages/AuthenticatorPage.tsx'), 'utf8')).replace(/\r\n/g, '\n');
+    const builder = (await readFile(path.join(process.cwd(), 'src/renderer/components/RegexBuilder.tsx'), 'utf8')).replace(/\r\n/g, '\n');
+    const styles = (await readFile(path.join(process.cwd(), 'src/renderer/styles/pages.css'), 'utf8')).replace(/\r\n/g, '\n');
     expect(source).not.toMatch(/<select[^>]+id="authenticator-(source|algorithm|digits)"/u);
     expect(source).toContain('function AuthenticatorPicker');
     expect(source).toContain('role="listbox"');
     expect(source).toContain('role="option"');
     expect(source).toContain('aria-selected={option.value === value}');
     expect(source).toContain("if (event.key === 'Escape')");
-    expect(source).toContain("event.target instanceof HTMLElement && event.target.closest('.regex-builder')");
+    expect(source).toContain("target?.closest('.regex-builder')");
+    expect(source).toContain("if (targetRole !== 'option' && targetRole !== 'listbox') return;");
+    expect(source).toContain('{open && !disabled && <section');
     expect(source).toContain("setQuery(''); setRegex(null); close();");
     expect(source).toContain('initialPattern={regex?.pattern} initialFlags={regex?.flags}');
+    expect(source).toContain('aria-haspopup="dialog"');
+    expect(source).toContain('aria-label={label(settings, `${labelText}: ${selected?.label ?? \'\'}`');
+    expect(source).toContain('authenticator-picker-result-count');
+    expect(source).toContain('role="status"');
+    expect(builder).toContain('type="button" className="filled-button" disabled={result.pending');
+    expect(builder).toContain("label(settings, 'Close regex builder', '關閉 Regex 建造器')");
+    expect(builder).toContain("label(settings, 'Guided regex parts', '引導式 Regex 元件')");
+    expect(builder).toContain("label(settings, 'Apply to search', '套用到搜尋')");
+    expect(styles).toContain('.authenticator-picker-popover { top: calc(100% + 6px); right: auto; left: 0; width: min(520px, calc(100vw - 48px)); padding: 12px; overflow: auto; }');
+    expect(styles).toContain('.authenticator-picker-search { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto;');
+    expect(styles).toContain('.authenticator-picker-search > .regex-builder { position: relative; top: auto; right: auto; grid-column: 1 / -1; width: 100%; max-height: min(560px, calc(100vh - 220px));');
     expect(source).toContain("event.key === 'ArrowDown' || event.key === 'ArrowRight'");
     expect(source).toContain("event.key === 'ArrowUp' || event.key === 'ArrowLeft'");
     expect(source).toContain("event.key === 'Home'");
@@ -411,8 +426,14 @@ describe('main-process restricted capability seam', () => {
     expect(source).toContain('RegexBuilder query={query}');
     expect(source).toContain('setRegex({ pattern, flags })');
     expect(source).toContain('setQuery(event.target.value); if (regex) setRegex({ ...regex, pattern: event.target.value });');
+    expect(source).toContain('Clear ${labelText.toLocaleLowerCase()} filter');
     expect(source).toContain('setTimeout(() => triggerRef.current?.focus(), 0)');
+    expect(source).toContain('const toggleOpen = () => {\n    if (open) setBuilderOpen(false);');
+    expect(source).toContain('onClick={toggleOpen}');
     expect(source).toContain('disabled={disabled}');
+    expect(source).toContain('if (!disabled || !open) return;');
+    expect(source).toContain('if (disabled) return;');
+    expect(source).toContain('const choose = (option: PickerOption) => {\n    if (disabled) return;');
     expect(source).toContain('id="authenticator-source"');
     expect(source).toContain('id="authenticator-algorithm"');
     expect(source).toContain('id="authenticator-digits"');
