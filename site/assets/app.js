@@ -1,3 +1,13 @@
+import {
+  addTab,
+  closeTab as closeTabState,
+  moveTab as moveTabState,
+  parseTabState,
+  routeHash,
+  tabIdFromHash,
+  togglePinned,
+} from './tab-state.mjs';
+
 (() => {
   'use strict';
   const bundle = window.DING_DING_DOCS;
@@ -6,8 +16,24 @@
   const categories = bundle.categories;
   const $ = (id) => document.getElementById(id);
   const storage = 'ding-ding-docs:';
+  const articleIds = articles.map((article) => article.id);
+  const legacyArticle = localStorage.getItem(storage + 'article') || 'home';
+  const readStoredSearch = (kind) => {
+    try {
+      const value = JSON.parse(localStorage.getItem(storage + `search:${kind}`) || 'null');
+      return {
+        regex: Boolean(value?.regex),
+        pattern: typeof value?.pattern === 'string' ? value.pattern : '',
+        flags: typeof value?.flags === 'string' ? value.flags : 'iu',
+        query: typeof value?.query === 'string' ? value.query : '',
+      };
+    } catch {
+      return { regex: false, pattern: '', flags: 'iu', query: '' };
+    }
+  };
   const state = {
-    article: localStorage.getItem(storage + 'article') || 'home',
+    article: legacyArticle,
+    tabs: parseTabState(localStorage.getItem(storage + 'tabs'), articleIds, legacyArticle),
     mode: localStorage.getItem(storage + 'mode') || 'en',
     funnyEn: +(localStorage.getItem(storage + 'funnyEn') || 2),
     funnyYue: +(localStorage.getItem(storage + 'funnyYue') || 3),
@@ -16,7 +42,7 @@
     accent: localStorage.getItem(storage + 'accent') || '#4f378b',
     settingsTab: localStorage.getItem(storage + 'settingsTab') || 'general',
   };
-  const search = { docs: { regex: false, pattern: '', flags: 'iu' }, settings: { regex: false, pattern: '', flags: 'iu' }, palette: { regex: false, pattern: '', flags: 'iu' } };
+  const search = { docs: readStoredSearch('docs'), settings: readStoredSearch('settings'), palette: readStoredSearch('palette') };
 
   const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
   const articleId = (href) => href.match(/(?:^|\/)([a-z0-9-]+)\.md(?:#.*)?$/i)?.[1] || null;
@@ -56,6 +82,24 @@
   function saveControls() {
     for (const key of ['mode', 'funnyEn', 'funnyYue', 'theme', 'density', 'accent', 'settingsTab']) localStorage.setItem(storage + key, state[key]);
   }
+  function saveTabs() {
+    localStorage.setItem(storage + 'tabs', JSON.stringify(state.tabs));
+    localStorage.setItem(storage + 'article', state.tabs.activeTab);
+  }
+  function saveSearch(kind) {
+    localStorage.setItem(storage + `search:${kind}`, JSON.stringify(search[kind]));
+  }
+  function syncRoute(id, mode = 'push') {
+    if (!window.history?.pushState || !window.location) return;
+    const hash = routeHash(id);
+    if (window.location.hash === hash || mode === 'none') return;
+    const method = mode === 'replace' ? 'replaceState' : 'pushState';
+    try {
+      window.history[method]({ article: id }, '', `${window.location.pathname}${window.location.search}${hash}`);
+    } catch {
+      window.location.hash = hash;
+    }
+  }
   function applyAppearance() {
     document.documentElement.dataset.theme = state.theme;
     document.documentElement.dataset.density = state.density;
@@ -70,6 +114,95 @@
   function articleContent(article) {
     if (!article) return homeContent();
     return `<span class="tag ${article.status}">${article.status}</span><h1>${escapeHtml(title(article))}</h1><p class="lede">${escapeHtml(article.summary)}</p>${markdown(article.body)}`;
+  }
+
+  function browserTabTitle(id) {
+    const article = articles.find((item) => item.id === id);
+    return article ? title(article) : 'Home';
+  }
+
+  function renderBrowserTabs() {
+    const target = $('browser-tabs');
+    if (!target) return;
+    target.innerHTML = state.tabs.openTabs.map((id) => {
+      const label = browserTabTitle(id);
+      const active = state.tabs.activeTab === id;
+      const pinned = state.tabs.pinnedTabs.includes(id);
+      return `<div class="browser-tab-shell" role="presentation">
+        <button class="browser-tab ${active ? 'active' : ''}" type="button" role="tab" aria-selected="${active}" aria-controls="article" tabindex="${active ? '0' : '-1'}" data-route-tab="${escapeHtml(id)}" title="Open ${escapeHtml(label)}">${pinned ? '<span class="tab-pin-mark" aria-hidden="true">•</span>' : ''}<span>${escapeHtml(label)}</span></button>
+        <button class="tab-tool" type="button" data-pin-tab="${escapeHtml(id)}" aria-pressed="${pinned}" aria-label="${pinned ? 'Unpin' : 'Pin'} ${escapeHtml(label)} tab">${pinned ? 'Unpin' : 'Pin'}</button>
+        <button class="tab-tool" type="button" data-close-tab="${escapeHtml(id)}" aria-label="Close ${escapeHtml(label)} tab">×</button>
+      </div>`;
+    }).join('');
+
+    const routeButtons = [...target.querySelectorAll('[data-route-tab]')];
+    routeButtons.forEach((button, index) => {
+      button.addEventListener('click', () => openArticle(button.dataset.routeTab));
+      button.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          openArticle(button.dataset.routeTab);
+          return;
+        }
+        if (event.ctrlKey && event.key.toLowerCase() === 'w') {
+          event.preventDefault();
+          closeOpenTab(button.dataset.routeTab);
+          return;
+        }
+        if (event.altKey && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+          event.preventDefault();
+          moveOpenTab(button.dataset.routeTab, event.key === 'ArrowLeft' ? -1 : 1);
+          return;
+        }
+        const targetIndex = event.key === 'Home' ? 0 : event.key === 'End' ? routeButtons.length - 1 : event.key === 'ArrowLeft' ? index - 1 : event.key === 'ArrowRight' ? index + 1 : -1;
+        if (targetIndex < 0) return;
+        event.preventDefault();
+        const next = routeButtons[(targetIndex + routeButtons.length) % routeButtons.length];
+        next.focus();
+        openArticle(next.dataset.routeTab, false);
+      });
+    });
+    target.querySelectorAll('[data-close-tab]').forEach((button) => button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      closeOpenTab(button.dataset.closeTab);
+    }));
+    target.querySelectorAll('[data-pin-tab]').forEach((button) => button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      toggleOpenTabPin(button.dataset.pinTab);
+    }));
+  }
+
+  function closeOpenTab(id) {
+    const next = closeTabState(state.tabs, id, articleIds);
+    if (next.openTabs.length === state.tabs.openTabs.length) {
+      setStatus('Keep at least one documentation tab open.');
+      return;
+    }
+    const activeChanged = next.activeTab !== state.article;
+    state.tabs = next;
+    openArticle(next.activeTab, activeChanged, { addTab: false, route: activeChanged ? 'push' : 'none' });
+  }
+
+  function moveOpenTab(id, direction) {
+    const before = state.tabs.openTabs.join('|');
+    const next = moveTabState(state.tabs, id, direction, articleIds);
+    if (next.openTabs.join('|') === before) {
+      setStatus(`${browserTabTitle(id)} is already at that edge.`);
+      return;
+    }
+    state.tabs = next;
+    saveTabs();
+    renderBrowserTabs();
+    const button = [...document.querySelectorAll('[data-route-tab]')].find((candidate) => candidate.dataset.routeTab === id);
+    if (button) button.focus();
+    setStatus(`Moved ${browserTabTitle(id)} ${direction < 0 ? 'left' : 'right'}.`);
+  }
+
+  function toggleOpenTabPin(id) {
+    state.tabs = togglePinned(state.tabs, id, articleIds);
+    saveTabs();
+    renderBrowserTabs();
+    setStatus(`${state.tabs.pinnedTabs.includes(id) ? 'Pinned' : 'Unpinned'} ${browserTabTitle(id)}.`);
   }
 
   function tabs() {
@@ -89,12 +222,17 @@
     });
   }
 
-  function openArticle(id, focus = true) {
-    state.article = articles.some((article) => article.id === id) ? id : 'home';
-    localStorage.setItem(storage + 'article', state.article);
+  function openArticle(id, focus = true, options = {}) {
+    const target = articles.some((article) => article.id === id) ? id : 'home';
+    state.tabs = options.addTab === false
+      ? { ...state.tabs, activeTab: target }
+      : addTab(state.tabs, target, articleIds);
+    state.article = state.tabs.activeTab;
+    saveTabs();
+    syncRoute(state.article, options.route ?? 'push');
     const article = articles.find((item) => item.id === state.article);
     $('article').innerHTML = articleContent(article);
-    bindOpen(); tabs();
+    bindOpen(); tabs(); renderBrowserTabs();
     $('home-tab').classList.toggle('active', state.article === 'home');
     $('home-tab').setAttribute('aria-selected', String(state.article === 'home'));
     $('home-tab').tabIndex = state.article === 'home' ? 0 : -1;
@@ -114,6 +252,8 @@
 
   function renderDocsResults() {
     const query = $('docs-search').value.trim(); const mode = search.docs; const key = mode.regex ? mode.pattern : query;
+    if (!mode.regex) mode.query = query;
+    saveSearch('docs');
     if (!key) { $('results').innerHTML = ''; return; }
     const match = matcher('docs', query);
     const rows = articles.filter((article) => match([article.title, article.titleYue, article.category, article.status, article.summary, article.body].join('\n')));
@@ -133,8 +273,8 @@
     };
     panel.querySelectorAll('input, textarea').forEach((input) => input.addEventListener('input', update));
     panel.querySelectorAll('[data-token]').forEach((button) => button.addEventListener('click', () => { pattern.setRangeText(button.dataset.token, pattern.selectionStart, pattern.selectionEnd, 'end'); pattern.focus(); update(); }));
-    panel.querySelector('[data-regex="plain"]').addEventListener('click', () => { search[kind].regex = false; search[kind].pattern = ''; panel.hidden = true; $(`${kind}-regex-toggle`).setAttribute('aria-expanded', 'false'); onApply(); });
-    panel.querySelector('[data-regex="apply"]').addEventListener('click', () => { update(); search[kind].regex = true; $(`${kind}-search`).value = pattern.value; panel.hidden = true; $(`${kind}-regex-toggle`).setAttribute('aria-expanded', 'false'); onApply(); });
+    panel.querySelector('[data-regex="plain"]').addEventListener('click', () => { search[kind].regex = false; search[kind].query = $(`${kind}-search`).value; search[kind].pattern = ''; saveSearch(kind); panel.hidden = true; $(`${kind}-regex-toggle`).setAttribute('aria-expanded', 'false'); onApply(); });
+    panel.querySelector('[data-regex="apply"]').addEventListener('click', () => { update(); search[kind].regex = true; search[kind].query = pattern.value; $(`${kind}-search`).value = pattern.value; saveSearch(kind); panel.hidden = true; $(`${kind}-regex-toggle`).setAttribute('aria-expanded', 'false'); onApply(); });
     update();
   }
 
@@ -156,25 +296,34 @@
     state.settingsTab = ['general', 'appearance', 'about'].includes(id) ? id : 'general'; saveControls();
     document.querySelectorAll('[data-settings-tab]').forEach((tab) => { const active = tab.dataset.settingsTab === state.settingsTab; tab.setAttribute('aria-selected', String(active)); tab.tabIndex = active ? 0 : -1; });
     document.querySelectorAll('[data-settings-panel]').forEach((panel) => { panel.hidden = panel.dataset.settingsPanel !== state.settingsTab; });
-    $('settings-search').value = ''; search.settings.pattern = ''; search.settings.regex = false; filterSettings();
+    $('settings-search').value = search.settings.regex ? search.settings.pattern : search.settings.query;
+    filterSettings();
     if (focus) $(`settings-tab-${state.settingsTab}`).focus();
   }
   function filterSettings() {
     const panel = $(`settings-panel-${state.settingsTab}`); const match = matcher('settings', $('settings-search').value.trim()); let visible = 0;
+    if (!search.settings.regex) search.settings.query = $('settings-search').value.trim();
+    saveSearch('settings');
     panel.querySelectorAll('[data-settings-text]').forEach((row) => { const show = match(`${row.dataset.settingsText} ${row.textContent}`); row.hidden = !show; if (show) visible += 1; });
     $('settings-empty').hidden = visible > 0;
   }
 
   function paletteResults() {
     const value = $('palette-search').value.trim(); const match = matcher('palette', value);
+    if (!search.palette.regex) search.palette.query = value;
+    saveSearch('palette');
     const rows = [{ id: 'home', label: 'Home', type: 'Destination' }, ...articles.map((article) => ({ id: article.id, label: title(article), type: `${article.category} · ${article.status}` })), ...['general', 'appearance', 'about'].map((id) => ({ id: `setting-${id}`, label: `${id[0].toUpperCase()}${id.slice(1)} settings`, type: 'Setting destination' }))].filter((row) => match(`${row.label} ${row.type}`));
     $('palette-results').innerHTML = rows.length ? rows.map((row) => `<button class="palette-row" data-command="${row.id}" role="option"><strong>${escapeHtml(row.label)}</strong><br><small>${escapeHtml(row.type)}</small></button>`).join('') : '<p class="empty">No command or destination matches.</p>';
     document.querySelectorAll('[data-command]').forEach((button) => button.addEventListener('click', () => { $('palette').close(); const id = button.dataset.command; if (id.startsWith('setting-')) { openSettingsTab(id.slice(8)); $('settings-title').scrollIntoView(); } else openArticle(id); }));
   }
 
-  $('docs-search').addEventListener('input', () => { if (search.docs.regex) search.docs.pattern = $('docs-search').value; renderDocsResults(); });
-  $('settings-search').addEventListener('input', () => { if (search.settings.regex) search.settings.pattern = $('settings-search').value; filterSettings(); });
-  $('palette-search').addEventListener('input', () => { if (search.palette.regex) search.palette.pattern = $('palette-search').value; paletteResults(); });
+  ['docs', 'settings', 'palette'].forEach((kind) => {
+    const input = $(`${kind}-search`);
+    input.value = search[kind].regex ? search[kind].pattern : search[kind].query;
+  });
+  $('docs-search').addEventListener('input', () => { if (search.docs.regex) search.docs.pattern = $('docs-search').value; else search.docs.query = $('docs-search').value; saveSearch('docs'); renderDocsResults(); });
+  $('settings-search').addEventListener('input', () => { if (search.settings.regex) search.settings.pattern = $('settings-search').value; else search.settings.query = $('settings-search').value; saveSearch('settings'); filterSettings(); });
+  $('palette-search').addEventListener('input', () => { if (search.palette.regex) search.palette.pattern = $('palette-search').value; else search.palette.query = $('palette-search').value; saveSearch('palette'); paletteResults(); });
   setupBuilder('docs', renderDocsResults); setupBuilder('settings', filterSettings); setupBuilder('palette', paletteResults);
 
   document.querySelectorAll('[data-settings-tab]').forEach((tab, index, tabs) => {
@@ -188,9 +337,18 @@
   [['funny-en', 'funnyEn', 'funny-en-value'], ['funny-yue', 'funnyYue', 'funny-yue-value']].forEach(([id, key, output]) => $(id).addEventListener('input', (event) => { state[key] = +event.target.value; $(output).textContent = event.target.value; saveControls(); setStatus(`${id === 'funny-en' ? 'English' : 'Cantonese'} funny level set to ${event.target.value}; factual article content is unchanged.`); }));
   [['theme', 'theme'], ['density', 'density'], ['accent', 'accent']].forEach(([id, key]) => $(id).addEventListener('input', (event) => { state[key] = event.target.value; saveControls(); applyAppearance(); }));
 
-  $('palette-button').addEventListener('click', () => { $('palette').showModal(); $('palette-search').value = ''; search.palette.pattern = ''; search.palette.regex = false; paletteResults(); $('palette-search').focus(); });
+  $('palette-button').addEventListener('click', () => { $('palette').showModal(); $('palette-search').value = search.palette.regex ? search.palette.pattern : search.palette.query; paletteResults(); $('palette-search').focus(); });
   $('palette-close').addEventListener('click', () => $('palette').close());
+  $('new-doc-tab').addEventListener('click', () => {
+    const next = ['home', ...articleIds].find((id) => !state.tabs.openTabs.includes(id)) || 'home';
+    openArticle(next);
+  });
   window.addEventListener('keydown', (event) => { if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'f') { event.preventDefault(); $('palette-button').click(); } });
+  window.addEventListener('hashchange', () => {
+    const id = tabIdFromHash(window.location.hash, articleIds);
+    if (id) openArticle(id, false, { route: 'none' });
+  });
 
-  applyAppearance(); openSettingsTab(state.settingsTab); openArticle(state.article, false);
+  applyAppearance(); openSettingsTab(state.settingsTab);
+  openArticle(tabIdFromHash(window.location.hash, articleIds) || state.tabs.activeTab, false, { route: 'replace' });
 })();
