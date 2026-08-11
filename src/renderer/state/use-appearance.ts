@@ -13,6 +13,7 @@ export interface AppearanceApi {
   /** Stored overrides with the live draft layered on top, so the preview is always what you will get. */
   elements: AppearanceElements;
   editMode: boolean;
+  reload(): Promise<void>;
   setEditMode(on: boolean | 'toggle'): void;
   selectedKey: ElementKey | null;
   select(key: ElementKey | null): void;
@@ -49,7 +50,25 @@ export function useAppearance(notify: Notify): AppearanceApi {
     void work().then((next) => accept(id, next), (error: unknown) => notify({ ok: false, message: (error as Error).message.slice(0, 200) }));
   }, [accept, notify]);
 
-  useEffect(() => { run(() => window.dingDingStore.appearance.load()); }, [run]);
+  const reload = useCallback(async () => {
+    requestId.current += 1;
+    const id = requestId.current;
+    if (timer.current !== null) {
+      window.clearTimeout(timer.current);
+      timer.current = null;
+    }
+    setDraft(null);
+    undoRef.current = null;
+    setCanUndo(false);
+    try {
+      const next = await window.dingDingStore.appearance.load();
+      accept(id, next);
+    } catch (error) {
+      if (id === requestId.current) notify({ ok: false, message: `Appearance could not be reloaded after the local history change: ${(error as Error).message.slice(0, 200)}` });
+    }
+  }, [accept, notify]);
+
+  useEffect(() => { void reload(); }, [reload]);
 
   const elements = useMemo<AppearanceElements>(() => {
     if (!draft) return document.elements;
@@ -134,6 +153,7 @@ export function useAppearance(notify: Notify): AppearanceApi {
     document,
     elements,
     editMode,
+    reload,
     setEditMode: (on) => setEditModeState((current) => (on === 'toggle' ? !current : on)),
     selectedKey,
     select,

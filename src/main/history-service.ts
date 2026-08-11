@@ -12,6 +12,7 @@ const MAX_HISTORY_ENTRIES = 10_000;
 const MAX_REVISIONS = 200;
 const MAX_REVISION_BYTES = 2_000_000;
 const MAX_LABEL_LENGTH = 80;
+const MAX_HISTORY_FIELD_LENGTH = 20_000;
 const REVISION_ID = /^[0-9a-f]{40}$/i;
 const SNAPSHOT_DEFINITIONS = [
   { sourceName: 'installed-apps.v1.json', stateName: 'installed-apps.json', fallback: '[]\n' },
@@ -24,6 +25,7 @@ const SNAPSHOT_DEFINITIONS = [
 ] as const;
 const SNAPSHOT_FILES = SNAPSHOT_DEFINITIONS.map(({ stateName }) => `state/${stateName}`);
 const LEGACY_SNAPSHOT_FILES = ['state/installed-apps.json', 'state/settings.json'] as const;
+const HISTORY_METADATA_FILES = ['state/labels.v1.json'] as const;
 
 async function git(cwd: string, args: string[]): Promise<number> {
   return await new Promise<number>((resolve) => {
@@ -59,7 +61,13 @@ async function gitText(cwd: string, args: string[], limit = MAX_REVISION_BYTES):
       shell: false,
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'ignore'],
-      env: { ...process.env, GIT_CONFIG_NOSYSTEM: '1' },
+      env: {
+        ...process.env,
+        GIT_CONFIG_NOSYSTEM: '1',
+        GIT_CONFIG_NOGLOBAL: '1',
+        GIT_CONFIG_SYSTEM: 'NUL',
+        GIT_CONFIG_GLOBAL: 'NUL',
+      },
     });
     let output = '';
     let overflow = false;
@@ -81,6 +89,25 @@ export interface HistoryRecordInput {
   message: string;
 }
 
+/** Parses one append-only log line without allowing malformed records to poison the whole Activity list. */
+export function parseHistoryEntry(value: unknown): HistoryEntry | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const entry = value as Record<string, unknown>;
+  const textFields = ['id', 'appId', 'displayName', 'message', 'occurredAt'] as const;
+  if (textFields.some((field) => typeof entry[field] !== 'string' || !String(entry[field]).trim() || String(entry[field]).length > MAX_HISTORY_FIELD_LENGTH)) return null;
+  if (typeof entry.kind !== 'string' || !(['install', 'build', 'uninstall', 'update', 'settings'] as const).includes(entry.kind as OperationKind)) return null;
+  if (typeof entry.ok !== 'boolean' || !Number.isFinite(Date.parse(entry.occurredAt as string))) return null;
+  return {
+    id: entry.id as string,
+    appId: entry.appId as string,
+    displayName: entry.displayName as string,
+    kind: entry.kind as OperationKind,
+    ok: entry.ok,
+    message: entry.message as string,
+    occurredAt: entry.occurredAt as string,
+  };
+}
+
 export class HistoryService {
   private readonly root = path.join(app.getPath('userData'), 'history');
   private readonly logPath = path.join(this.root, 'operations.v1.jsonl');
@@ -95,8 +122,10 @@ export class HistoryService {
         .split(/\r?\n/)
         .filter(Boolean)
         .slice(-MAX_HISTORY_ENTRIES)
-        .map((line) => JSON.parse(line) as HistoryEntry)
-        .filter((entry) => Boolean(entry?.id && entry?.appId && entry?.occurredAt))
+        .flatMap((line) => {
+          try { return [parseHistoryEntry(JSON.parse(line))].filter((entry): entry is HistoryEntry => entry !== null); }
+          catch { return []; }
+        })
         .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
@@ -290,7 +319,10 @@ export class HistoryService {
         await writeFile(path.join(state, definition.stateName), content, { encoding: 'utf8', mode: 0o600 });
       }
       const tracked = (await gitText(this.repositoryPath, ['ls-files', '--', 'state'], 32_000) ?? '').split(/\r?\n/).filter(Boolean);
-      const allowed = new Set(SNAPSHOT_FILES);
+      // Labels describe revisions rather than live App Store state. Retain
+      // them across later snapshots so an append-only label is not silently
+      // deleted the next time an operation records a state commit.
+      const allowed = new Set([...SNAPSHOT_FILES, ...HISTORY_METADATA_FILES]);
       for (const file of tracked) if (!allowed.has(file)) await git(this.repositoryPath, ['rm', '--cached', '--ignore-unmatch', '--', file]);
       await git(this.repositoryPath, ['add', '--', ...SNAPSHOT_FILES]);
       if (force) return await git(this.repositoryPath, ['commit', '--allow-empty', '-m', label]) === 0;

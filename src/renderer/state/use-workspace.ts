@@ -149,6 +149,7 @@ function reducer(state: TabWorkspace, action: WorkspaceAction): TabWorkspace {
 export interface WorkspaceApi {
   workspace: TabWorkspace;
   ready: boolean;
+  reload(): Promise<void>;
   dispatch(action: WorkspaceAction): void;
   reset(): Promise<void>;
   exportLayout(): Promise<string>;
@@ -162,24 +163,40 @@ export function useWorkspace(notify: Notify): WorkspaceApi {
   const [ready, setReady] = useState(false);
   const lastGood = useRef<TabWorkspace>(DEFAULT_TAB_WORKSPACE);
   const timer = useRef<number | null>(null);
+  const requestId = useRef(0);
 
-  useEffect(() => {
-    void window.dingDingStore.workspace.load().then((value) => {
+  const reload = useCallback(async () => {
+    const id = ++requestId.current;
+    if (timer.current !== null) {
+      window.clearTimeout(timer.current);
+      timer.current = null;
+    }
+    try {
+      const value = await window.dingDingStore.workspace.load();
+      if (id !== requestId.current) return;
       lastGood.current = value;
       dispatch({ type: 'replace', value });
       setReady(true);
-    });
-  }, []);
+    } catch (error) {
+      if (id !== requestId.current) return;
+      setReady(true);
+      notify({ ok: false, message: `Tab layout could not be reloaded after the local history change: ${(error as Error).message.slice(0, 200)}` });
+    }
+  }, [notify]);
+
+  useEffect(() => { void reload(); }, [reload]);
 
   useEffect(() => {
     if (!ready || workspace === lastGood.current) return;
     if (timer.current !== null) window.clearTimeout(timer.current);
     const pending = workspace;
+    const id = requestId.current;
     timer.current = window.setTimeout(() => {
       timer.current = null;
       void window.dingDingStore.workspace.save(pending).then(
-        (saved) => { lastGood.current = saved; },
+        (saved) => { if (id === requestId.current) lastGood.current = saved; },
         (error: unknown) => {
+          if (id !== requestId.current) return;
           const restored = lastGood.current;
           dispatch({ type: 'replace', value: restored });
           notify({ ok: false, message: `Tab layout was not saved: ${(error as Error).message}` });
@@ -211,5 +228,5 @@ export function useWorkspace(notify: Notify): WorkspaceApi {
     }
   }, [notify]);
 
-  return { workspace, ready, dispatch, reset, exportLayout, importLayout };
+  return { workspace, ready, reload, dispatch, reset, exportLayout, importLayout };
 }
