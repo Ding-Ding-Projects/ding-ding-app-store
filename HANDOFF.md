@@ -1,5 +1,12 @@
 # Handoff
 
+## 2026-08-11 Workflow and local build entry points
+
+- Added root `build.bat` and `build-installer.bat` with silent `/s`, `--silent`, and `SILENT=1` modes. The shared PowerShell path resolves Node.js 22 through a user-scoped package-manager route or a SHA-256-verified canonical Node.js archive, runs locked `npm ci` and `npm run build`, clears only generated `dist`/`release` output, and fails closed on missing outputs.
+- Aligned `.github/workflows/ci.yml`, `.github/workflows/release.yml`, and `.github/workflows/install-adapter-proof.yml` with the build-only Actions policy: no test, lint, or typecheck gate runs in Actions; local checks remain available to contributors. Release timing, line-count, dim-sum metadata, unsigned Squirrel.Windows packaging, and exact source-target verification remain intact. Artifact collection is defensive, bounded to seven days, and records run/commit/runner context.
+- Real local installer verification ran from source commit `8f26e344a28af8041cbfbfaf8476449f586bebff` on the workflow-alignment checkout. `Setup.exe` was `144130560` bytes with SHA-256 `49620284905fd2a609871bd456c2e5fa13cb47598f378eb79a8f2d1b8c1c5d6f`; `RELEASES` was `87` bytes with SHA-256 `1a73958300822080a5f3bd61d3877114dd76f4736d5d8bf2e0eef86a8ebbd4b8`; the full `.nupkg` was `143441877` bytes with SHA-256 `ac5818dee46e58a24f982fb42cc32d9858bdaa9ecda9fa2edcf840c020cb8714`. `Get-AuthenticodeSignature` reported `NotSigned`, and `release/local-installer-manifest.json` records the source commit, dirty-checkout state, sizes, and hashes. This is local artifact evidence, not a published release.
+- Focused workflow/build contract tests passed `20/20` and `actionlint -shellcheck=` structurally validated all four workflows. A full root Vitest attempt passed `281/282` tests across 42 files; concurrent Electron installation races and a 120-second line-counter timeout remain recorded as failed shared-host evidence. No cloud workflow or release is claimed from this branch-only lane.
+
 ## 2026-08-11 Catalog and shared-contract expansion
 
 - Added the reviewed `material-minecraft-map-editor` catalog record as `Amulet Map Editor` with its Squirrel adapter, pinned packaging evidence, and public release `0.10.0-dev.567`. The release body reports `1256 passed, 8 skipped, 1 warning, 24 errors, 332 subtests passed`; this catalog slice records that result as non-green upstream evidence and does not claim clean-machine installation or UI proof.
