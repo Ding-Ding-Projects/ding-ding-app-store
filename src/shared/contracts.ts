@@ -205,7 +205,7 @@ export interface HistoryArchiveExport {
 }
 
 export type ExternalEditorId = 'vscode';
-export type ExportRecordKind = 'catalog' | 'installed' | 'activity' | 'notifications' | 'changelog' | 'docs' | 'settings' | 'appearance' | 'tabs';
+export type ExportRecordKind = 'catalog' | 'installed' | 'activity' | 'notifications' | 'changelog' | 'docs' | 'settings' | 'appearance' | 'tabs' | 'authenticator';
 export type ExternalEditorEdition = 'stable' | 'insiders' | 'portable' | 'unknown';
 
 export interface ExternalEditorPreference {
@@ -243,7 +243,7 @@ export const externalEditorPreferenceSchema = z.strictObject({
 
 export const externalEditorOpenRequestSchema = z.strictObject({
   editor: z.literal('vscode'),
-  recordKind: z.enum(['catalog', 'installed', 'activity', 'notifications', 'changelog', 'docs', 'settings', 'appearance', 'tabs']),
+  recordKind: z.enum(['catalog', 'installed', 'activity', 'notifications', 'changelog', 'docs', 'settings', 'appearance', 'tabs', 'authenticator']),
   suggestedName: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,96}$/).refine((value) => !value.includes('..'), 'Suggested filename cannot contain repeated dots.'),
   mime: z.enum(['application/json', 'application/x-ndjson', 'application/yaml', 'application/toml', 'application/xml', 'text/csv', 'text/tab-separated-values', 'text/markdown', 'text/html', 'application/sql', 'text/x-typescript', 'text/javascript', 'text/x-python', 'text/x-go', 'text/x-rustsrc', 'application/schema+json', 'text/x-protobuf', 'text/plain']),
   content: z.string().max(256_000),
@@ -763,6 +763,10 @@ const ELEMENT_LIST = [
   { key: 'history-row', en: 'Activity row', yue: '活動列', group: 'content', tokens: BOX },
   { key: 'docs-article', en: 'Documentation article', yue: '說明文章', group: 'content', tokens: BOX },
   { key: 'settings-card', en: 'Settings card', yue: '設定卡片', group: 'content', tokens: BOX_RAISED },
+  { key: 'authenticator-entry', en: 'Authenticator entry', yue: 'Authenticator 項目', group: 'content', tokens: BOX_RAISED },
+  { key: 'authenticator-entry-management', en: 'Authenticator entry management', yue: 'Authenticator 項目管理', group: 'controls', tokens: BOX_RAISED },
+  { key: 'authenticator-entry-select', en: 'Authenticator entry selection', yue: 'Authenticator 項目揀選', group: 'controls', tokens: PILL },
+  { key: 'authenticator-code', en: 'Authenticator code', yue: 'Authenticator 驗證碼', group: 'content', tokens: TEXT },
   { key: 'schedule-card', en: 'Schedule card', yue: '排程卡片', group: 'content', tokens: BOX_RAISED },
   { key: 'dialog', en: 'Dialog', yue: '對話框', group: 'feedback', tokens: BOX_RAISED },
   { key: 'command-palette', en: 'Command palette', yue: '指令面板', group: 'feedback', tokens: BOX_RAISED },
@@ -1210,6 +1214,9 @@ export const AUTHENTICATOR_MAX_ENTRIES = 256;
 export const AUTHENTICATOR_MAX_ISSUER_LENGTH = 128;
 export const AUTHENTICATOR_MAX_ACCOUNT_LENGTH = 256;
 export const AUTHENTICATOR_MAX_URI_LENGTH = 2_048;
+export const AUTHENTICATOR_MAX_LABEL_LENGTH = 512;
+export const AUTHENTICATOR_MAX_GROUP_LENGTH = 64;
+export const AUTHENTICATOR_MAX_EXPORT_LENGTH = 512_000;
 
 export interface AuthenticatorEntryMetadata {
   id: string;
@@ -1222,6 +1229,8 @@ export interface AuthenticatorEntryMetadata {
   createdAt: string;
   updatedAt: string;
   order: number;
+  /** User-managed group membership; null means ungrouped. */
+  group: string | null;
 }
 
 export interface AuthenticatorEntry extends AuthenticatorEntryMetadata {
@@ -1266,12 +1275,77 @@ export interface AuthenticatorRegistrationConfirmRequest {
   code: string;
 }
 
+export interface AuthenticatorEntryIdRequest {
+  entryId: string;
+}
+
+export interface AuthenticatorRenameRequest extends AuthenticatorEntryIdRequest {
+  label: string;
+}
+
+export interface AuthenticatorGroupRequest extends AuthenticatorEntryIdRequest {
+  group: string | null;
+}
+
+export interface AuthenticatorReorderRequest extends AuthenticatorEntryIdRequest {
+  order: number;
+}
+
+export interface AuthenticatorDeleteRequest extends AuthenticatorEntryIdRequest {
+  /** Set only after the renderer's native super-confirmation completes. */
+  confirmed: true;
+}
+
+export interface AuthenticatorBulkDeleteRequest {
+  entryIds: string[];
+  /** Set only after the renderer's native super-confirmation completes. */
+  confirmed: true;
+}
+
+export type AuthenticatorExportFormat = 'json' | 'csv' | 'markdown';
+
+export interface AuthenticatorExportRequest {
+  entryIds: string[];
+  format: AuthenticatorExportFormat;
+}
+
 export interface AuthenticatorMutationResult {
   ok: boolean;
   entry?: AuthenticatorEntryMetadata;
   message: string;
   messageYue: string;
 }
+
+export interface AuthenticatorDeleteResult {
+  ok: boolean;
+  deletedId?: string;
+  /** The vault may have committed while rollback/visibility was uncertain; keep the item under review. */
+  uncertain?: boolean;
+  message: string;
+  messageYue: string;
+}
+
+export interface AuthenticatorBulkDeleteResult {
+  ok: boolean;
+  deletedIds: string[];
+  skippedIds: string[];
+  /** Entries whose deletion was committed but whose rollback/visibility could not be verified; always a subset of deletedIds. */
+  uncertainIds: string[];
+  message: string;
+  messageYue: string;
+}
+
+export interface AuthenticatorExportResult {
+  ok: boolean;
+  format?: AuthenticatorExportFormat;
+  filename?: string;
+  content?: string;
+  omittedFields: AuthenticatorExportOmittedField[];
+  message: string;
+  messageYue: string;
+}
+
+export type AuthenticatorExportOmittedField = 'secret' | 'uri' | 'code' | 'remainingSeconds' | 'expiresAt';
 
 export interface AuthenticatorListResult {
   entries: AuthenticatorEntry[];
@@ -1427,6 +1501,12 @@ export interface DingDingStoreApi {
     confirm(request: AuthenticatorRegistrationConfirmRequest): Promise<AuthenticatorMutationResult>;
     cancel(registrationId: string): Promise<void>;
     list(): Promise<AuthenticatorListResult>;
+    rename(request: AuthenticatorRenameRequest): Promise<AuthenticatorMutationResult>;
+    setGroup(request: AuthenticatorGroupRequest): Promise<AuthenticatorMutationResult>;
+    reorder(request: AuthenticatorReorderRequest): Promise<AuthenticatorMutationResult>;
+    remove(request: AuthenticatorDeleteRequest): Promise<AuthenticatorDeleteResult>;
+    bulkRemove(request: AuthenticatorBulkDeleteRequest): Promise<AuthenticatorBulkDeleteResult>;
+    export(request: AuthenticatorExportRequest): Promise<AuthenticatorExportResult>;
   };
   dimSum: {
     startup(): Promise<DimSumSurprise>;

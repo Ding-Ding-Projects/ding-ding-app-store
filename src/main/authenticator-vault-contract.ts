@@ -7,11 +7,17 @@ export interface AuthenticatorVaultSaveOptions {
   shouldCommit?: () => boolean;
 }
 
+export interface AuthenticatorVaultMetadataWriteOptions {
+  /** Capability fence checked before publication and again after it settles. */
+  shouldCommit?: () => boolean;
+}
+
 export interface AuthenticatorVault {
   status(): Promise<AuthenticatorVaultStatus>;
   listMetadata(): Promise<AuthenticatorEntryMetadata[]>;
+  writeMetadata(entries: readonly AuthenticatorEntryMetadata[], options?: AuthenticatorVaultMetadataWriteOptions): Promise<void>;
   save(entry: AuthenticatorEntryMetadata, secret: string, options?: AuthenticatorVaultSaveOptions): Promise<void>;
-  remove(entryId: string): Promise<void>;
+  remove(entryId: string, options?: AuthenticatorVaultSaveOptions): Promise<void>;
   readSecret(entryId: string): Promise<string | null>;
 }
 
@@ -19,6 +25,7 @@ export interface AuthenticatorVault {
 export class UnavailableAuthenticatorVault implements AuthenticatorVault {
   async status(): Promise<'unavailable'> { return 'unavailable'; }
   async listMetadata(): Promise<AuthenticatorEntryMetadata[]> { return []; }
+  async writeMetadata(): Promise<void> { throw new Error('The operating-system credential vault is unavailable.'); }
   async save(): Promise<void> { throw new Error('The operating-system credential vault is unavailable.'); }
   async remove(): Promise<void> { throw new Error('The operating-system credential vault is unavailable.'); }
   async readSecret(): Promise<null> { return null; }

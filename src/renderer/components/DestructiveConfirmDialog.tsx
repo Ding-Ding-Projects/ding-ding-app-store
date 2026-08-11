@@ -9,7 +9,7 @@ export function DestructiveConfirmDialog({ title, description, actionLabel, sett
   description: string;
   actionLabel: string;
   settings: UserSettings;
-  onConfirm(): void;
+  onConfirm(): void | Promise<void>;
   onClose(): void;
 }) {
   const dialogRef = useRef<HTMLElement>(null);
@@ -39,7 +39,7 @@ export function DestructiveConfirmDialog({ title, description, actionLabel, sett
         <header><div><span className="eyebrow">DESTRUCTIVE ACTION</span><h2 id="destructive-title">{dialogCopy(settings, title, '⚠️')}</h2></div><button className="icon-button" onClick={onClose} aria-label="Emergency exit"><Icon>close</Icon></button></header>
         <p id="destructive-description">{dialogCopy(settings, description, '⚠️')}</p>
         <SuperConfirm firstKey={firstKey} secondKey={secondKey} slider={slider} onFirstKey={setFirstKey} onSecondKey={setSecondKey} onSlider={setSlider} />
-        <footer><button className="text-button" onClick={onClose}>Emergency exit · 緊急離開</button><button className="filled-button danger-fill" disabled={!ready} onClick={() => { onConfirm(); onClose(); }}>{actionLabel}</button></footer>
+        <footer><button className="text-button" onClick={onClose}>Emergency exit · 緊急離開</button><button className="filled-button danger-fill" disabled={!ready} onClick={() => { const result = onConfirm(); if (result && typeof (result as Promise<void>).then === 'function') void (result as Promise<void>).then(onClose, () => undefined); else onClose(); }}>{actionLabel}</button></footer>
       </section>
     </div>
   );

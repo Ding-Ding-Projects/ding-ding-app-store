@@ -12,7 +12,7 @@ summary: Records the shared instruction contract boundary for redacted local his
 
 The shared instruction contract requires every app that owns a renameable display name or authenticator entries to keep append-only, local Git history in its own application-data directory. A display-name rename, reset, or authenticator mutation is a separate history event; restores and imports create new revisions rather than rewriting the old ones. History views and exports must contain redacted metadata only: no password, PIN, TOTP secret, QR payload, or usable credential.
 
-This App Store now records a display-name change as a typed `settings` Activity event and keeps the existing settings snapshot in the local version repository. The visible Activity route and generated article are the reachable part of that history slice. A separate Authenticator tab now offers bounded local URI/Base32 registration, QR pairing, and safeStorage-backed entries, but authenticator mutations are not yet Activity events and authenticator metadata/ciphertext are not in the history snapshot allowlist; protected authenticator history, restore, and deliberate secret export remain explicit follow-up work.
+This App Store now records a display-name change as a typed `settings` Activity event and keeps the existing settings snapshot in the local version repository. The visible Activity route and generated article are the reachable part of that history slice. A separate Authenticator tab now offers bounded local URI/Base32 registration, QR pairing, safeStorage-backed entries, and metadata-only rename, reorder, label-only grouping, checkbox selection, destructive deletion, and redacted export. These authenticator mutations are not yet Activity events and authenticator metadata/ciphertext are not in the history snapshot allowlist; protected authenticator history, restore, stable group records, and deliberate secret export remain explicit follow-up work.
 
 ## Configuration
 
@@ -24,7 +24,7 @@ If settings persistence fails, the rename is not reported as successful. If the 
 
 ## Security considerations
 
-The Activity entry and ordinary exports contain no password, PIN, TOTP secret, QR URI, salt, verifier, or credential-vault value. Authenticator registration clears pending secrets after confirmation/expiry, returns only metadata and code display, and keeps safeStorage ciphertext outside ordinary exports/history. A future history integration must add only redacted metadata snapshots; it must not put secrets into settings JSON, local Git blobs, exports, logs, screenshots, sync repositories, or public records.
+The Activity entry and ordinary exports contain no password, PIN, TOTP secret, QR URI, salt, verifier, or credential-vault value. Authenticator registration clears pending secrets after confirmation/expiry, returns only metadata and code display, and keeps safeStorage ciphertext outside ordinary exports/history. The authenticator metadata export explicitly omits `secret`, `uri`, `code`, `remainingSeconds`, and `expiresAt`; its CSV form has a documented UTF-8/LF metadata preamble and its Markdown form escapes label/group cells. A future history integration must add only redacted metadata snapshots; it must not put secrets into settings JSON, local Git blobs, exports, logs, screenshots, sync repositories, or public records.
 
 ## Verification
 

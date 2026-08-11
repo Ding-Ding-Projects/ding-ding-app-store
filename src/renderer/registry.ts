@@ -67,6 +67,8 @@ const STATIC_COMMANDS = [
   'toggle-quiet-hours', 'apply-quiet-night', 'show-next-runs', 'toggle-badges', 'toggle-color-bar',
   'toggle-pinned-icon-only', 'save-schedule', 'reset-schedule',
   'open-notifications', 'open-changelog', 'open-school-mode', 'open-source-details',
+  'authenticator-rename', 'authenticator-group', 'authenticator-reorder', 'authenticator-select',
+  'authenticator-export', 'authenticator-delete', 'authenticator-bulk-delete',
 ] as const;
 
 export type StaticCommandId = (typeof STATIC_COMMANDS)[number];
@@ -505,6 +507,7 @@ export function buildRegistry(context: RegistryContext): Entry[] {
   }
 
   for (const definition of ELEMENTS) {
+    if (schoolModeEnabled && definition.key.startsWith('authenticator-')) continue;
     const key = definition.key as ElementKey;
     const overridden = Object.keys(appearance[key] ?? {}).length;
     entries.push(command(`edit-element:${key}`, `Edit appearance of ${definition.en}`, `編輯${definition.yue}外觀`, 'palette', [key, definition.yue, 'appearance', 'style'], 'Appearance', { surface: 'settings.appearance', element: key }));
@@ -540,6 +543,15 @@ export function buildRegistry(context: RegistryContext): Entry[] {
     command('focus-tab-search', 'Focus tab search', '跳去分頁搜尋', 'search', ['tabs', 'filter', 'ctrl shift k'], 'Search'),
     command('open-school-mode', `Open ${schoolModeName} settings`, `開 ${schoolModeName} 設定`, 'settings', schoolModeName === 'School mode' ? [schoolModeName, 'school', 'mode', 'unlock', 'credential', 'reset'] : [schoolModeName, 'unlock', 'credential', 'reset'], 'Settings', { surface: 'settings.general', focusId: 'school-mode-title' }),
     command('open-source-details', 'Open source execution isolation details', '開 source 執行隔離詳情', 'info', ['source', 'repair', 'OpenCode', 'isolation', 'guest', 'transport', 'sandbox', 'status'], 'Settings', { surface: 'settings.general', focusId: 'source-isolation-title' }),
+  );
+  if (!schoolModeEnabled) entries.push(
+    command('authenticator-rename', 'Rename an authenticator entry', '改名 authenticator 項目', 'edit', ['authenticator', 'rename', 'name'], 'Pages', { surface: 'authenticator', focusId: 'authenticator-entry-management' }),
+    command('authenticator-group', 'Edit authenticator group labels', '編輯 authenticator 分組標籤', 'folder', ['authenticator', 'group', 'label'], 'Pages', { surface: 'authenticator', focusId: 'authenticator-entry-management' }),
+    command('authenticator-reorder', 'Reorder authenticator entries', '重新排列 authenticator 項目', 'swap_vert', ['authenticator', 'reorder', 'move'], 'Pages', { surface: 'authenticator', focusId: 'authenticator-entry-management' }),
+    command('authenticator-select', 'Select authenticator entries', '揀選 authenticator 項目', 'check_box', ['authenticator', 'select', 'selection'], 'Pages', { surface: 'authenticator', focusId: 'authenticator-entry-management' }),
+    command('authenticator-export', 'Export authenticator metadata without secrets', '匯出不含秘密嘅 authenticator metadata', 'download', ['authenticator', 'export', 'metadata', 'secret-free'], 'Pages', { surface: 'authenticator', focusId: 'authenticator-entry-management' }),
+    command('authenticator-delete', 'Delete one authenticator entry', '刪除一個 authenticator 項目', 'delete', ['authenticator', 'delete'], 'Pages', { surface: 'authenticator', focusId: 'authenticator-entry-management' }),
+    command('authenticator-bulk-delete', 'Delete selected authenticator entries', '刪除揀選嘅 authenticator 項目', 'delete_sweep', ['authenticator', 'delete', 'bulk', 'destructive'], 'Pages', { surface: 'authenticator', focusId: 'authenticator-entry-management' }),
   );
 
   for (const surface of visibleSurfaces) {

@@ -54,5 +54,11 @@
     .changelog-viewer { padding: 16px; }
     .sub-tab-row button { flex: 1 1 120px; }
     .ticket-row { flex-direction: column; }
+    .authenticator-entry { grid-template-columns: 1fr; }
+    .authenticator-entry-heading { grid-template-columns: auto minmax(0, 1fr); }
+    .authenticator-entry-heading > .text-button { grid-column: 2; justify-self: start; }
+    .authenticator-code { justify-self: start; }
+    .authenticator-entry-management label { flex-basis: 100%; }
+    .authenticator-entry-management button { flex: 1 1 130px; }
   }
 }

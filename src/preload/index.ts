@@ -3,6 +3,15 @@ import type {
   AppStoreUpdateState,
   AuthenticatorPreviewRequest,
   AuthenticatorPreviewResult,
+  AuthenticatorBulkDeleteRequest,
+  AuthenticatorBulkDeleteResult,
+  AuthenticatorDeleteRequest,
+  AuthenticatorDeleteResult,
+  AuthenticatorExportRequest,
+  AuthenticatorExportResult,
+  AuthenticatorGroupRequest,
+  AuthenticatorRenameRequest,
+  AuthenticatorReorderRequest,
   AuthenticatorListResult,
   AuthenticatorMutationResult,
   AuthenticatorRegistrationConfirmRequest,
@@ -69,6 +78,10 @@ const AUTHENTICATOR_STORAGE_SET = new Set<string>(['memory-only', 'os-vault']);
 const AUTHENTICATOR_MAX_ENTRIES = 256;
 const AUTHENTICATOR_MAX_ISSUER_LENGTH = 128;
 const AUTHENTICATOR_MAX_ACCOUNT_LENGTH = 256;
+const AUTHENTICATOR_MAX_LABEL_LENGTH = 512;
+const AUTHENTICATOR_MAX_GROUP_LENGTH = 64;
+const AUTHENTICATOR_MAX_EXPORT_LENGTH = 512_000;
+const AUTHENTICATOR_EXPORT_OMITTED_FIELDS = ['secret', 'uri', 'code', 'remainingSeconds', 'expiresAt'] as const;
 
 function parseAuthenticatorStatus(value: unknown): AuthenticatorStatus {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('The authenticator status response was invalid.');
@@ -97,12 +110,13 @@ function parseAuthenticatorPreviewResult(value: unknown): AuthenticatorPreviewRe
 function parseAuthenticatorEntryMetadata(value: unknown): AuthenticatorListResult['entries'][number] {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('The authenticator entry response was invalid.');
   const entry = value as Record<string, unknown>;
-  const metadataKeys = new Set(['id', 'issuer', 'account', 'label', 'algorithm', 'digits', 'periodSeconds', 'createdAt', 'updatedAt', 'order', 'code', 'remainingSeconds', 'expiresAt']);
+  const metadataKeys = new Set(['id', 'issuer', 'account', 'label', 'algorithm', 'digits', 'periodSeconds', 'createdAt', 'updatedAt', 'order', 'group', 'code', 'remainingSeconds', 'expiresAt']);
   if (Object.keys(entry).some((key) => !metadataKeys.has(key))) throw new Error('The authenticator entry response was invalid.');
   if (typeof entry.id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(entry.id)
     || typeof entry.issuer !== 'string' || entry.issuer.length > AUTHENTICATOR_MAX_ISSUER_LENGTH
     || typeof entry.account !== 'string' || entry.account.length < 1 || entry.account.length > AUTHENTICATOR_MAX_ACCOUNT_LENGTH
-    || typeof entry.label !== 'string' || entry.label.length < 1 || entry.label.length > AUTHENTICATOR_MAX_ISSUER_LENGTH + AUTHENTICATOR_MAX_ACCOUNT_LENGTH + 3
+    || typeof entry.label !== 'string' || entry.label.length < 1 || entry.label.length > AUTHENTICATOR_MAX_LABEL_LENGTH
+    || (entry.group !== undefined && entry.group !== null && (typeof entry.group !== 'string' || entry.group.length < 1 || entry.group.length > AUTHENTICATOR_MAX_GROUP_LENGTH || entry.group.trim() !== entry.group || /[\u0000-\u001f\u007f]/.test(entry.group)))
     || typeof entry.algorithm !== 'string' || !AUTHENTICATOR_ALGORITHM_SET.has(entry.algorithm)
     || typeof entry.digits !== 'number' || !AUTHENTICATOR_DIGIT_SET.has(entry.digits)
     || !Number.isInteger(entry.periodSeconds) || Number(entry.periodSeconds) < 1 || Number(entry.periodSeconds) > 3_600
@@ -121,8 +135,9 @@ function parseAuthenticatorEntryMetadata(value: unknown): AuthenticatorListResul
     digits: entry.digits as AuthenticatorListResult['entries'][number]['digits'],
     periodSeconds: Number(entry.periodSeconds),
     createdAt: entry.createdAt,
-    updatedAt: entry.updatedAt,
-    order: Number(entry.order),
+     updatedAt: entry.updatedAt,
+     order: Number(entry.order),
+     group: entry.group === undefined || entry.group === null ? null : String(entry.group),
     code: entry.code as string | null,
     remainingSeconds: entry.remainingSeconds as number | null,
     expiresAt: entry.expiresAt as string | null,
@@ -162,6 +177,40 @@ function parseAuthenticatorMutation(value: unknown): AuthenticatorMutationResult
   if (Object.keys(result).some((key) => !keys.has(key)) || typeof result.ok !== 'boolean' || typeof result.message !== 'string' || result.message.length > 512 || typeof result.messageYue !== 'string' || result.messageYue.length > 512) throw new Error('The authenticator mutation response was invalid.');
   if (result.ok && result.entry === undefined) throw new Error('The authenticator mutation response was invalid.');
   return Object.freeze({ ok: result.ok, entry: result.entry === undefined ? undefined : parseAuthenticatorMetadata(result.entry), message: result.message, messageYue: result.messageYue });
+}
+
+function parseAuthenticatorDelete(value: unknown): AuthenticatorDeleteResult {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('The authenticator delete response was invalid.');
+  const result = value as Record<string, unknown>;
+  const keys = new Set(['ok', 'deletedId', 'uncertain', 'message', 'messageYue']);
+  if (Object.keys(result).some((key) => !keys.has(key)) || typeof result.ok !== 'boolean' || (result.uncertain !== undefined && typeof result.uncertain !== 'boolean') || typeof result.message !== 'string' || result.message.length > 512 || typeof result.messageYue !== 'string' || result.messageYue.length > 512) throw new Error('The authenticator delete response was invalid.');
+  if (result.deletedId !== undefined && (typeof result.deletedId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(result.deletedId))) throw new Error('The authenticator delete response was invalid.');
+  if ((result.ok && result.deletedId === undefined) || (result.uncertain && (result.ok || result.deletedId === undefined))) throw new Error('The authenticator delete response was invalid.');
+  return Object.freeze({ ok: result.ok, deletedId: result.deletedId as string | undefined, uncertain: result.uncertain === true, message: result.message, messageYue: result.messageYue });
+}
+
+function parseAuthenticatorBulkDelete(value: unknown): AuthenticatorBulkDeleteResult {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('The authenticator bulk-delete response was invalid.');
+  const result = value as Record<string, unknown>;
+  const keys = new Set(['ok', 'deletedIds', 'skippedIds', 'uncertainIds', 'message', 'messageYue']);
+  const uuid = (entry: unknown) => typeof entry === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(entry);
+  const deletedIds = result.deletedIds as string[];
+  const skippedIds = result.skippedIds as string[];
+  const uncertainIds = result.uncertainIds as string[];
+  if (Object.keys(result).some((key) => !keys.has(key)) || typeof result.ok !== 'boolean' || !Array.isArray(result.deletedIds) || !Array.isArray(result.skippedIds) || !Array.isArray(result.uncertainIds) || deletedIds.length > AUTHENTICATOR_MAX_ENTRIES || skippedIds.length > AUTHENTICATOR_MAX_ENTRIES || uncertainIds.length > AUTHENTICATOR_MAX_ENTRIES || deletedIds.some((id) => !uuid(id)) || skippedIds.some((id) => !uuid(id)) || uncertainIds.some((id) => !uuid(id)) || new Set([...deletedIds, ...skippedIds]).size !== deletedIds.length + skippedIds.length || new Set(uncertainIds).size !== uncertainIds.length || uncertainIds.some((id) => !deletedIds.includes(id)) || skippedIds.some((id) => uncertainIds.includes(id)) || (result.ok && (skippedIds.length !== 0 || uncertainIds.length !== 0)) || typeof result.message !== 'string' || result.message.length > 512 || typeof result.messageYue !== 'string' || result.messageYue.length > 512) throw new Error('The authenticator bulk-delete response was invalid.');
+  return Object.freeze({ ok: result.ok, deletedIds: [...result.deletedIds] as string[], skippedIds: [...result.skippedIds] as string[], uncertainIds: [...result.uncertainIds] as string[], message: result.message, messageYue: result.messageYue });
+}
+
+function parseAuthenticatorExport(value: unknown): AuthenticatorExportResult {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('The authenticator export response was invalid.');
+  const result = value as Record<string, unknown>;
+  const keys = new Set(['ok', 'format', 'filename', 'content', 'omittedFields', 'message', 'messageYue']);
+  if (Object.keys(result).some((key) => !keys.has(key)) || typeof result.ok !== 'boolean' || !Array.isArray(result.omittedFields) || result.omittedFields.length !== AUTHENTICATOR_EXPORT_OMITTED_FIELDS.length || result.omittedFields.some((field, index) => field !== AUTHENTICATOR_EXPORT_OMITTED_FIELDS[index]) || typeof result.message !== 'string' || result.message.length > 512 || typeof result.messageYue !== 'string' || result.messageYue.length > 512) throw new Error('The authenticator export response was invalid.');
+  if (result.format !== undefined && result.format !== 'json' && result.format !== 'csv' && result.format !== 'markdown') throw new Error('The authenticator export response was invalid.');
+  if (result.filename !== undefined && (typeof result.filename !== 'string' || !/^authenticator-metadata\.(json|csv|md)$/.test(result.filename))) throw new Error('The authenticator export response was invalid.');
+  if (result.content !== undefined && (typeof result.content !== 'string' || new TextEncoder().encode(result.content).byteLength > AUTHENTICATOR_MAX_EXPORT_LENGTH)) throw new Error('The authenticator export response was invalid.');
+  if (result.ok && (typeof result.format !== 'string' || typeof result.filename !== 'string' || typeof result.content !== 'string')) throw new Error('The authenticator export response was invalid.');
+  return Object.freeze({ ok: result.ok, format: result.format as AuthenticatorExportResult['format'], filename: result.filename as string | undefined, content: result.content as string | undefined, omittedFields: [...AUTHENTICATOR_EXPORT_OMITTED_FIELDS], message: result.message, messageYue: result.messageYue });
 }
 
 function parseAuthenticatorList(value: unknown): AuthenticatorListResult {
@@ -361,6 +410,12 @@ const api: DingDingStoreApi = {
       await ipcRenderer.invoke('authenticator:cancel', registrationId);
     },
     list: async () => parseAuthenticatorList(await ipcRenderer.invoke('authenticator:list')),
+    rename: async (request: AuthenticatorRenameRequest) => parseAuthenticatorMutation(await ipcRenderer.invoke('authenticator:rename', request)),
+    setGroup: async (request: AuthenticatorGroupRequest) => parseAuthenticatorMutation(await ipcRenderer.invoke('authenticator:set-group', request)),
+    reorder: async (request: AuthenticatorReorderRequest) => parseAuthenticatorMutation(await ipcRenderer.invoke('authenticator:reorder', request)),
+    remove: async (request: AuthenticatorDeleteRequest) => parseAuthenticatorDelete(await ipcRenderer.invoke('authenticator:delete', request)),
+    bulkRemove: async (request: AuthenticatorBulkDeleteRequest) => parseAuthenticatorBulkDelete(await ipcRenderer.invoke('authenticator:bulk-delete', request)),
+    export: async (request: AuthenticatorExportRequest) => parseAuthenticatorExport(await ipcRenderer.invoke('authenticator:export', request)),
   },
   dimSum: {
     startup: (): Promise<DimSumSurprise> => ipcRenderer.invoke('dim-sum:startup'),
@@ -392,4 +447,7 @@ export {
   parseAuthenticatorQr,
   parseAuthenticatorRegistrationPreview,
   parseAuthenticatorStatus,
+  parseAuthenticatorDelete,
+  parseAuthenticatorBulkDelete,
+  parseAuthenticatorExport,
 };

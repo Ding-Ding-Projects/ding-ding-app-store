@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, ipcMain, session, shell } from 'electron';
 import squirrelStartup from 'electron-squirrel-startup';
 import { z } from 'zod';
-import type { AuthenticatorListResult, AuthenticatorMutationResult, AuthenticatorPreviewRequest, AuthenticatorPreviewResult, AuthenticatorRegistrationConfirmRequest, AuthenticatorRegistrationPreviewResult, AuthenticatorRegistrationRequest, AuthenticatorStatus, ElementKey, ElementOverride, ExternalEditorOpenRequest, ExternalEditorPreference, HistoryExportFormat, InstallCancelRequest, LockCredentialRequest, LockSetRequest, LockTarget, OperationRequest, SchoolModeConfigureRequest, SchoolModeCredentialChangeRequest, SchoolModeRenameRequest, SchoolModeToggleRequest, SchoolModeVerifyRequest, SourceJobCancelRequest, SourceJobRequest, SupportTicketCreateRequest, TabWorkspace, UserSettings } from '../shared/contracts.js';
+import type { AuthenticatorBulkDeleteRequest, AuthenticatorBulkDeleteResult, AuthenticatorDeleteRequest, AuthenticatorDeleteResult, AuthenticatorExportRequest, AuthenticatorExportResult, AuthenticatorGroupRequest, AuthenticatorListResult, AuthenticatorMutationResult, AuthenticatorPreviewRequest, AuthenticatorPreviewResult, AuthenticatorRegistrationConfirmRequest, AuthenticatorRegistrationPreviewResult, AuthenticatorRegistrationRequest, AuthenticatorRenameRequest, AuthenticatorReorderRequest, AuthenticatorStatus, ElementKey, ElementOverride, ExternalEditorOpenRequest, ExternalEditorPreference, HistoryExportFormat, InstallCancelRequest, LockCredentialRequest, LockSetRequest, LockTarget, OperationRequest, SchoolModeConfigureRequest, SchoolModeCredentialChangeRequest, SchoolModeRenameRequest, SchoolModeToggleRequest, SchoolModeVerifyRequest, SourceJobCancelRequest, SourceJobRequest, SupportTicketCreateRequest, TabWorkspace, UserSettings } from '../shared/contracts.js';
 import { AppearanceService } from './appearance-service.js';
 import { CatalogService } from './catalog-service.js';
 import { HistoryService } from './history-service.js';
@@ -130,14 +130,33 @@ void app.whenReady().then(async () => {
   });
   const authenticatorRestrictedMutation = (): AuthenticatorMutationResult => ({
     ok: false,
-    message: 'Authenticator pairing is unavailable while the shared restricted mode is enabled or unavailable.',
-    messageYue: '共享限制模式開啟或不可用時，驗證器配對暫時唔可用。',
+    message: 'Authenticator entry management is unavailable while the shared restricted mode is enabled or unavailable.',
+    messageYue: '共享限制模式開啟或不可用時，驗證器項目管理暫時唔可用。',
   });
   const authenticatorRestrictedList = (): AuthenticatorListResult => ({
     entries: [],
     storage: 'memory-only',
     message: 'Authenticator entries are unavailable while the shared restricted mode is enabled or unavailable.',
     messageYue: '共享限制模式開啟或不可用時，驗證器項目暫時唔可用。',
+  });
+  const authenticatorRestrictedDelete = (): AuthenticatorDeleteResult => ({
+    ok: false,
+    message: 'Authenticator entry management is unavailable while the shared restricted mode is enabled or unavailable.',
+    messageYue: '共享限制模式開啟或不可用時，驗證器項目管理暫時唔可用。',
+  });
+  const authenticatorRestrictedBulkDelete = (): AuthenticatorBulkDeleteResult => ({
+    ok: false,
+    deletedIds: [],
+    skippedIds: [],
+    uncertainIds: [],
+    message: 'Authenticator bulk management is unavailable while the shared restricted mode is enabled or unavailable.',
+    messageYue: '共享限制模式開啟或不可用時，驗證器批量管理暫時唔可用。',
+  });
+  const authenticatorRestrictedExport = (): AuthenticatorExportResult => ({
+    ok: false,
+    omittedFields: ['secret', 'uri', 'code', 'remainingSeconds', 'expiresAt'],
+    message: 'Authenticator metadata export is unavailable while the shared restricted mode is enabled or unavailable.',
+    messageYue: '共享限制模式開啟或不可用時，驗證器 metadata 匯出暫時唔可用。',
   });
   const authenticatorAllowed = async (): Promise<boolean> => {
     try {
@@ -253,11 +272,35 @@ void app.whenReady().then(async () => {
   });
   ipcMain.handle('authenticator:cancel', (event, registrationId: unknown) => {
     if (event.sender !== mainWindow?.webContents) return Promise.reject(new Error('Blocked authenticator cancellation request from an unknown renderer.'));
-    authenticator.cancel(typeof registrationId === 'string' ? registrationId : '');
+    return authenticatorAllowed().then((allowed) => { if (allowed) authenticator.cancel(typeof registrationId === 'string' ? registrationId : ''); });
   });
   ipcMain.handle('authenticator:list', (event) => {
     if (event.sender !== mainWindow?.webContents) return Promise.reject(new Error('Blocked authenticator list request from an unknown renderer.'));
     return authenticatorAllowed().then((allowed) => allowed ? authenticator.list() : authenticatorRestrictedList());
+  });
+  ipcMain.handle('authenticator:rename', (event, request: unknown) => {
+    if (event.sender !== mainWindow?.webContents) return Promise.reject(new Error('Blocked authenticator rename request from an unknown renderer.'));
+    return authenticatorAllowed().then((allowed) => allowed ? authenticator.rename(request as AuthenticatorRenameRequest) : authenticatorRestrictedMutation());
+  });
+  ipcMain.handle('authenticator:set-group', (event, request: unknown) => {
+    if (event.sender !== mainWindow?.webContents) return Promise.reject(new Error('Blocked authenticator group request from an unknown renderer.'));
+    return authenticatorAllowed().then((allowed) => allowed ? authenticator.setGroup(request as AuthenticatorGroupRequest) : authenticatorRestrictedMutation());
+  });
+  ipcMain.handle('authenticator:reorder', (event, request: unknown) => {
+    if (event.sender !== mainWindow?.webContents) return Promise.reject(new Error('Blocked authenticator reorder request from an unknown renderer.'));
+    return authenticatorAllowed().then((allowed) => allowed ? authenticator.reorder(request as AuthenticatorReorderRequest) : authenticatorRestrictedMutation());
+  });
+  ipcMain.handle('authenticator:delete', (event, request: unknown) => {
+    if (event.sender !== mainWindow?.webContents) return Promise.reject(new Error('Blocked authenticator delete request from an unknown renderer.'));
+    return authenticatorAllowed().then((allowed) => allowed ? authenticator.remove(request as AuthenticatorDeleteRequest) : authenticatorRestrictedDelete());
+  });
+  ipcMain.handle('authenticator:bulk-delete', (event, request: unknown) => {
+    if (event.sender !== mainWindow?.webContents) return Promise.reject(new Error('Blocked authenticator bulk-delete request from an unknown renderer.'));
+    return authenticatorAllowed().then((allowed) => allowed ? authenticator.bulkRemove(request as AuthenticatorBulkDeleteRequest) : authenticatorRestrictedBulkDelete());
+  });
+  ipcMain.handle('authenticator:export', (event, request: unknown) => {
+    if (event.sender !== mainWindow?.webContents) return Promise.reject(new Error('Blocked authenticator export request from an unknown renderer.'));
+    return authenticatorAllowed().then((allowed) => allowed ? authenticator.export(request as AuthenticatorExportRequest) : authenticatorRestrictedExport());
   });
   ipcMain.handle('locks:load', (event) => event.sender === mainWindow?.webContents ? lockSupport.loadLocks() : Promise.reject(new Error('Blocked lock request from an unknown renderer.')));
   ipcMain.handle('locks:set', (event, request: LockSetRequest) => event.sender === mainWindow?.webContents ? lockSupport.setLock(request) : Promise.reject(new Error('Blocked lock request from an unknown renderer.')));

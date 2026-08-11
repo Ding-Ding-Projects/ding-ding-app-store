@@ -9,6 +9,7 @@ import { SafeStorageAuthenticatorVault } from '../src/main/authenticator-vault.j
 import type { AuthenticatorEntryMetadata } from '../src/shared/contracts.js';
 import type { AuthenticatorVault } from '../src/main/authenticator-vault-contract.js';
 import { generateTotp } from '../src/main/totp.js';
+import { writeJsonAtomic } from '../src/main/json-store.js';
 
 vi.mock('electron', () => ({
   app: { getPath: () => os.tmpdir() },
@@ -31,6 +32,7 @@ function metadata(id = '11111111-1111-4111-8111-111111111111'): AuthenticatorEnt
     createdAt: '2026-08-11T00:00:00.000Z',
     updatedAt: '2026-08-11T00:00:00.000Z',
     order: 0,
+    group: null,
   };
 }
 
@@ -38,6 +40,7 @@ class MemoryVault implements AuthenticatorVault {
   readonly entries = new Map<string, { metadata: AuthenticatorEntryMetadata; secret: string }>();
   async status(): Promise<'os-credential-vault'> { return 'os-credential-vault'; }
   async listMetadata(): Promise<AuthenticatorEntryMetadata[]> { return [...this.entries.values()].map(({ metadata }) => metadata).sort((a, b) => a.order - b.order); }
+  async writeMetadata(entries: readonly AuthenticatorEntryMetadata[]): Promise<void> { const previous = new Map(this.entries); this.entries.clear(); for (const entry of entries) { this.entries.set(entry.id, { metadata: entry, secret: previous.get(entry.id)?.secret ?? '' }); } }
   async save(entry: AuthenticatorEntryMetadata, secret: string): Promise<void> { this.entries.set(entry.id, { metadata: entry, secret }); }
   async remove(entryId: string): Promise<void> { this.entries.delete(entryId); }
   async readSecret(entryId: string): Promise<string | null> { return this.entries.get(entryId)?.secret ?? null; }
@@ -70,6 +73,7 @@ class DeferredVault implements AuthenticatorVault {
     if (this.metadataGate) await this.metadataGate.wait();
     return [...this.entries.values()].map(({ metadata }) => metadata).sort((a, b) => a.order - b.order);
   }
+  async writeMetadata(entries: readonly AuthenticatorEntryMetadata[]): Promise<void> { for (const entry of entries) { const current = this.entries.get(entry.id); this.entries.set(entry.id, { metadata: entry, secret: current?.secret ?? '' }); } for (const id of this.entries.keys()) if (!entries.some((entry) => entry.id === id)) this.entries.delete(id); }
   async save(entry: AuthenticatorEntryMetadata, secret: string): Promise<void> {
     if (this.saveGate) await this.saveGate.wait();
     if (this.failSave) throw new Error('deferred save failure');
@@ -190,6 +194,50 @@ describe('safeStorage ciphertext rollback', () => {
     await expect(vault.save(metadata(), SECRET)).rejects.toThrow('metadata write failure');
     expect(await vault.listMetadata()).toEqual([]);
     await expect(readdir(path.join(directory!, 'secrets'))).resolves.toHaveLength(0);
+  });
+
+  it('restores metadata when an injected writer publishes before rejecting', async () => {
+    let calls = 0;
+    const vault = await createVault({
+      writeMetadata: async (filePath, value, options) => {
+        calls += 1;
+        await writeJsonAtomic(filePath, value, { shouldPublish: options?.shouldPublish });
+        if (calls === 1) throw new Error('post-publication metadata failure');
+      },
+    });
+    await expect(vault.writeMetadata([metadata()])).rejects.toThrow('post-publication metadata failure');
+    expect(await vault.listMetadata()).toEqual([]);
+    expect(calls).toBe(2);
+  });
+
+  it('rolls back a save when its metadata writer publishes before rejecting', async () => {
+    let calls = 0;
+    const vault = await createVault({
+      writeMetadata: async (filePath, value, options) => {
+        calls += 1;
+        await writeJsonAtomic(filePath, value, { shouldPublish: options?.shouldPublish });
+        if (calls === 1) throw new Error('post-publication save failure');
+      },
+    });
+    await expect(vault.save(metadata(), SECRET)).rejects.toThrow('post-publication save failure');
+    expect(await vault.listMetadata()).toEqual([]);
+    await expect(readdir(path.join(directory!, 'secrets'))).resolves.toHaveLength(0);
+    expect(calls).toBe(2);
+  });
+
+  it('restores a delete when its metadata writer publishes before rejecting', async () => {
+    let calls = 0;
+    const vault = await createVault({
+      writeMetadata: async (filePath, value, options) => {
+        calls += 1;
+        await writeJsonAtomic(filePath, value, { shouldPublish: options?.shouldPublish });
+        if (calls === 2) throw new Error('post-publication delete failure');
+      },
+    });
+    await vault.save(metadata(), SECRET);
+    await expect(vault.remove(metadata().id)).rejects.toThrow('post-publication delete failure');
+    expect(await vault.listMetadata()).toEqual([metadata()]);
+    await expect(vault.readSecret(metadata().id)).resolves.toBe(SECRET);
   });
 
   it('removes a temporary ciphertext when secret rename fails', async () => {
