@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import type { PackageType } from '../shared/contracts.js';
+import type { CatalogReleaseEvidence, PackageType } from '../shared/contracts.js';
+import { AMULET_RELEASE_EVIDENCE } from '../shared/catalog-release-evidence.js';
 
 export const CATALOG_APP_IDS = [
   'lowlevel-computer-use-mcp', 'material-download-manager', 'material-designer', 'material-bluemap',
@@ -34,6 +35,8 @@ interface AdapterBase {
   readonly appId: CatalogAppId;
   readonly packageType: PackageType;
   readonly evidence: readonly string[];
+  /** Public release evidence is optional because most legacy rows predate this typed slice. */
+  readonly releaseEvidence?: CatalogReleaseEvidence;
 }
 
 export interface ExecutableInstallAdapter extends AdapterBase {
@@ -139,7 +142,10 @@ export const INSTALL_ADAPTERS: Readonly<Record<CatalogAppId, InstallAdapter>> = 
   winforge: portable('winforge-portable-zip', 'winforge', /^WinForge-portable-x64-[0-9A-Za-z.+-]+\.zip$/, 'WinForge.exe', ['.github/workflows/release.yml: validated self-contained portable archive with WinForge.exe']),
   wimforge: portable('wimforge-portable-zip', 'wimforge', /^WimForge-portable-x64-[0-9A-Za-z.+-]+\.zip$/, 'WimForge.exe', ['.github/workflows/release.yml: self-contained portable Qt archive']),
   'photo-viewer': { id: 'photo-viewer-empty-release', appId: 'photo-viewer', supported: false, family: 'unsupported', packageType: 'unsupported', blockerCode: 'empty-release', blocker: 'The latest public release exists but contains no assets, so there is no installer byte stream to verify or run.', evidence: ['release v0.1.0 had zero assets on 2026-08-07', 'package.json proves a future NSIS target but not a published installer'] },
-  'material-minecraft-map-editor': squirrel('material-minecraft-map-editor-squirrel', 'material-minecraft-map-editor', /^Setup\.exe$/, ['Amulet Map Editor', 'Amulet'], ['installer/amulet.manifest: Amulet assembly identity', 'installer/build-squirrel.ps1: pinned Squirrel.Windows packaging and Amulet.exe validation', 'release 0.10.0-dev.567: unsigned Setup.exe; the release body records a non-green upstream test report']),
+  'material-minecraft-map-editor': {
+    ...squirrel('material-minecraft-map-editor-squirrel', 'material-minecraft-map-editor', /^Setup\.exe$/, ['Amulet Map Editor', 'Amulet'], ['installer/amulet.manifest: Amulet assembly identity', 'installer/build-squirrel.ps1: pinned Squirrel.Windows packaging and Amulet.exe validation', 'release 0.10.0-dev.567: unsigned Setup.exe; the release body records a non-green upstream test report']),
+    releaseEvidence: AMULET_RELEASE_EVIDENCE,
+  },
 };
 
 export function adapterFor(appId: string): InstallAdapter {
