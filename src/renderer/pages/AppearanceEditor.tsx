@@ -12,8 +12,20 @@ import type { WorkspaceApi } from '../state/use-workspace';
 
 interface RailRow { key: keyof TabRailLayout; en: string; yue: string; keywords: string }
 
+/**
+ * Keep the rail choices in one ordered list so the visible picker and its
+ * search vocabulary cannot drift apart. Left is the shipped default; the
+ * other three edges are equally real persisted layouts.
+ */
+export const RAIL_SIDE_OPTIONS = [
+  { value: 'left', en: 'Left', yue: '左邊' },
+  { value: 'right', en: 'Right', yue: '右邊' },
+  { value: 'top', en: 'Top', yue: '上面' },
+  { value: 'bottom', en: 'Bottom', yue: '下面' },
+] as const satisfies ReadonlyArray<{ value: TabRailLayout['side']; en: string; yue: string }>;
+
 const RAIL_ROWS: readonly RailRow[] = [
-  { key: 'side', en: 'Rail side', yue: '導覽位置', keywords: 'left top rail side' },
+  { key: 'side', en: 'Rail side', yue: '導覽位置', keywords: 'left right top bottom rail side edge dock' },
   { key: 'labelMode', en: 'Label mode', yue: '標籤模式', keywords: 'full compact icon label' },
   { key: 'tabHeight', en: 'Tab height', yue: '分頁高度', keywords: 'compact comfortable tall height' },
   { key: 'overflowMode', en: 'Overflow mode', yue: '溢出模式', keywords: 'menu scroll overflow' },
@@ -53,7 +65,7 @@ export function AppearanceEditor({ settings, workspace, appearance, notify, matc
       <div className="settings-card" {...el('settings-card')}>
         <h2>{label(settings, 'Tab rail layout', '分頁列版面')}</h2>
         {rows.map((row) => {
-          if (row.key === 'side') return <label key={row.key} htmlFor="rail-side">{label(settings, row.en, row.yue)}<select id="rail-side" value={rail.side} onChange={(event) => set('side', event.target.value as TabRailLayout['side'])}><option value="left">{label(settings, 'Left', '左邊')}</option><option value="top">{label(settings, 'Top', '上面')}</option></select></label>;
+          if (row.key === 'side') return <label key={row.key} htmlFor="rail-side">{label(settings, row.en, row.yue)}<select id="rail-side" value={rail.side} onChange={(event) => set('side', event.target.value as TabRailLayout['side'])}>{RAIL_SIDE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{label(settings, option.en, option.yue)}</option>)}</select></label>;
           if (row.key === 'labelMode') return <label key={row.key} htmlFor="rail-labelMode">{label(settings, row.en, row.yue)}<select id="rail-labelMode" value={rail.labelMode} onChange={(event) => set('labelMode', event.target.value as TabRailLayout['labelMode'])}><option value="full">{label(settings, 'Full', '完整')}</option><option value="compact">{label(settings, 'Compact', '精簡')}</option><option value="icon">{label(settings, 'Icon only', '淨係圖示')}</option></select></label>;
           if (row.key === 'tabHeight') return <label key={row.key} htmlFor="rail-tabHeight">{label(settings, row.en, row.yue)}<select id="rail-tabHeight" value={rail.tabHeight} onChange={(event) => set('tabHeight', event.target.value as TabRailLayout['tabHeight'])}><option value="compact">{label(settings, 'Compact', '緊湊')}</option><option value="comfortable">{label(settings, 'Comfortable', '舒適')}</option><option value="tall">{label(settings, 'Tall', '高')}</option></select></label>;
           if (row.key === 'overflowMode') return <label key={row.key} htmlFor="rail-overflowMode">{label(settings, row.en, row.yue)}<select id="rail-overflowMode" value={rail.overflowMode} onChange={(event) => set('overflowMode', event.target.value as TabRailLayout['overflowMode'])}><option value="menu">{label(settings, 'Overflow menu', '溢出選單')}</option><option value="scroll">{label(settings, 'Scroll', '捲動')}</option></select></label>;

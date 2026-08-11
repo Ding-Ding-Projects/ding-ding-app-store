@@ -93,6 +93,7 @@ export interface TabRailProps {
   onTabRegexHandled(): void;
   renameGroupId: string | null;
   onRenameHandled(): void;
+  onEditAppearance(target: MenuTarget, returnFocus: HTMLElement | null): void;
 }
 
 type HeaderProps = ComponentPropsWithRef<'button'> & {
@@ -177,9 +178,10 @@ export function TabOverflowSheet({ rows, settings, onActivate, onClose }: {
   );
 }
 
-export function TabContextMenu({ target, workspace, settings, dispatch, onClose, onRename, onMovePicker, announce }: {
+export function TabContextMenu({ target, workspace, settings, dispatch, onClose, onRename, onMovePicker, onEditAppearance, returnFocus, announce }: {
   target: MenuTarget; workspace: TabWorkspace; settings: UserSettings;
-  dispatch(action: WorkspaceAction): void; onClose(): void; onRename(groupId: string): void; onMovePicker(tabId: TabId): void; announce(message: string): void;
+  dispatch(action: WorkspaceAction): void; onClose(): void; onRename(groupId: string): void; onMovePicker(tabId: TabId): void;
+  onEditAppearance?(target: MenuTarget, returnFocus: HTMLElement | null): void; returnFocus?: HTMLElement | null; announce(message: string): void;
 }) {
   const menuSearch = useSurfaceSearch('tabs.menu');
   const menuMatcher = useMemo(() => makeMatcher(menuSearch.state), [menuSearch.state]);
@@ -203,6 +205,7 @@ export function TabContextMenu({ target, workspace, settings, dispatch, onClose,
             </button>
           ))}
         </div>)}
+        {item('Edit group appearance appearance colour font', <button role="menuitem" key="appearance" onClick={() => { onEditAppearance?.(target, returnFocus ?? null); onClose(); }}>{label(settings, 'Edit group appearance…', '編輯分組外觀…')}</button>)}
         {item('Delete group', <button role="menuitem" key="delete" className="danger" onClick={() => { dispatch({ type: 'group-delete', groupId: group.id }); close('Group deleted; its tabs moved out of the group'); }}>{label(settings, 'Delete group (tabs are kept)', '刪除分組（分頁會留低）')}</button>)}
       </div>
     );
@@ -238,6 +241,7 @@ export function TabContextMenu({ target, workspace, settings, dispatch, onClose,
       )}
       {!tab.pinned && workspace.groups.some((group) => group.id !== tab.groupId) && item('Move into group', <button role="menuitem" key="move-group" onClick={() => { onMovePicker(tab.id); onClose(); }}>{label(settings, 'Move… into group…', '移動…去分組…')}</button>)}
       {tab.groupId && item('Remove from group', <button role="menuitem" key="remove" onClick={() => { dispatch({ type: 'group-remove', id: tab.id }); close(`${meta.en} removed from its group`); }}>{label(settings, 'Remove from group', '離開分組')}</button>)}
+      {item('Edit tab appearance appearance colour font', <button role="menuitem" key="appearance" onClick={() => { onEditAppearance?.(target, returnFocus ?? null); onClose(); }}>{label(settings, 'Edit tab appearance…', '編輯分頁外觀…')}</button>)}
     </div>
   );
 }
@@ -347,7 +351,7 @@ export function TabBulkClosePanel({ workspace, settings, dispatch, announce }: {
   );
 }
 
-export function TabRail({ settings, workspace, dispatch, updatesBadge, onOpenPalette, announce, openOverflow, onOverflowHandled, openTabRegex, onTabRegexHandled, renameGroupId: renameRequest, onRenameHandled }: TabRailProps) {
+export function TabRail({ settings, workspace, dispatch, updatesBadge, onOpenPalette, announce, openOverflow, onOverflowHandled, openTabRegex, onTabRegexHandled, renameGroupId: renameRequest, onRenameHandled, onEditAppearance }: TabRailProps) {
   const search = useSurfaceSearch('tabs');
   const groupNames = useSurfaceSearch('tabs.groups');
   const master = useSurfaceSearch('tabs.master');
@@ -361,6 +365,7 @@ export function TabRail({ settings, workspace, dispatch, updatesBadge, onOpenPal
   const [overflowOpen, setOverflowOpen] = useState(false);
   const [dragId, setDragId] = useState<TabId | null>(null);
   const [dropKey, setDropKey] = useState<string | null>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
 
   const matcher = useMemo(() => makeMatcher(search.state), [search.state]);
   const groupNameMatcher = useMemo(() => makeMatcher(groupNames.state), [groupNames.state]);
@@ -451,6 +456,11 @@ export function TabRail({ settings, workspace, dispatch, updatesBadge, onOpenPal
     stopRefs.current.get(key)?.focus();
   }, []);
 
+  const openMenuFor = useCallback((next: MenuTarget, returnFocus: HTMLElement | null) => {
+    returnFocusRef.current = returnFocus;
+    setMenu(next);
+  }, []);
+
   const activate = useCallback((id: TabId) => {
     dispatch({ type: 'activate', id });
     setFocusKey(`t:${id}`);
@@ -499,7 +509,7 @@ export function TabRail({ settings, workspace, dispatch, updatesBadge, onOpenPal
     if (key === 'ArrowRight') {
       event.preventDefault();
       if (row.kind === 'header' && row.group.collapsed) dispatch({ type: 'group-collapse', groupId: row.group.id, collapsed: false });
-      else setMenu(row.kind === 'tab' ? { kind: 'tab', id: row.tab.id } : { kind: 'group', groupId: row.group.id });
+      else openMenuFor(row.kind === 'tab' ? { kind: 'tab', id: row.tab.id } : { kind: 'group', groupId: row.group.id }, event.currentTarget);
       return;
     }
     if (key === 'ArrowLeft') {
@@ -510,7 +520,7 @@ export function TabRail({ settings, workspace, dispatch, updatesBadge, onOpenPal
     }
     if (key === 'ContextMenu' || (key === 'F10' && event.shiftKey)) {
       event.preventDefault();
-      setMenu(row.kind === 'tab' ? { kind: 'tab', id: row.tab.id } : { kind: 'group', groupId: row.group.id });
+      openMenuFor(row.kind === 'tab' ? { kind: 'tab', id: row.tab.id } : { kind: 'group', groupId: row.group.id }, event.currentTarget);
     }
   };
 
@@ -547,7 +557,7 @@ export function TabRail({ settings, workspace, dispatch, updatesBadge, onOpenPal
         onDragEnd={() => { setDragId(null); setDropKey(null); }}
         onFocus={() => setFocusKey(row.key)}
         onKeyDown={(event) => onRowKeyDown(event, index, row)}
-        onContextMenu={(event) => { event.preventDefault(); setMenu({ kind: 'tab', id: row.tab.id }); }}
+        onContextMenu={(event) => { event.preventDefault(); openMenuFor({ kind: 'tab', id: row.tab.id }, event.currentTarget); }}
         onClick={() => activate(row.tab.id)}
       />
     );
@@ -580,7 +590,7 @@ export function TabRail({ settings, workspace, dispatch, updatesBadge, onOpenPal
             tabIndex={focusKey === row.key ? 0 : -1}
             onFocus={() => setFocusKey(row.key)}
             onKeyDown={(event) => onRowKeyDown(event, headerIndex, row)}
-            onContextMenu={(event) => { event.preventDefault(); setMenu({ kind: 'group', groupId: row.group.id }); }}
+            onContextMenu={(event) => { event.preventDefault(); openMenuFor({ kind: 'group', groupId: row.group.id }, event.currentTarget); }}
             onToggle={() => dispatch({ type: 'group-collapse', groupId: row.group.id, collapsed: 'toggle' })}
             onRename={(name) => {
               if (name !== null) dispatch({ type: 'group-rename', groupId: row.group.id, name });
@@ -649,7 +659,7 @@ export function TabRail({ settings, workspace, dispatch, updatesBadge, onOpenPal
       )}
       {overflowOpen && <TabOverflowSheet rows={overflowRows} settings={settings} onActivate={activate} onClose={() => setOverflowOpen(false)} />}
       {menu && (
-        <TabContextMenu target={menu} workspace={workspace} settings={settings} dispatch={dispatch} announce={announce} onRename={(groupId) => setRenamingGroupId(groupId)} onMovePicker={(tabId) => setMovePickerTabId(tabId)} onClose={() => setMenu(null)} />
+        <TabContextMenu target={menu} workspace={workspace} settings={settings} dispatch={dispatch} announce={announce} onRename={(groupId) => setRenamingGroupId(groupId)} onMovePicker={(tabId) => setMovePickerTabId(tabId)} onEditAppearance={onEditAppearance} returnFocus={returnFocusRef.current} onClose={() => setMenu(null)} />
       )}
       {movePickerTabId && <TabMoveGroupPicker tabId={movePickerTabId} workspace={workspace} settings={settings} dispatch={dispatch} announce={announce} onClose={() => setMovePickerTabId(null)} />}
       <button className="palette-hint" onClick={onOpenPalette} {...el('palette-hint')}>

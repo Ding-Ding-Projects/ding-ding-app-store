@@ -118,6 +118,7 @@ export function App() {
   const managedChecks = useRef(new Set<string>());
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
+  const appearanceReturnFocusRef = useRef<HTMLElement | null>(null);
   const [notificationCenterOpen, setNotificationCenterOpen] = useState(false);
   const notificationTriggerRef = useRef<HTMLButtonElement>(null);
   const [regexRequest, setRegexRequest] = useState<SurfaceId | null>(null);
@@ -522,6 +523,22 @@ export function App() {
     setPanelOpen(true);
   }, [appearance]);
 
+  const editTabOrGroupAppearance = useCallback((target: { kind: 'tab'; id: TabId } | { kind: 'group'; groupId: string }, returnFocus: HTMLElement | null) => {
+    appearanceReturnFocusRef.current = returnFocus;
+    appearance.select(target.kind === 'tab' ? 'nav-tab' : 'tab-group-header');
+    appearance.setEditMode(true);
+    setPanelOpen(true);
+  }, [appearance]);
+
+  const closeAppearancePanel = useCallback(() => {
+    setPanelOpen(false);
+    window.setTimeout(() => {
+      const target = appearanceReturnFocusRef.current;
+      appearanceReturnFocusRef.current = null;
+      if (target?.isConnected) target.focus();
+    }, 0);
+  }, []);
+
   /**
    * Palette results carry a typed destination instead of an opaque callback.
    * Navigation happens before focus, then a short-lived marker makes the exact
@@ -721,14 +738,14 @@ export function App() {
         if (notificationCenterOpen) { closeNotificationCenter(); return; }
         if (paletteOpen) { setPaletteOpen(false); return; }
         if (action) { closeAction(); return; }
-        if (panelOpen) { setPanelOpen(false); return; }
+        if (panelOpen) { closeAppearancePanel(); return; }
         if (appearance.editMode) { appearance.setEditMode(false); announce('Appearance edit mode off'); return; }
         search.dispatch({ type: 'clear', surface: 'tabs' });
       }
     };
     window.addEventListener('keydown', listener);
     return () => window.removeEventListener('keydown', listener);
-  }, [activeTab, workspace, runCommand, createGroup, announce, paletteOpen, action, closeAction, panelOpen, notificationCenterOpen, closeNotificationCenter, appearance, search]);
+  }, [activeTab, workspace, runCommand, createGroup, announce, paletteOpen, action, closeAction, panelOpen, notificationCenterOpen, closeNotificationCenter, appearance, search, closeAppearancePanel]);
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -846,6 +863,7 @@ export function App() {
           onTabRegexHandled={() => setRegexRequest(null)}
           renameGroupId={renameRequest}
           onRenameHandled={() => setRenameRequest(null)}
+          onEditAppearance={editTabOrGroupAppearance}
         />
 
         <main className="content" id="surface-panel" role="tabpanel" aria-labelledby={`tab-${activeTab}`} {...el('content-surface')}>
@@ -921,7 +939,7 @@ export function App() {
           )}
         </main>
 
-        {panelOpen && appearance.editMode && <AppearancePanel appearance={appearance} settings={settings} notify={notify} onClose={() => setPanelOpen(false)} />}
+        {panelOpen && appearance.editMode && <AppearancePanel appearance={appearance} settings={settings} notify={notify} onClose={closeAppearancePanel} />}
 
         {action && <ActionDialog action={action} settings={settings} onClose={closeAction} onResult={reportOperation} />}
 

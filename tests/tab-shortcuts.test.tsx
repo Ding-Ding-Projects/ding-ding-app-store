@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { TabContextMenu, TAB_SHORTCUTS, matchesTabShortcut, nextTabGroup } from '../src/renderer/components/TabRail';
+import { RAIL_SIDE_OPTIONS } from '../src/renderer/pages/AppearanceEditor';
 import { SearchContext } from '../src/renderer/search';
 import { DEFAULT_TAB_WORKSPACE, DEFAULT_USER_SETTINGS } from '../src/shared/contracts';
 
@@ -11,6 +12,15 @@ const keyboardEvent = (patch: Partial<KeyboardEvent> = {}) => ({
 }) as KeyboardEvent;
 
 describe('tab shortcut registry', () => {
+  it('keeps the rail picker wired to every persisted dock edge', async () => {
+    expect(RAIL_SIDE_OPTIONS.map((option) => option.value)).toEqual(['left', 'right', 'top', 'bottom']);
+    const source = await readFile(new URL('../src/renderer/pages/AppearanceEditor.tsx', import.meta.url), 'utf8');
+    expect(source).toContain('RAIL_SIDE_OPTIONS.map((option) =>');
+    for (const side of RAIL_SIDE_OPTIONS) {
+      expect(source).toContain(`value: '${side.value}'`);
+    }
+  });
+
   it('matches exact registered chords and rejects missing or extra modifiers', () => {
     expect(matchesTabShortcut(keyboardEvent({ key: 'P', ctrlKey: true, shiftKey: true }), TAB_SHORTCUTS.pin)).toBe(true);
     expect(matchesTabShortcut(keyboardEvent({ key: 'p', ctrlKey: true }), TAB_SHORTCUTS.pin)).toBe(false);
@@ -25,7 +35,7 @@ describe('tab shortcut registry', () => {
     expect(group.id).toMatch(/^grp_[a-z0-9]{8}$/);
   });
 
-  it('renders only real shortcuts with semantic aria-keyshortcuts and silent visual key caps', () => {
+  it('renders only real shortcuts with semantic aria-keyshortcuts and silent visual key caps', async () => {
     const markup = renderToStaticMarkup(createElement(SearchContext.Provider, {
       value: { states: {}, dispatch: vi.fn() },
       children: createElement(TabContextMenu, {
@@ -44,6 +54,21 @@ describe('tab shortcut registry', () => {
       expect(markup).toContain(`<kbd aria-hidden="true">${shortcut.display}</kbd>`);
     }
     expect(markup).not.toContain('aria-keyshortcuts="Control+W"');
+    expect(markup).toContain('Edit tab appearance…');
+    const source = await readFile(new URL('../src/renderer/components/TabRail.tsx', import.meta.url), 'utf8');
+    expect(source).toContain('Edit group appearance…');
+  });
+
+  it('keeps context-menu appearance actions keyboard reachable and restores origin focus', async () => {
+    const [rail, app] = await Promise.all([
+      readFile(new URL('../src/renderer/components/TabRail.tsx', import.meta.url), 'utf8'),
+      readFile(new URL('../src/renderer/App.tsx', import.meta.url), 'utf8'),
+    ]);
+    expect(rail).toContain('key="appearance"');
+    expect(rail).toContain('onEditAppearance?.(target, returnFocus ?? null)');
+    expect(rail).toContain("openMenuFor({ kind: 'tab', id: row.tab.id }, event.currentTarget)");
+    expect(app).toContain('appearanceReturnFocusRef.current = returnFocus');
+    expect(app).toContain('if (target?.isConnected) target.focus();');
   });
 
   it('wires every displayed shortcut back to the shared matcher in live rail and menu handlers', async () => {
