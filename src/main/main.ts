@@ -342,7 +342,7 @@ void app.whenReady().then(async () => {
   ipcMain.handle('appearance:set-element', (_event, key: ElementKey, override: ElementOverride) => stateMutationQueue.run(() => appearance.setElement(key, override)));
   ipcMain.handle('appearance:reset-element', (_event, key: ElementKey) => stateMutationQueue.run(() => appearance.resetElement(key)));
   ipcMain.handle('appearance:reset-all', () => stateMutationQueue.run(() => appearance.resetAll()));
-  ipcMain.handle('appearance:export', () => appearance.export());
+  ipcMain.handle('appearance:export', () => stateMutationQueue.run(() => appearance.export()));
   ipcMain.handle('appearance:import', (_event, payload: string) => stateMutationQueue.run(() => appearance.import(payload)));
   ipcMain.handle('schedule:load', () => stateMutationQueue.run(() => scheduler.reloadFromDisk()));
   ipcMain.handle('schedule:save', (_event, config: unknown) => stateMutationQueue.run(() => scheduler.save(config)));
