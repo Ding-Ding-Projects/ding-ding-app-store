@@ -34,6 +34,18 @@ Selecting **Install** or **Reinstall** immediately submits only the catalog appl
 | Amulet Map Editor | Squirrel | `Setup.exe`; release `0.10.0-dev.567` records pinned Squirrel.Windows packaging and a non-green upstream test report. |
 | Photo Viewer | Unavailable | Public `v0.1.0` release contains zero assets. Its source declares a future NSIS target but no published installer exists. |
 
+### Amulet Map Editor release evidence
+
+The reviewed Amulet record is pinned to public release `0.10.0-dev.567` at source commit `0173704db6bb37f8cdeae75b98bf2e6a25537e46`. Its source-manifest evidence is `pyproject.toml`, `.github/workflows/build-windows.yml`, `installer/build-squirrel.ps1`, and `installer/PACKAGING.md`; the catalog's source-manifest marker remains metadata only and never becomes a renderer-supplied build recipe.
+
+| Release asset | Bytes | SHA-256 | Role |
+| --- | ---: | --- | --- |
+| `Setup.exe` | 70,412,800 | `bfd30c6ad64cd4c8f6efbd03ffac44e032b334d163074bd089cf52bc0fe6fce1` | Squirrel installer |
+| `RELEASES` | 79 | `039bcef7f8f87f5ea0a4ae010022231bdf389bb94d58dc9070320c9aaf0166c7` | Squirrel update index |
+| `Amulet-0.10.100567-full.nupkg` | 70,259,367 | `5b427ae6fe6285333ace91385199cb29a2bae51f0cb7579b7194dbced9c6c606` | Full Squirrel package |
+
+The source workflow reports `2026-08-11T05:59:50Z` to `2026-08-11T06:08:38Z` (`00:08:48`). Its latest release test result is **failed**, with `1256 passed, 8 skipped, 1 warning, 24 errors, 332 subtests passed in 221.33s`. The installable classification is based only on the immutable Squirrel asset contract; this record does not claim green tests, a clean-machine installation, an application launch, or packaged UI evidence.
+
 Uninstall remains behind the native two-key plus full-slider confirmation because it removes user-visible state. Installation and source-repair stay separate: ordinary release installation never imports or invokes the disposable/OpenCode runtime.
 
 ## Configuration

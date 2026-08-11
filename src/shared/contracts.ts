@@ -25,6 +25,37 @@ export interface CatalogApp {
   docsAvailable: boolean;
 }
 
+/**
+ * Public release facts attached to a reviewed catalog adapter.  These facts
+ * are immutable validation evidence, never renderer-provided installer input.
+ */
+export interface CatalogReleaseAssetEvidence {
+  readonly name: string;
+  readonly bytes: number;
+  readonly sha256: string;
+  readonly role: 'installer' | 'update-index' | 'package';
+}
+
+export interface CatalogReleaseEvidence {
+  readonly appId: string;
+  readonly repository: string;
+  readonly tag: string;
+  readonly targetCommit: string;
+  readonly sourceManifest: string;
+  readonly sourceEvidence: readonly string[];
+  readonly workflow: {
+    readonly started: string;
+    readonly completed: string;
+    readonly duration: string;
+  };
+  readonly assets: readonly CatalogReleaseAssetEvidence[];
+  readonly tests: {
+    readonly status: 'passed' | 'failed' | 'unknown';
+    readonly summary: string;
+    readonly disclosure: string;
+  };
+}
+
 export interface CatalogSnapshot {
   apps: CatalogApp[];
   fetchedAt: string;
