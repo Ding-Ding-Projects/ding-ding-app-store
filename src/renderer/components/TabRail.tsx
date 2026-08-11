@@ -385,7 +385,6 @@ export function TabRail({ settings, workspace, dispatch, locks, updatesBadge, on
   const [dragId, setDragId] = useState<TabId | null>(null);
   const [dropKey, setDropKey] = useState<string | null>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
-  const returnFocusRef = useRef<HTMLElement | null>(null);
 
   const matcher = useMemo(() => makeMatcher(search.state), [search.state]);
   const groupNameMatcher = useMemo(() => makeMatcher(groupNames.state), [groupNames.state]);
