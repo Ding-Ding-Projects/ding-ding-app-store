@@ -35,6 +35,7 @@ interface TaskState {
   nextRunIsBackoff: boolean;
   consecutiveFailures: number;
   lastRun: ScheduleRunRecord | null;
+  runToken: number;
 }
 
 export interface SchedulerOptions {
@@ -42,6 +43,7 @@ export interface SchedulerOptions {
   service: ScheduleService;
   tasks: Record<ScheduleTaskId, () => Promise<ScheduleTaskResult>>;
   externalSources?: ExternalScheduledSettingsService;
+  mutate?: <T>(operation: () => Promise<T>) => Promise<T>;
 }
 
 function newTask(id: ScheduleTaskId): TaskState {
@@ -56,6 +58,7 @@ function newTask(id: ScheduleTaskId): TaskState {
     nextRunIsBackoff: false,
     consecutiveFailures: 0,
     lastRun: null,
+    runToken: 0,
   };
 }
 
@@ -73,22 +76,14 @@ export class Scheduler {
   private heldSinceQuietStart = 0;
   private started = false;
   private externalRefreshTimer: NodeJS.Timeout | null = null;
+  private reloadGeneration = 0;
 
   constructor(private readonly options: SchedulerOptions) {}
 
   async start(): Promise<void> {
     if (this.started) return;
     this.started = true;
-    const loaded = await this.options.service.loadWithProvenance();
-    this.config = loaded.config;
-    this.configSource = loaded.source;
-    const runs = await this.options.service.loadRuns();
-    this.tasks['self-update'].lastRun = runs.selfUpdate;
-    this.tasks['catalog-refresh'].lastRun = runs.catalogRefresh;
-    for (const id of TASK_IDS) {
-      const at = Date.parse(this.tasks[id].lastRun?.at ?? '');
-      this.tasks[id].anchor = Number.isFinite(at) ? at : Date.now();
-    }
+    await this.loadPersistedState();
     this.quietWas = this.quietActive();
     try {
       powerMonitor.on('resume', () => this.reevaluate());
@@ -103,12 +98,58 @@ export class Scheduler {
     this.publish();
   }
 
+  /**
+   * Re-reads the schedule files after a local-history restore. `status()` is
+   * intentionally an in-memory projection, so returning it directly from the
+   * IPC handler would leave the renderer and timers on the pre-restore config.
+   */
+  async reloadFromDisk(): Promise<ScheduleStatus> {
+    this.reloadGeneration += 1;
+    const previous = this.config;
+    await this.loadPersistedState();
+    this.startupCheck = null;
+    this.notice = null;
+    this.heldSinceQuietStart = 0;
+
+    if (this.started) {
+      for (const id of TASK_IDS) {
+        const task = this.tasks[id];
+        task.runToken += 1;
+        task.running = false;
+        task.consecutiveFailures = 0;
+        task.nextRunIsBackoff = false;
+        this.disarm(task);
+        if (!this.enabledFor(id, this.config)) {
+          task.nextRunAt = null;
+          task.expectedFireAt = null;
+          task.nextRunIsBackoff = false;
+          continue;
+        }
+        const wasEnabled = this.enabledFor(id, previous);
+        const intervalChanged = this.intervalFor(id, this.config) !== this.intervalFor(id, previous);
+        if (!wasEnabled || intervalChanged || task.anchor === null) {
+          const at = Date.parse(task.lastRun?.at ?? '');
+          task.anchor = Number.isFinite(at) ? at : Date.now();
+        }
+        this.arm(task);
+      }
+      this.quietWas = this.quietActive();
+      if (!this.quietWas) this.heldSinceQuietStart = 0;
+      this.armQuietBoundary();
+      await this.refreshExternalSources();
+      this.armExternalRefresh();
+    }
+
+    this.publish();
+    return this.status();
+  }
+
   async runStartupCheck(): Promise<void> {
-    await this.run(this.tasks['self-update'], 'startup');
+    await this.runExclusive(this.tasks['self-update'], 'startup');
   }
 
   async runNow(id: ScheduleTaskId): Promise<ScheduleStatus> {
-    await this.run(this.tasks[id], 'manual');
+    await this.runExclusive(this.tasks[id], 'manual');
     return this.status();
   }
 
@@ -197,6 +238,19 @@ export class Scheduler {
     this.publish();
   }
 
+  private async loadPersistedState(): Promise<void> {
+    const loaded = await this.options.service.loadWithProvenance();
+    this.config = loaded.config;
+    this.configSource = loaded.source;
+    const runs = await this.options.service.loadRuns();
+    this.tasks['self-update'].lastRun = runs.selfUpdate;
+    this.tasks['catalog-refresh'].lastRun = runs.catalogRefresh;
+    for (const id of TASK_IDS) {
+      const at = Date.parse(this.tasks[id].lastRun?.at ?? '');
+      this.tasks[id].anchor = Number.isFinite(at) ? at : Date.now();
+    }
+  }
+
   private async refreshExternalSources(): Promise<void> {
     if (!this.options.externalSources) return;
     await this.options.externalSources.refresh(this.config).catch(() => undefined);
@@ -264,6 +318,7 @@ export class Scheduler {
   }
 
   private onFire(task: TaskState): void {
+    const expectedGeneration = this.reloadGeneration;
     const now = Date.now();
     const expected = task.expectedFireAt ?? now;
     if (now < expected - CLOCK_TOLERANCE_MS) {
@@ -274,7 +329,7 @@ export class Scheduler {
     }
     const intervalMs = this.intervalFor(task.id, this.config) * 60_000;
     const trigger: ScheduleTrigger = now - expected >= intervalMs ? 'catch-up' : 'schedule';
-    void this.run(task, trigger);
+    void this.runExclusive(task, trigger, expectedGeneration);
   }
 
   private reevaluate(): void {
@@ -291,7 +346,9 @@ export class Scheduler {
     this.publish();
   }
 
-  private async run(task: TaskState, trigger: ScheduleTrigger): Promise<void> {
+  private async run(task: TaskState, trigger: ScheduleTrigger, expectedGeneration?: number): Promise<void> {
+    if (expectedGeneration !== undefined && expectedGeneration !== this.reloadGeneration) return;
+    const runGeneration = this.reloadGeneration;
     this.disarm(task);
     if (task.running) {
       this.record(task, { outcome: 'skipped', message: 'Previous run was still in progress.' }, trigger, 0);
@@ -299,6 +356,8 @@ export class Scheduler {
       this.publish();
       return;
     }
+    const runToken = task.runToken + 1;
+    task.runToken = runToken;
     task.running = true;
     this.publish();
     const started = Date.now();
@@ -307,6 +366,11 @@ export class Scheduler {
       result = await this.options.tasks[task.id]();
     } catch (error) {
       result = { outcome: 'failed', message: (error as Error).message };
+    }
+    if (runGeneration !== this.reloadGeneration || task.runToken !== runToken) {
+      // A history restore replaced the schedule while this operation was
+      // awaiting I/O. Do not let the old result rewrite restored run history.
+      return;
     }
     task.running = false;
     this.record(task, result, trigger, Date.now() - started);
@@ -317,6 +381,12 @@ export class Scheduler {
       catalogRefresh: this.tasks['catalog-refresh'].lastRun,
     });
     this.publish();
+  }
+
+  private async runExclusive(task: TaskState, trigger: ScheduleTrigger, expectedGeneration?: number): Promise<void> {
+    const operation = () => this.run(task, trigger, expectedGeneration);
+    if (!this.options.mutate) return operation();
+    await this.options.mutate(operation);
   }
 
   private record(task: TaskState, result: ScheduleTaskResult, trigger: ScheduleTrigger, durationMs: number): void {
