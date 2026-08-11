@@ -377,7 +377,7 @@ describe('main-process restricted capability seam', () => {
 
   it('clears the renderer manual secret when switching registration source', async () => {
     const source = (await readFile(path.join(process.cwd(), 'src/renderer/pages/AuthenticatorPage.tsx'), 'utf8')).replace(/\r\n/g, '\n');
-    expect(source).toContain("setSource(event.target.value as typeof source); setPreview(null); setSecret(''); setUri(''); setShowSecret(false);");
+    expect(source).toContain("setSource(value as typeof source); setPreview(null); setSecret(''); setUri(''); setShowSecret(false);");
     expect(source).toContain('const displayCode = seconds === 0 ? null : entry.code;');
     expect(source).toContain('disabled={Boolean(preview?.ok)}');
     expect(source).toContain('aria-live="polite" aria-atomic="true"');
@@ -391,5 +391,31 @@ describe('main-process restricted capability seam', () => {
     expect(source).toContain('confirmingRegistrationId');
     expect(source).toContain('disabled={!confirmationCode || confirmingRegistrationId === preview.registrationId}');
     expect(source).toContain("setPreview(next);\n    setConfirmationCode('');\n    setShowSecret(false);");
+  });
+
+  it('uses independent searchable keyboard pickers for source, algorithm, and digits', async () => {
+    const source = (await readFile(path.join(process.cwd(), 'src/renderer/pages/AuthenticatorPage.tsx'), 'utf8')).replace(/\r\n/g, '\n');
+    expect(source).not.toMatch(/<select[^>]+id="authenticator-(source|algorithm|digits)"/u);
+    expect(source).toContain('function AuthenticatorPicker');
+    expect(source).toContain('role="listbox"');
+    expect(source).toContain('role="option"');
+    expect(source).toContain('aria-selected={option.value === value}');
+    expect(source).toContain("if (event.key === 'Escape')");
+    expect(source).toContain("event.key === 'ArrowDown' || event.key === 'ArrowRight'");
+    expect(source).toContain("event.key === 'ArrowUp' || event.key === 'ArrowLeft'");
+    expect(source).toContain("event.key === 'Home'");
+    expect(source).toContain("event.key === 'End'");
+    expect(source).toContain('RegexBuilder query={query}');
+    expect(source).toContain('setRegex({ pattern, flags })');
+    expect(source).toContain('setQuery(event.target.value); if (regex) setRegex({ ...regex, pattern: event.target.value });');
+    expect(source).toContain('setTimeout(() => triggerRef.current?.focus(), 0)');
+    expect(source).toContain('disabled={disabled}');
+    expect(source).toContain('id="authenticator-source"');
+    expect(source).toContain('id="authenticator-algorithm"');
+    expect(source).toContain('id="authenticator-digits"');
+    expect(source).toContain("options={[{ value: 'manual'");
+    expect(source).toContain('options={ALGORITHMS.map');
+    expect(source).toContain('options={DIGITS.map');
+    expect(source).toContain("setSource(value as typeof source); setPreview(null); setSecret(''); setUri(''); setShowSecret(false);");
   });
 });

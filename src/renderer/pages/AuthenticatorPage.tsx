@@ -1,12 +1,15 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { FormEvent } from 'react';
 import type { AuthenticatorAlgorithm, AuthenticatorDigits, AuthenticatorRegistrationPreviewResult, UserSettings } from '../../shared/contracts';
 import { SearchBox } from '../components/SearchBox';
+import { RegexBuilder } from '../components/RegexBuilder';
 import { el } from '../el';
 import { Icon } from '../icons';
 import { label } from '../i18n';
 import type { Notify } from '../notify';
 import { makeMatcher, useSurfaceSearch } from '../search';
+import type { SearchState } from '../search';
 import type { AuthenticatorApi } from '../state/use-authenticator';
 
 const ALGORITHMS: readonly { value: AuthenticatorAlgorithm; en: string; yue: string }[] = [
@@ -15,6 +18,117 @@ const ALGORITHMS: readonly { value: AuthenticatorAlgorithm; en: string; yue: str
   { value: 'sha512', en: 'SHA-512', yue: 'SHA-512' },
 ];
 const DIGITS: readonly AuthenticatorDigits[] = [6, 7, 8];
+
+type PickerValue = string | number;
+type PickerOption = { value: PickerValue; label: string };
+
+/**
+ * A bounded, keyboard-first picker. Each instance owns its query and regex
+ * state so source, algorithm, and digits never leak filters into one another.
+ */
+function AuthenticatorPicker({ id, labelText, settings, value, options, disabled, onChange }: {
+  id: string;
+  labelText: string;
+  settings: UserSettings;
+  value: PickerValue;
+  options: readonly PickerOption[];
+  disabled: boolean;
+  onChange(value: PickerValue): void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [builderOpen, setBuilderOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [regex, setRegex] = useState<SearchState['regex']>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const matcher = useMemo(() => makeMatcher({ query, regex }), [query, regex]);
+  const visibleOptions = useMemo(() => options.filter((option) => matcher(option.label)), [matcher, options]);
+  const selected = options.find((option) => option.value === value) ?? options[0];
+
+  useEffect(() => {
+    if (!open) return;
+    setActiveIndex(Math.max(0, visibleOptions.findIndex((option) => option.value === value)));
+    window.setTimeout(() => inputRef.current?.focus(), 0);
+    // Query/regex changes intentionally refocus the field so keyboard users can
+    // continue filtering after an option list update; parent rerenders alone do
+    // not steal focus.
+  }, [open, value, query, regex]);
+
+  const close = () => {
+    setOpen(false);
+    setBuilderOpen(false);
+    window.setTimeout(() => triggerRef.current?.focus(), 0);
+  };
+  const choose = (option: PickerOption) => {
+    onChange(option.value);
+    close();
+  };
+  const onTriggerKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+    if (disabled) return;
+    if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      setOpen(true);
+    }
+  };
+  const onListKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape') { event.preventDefault(); close(); return; }
+    if (!visibleOptions.length) return;
+    if (event.key === 'ArrowDown' || event.key === 'ArrowRight') { event.preventDefault(); setActiveIndex((index) => (index + 1) % visibleOptions.length); return; }
+    if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') { event.preventDefault(); setActiveIndex((index) => (index - 1 + visibleOptions.length) % visibleOptions.length); return; }
+    if (event.key === 'Home') { event.preventDefault(); setActiveIndex(0); return; }
+    if (event.key === 'End') { event.preventDefault(); setActiveIndex(visibleOptions.length - 1); return; }
+    if (event.key === 'Enter') { event.preventDefault(); choose(visibleOptions[activeIndex] ?? visibleOptions[0]); }
+  };
+
+  return <div className="authenticator-picker setting-field">
+    <span id={`${id}-label`}>{labelText}</span>
+    <button
+      ref={triggerRef}
+      id={id}
+      type="button"
+      className="authenticator-picker-trigger"
+      disabled={disabled}
+      aria-haspopup="listbox"
+      aria-expanded={open}
+      aria-labelledby={`${id}-label`}
+      onClick={() => setOpen((current) => !current)}
+      onKeyDown={onTriggerKeyDown}
+    >
+      <span>{selected?.label ?? ''}</span><Icon>expand_more</Icon>
+    </button>
+    {open && <section className="popover authenticator-picker-popover" role="dialog" aria-label={label(settings, `${labelText} picker`, `${labelText}選擇器`)} onKeyDown={onListKeyDown}>
+      <div className="authenticator-picker-search">
+        <Icon>search</Icon>
+        <input
+          ref={inputRef}
+          type="search"
+          value={query}
+          maxLength={160}
+          placeholder={label(settings, `Search ${labelText.toLocaleLowerCase()}`, `搜尋${labelText}`)}
+          aria-label={label(settings, `Search ${labelText.toLocaleLowerCase()}`, `搜尋${labelText}`)}
+          aria-controls={`${id}-options`}
+          aria-activedescendant={visibleOptions[activeIndex] ? `${id}-option-${String(visibleOptions[activeIndex].value)}` : undefined}
+          onChange={(event) => { setQuery(event.target.value); if (regex) setRegex({ ...regex, pattern: event.target.value }); }}
+        />
+        <button className="icon-button" type="button" aria-label={label(settings, `Open regex builder for ${labelText}`, `開啟${labelText}正則建造器`)} aria-expanded={builderOpen} onClick={() => setBuilderOpen((current) => !current)}><Icon>regular_expression</Icon></button>
+        {builderOpen && <RegexBuilder query={query} settings={settings} onClose={() => { setBuilderOpen(false); window.setTimeout(() => inputRef.current?.focus(), 0); }} onApply={(pattern, flags) => { setQuery(pattern); setRegex({ pattern, flags }); setBuilderOpen(false); window.setTimeout(() => inputRef.current?.focus(), 0); }} />}
+      </div>
+      <div id={`${id}-options`} className="authenticator-picker-list" role="listbox" aria-label={labelText}>
+        {visibleOptions.length === 0 ? <p className="empty-state compact" role="status">{label(settings, 'No matching options.', '冇配到嘅選項。')}</p> : visibleOptions.map((option, index) => <button
+          type="button"
+          role="option"
+          id={`${id}-option-${String(option.value)}`}
+          aria-selected={option.value === value}
+          className={index === activeIndex ? 'authenticator-picker-option active' : 'authenticator-picker-option'}
+          key={String(option.value)}
+          onMouseEnter={() => setActiveIndex(index)}
+          onClick={() => choose(option)}
+        >{option.label}</button>)}
+      </div>
+    </section>}
+  </div>;
+}
 
 function remaining(entry: AuthenticatorApi['entries'][number]): number | null {
   if (!entry.expiresAt) return entry.remainingSeconds;
@@ -183,7 +297,15 @@ export function AuthenticatorPage({ settings, authenticator, notify, openRegex, 
         <h2>{label(viewSettings, 'Register an authenticator entry', '註冊 authenticator 項目')}</h2>
         {preview?.ok && <p className="supporting">{label(viewSettings, 'Registration fields are locked while this pairing preview is active, so the QR, code, and metadata cannot drift apart.', '配對預覽進行中會鎖住註冊欄位，避免 QR、驗證碼同 metadata 對唔上。')}</p>}
         <form onSubmit={(event) => void submitRegistration(event)}>
-          <label htmlFor="authenticator-source">{label(viewSettings, 'Registration source', '註冊來源')}<select id="authenticator-source" disabled={Boolean(preview?.ok)} value={source} onChange={(event) => { setSource(event.target.value as typeof source); setPreview(null); setSecret(''); setUri(''); setShowSecret(false); }}><option value="manual">{label(viewSettings, 'Manual Base32 metadata', '手動 Base32 metadata')}</option><option value="otpauth-uri">otpauth://totp/ URI</option></select></label>
+          <AuthenticatorPicker
+            id="authenticator-source"
+            labelText={label(viewSettings, 'Registration source', '註冊來源')}
+            settings={viewSettings}
+            value={source}
+            disabled={Boolean(preview?.ok)}
+            options={[{ value: 'manual', label: label(viewSettings, 'Manual Base32 metadata', '手動 Base32 metadata') }, { value: 'otpauth-uri', label: 'otpauth://totp/ URI' }]}
+            onChange={(value) => { setSource(value as typeof source); setPreview(null); setSecret(''); setUri(''); setShowSecret(false); }}
+          />
           {source === 'otpauth-uri' ? <>
             <label htmlFor="authenticator-uri">{label(viewSettings, 'otpauth://totp/ URI (hidden until reveal)', 'otpauth://totp/ URI（顯示前會收埋）')}<input id="authenticator-uri" disabled={Boolean(preview?.ok)} type={showSecret ? 'text' : 'password'} autoComplete="off" maxLength={2_048} value={uri} onChange={(event) => setUri(event.target.value)} required /></label>
             <div className="button-row">
@@ -195,8 +317,24 @@ export function AuthenticatorPage({ settings, authenticator, notify, openRegex, 
             <button className="text-button" type="button" disabled={Boolean(preview?.ok)} onClick={() => setShowSecret((value) => !value)}>{showSecret ? label(viewSettings, 'Hide manual secret', '收埋手動秘密') : label(viewSettings, 'Reveal manual secret', '顯示手動秘密')}</button>
             <label htmlFor="authenticator-issuer">{label(viewSettings, 'Issuer (optional)', 'Issuer（可選）')}<input id="authenticator-issuer" disabled={Boolean(preview?.ok)} type="text" maxLength={128} value={issuer} onChange={(event) => setIssuer(event.target.value)} /></label>
             <label htmlFor="authenticator-account">{label(viewSettings, 'Account', '帳戶')}<input id="authenticator-account" disabled={Boolean(preview?.ok)} type="text" maxLength={256} value={account} onChange={(event) => setAccount(event.target.value)} required /></label>
-            <label htmlFor="authenticator-algorithm">{label(viewSettings, 'Algorithm', '演算法')}<select id="authenticator-algorithm" disabled={Boolean(preview?.ok)} value={algorithm} onChange={(event) => setAlgorithm(event.target.value as AuthenticatorAlgorithm)}>{ALGORITHMS.map((item) => <option key={item.value} value={item.value}>{label(viewSettings, item.en, item.yue)}</option>)}</select></label>
-            <label htmlFor="authenticator-digits">{label(viewSettings, 'Digits', '位數')}<select id="authenticator-digits" disabled={Boolean(preview?.ok)} value={digits} onChange={(event) => setDigits(Number(event.target.value) as AuthenticatorDigits)}>{DIGITS.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
+            <AuthenticatorPicker
+              id="authenticator-algorithm"
+              labelText={label(viewSettings, 'Algorithm', '演算法')}
+              settings={viewSettings}
+              value={algorithm}
+              disabled={Boolean(preview?.ok)}
+              options={ALGORITHMS.map((item) => ({ value: item.value, label: label(viewSettings, item.en, item.yue) }))}
+              onChange={(value) => setAlgorithm(value as AuthenticatorAlgorithm)}
+            />
+            <AuthenticatorPicker
+              id="authenticator-digits"
+              labelText={label(viewSettings, 'Digits', '位數')}
+              settings={viewSettings}
+              value={digits}
+              disabled={Boolean(preview?.ok)}
+              options={DIGITS.map((value) => ({ value, label: String(value) }))}
+              onChange={(value) => setDigits(Number(value) as AuthenticatorDigits)}
+            />
             <label htmlFor="authenticator-period">{label(viewSettings, 'Period in seconds', '週期秒數')}<input id="authenticator-period" disabled={Boolean(preview?.ok)} type="number" min={1} max={3600} step={1} value={periodSeconds} onChange={(event) => setPeriodSeconds(Number(event.target.value))} /></label>
           </>}
           <button className="filled-button" type="submit" disabled={authenticator.loading || Boolean(preview?.ok) || (source === 'manual' ? !secret.trim() || !account.trim() : !uri.trim())}>{label(viewSettings, 'Prepare local QR pairing', '準備本機 QR 配對')}</button>
