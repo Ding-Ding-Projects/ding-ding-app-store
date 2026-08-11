@@ -19,6 +19,7 @@ import type {
   TokenId,
   UserSettings,
   DimSumSurprise,
+  LockTarget,
 } from '../shared/contracts';
 import { resolveScheduledSettings } from '../shared/scheduled-settings';
 import { applySchoolModePresentation } from '../shared/school-mode';
@@ -48,6 +49,8 @@ import { useAppearance, useAppearanceVars } from './state/use-appearance';
 import { useSchedule } from './state/use-schedule';
 import { useSettings } from './state/use-settings';
 import { useSchoolMode } from './state/use-school-mode';
+import { useLocks } from './state/use-locks';
+import { useSupport } from './state/use-support';
 import { useNotifications } from './state/use-notifications';
 import { useNarrator } from './state/use-narrator';
 import { newGroupId, orderedTabIds, useWorkspace } from './state/use-workspace';
@@ -68,6 +71,8 @@ export function App() {
 
   const { settings: baseSettings, provenance: settingsProvenance, reload: reloadSettings, save: saveSettings, patch: patchSetting } = useSettings(notify);
   const schoolMode = useSchoolMode(notify);
+  const locks = useLocks(notify);
+  const support = useSupport(notify);
   const workspace = useWorkspace(notify);
   const appearance = useAppearance(notify);
   const schedule = useSchedule(notify);
@@ -123,6 +128,7 @@ export function App() {
   const [regexRequest, setRegexRequest] = useState<SurfaceId | null>(null);
   const [overflowRequest, setOverflowRequest] = useState(false);
   const [renameRequest, setRenameRequest] = useState<string | null>(null);
+  const [lockTargetRequest, setLockTargetRequest] = useState<LockTarget | null>(null);
   const [subTab, setSubTab] = useState<SettingsSubTabId>('settings.general');
   const [docRequest, setDocRequest] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState('');
@@ -516,6 +522,13 @@ export function App() {
 
   const focusLater = (id: string) => window.setTimeout(() => window.document.getElementById(id)?.focus(), 0);
 
+  const openLockSupport = useCallback((target: LockTarget) => {
+    workspace.dispatch({ type: 'activate', id: 'settings' });
+    setSubTab('settings.support');
+    setLockTargetRequest(target);
+    focusLater('lock-target');
+  }, [workspace]);
+
   const selectElement = useCallback((key: ElementKey) => {
     appearance.select(key);
     appearance.setEditMode(true);
@@ -833,10 +846,12 @@ export function App() {
           <button className="close-window" onClick={() => window.dingDingStore.window.close()} aria-label="Close"><Icon>close</Icon></button>
         </header>
 
-        <TabRail
-          settings={settings}
-          workspace={workspace.workspace}
-          dispatch={workspace.dispatch}
+      <TabRail
+        settings={settings}
+        workspace={workspace.workspace}
+        dispatch={workspace.dispatch}
+          locks={locks}
+          onManageLock={openLockSupport}
           updatesBadge={updatesBadge}
           onOpenPalette={() => setPaletteOpen(true)}
           announce={announce}
@@ -898,7 +913,7 @@ export function App() {
               onRegexHandled={() => setRegexRequest(null)}
             />
           )}
-          {activeTab === 'docs' && <DocsPage settings={settings} schoolModeEnabled={schoolMode.state.enabled} schoolModeName={schoolMode.state.displayName} notify={notify} openRegex={regexRequest === 'docs'} onRegexHandled={() => setRegexRequest(null)} articleRequest={docRequest} onArticleHandled={() => setDocRequest(null)} />}
+          {activeTab === 'docs' && <DocsPage settings={settings} schoolModeEnabled={schoolMode.state.enabled} schoolModeName={schoolMode.state.displayName} notify={notify} openRegex={regexRequest === 'docs'} onRegexHandled={() => setRegexRequest(null)} articleRequest={docRequest} onArticleHandled={() => setDocRequest(null)} onOpenSupport={() => openLockSupport({ targetKind: 'tab', targetId: workspace.workspace.activeTabId })} />}
           {activeTab === 'activity' && <ActivityPage entries={history} revisions={historyRevisions} loading={historyLoading} settings={settings} openRegex={regexRequest === 'activity'} onRegexHandled={() => setRegexRequest(null)} notify={notify} onHistoryChanged={reloadHistoryAndSettings} />}
           {activeTab === 'settings' && (
             <SettingsPage
@@ -912,6 +927,9 @@ export function App() {
               appearance={appearance}
               schedule={schedule}
               schoolMode={schoolMode}
+              locks={locks}
+              support={support}
+              lockTargetRequest={lockTargetRequest}
               notify={notify}
               subTab={subTab}
               onSubTab={setSubTab}

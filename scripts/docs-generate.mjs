@@ -37,6 +37,7 @@ const articles = [
   ['app-store-self-updater', 'App Store self-updater', 'App Store 自己更新', 'updates', 'App-Store-Self-Updater', 'limited', ['update-schedule', 'notifications-and-status', 'verification']],
   ['update-schedule', 'Update schedule', '更新排程', 'updates', 'Update-Schedule', 'shipped', ['app-store-self-updater', 'catalog-discovery', 'notifications-and-status', 'dim-sum-surprise']],
   ['tab-navigation', 'Tab workspace', '分頁工作區', 'experience', 'Tab-Navigation', 'shipped', ['search-and-regex-builder', 'command-palette', 'appearance-editor']],
+  ['tab-and-group-locks-and-support-tickets', 'Tab and group UX locks with local Support Tickets', '分頁同分組 UX 鎖連本機支援票', 'experience', 'Tab-And-Group-Locks-And-Support-Tickets', 'limited', ['tab-navigation', 'notifications-and-status', 'privacy-and-security', 'history-versioning']],
   ['search-and-regex-builder', 'Search and regex builder', '搜尋同 Regex 建造器', 'experience', 'Search-and-Regex-Builder', 'shipped', ['tab-navigation', 'command-palette', 'offline-documentation-browser']],
   ['command-palette', 'Command palette', '指令板', 'experience', 'Command-Palette', 'shipped', ['search-and-regex-builder', 'settings-language-and-display-name', 'appearance-editor']],
   ['settings-language-and-display-name', 'Settings, language, and display name', '設定、語言同顯示名稱', 'experience', 'Settings-Language-and-Display-Name', 'shipped', ['command-palette', 'appearance-editor', 'update-schedule']],

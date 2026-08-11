@@ -124,6 +124,21 @@
   .settings-card input[type="range"] { width: 100%; }
   .settings-card input[type="color"] { width: 100%; min-height: 48px; padding: 4px; border: 1px solid var(--outline); border-radius: 12px; background: var(--surface); }
   .settings-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
+  .lock-support-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; max-width: 1200px; margin: 0 auto 20px; }
+  .lock-support-grid .settings-card { min-width: 0; }
+  .lock-support-grid label { display: grid; gap: 6px; margin: 12px 0; }
+  .lock-support-grid input, .lock-support-grid select, .lock-support-grid textarea { width: 100%; min-height: 44px; padding: 9px 11px; border: 1px solid var(--outline); border-radius: 12px; color: inherit; background: var(--surface); font: inherit; }
+  .lock-support-grid textarea { min-height: 112px; resize: vertical; }
+  .lock-support-grid .settings-actions { grid-column: auto; justify-content: flex-start; }
+  .support-disclosure { margin: 12px 0; padding: 12px; border: 1px solid var(--outline); border-radius: 14px; color: var(--on-surface); background: var(--surface-high); font-weight: 700; }
+  .support-recovery { display: grid; gap: 8px; margin-top: 18px; padding: 14px; border-radius: 16px; background: var(--surface-high); }
+  .support-recovery code { display: block; max-width: 100%; overflow-wrap: anywhere; user-select: text; }
+  .ticket-list { display: grid; gap: 8px; margin-top: 18px; }
+  .ticket-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 12px; border-radius: 14px; background: var(--surface-high); }
+  .ticket-row > div { min-width: 0; flex: 1; }
+  .ticket-row strong, .ticket-row small { display: block; }
+  .ticket-row small { color: var(--outline); }
+  .ticket-row p { margin: 8px 0 0; overflow-wrap: anywhere; }
   .override-list { display: grid; gap: 8px; margin: 8px 0 0; padding: 0; list-style: none; }
   .override-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px; border-radius: 14px; background: var(--surface); }
   .override-list li .supporting { flex: 1; min-width: 120px; }

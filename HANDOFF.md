@@ -1,5 +1,13 @@
 # Handoff
 
+## 2026-08-11 tab/group UX locks and local Support Tickets (branch-only until integration)
+
+- Added typed main/preload/renderer contracts for per-tab and per-group password UX locks. Each lock is session-scoped, remains a readable tab/group label with an accessible lock affordance, and requires its own credential to change or remove. Locked activation opens the target's inline unlock route; Help and the lock prompt both reach Settings → Locks & Support.
+- Added a local fictional Support Tickets desk with category, description, severity, local ticket number, advancing status, canned first response, searchable list, copyable recovery path, and an Open folder action. The desk never calls the network or deletes the folder; the user performs any app-data reset themselves.
+- Credential verifiers use salted `scrypt` plus Electron `safeStorage`; plaintext secrets never enter renderer state or files. If the operating-system vault is unavailable or unreadable, lock changes fail closed and the UI explains that no pretend security is offered. This slice does not claim per-property appearance locks, OTP/TOTP, or a master credential.
+- Local evidence on this branch: `npm run docs:check`; `npm exec -- vitest run tests/locks-support.test.ts --pool=forks --no-file-parallelism --maxWorkers=1` (5/5); `npm exec -- vitest run tests/contracts.test.ts --pool=forks --no-file-parallelism --maxWorkers=1` (37/37); renderer and main TypeScript no-emit checks; renderer/main/preload builds. Packaged hidden-desktop interaction and remote CI remain separate evidence boundaries until integration.
+- Source branch: `codex/locks-support-slice-20260811`; exact commit and hui CI link will be recorded after the focused dew.
+
 ## 2026-08-11 Catalog and shared-contract expansion
 
 - Added the reviewed `material-minecraft-map-editor` catalog record as `Amulet Map Editor` with its Squirrel adapter, pinned packaging evidence, and public release `0.10.0-dev.567`. The release body reports `1256 passed, 8 skipped, 1 warning, 24 errors, 332 subtests passed`; this catalog slice records that result as non-green upstream evidence and does not claim clean-machine installation or UI proof.

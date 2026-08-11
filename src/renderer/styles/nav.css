@@ -159,6 +159,12 @@
   .tab-group-dot[data-color="purple"] { background: var(--group-purple); }
   .tab-group-dot[data-color="teal"] { background: var(--group-teal); }
   .tab-group-count { margin-left: auto; color: var(--outline); }
+  .tab-lock { display: inline-flex; align-items: center; margin-left: auto; color: var(--primary); }
+  .tab-lock .material-symbols-rounded { font-size: 16px; }
+  .menu-credential-row { display: grid; gap: 8px; padding: 8px; border-radius: 12px; background: var(--surface-high); }
+  .menu-credential-row label { display: grid; gap: 4px; color: var(--outline); font-size: 12px; }
+  .menu-credential-row input { min-height: 38px; padding: 6px 8px; border: 1px solid var(--outline); border-radius: 10px; color: inherit; background: var(--surface); font: inherit; }
+  .menu-credential-row button { min-height: 38px; padding: 0 10px; border-radius: 10px; background: var(--primary-container); }
 
   .tab-empty { display: grid; gap: 6px; padding: 12px 10px; color: var(--outline); font-size: 13px; }
   .tab-empty p { margin: 0; }

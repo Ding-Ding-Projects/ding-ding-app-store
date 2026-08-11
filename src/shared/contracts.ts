@@ -377,6 +377,80 @@ export interface SchoolModeMutationResult {
   message: string;
 }
 
+/**
+ * A lock is a local UX speed bump, not encryption or a security boundary.
+ * The credential verifier stays in the main process; the renderer receives
+ * only this projection and never receives a password, salt, or verifier.
+ */
+export type LockTargetKind = 'tab' | 'group';
+export interface LockTarget {
+  targetKind: LockTargetKind;
+  targetId: string;
+}
+export interface LockRecord extends LockTarget {
+  credentialKind: 'password';
+  locked: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface LockState {
+  schemaVersion: 1;
+  vaultAvailable: boolean;
+  unavailableReason: 'credential-store-unavailable' | 'credential-store-read-failed' | null;
+  records: LockRecord[];
+  recoveryPath: string;
+}
+export interface LockSetRequest extends LockTarget {
+  credential: string;
+  currentCredential?: string;
+}
+export interface LockCredentialRequest extends LockTarget {
+  credential: string;
+}
+export interface LockMutationResult {
+  ok: boolean;
+  state: LockState;
+  message: string;
+  reason?: 'credential-store-unavailable' | 'credential-store-read-failed' | 'credential-mismatch' | 'not-found' | 'invalid';
+}
+
+export type SupportTicketCategory = 'unlock' | 'lock' | 'other';
+export type SupportTicketSeverity = 'low' | 'normal' | 'high';
+export type SupportTicketStatus = 'created' | 'reviewed' | 'resolved';
+export interface SupportTicket {
+  id: string;
+  number: string;
+  category: SupportTicketCategory;
+  description: string;
+  severity: SupportTicketSeverity;
+  status: SupportTicketStatus;
+  firstResponse: string;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface SupportState {
+  schemaVersion: 1;
+  tickets: SupportTicket[];
+  recoveryPath: string;
+  disclosure: string;
+}
+export interface SupportTicketCreateRequest {
+  category: SupportTicketCategory;
+  description: string;
+  severity: SupportTicketSeverity;
+}
+export interface SupportTicketMutationResult {
+  ok: boolean;
+  state: SupportState;
+  message: string;
+  reason?: 'invalid' | 'storage-failed' | 'not-found';
+}
+export interface SupportOpenRecoveryResult {
+  ok: boolean;
+  path: string;
+  message: string;
+}
+
 /** The compiled-in settings are a public contract: every settings explanation names these values. */
 export const DEFAULT_USER_SETTINGS: UserSettings = {
   language: 'bilingual',
@@ -410,6 +484,7 @@ export const SURFACE_IDS = [
   'settings.appearance',
   'settings.schedule',
   'settings.about',
+  'settings.support',
 ] as const;
 export type PersistedSurfaceId = (typeof SURFACE_IDS)[number];
 
@@ -1127,6 +1202,19 @@ export interface DingDingStoreApi {
     rename(request: SchoolModeRenameRequest): Promise<SchoolModeMutationResult>;
     setEnabled(request: SchoolModeToggleRequest): Promise<SchoolModeMutationResult>;
     verify(request: SchoolModeVerifyRequest): Promise<boolean>;
+  };
+  locks: {
+    load(): Promise<LockState>;
+    set(request: LockSetRequest): Promise<LockMutationResult>;
+    unlock(request: LockCredentialRequest): Promise<LockMutationResult>;
+    lockAgain(target: LockTarget): Promise<LockMutationResult>;
+    remove(request: LockCredentialRequest): Promise<LockMutationResult>;
+  };
+  support: {
+    load(): Promise<SupportState>;
+    create(request: SupportTicketCreateRequest): Promise<SupportTicketMutationResult>;
+    advance(ticketId: string): Promise<SupportTicketMutationResult>;
+    openRecoveryFolder(): Promise<SupportOpenRecoveryResult>;
   };
   history: {
     list(): Promise<HistoryEntry[]>;
