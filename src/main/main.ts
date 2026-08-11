@@ -272,6 +272,14 @@ void app.whenReady().then(async () => {
       ? authenticator.prepare(request as AuthenticatorRegistrationRequest)
       : authenticatorRestrictedRegistration());
   });
+  ipcMain.handle('authenticator:cancel-attempt', (event, attemptId: unknown) => {
+    if (event.sender !== mainWindow?.webContents) return Promise.reject(new Error('Blocked authenticator cancellation request from an unknown renderer.'));
+    // This is an internal lost-response cleanup route. It remains callable
+    // during School mode so a pending plaintext pairing can be cleared rather
+    // than waiting for its expiry; it never lists, returns, or saves data.
+    authenticator.cancelAttempt(typeof attemptId === 'string' ? attemptId : '');
+    return undefined;
+  });
   ipcMain.handle('authenticator:confirm', (event, request: unknown) => {
     if (event.sender !== mainWindow?.webContents) return Promise.reject(new Error('Blocked authenticator pairing request from an unknown renderer.'));
     return authenticatorAllowed().then((allowed) => allowed

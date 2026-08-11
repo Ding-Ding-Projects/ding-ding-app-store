@@ -172,20 +172,21 @@ function parseAuthenticatorRegistrationPreview(value: unknown): AuthenticatorReg
   const result = value as Record<string, unknown>;
   const keys = new Set(['ok', 'registrationId', 'metadata', 'qr', 'storage', 'message', 'messageYue']);
   if (Object.keys(result).some((key) => !keys.has(key)) || typeof result.ok !== 'boolean' || !AUTHENTICATOR_STORAGE_SET.has(String(result.storage)) || typeof result.message !== 'string' || result.message.length > 512 || typeof result.messageYue !== 'string' || result.messageYue.length > 512) throw new Error('The authenticator registration response was invalid.');
+  if (!result.ok && ['registrationId', 'metadata', 'qr'].some((key) => Object.prototype.hasOwnProperty.call(result, key))) throw new Error('The authenticator registration response was invalid.');
   if (result.registrationId !== undefined && (typeof result.registrationId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(result.registrationId))) throw new Error('The authenticator registration response was invalid.');
   const metadata = result.metadata === undefined ? undefined : parseAuthenticatorMetadata(result.metadata);
-  if (result.qr !== undefined) parseAuthenticatorQr(result.qr);
+  const qr = result.qr === undefined ? undefined : parseAuthenticatorQr(result.qr);
   if (result.ok && (typeof result.registrationId !== 'string' || result.metadata === undefined || result.qr === undefined)) throw new Error('The authenticator registration response was invalid.');
-  return Object.freeze({ ok: result.ok, registrationId: result.registrationId as string | undefined, metadata, qr: result.qr === undefined ? undefined : parseAuthenticatorQr(result.qr), storage: result.storage as AuthenticatorRegistrationPreviewResult['storage'], message: result.message, messageYue: result.messageYue });
+  return Object.freeze({ ok: result.ok, registrationId: result.registrationId as string | undefined, metadata, qr, storage: result.storage as AuthenticatorRegistrationPreviewResult['storage'], message: result.message, messageYue: result.messageYue });
 }
 
 function parseAuthenticatorMutation(value: unknown): AuthenticatorMutationResult {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('The authenticator mutation response was invalid.');
   const result = value as Record<string, unknown>;
-  const keys = new Set(['ok', 'entry', 'message', 'messageYue']);
-  if (Object.keys(result).some((key) => !keys.has(key)) || typeof result.ok !== 'boolean' || typeof result.message !== 'string' || result.message.length > 512 || typeof result.messageYue !== 'string' || result.messageYue.length > 512) throw new Error('The authenticator mutation response was invalid.');
+  const keys = new Set(['ok', 'entry', 'uncertain', 'message', 'messageYue']);
+  if (Object.keys(result).some((key) => !keys.has(key)) || typeof result.ok !== 'boolean' || (result.uncertain !== undefined && typeof result.uncertain !== 'boolean') || (result.uncertain === true && result.ok) || typeof result.message !== 'string' || result.message.length > 512 || typeof result.messageYue !== 'string' || result.messageYue.length > 512) throw new Error('The authenticator mutation response was invalid.');
   if (result.ok && result.entry === undefined) throw new Error('The authenticator mutation response was invalid.');
-  return Object.freeze({ ok: result.ok, entry: result.entry === undefined ? undefined : parseAuthenticatorMetadata(result.entry), message: result.message, messageYue: result.messageYue });
+  return Object.freeze({ ok: result.ok, entry: result.entry === undefined ? undefined : parseAuthenticatorMetadata(result.entry), uncertain: result.uncertain === true, message: result.message, messageYue: result.messageYue });
 }
 
 function parseAuthenticatorDelete(value: unknown): AuthenticatorDeleteResult {
@@ -413,6 +414,10 @@ const api: DingDingStoreApi = {
     status: async () => parseAuthenticatorStatus(await ipcRenderer.invoke('authenticator:status')),
     preview: async (request: AuthenticatorPreviewRequest) => parseAuthenticatorPreviewResult(await ipcRenderer.invoke('authenticator:preview', request)),
     prepare: async (request: AuthenticatorRegistrationRequest) => parseAuthenticatorRegistrationPreview(await ipcRenderer.invoke('authenticator:prepare', request)),
+    cancelAttempt: async (attemptId: string) => {
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(attemptId)) throw new Error('The authenticator prepare attempt identifier was invalid.');
+      await ipcRenderer.invoke('authenticator:cancel-attempt', attemptId);
+    },
     confirm: async (request: AuthenticatorRegistrationConfirmRequest) => parseAuthenticatorMutation(await ipcRenderer.invoke('authenticator:confirm', request)),
     cancel: async (registrationId: string) => {
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(registrationId)) throw new Error('The authenticator registration identifier was invalid.');

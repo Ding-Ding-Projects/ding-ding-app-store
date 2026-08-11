@@ -1283,9 +1283,11 @@ export interface AuthenticatorQrMatrix {
 }
 
 export type AuthenticatorRegistrationRequest =
-  | { source: 'otpauth-uri'; uri: string }
+  | { source: 'otpauth-uri'; uri: string; attemptId?: string }
   | {
       source: 'manual';
+      /** Renderer-owned one-shot id used only to cancel a lost prepare response. */
+      attemptId?: string;
       secret: string;
       issuer: string;
       account: string;
@@ -1346,6 +1348,8 @@ export interface AuthenticatorExportRequest {
 export interface AuthenticatorMutationResult {
   ok: boolean;
   entry?: AuthenticatorEntryMetadata;
+  /** The pairing may have been published while rollback/visibility was uncertain; do not retry it. */
+  uncertain?: boolean;
   message: string;
   messageYue: string;
 }
@@ -1532,6 +1536,7 @@ export interface DingDingStoreApi {
     status(): Promise<AuthenticatorStatus>;
     preview(request: AuthenticatorPreviewRequest): Promise<AuthenticatorPreviewResult>;
     prepare(request: AuthenticatorRegistrationRequest): Promise<AuthenticatorRegistrationPreviewResult>;
+    cancelAttempt(attemptId: string): Promise<void>;
     confirm(request: AuthenticatorRegistrationConfirmRequest): Promise<AuthenticatorMutationResult>;
     cancel(registrationId: string): Promise<void>;
     list(): Promise<AuthenticatorListResult>;

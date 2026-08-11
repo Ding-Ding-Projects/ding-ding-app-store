@@ -15,6 +15,7 @@ import type { AuthenticatorApi } from '../state/use-authenticator';
 import { moveAuthenticatorPickerFocus } from '../authenticator-picker-keyboard';
 import { selectAuthenticatorRange, toggleAuthenticatorSelection } from '../authenticator-selection';
 import { isExternalEditorBridgeAvailable, openExportInVsCode } from '../external-editor';
+import { authenticatorRegistrationFailureNotice } from '../authenticator-registration-notifications';
 
 const ALGORITHMS: readonly { value: AuthenticatorAlgorithm; en: string; yue: string }[] = [
   { value: 'sha1', en: 'SHA-1', yue: 'SHA-1' },
@@ -199,7 +200,10 @@ export function AuthenticatorPage({ settings, authenticator, notify, openRegex, 
   const [showSecret, setShowSecret] = useState(false);
   const [preview, setPreview] = useState<AuthenticatorRegistrationPreviewResult | null>(null);
   const [confirmationCode, setConfirmationCode] = useState('');
+  const [preparingRegistration, setPreparingRegistration] = useState(false);
   const [confirmingRegistrationId, setConfirmingRegistrationId] = useState<string | null>(null);
+  const [uncertainRegistrationId, setUncertainRegistrationId] = useState<string | null>(null);
+  const prepareGeneration = useRef(0);
   const [clock, setClock] = useState(0);
   const [selectedEntries, setSelectedEntries] = useState<Set<string>>(new Set());
   const [selectionAnchorId, setSelectionAnchorId] = useState<string | null>(null);
@@ -254,14 +258,28 @@ export function AuthenticatorPage({ settings, authenticator, notify, openRegex, 
 
   const submitRegistration = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (preparingRegistration) return;
+    const generation = ++prepareGeneration.current;
+    const attemptId = globalThis.crypto.randomUUID();
+    setPreparingRegistration(true);
     const request = source === 'otpauth-uri'
-      ? { source, uri }
-      : { source, secret, issuer, account, algorithm, digits, periodSeconds };
-    const next = await authenticator.prepare(request);
-    setPreview(next);
-    setConfirmationCode('');
-    setShowSecret(false);
-    notify({ ok: next.ok, message: label(viewSettings, next.message, next.messageYue) });
+      ? { source, uri, attemptId }
+      : { source, attemptId, secret, issuer, account, algorithm, digits, periodSeconds };
+    try {
+      const next = await authenticator.prepare(request);
+      if (generation !== prepareGeneration.current) return;
+      setPreview(next);
+      setConfirmationCode('');
+      setShowSecret(false);
+      setUncertainRegistrationId(null);
+      notify({ ok: next.ok, category: next.ok ? 'success' : 'error', title: label(viewSettings, next.ok ? 'Authenticator pairing ready' : 'Authenticator registration needs attention', next.ok ? '驗證器配對準備好' : '驗證器註冊要留意'), message: label(viewSettings, next.message, next.messageYue) });
+    } catch (error) {
+      if (generation !== prepareGeneration.current) return;
+      const failure = authenticatorRegistrationFailureNotice('prepare', error);
+      notify({ ok: false, category: 'error', title: label(viewSettings, failure.title, failure.titleYue), message: label(viewSettings, failure.message, failure.messageYue) });
+    } finally {
+      if (generation === prepareGeneration.current) setPreparingRegistration(false);
+    }
   };
 
   const confirmRegistration = async (event: FormEvent<HTMLFormElement>) => {
@@ -271,7 +289,8 @@ export function AuthenticatorPage({ settings, authenticator, notify, openRegex, 
     setConfirmingRegistrationId(registrationId);
     try {
       const next = await authenticator.confirm({ registrationId, code: confirmationCode });
-      notify({ ok: next.ok, message: label(viewSettings, next.message, next.messageYue) });
+      notify({ ok: next.ok, category: next.ok ? 'success' : 'error', title: label(viewSettings, next.ok ? 'Authenticator entry saved' : 'Authenticator confirmation needs attention', next.ok ? '驗證器項目已儲存' : '驗證器確認要留意'), message: label(viewSettings, next.message, next.messageYue) });
+      setUncertainRegistrationId(next.uncertain ? registrationId : null);
       if (next.ok) {
         setPreview(null);
         setSecret('');
@@ -280,7 +299,11 @@ export function AuthenticatorPage({ settings, authenticator, notify, openRegex, 
         setAccount('');
         setConfirmationCode('');
         setShowSecret(false);
+        setUncertainRegistrationId(null);
       }
+    } catch (error) {
+      const failure = authenticatorRegistrationFailureNotice('confirm', error);
+      notify({ ok: false, category: 'error', title: label(viewSettings, failure.title, failure.titleYue), message: label(viewSettings, failure.message, failure.messageYue) });
     } finally {
       setConfirmingRegistrationId(null);
     }
@@ -295,6 +318,7 @@ export function AuthenticatorPage({ settings, authenticator, notify, openRegex, 
       setSecret('');
       setUri('');
       setShowSecret(false);
+      setUncertainRegistrationId(null);
       notify({ ok: true, message: label(viewSettings, 'Pairing preview discarded; its in-memory secret was cleared.', '配對預覽已丟棄；記憶體入面嘅秘密已清走。') });
     } catch {
       notify({ ok: false, message: label(viewSettings, 'The pairing preview could not be discarded; it remains active.', '未能丟棄配對預覽；佢仍然有效。') });
@@ -443,27 +467,27 @@ export function AuthenticatorPage({ settings, authenticator, notify, openRegex, 
             labelText={label(viewSettings, 'Registration source', '註冊來源')}
             settings={viewSettings}
             value={source}
-            disabled={Boolean(preview?.ok)}
+            disabled={Boolean(preview?.ok) || preparingRegistration}
             options={[{ value: 'manual', label: label(viewSettings, 'Manual Base32 metadata', '手動 Base32 metadata') }, { value: 'otpauth-uri', label: 'otpauth://totp/ URI' }]}
-            onChange={(value) => { setSource(value as typeof source); setPreview(null); setSecret(''); setUri(''); setShowSecret(false); }}
+            onChange={(value) => { prepareGeneration.current += 1; setSource(value as typeof source); setPreview(null); setSecret(''); setUri(''); setShowSecret(false); setUncertainRegistrationId(null); }}
           />
           {source === 'otpauth-uri' ? <>
-            <label htmlFor="authenticator-uri">{label(viewSettings, 'otpauth://totp/ URI (hidden until reveal)', 'otpauth://totp/ URI（顯示前會收埋）')}<input id="authenticator-uri" disabled={Boolean(preview?.ok)} type={showSecret ? 'text' : 'password'} autoComplete="off" maxLength={2_048} value={uri} onChange={(event) => setUri(event.target.value)} required /></label>
+            <label htmlFor="authenticator-uri">{label(viewSettings, 'otpauth://totp/ URI (hidden until reveal)', 'otpauth://totp/ URI（顯示前會收埋）')}<input id="authenticator-uri" disabled={Boolean(preview?.ok) || preparingRegistration} type={showSecret ? 'text' : 'password'} autoComplete="off" maxLength={2_048} value={uri} onChange={(event) => setUri(event.target.value)} required /></label>
             <div className="button-row">
-              <button className="text-button" type="button" disabled={false} onClick={() => setShowSecret((value) => !value)}>{showSecret ? label(viewSettings, 'Hide otpauth URI', '收埋 otpauth URI') : label(viewSettings, 'Reveal otpauth URI', '顯示 otpauth URI')}</button>
-              <button className="text-button" type="button" disabled={!showSecret || !uri} onClick={() => void copyRegistrationUri()}>{label(viewSettings, 'Copy otpauth URI', '複製 otpauth URI')}</button>
+              <button className="text-button" type="button" disabled={preparingRegistration} onClick={() => setShowSecret((value) => !value)}>{showSecret ? label(viewSettings, 'Hide otpauth URI', '收埋 otpauth URI') : label(viewSettings, 'Reveal otpauth URI', '顯示 otpauth URI')}</button>
+              <button className="text-button" type="button" disabled={preparingRegistration || !showSecret || !uri} onClick={() => void copyRegistrationUri()}>{label(viewSettings, 'Copy otpauth URI', '複製 otpauth URI')}</button>
             </div>
           </> : <>
-            <label htmlFor="authenticator-secret">{label(viewSettings, 'Base32 secret (cleared after pairing)', 'Base32 秘密（配對後清走）')}<input id="authenticator-secret" disabled={Boolean(preview?.ok)} type={showSecret ? 'text' : 'password'} autoComplete="off" maxLength={256} value={secret} onChange={(event) => setSecret(event.target.value)} required /></label>
-            <button className="text-button" type="button" disabled={Boolean(preview?.ok)} onClick={() => setShowSecret((value) => !value)}>{showSecret ? label(viewSettings, 'Hide manual secret', '收埋手動秘密') : label(viewSettings, 'Reveal manual secret', '顯示手動秘密')}</button>
-            <label htmlFor="authenticator-issuer">{label(viewSettings, 'Issuer (optional)', 'Issuer（可選）')}<input id="authenticator-issuer" disabled={Boolean(preview?.ok)} type="text" maxLength={128} value={issuer} onChange={(event) => setIssuer(event.target.value)} /></label>
-            <label htmlFor="authenticator-account">{label(viewSettings, 'Account', '帳戶')}<input id="authenticator-account" disabled={Boolean(preview?.ok)} type="text" maxLength={256} value={account} onChange={(event) => setAccount(event.target.value)} required /></label>
+            <label htmlFor="authenticator-secret">{label(viewSettings, 'Base32 secret (cleared after pairing)', 'Base32 秘密（配對後清走）')}<input id="authenticator-secret" disabled={Boolean(preview?.ok) || preparingRegistration} type={showSecret ? 'text' : 'password'} autoComplete="off" maxLength={256} value={secret} onChange={(event) => setSecret(event.target.value)} required /></label>
+            <button className="text-button" type="button" disabled={Boolean(preview?.ok) || preparingRegistration} onClick={() => setShowSecret((value) => !value)}>{showSecret ? label(viewSettings, 'Hide manual secret', '收埋手動秘密') : label(viewSettings, 'Reveal manual secret', '顯示手動秘密')}</button>
+            <label htmlFor="authenticator-issuer">{label(viewSettings, 'Issuer (optional)', 'Issuer（可選）')}<input id="authenticator-issuer" disabled={Boolean(preview?.ok) || preparingRegistration} type="text" maxLength={128} value={issuer} onChange={(event) => setIssuer(event.target.value)} /></label>
+            <label htmlFor="authenticator-account">{label(viewSettings, 'Account', '帳戶')}<input id="authenticator-account" disabled={Boolean(preview?.ok) || preparingRegistration} type="text" maxLength={256} value={account} onChange={(event) => setAccount(event.target.value)} required /></label>
             <AuthenticatorPicker
               id="authenticator-algorithm"
               labelText={label(viewSettings, 'Algorithm', '演算法')}
               settings={viewSettings}
               value={algorithm}
-              disabled={Boolean(preview?.ok)}
+              disabled={Boolean(preview?.ok) || preparingRegistration}
               options={ALGORITHMS.map((item) => ({ value: item.value, label: label(viewSettings, item.en, item.yue) }))}
               onChange={(value) => setAlgorithm(value as AuthenticatorAlgorithm)}
             />
@@ -472,13 +496,13 @@ export function AuthenticatorPage({ settings, authenticator, notify, openRegex, 
               labelText={label(viewSettings, 'Digits', '位數')}
               settings={viewSettings}
               value={digits}
-              disabled={Boolean(preview?.ok)}
+              disabled={Boolean(preview?.ok) || preparingRegistration}
               options={DIGITS.map((value) => ({ value, label: String(value) }))}
               onChange={(value) => setDigits(Number(value) as AuthenticatorDigits)}
             />
-            <label htmlFor="authenticator-period">{label(viewSettings, 'Period in seconds', '週期秒數')}<input id="authenticator-period" disabled={Boolean(preview?.ok)} type="number" min={1} max={3600} step={1} value={periodSeconds} onChange={(event) => setPeriodSeconds(Number(event.target.value))} /></label>
+            <label htmlFor="authenticator-period">{label(viewSettings, 'Period in seconds', '週期秒數')}<input id="authenticator-period" disabled={Boolean(preview?.ok) || preparingRegistration} type="number" min={1} max={3600} step={1} value={periodSeconds} onChange={(event) => setPeriodSeconds(Number(event.target.value))} /></label>
           </>}
-          <button className="filled-button" type="submit" disabled={authenticator.loading || Boolean(preview?.ok) || (source === 'manual' ? !secret.trim() || !account.trim() : !uri.trim())}>{label(viewSettings, 'Prepare local QR pairing', '準備本機 QR 配對')}</button>
+          <button className="filled-button" type="submit" disabled={authenticator.loading || preparingRegistration || Boolean(preview?.ok) || (source === 'manual' ? !secret.trim() || !account.trim() : !uri.trim())}>{preparingRegistration ? label(viewSettings, 'Preparing local QR pairing…', '準備緊本機 QR 配對…') : label(viewSettings, 'Prepare local QR pairing', '準備本機 QR 配對')}</button>
         </form>
         {preview && <div className="notice" role={preview.ok ? 'status' : 'alert'}>
           <Icon>{preview.ok ? 'qr_code_2' : 'error'}</Icon>
@@ -497,7 +521,8 @@ export function AuthenticatorPage({ settings, authenticator, notify, openRegex, 
               </div>}
               <form onSubmit={(event) => void confirmRegistration(event)}>
                 <label htmlFor="authenticator-confirm-code">{label(viewSettings, 'Current code from your authenticator', '你個 authenticator 嘅目前驗證碼')}<input id="authenticator-confirm-code" inputMode="numeric" pattern="[0-9]{6,8}" maxLength={8} value={confirmationCode} onChange={(event) => setConfirmationCode(event.target.value.replace(/\D/g, ''))} required /></label>
-                <button className="filled-button" type="submit" disabled={!confirmationCode || confirmingRegistrationId === preview.registrationId}>{label(viewSettings, 'Confirm and save entry', '確認並儲存項目')}</button>
+                {uncertainRegistrationId === preview.registrationId && <p className="supporting" role="alert">{label(viewSettings, 'This pairing result is uncertain; do not retry it. Refresh the saved-entry list or discard this preview.', '呢個配對結果未能確定；唔好重試。請重新整理已儲存項目清單，或者丟棄呢個預覽。')}</p>}
+                <button className="filled-button" type="submit" disabled={!confirmationCode || confirmingRegistrationId === preview.registrationId || uncertainRegistrationId === preview.registrationId} title={uncertainRegistrationId === preview.registrationId ? label(viewSettings, 'Unavailable: the previous pairing result is uncertain; refresh or discard it first.', '未能使用：上次配對結果未能確定；請先重新整理或者丟棄。') : undefined}>{label(viewSettings, 'Confirm and save entry', '確認並儲存項目')}</button>
               </form>
               <button className="text-button" type="button" onClick={() => void discardPairing()}>{label(viewSettings, 'Discard pairing preview', '丟棄配對預覽')}</button>
             </>}

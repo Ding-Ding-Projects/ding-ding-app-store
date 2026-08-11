@@ -47,9 +47,10 @@ const previewRequestSchema = z.strictObject({
   atMs: z.number().int().min(0).max(MAX_TOTP_TIMESTAMP_MS).optional(),
 });
 const registrationRequestSchema = z.discriminatedUnion('source', [
-  z.strictObject({ source: z.literal('otpauth-uri'), uri: z.string().min(1).max(2_048) }),
+  z.strictObject({ source: z.literal('otpauth-uri'), uri: z.string().min(1).max(2_048), attemptId: z.string().uuid().optional() }),
   z.strictObject({
     source: z.literal('manual'),
+    attemptId: z.string().uuid().optional(),
     secret: z.string().min(1).max(AUTHENTICATOR_MAX_SECRET_LENGTH),
     issuer: z.string().max(AUTHENTICATOR_MAX_ISSUER_LENGTH),
     account: z.string().min(1).max(AUTHENTICATOR_MAX_ACCOUNT_LENGTH),
@@ -77,6 +78,7 @@ const exportRequestSchema = z.strictObject({ entryIds: z.array(uuidSchema).min(1
 
 interface PendingRegistration {
   registrationId: string;
+  attemptId?: string;
   metadata: AuthenticatorEntryMetadata;
   secret: string;
   uri: string;
@@ -120,7 +122,7 @@ function clockFailure(message: string, messageYue: string): AuthenticatorMutatio
 function cancelledPairingFailure(rolledBack: boolean): AuthenticatorMutationResult {
   return rolledBack
     ? mutationFailure('Authenticator pairing was discarded; no entry was kept.', 'Authenticator 配對已丟棄；冇保留項目。')
-    : mutationFailure('Authenticator pairing was discarded, but the saved entry could not be rolled back safely.', 'Authenticator 配對已丟棄，但未能安全回復已儲存項目。');
+    : { ...mutationFailure('Authenticator pairing was discarded, but the saved entry could not be rolled back safely.', 'Authenticator 配對已丟棄，但未能安全回復已儲存項目。'), uncertain: true };
 }
 
 function confirmationInProgressFailure(): AuthenticatorMutationResult {
@@ -354,7 +356,7 @@ export class AuthenticatorService {
       const qr = createAuthenticatorQr(uri);
       if (!this.capabilityIsLive(generation)) return registrationFailure('Authenticator registration is unavailable while the shared restricted mode is enabled or unavailable.', '共享限制模式開啟或不可用時，驗證器登記暫時唔可用。');
       const registrationId = randomUUID();
-      const pending: PendingRegistration = { registrationId, metadata, secret: parsed.secret, uri, createdAtMs: Date.now(), attempts: 0 };
+      const pending: PendingRegistration = { registrationId, attemptId: parsedRequest.data.attemptId, metadata, secret: parsed.secret, uri, createdAtMs: Date.now(), attempts: 0 };
       this.pending.set(registrationId, pending);
       pending.expiryTimer = setTimeout(() => {
         if (this.pending.get(registrationId) === pending) this.removePending(registrationId);
@@ -432,7 +434,7 @@ export class AuthenticatorService {
         if (cancelled) return cancelledPairingFailure(rolledBack);
         return rolledBack
           ? mutationFailure('Authenticator pairing was cancelled because the shared restricted mode changed; no entry was kept.', '共享限制模式有變，所以 authenticator 配對已取消；冇保留項目。')
-          : mutationFailure('Authenticator pairing was cancelled by the shared restricted mode, but the saved entry could not be rolled back safely.', '共享限制模式取消咗 authenticator 配對，但未能安全回復已儲存項目。');
+          : { ...mutationFailure('Authenticator pairing was cancelled by the shared restricted mode, but the saved entry could not be rolled back safely.', '共享限制模式取消咗 authenticator 配對，但未能安全回復已儲存項目。'), uncertain: true };
       }
       this.removePending(parsed.data.registrationId);
       return {
@@ -458,7 +460,7 @@ export class AuthenticatorService {
         if (cancelled) return cancelledPairingFailure(rolledBack);
         return rolledBack
           ? mutationFailure('Authenticator pairing was cancelled because the shared restricted mode changed; no entry was kept.', '共享限制模式有變，所以 authenticator 配對已取消；冇保留項目。')
-          : mutationFailure('Authenticator pairing was cancelled by the shared restricted mode, but the saved entry could not be rolled back safely.', '共享限制模式取消咗 authenticator 配對，但未能安全回復已儲存項目。');
+          : { ...mutationFailure('Authenticator pairing was cancelled by the shared restricted mode, but the saved entry could not be rolled back safely.', '共享限制模式取消咗 authenticator 配對，但未能安全回復已儲存項目。'), uncertain: true };
       }
       return mutationFailure('The credential vault could not save this entry; no plaintext fallback was used.', '憑證庫未能儲存項目；冇使用明文後備方案。');
     } finally {
@@ -470,6 +472,14 @@ export class AuthenticatorService {
   cancel(registrationId: string): void {
     if (!z.string().uuid().safeParse(registrationId).success) return;
     this.removePending(registrationId);
+  }
+
+  /** Cancel an unfinished pairing when the prepare response was lost before its registration id arrived. */
+  cancelAttempt(attemptId: string): void {
+    if (!z.string().uuid().safeParse(attemptId).success) return;
+    for (const [registrationId, pending] of this.pending) {
+      if (pending.attemptId === attemptId) this.removePending(registrationId);
+    }
   }
 
   async rename(request: AuthenticatorRenameRequest): Promise<AuthenticatorMutationResult> {

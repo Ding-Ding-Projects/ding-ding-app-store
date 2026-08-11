@@ -11,6 +11,8 @@ import type { AuthenticatorVault } from '../src/main/authenticator-vault-contrac
 import { generateTotp, MAX_TOTP_TIMESTAMP_MS } from '../src/main/totp.js';
 import { writeJsonAtomic } from '../src/main/json-store.js';
 import { moveAuthenticatorPickerFocus } from '../src/renderer/authenticator-picker-keyboard.js';
+import { authenticatorRegistrationFailureNotice, classifyAuthenticatorRegistrationFailure } from '../src/renderer/authenticator-registration-notifications.js';
+import { confirmAuthenticatorWithRefresh } from '../src/renderer/state/use-authenticator.js';
 
 vi.mock('electron', () => ({
   app: { getPath: () => os.tmpdir() },
@@ -64,6 +66,8 @@ function deferredGate(): DeferredGate {
 class DeferredVault implements AuthenticatorVault {
   readonly entries = new Map<string, { metadata: AuthenticatorEntryMetadata; secret: string }>();
   failSave = false;
+  uncertainSave = false;
+  failRemove = false;
   removeCalls = 0;
   statusGate: DeferredGate | undefined;
   metadataGate: DeferredGate | undefined;
@@ -81,8 +85,9 @@ class DeferredVault implements AuthenticatorVault {
     // Deliberately ignore the optional fence: the service must still detect a
     // transition after an adapter has published and remove the saved entry.
     this.entries.set(entry.id, { metadata: entry, secret });
+    if (this.uncertainSave) { const error = new Error('rollback could not be verified') as NodeJS.ErrnoException & { committed?: boolean }; error.code = 'EINTEGRITY'; error.committed = true; throw error; }
   }
-  async remove(entryId: string): Promise<void> { this.removeCalls += 1; this.entries.delete(entryId); }
+  async remove(entryId: string): Promise<void> { this.removeCalls += 1; if (this.failRemove) throw new Error('rollback failure'); this.entries.delete(entryId); }
   async readSecret(entryId: string): Promise<string | null> {
     if (this.readGate) await this.readGate.wait();
     return this.entries.get(entryId)?.secret ?? null;
@@ -181,6 +186,43 @@ describe('otpauth URI and local QR registration boundary', () => {
     const confirm = await service.confirm({ registrationId: prepared.registrationId!, code: '000000' });
     expect(confirm.ok).toBe(false);
     expect(JSON.stringify(vault.entries)).not.toContain(SECRET);
+  });
+
+  it('cancels a pending pairing by renderer attempt id when prepare response is lost', async () => {
+    const vault = new MemoryVault();
+    const service = new AuthenticatorService(vault);
+    const attemptId = '11111111-1111-4111-8111-111111111111';
+    const prepared = await service.prepare({ source: 'manual', attemptId, secret: SECRET, issuer: 'Acme', account: 'alice', algorithm: 'sha1', digits: 6, periodSeconds: 30 });
+    expect(prepared.ok).toBe(true);
+    service.cancelAttempt(attemptId);
+    expect((service as unknown as { pending: Map<string, unknown> }).pending.size).toBe(0);
+    expect(JSON.stringify(vault.entries)).not.toContain(SECRET);
+  });
+
+  it('refreshes after a post-save confirmation response loss before rethrowing', async () => {
+    let saved = false;
+    let refreshes = 0;
+    const droppedResponse = new Error('ERR_IPC_CHANNEL_CLOSED after main-process publication');
+    await expect(confirmAuthenticatorWithRefresh(async () => {
+      saved = true;
+      throw droppedResponse;
+    }, async () => {
+      if (saved) refreshes += 1;
+    })).rejects.toBe(droppedResponse);
+    expect(saved).toBe(true);
+    expect(refreshes).toBe(1);
+  });
+
+  it('refreshes after a typed false confirmation result with uncertain publication', async () => {
+    let refreshes = 0;
+    const result = await confirmAuthenticatorWithRefresh(async () => ({
+      ok: false,
+      uncertain: true,
+      message: 'The saved entry could not be reconciled.',
+      messageYue: '未能核對已儲存項目。',
+    }), async () => { refreshes += 1; });
+    expect(result.ok).toBe(false);
+    expect(refreshes).toBe(1);
   });
 
   it('fails closed when the vault is unavailable and expires unfinished pairings', async () => {
@@ -316,6 +358,8 @@ describe('preload authenticator response boundary', () => {
       secret: SECRET,
     })).toThrow();
     expect(() => preload.parseAuthenticatorMutation({ ok: true, message: 'saved', messageYue: '已儲存' })).toThrow();
+    expect(preload.parseAuthenticatorMutation({ ok: false, uncertain: true, message: 'uncertain', messageYue: '未能確定' })).toMatchObject({ ok: false, uncertain: true });
+    expect(() => preload.parseAuthenticatorMutation({ ok: true, uncertain: true, entry: metadata(), message: 'bad', messageYue: '唔啱' })).toThrow();
     expect(() => preload.parseAuthenticatorList({
       entries: [{ ...metadata(), code: null, nextCode: null, remainingSeconds: null, expiresAt: null, secret: SECRET }],
       storage: 'os-vault',
@@ -349,6 +393,54 @@ describe('preload authenticator response boundary', () => {
     })).toThrow();
     expect(() => preload.parseAuthenticatorPreviewResult({ ok: true, storage: 'memory-only', message: 'incomplete', messageYue: '唔完整' })).toThrow();
     expect(preload.parseAuthenticatorPreviewResult({ ok: true, code: '123456', remainingSeconds: 12, expiresAt: '2026-08-11T00:00:30.000Z', algorithm: 'sha1', digits: 6, periodSeconds: 30, storage: 'memory-only', message: 'ok', messageYue: '好' }).code).toBe('123456');
+    const registrationFailure = { ok: false, storage: 'memory-only', message: 'failed', messageYue: '失敗' };
+    expect(() => preload.parseAuthenticatorRegistrationPreview({ ...registrationFailure, registrationId: '11111111-1111-4111-8111-111111111111' })).toThrow();
+    expect(() => preload.parseAuthenticatorRegistrationPreview({ ...registrationFailure, registrationId: undefined })).toThrow();
+    expect(() => preload.parseAuthenticatorRegistrationPreview({ ...registrationFailure, metadata: metadata() })).toThrow();
+    expect(() => preload.parseAuthenticatorRegistrationPreview({ ...registrationFailure, qr: { schemaVersion: 1, size: 21, modules: Array.from({ length: 21 }, () => '0'.repeat(21)), errorCorrectionLevel: 'M' } })).toThrow();
+  });
+});
+
+describe('renderer registration rejection notifications', () => {
+  it('classifies parser, transport, and unknown failures without echoing raw errors', () => {
+    expect(classifyAuthenticatorRegistrationFailure(new Error('The authenticator registration response was invalid.'))).toBe('response-invalid');
+    expect(classifyAuthenticatorRegistrationFailure({ code: 'ERR_IPC_CHANNEL_CLOSED', message: SECRET })).toBe('transport');
+    expect(classifyAuthenticatorRegistrationFailure(new Error(SECRET))).toBe('unexpected');
+    const prepare = authenticatorRegistrationFailureNotice('prepare', new Error('The authenticator registration response was invalid.'));
+    expect(prepare.reason).toBe('response-invalid');
+    expect(prepare.message).toContain('form and any existing preview are unchanged');
+    expect(prepare.message).toContain('attempted to clear this pending attempt');
+    expect(prepare.title).toContain('registration failed');
+    expect(prepare.messageYue).toContain('表格同現有預覽保持不變');
+    expect(`${prepare.message} ${prepare.messageYue}`).not.toContain(SECRET);
+    const confirm = authenticatorRegistrationFailureNotice('confirm', { code: 'ERR_IPC_CHANNEL_CLOSED', message: SECRET });
+    expect(confirm.reason).toBe('transport');
+    expect(confirm.message).toContain('pairing preview remains active');
+    expect(confirm.message).toContain('may already contain this entry');
+    expect(confirm.title).toContain('needs review');
+    expect(confirm.messageYue).toContain('配對預覽仍然有效');
+    expect(`${confirm.message} ${confirm.messageYue}`).not.toContain(SECRET);
+  });
+
+  it('keeps registration rejection handling non-blocking and state-preserving', async () => {
+    const source = (await readFile(path.join(process.cwd(), 'src/renderer/pages/AuthenticatorPage.tsx'), 'utf8')).replace(/\r\n/g, '\n');
+    const notices = (await readFile(path.join(process.cwd(), 'src/renderer/authenticator-registration-notifications.ts'), 'utf8')).replace(/\r\n/g, '\n');
+    expect(source).toContain("authenticatorRegistrationFailureNotice('prepare', error)");
+    expect(source).toContain("authenticatorRegistrationFailureNotice('confirm', error)");
+    expect(source).toContain("category: 'error'");
+    expect(source).toContain('title: label(viewSettings, failure.title, failure.titleYue)');
+    expect(source).toContain('preparingRegistration');
+    expect(source).toContain('prepareGeneration');
+    expect(source).toContain('globalThis.crypto.randomUUID()');
+    expect(source).toContain('setConfirmingRegistrationId(null)');
+    expect(notices).toContain('the form and any existing preview are unchanged');
+    expect(notices).toContain('the saved-entry list may already contain this entry');
+    expect(notices).toContain('attempted to clear this pending attempt');
+    const hook = (await readFile(path.join(process.cwd(), 'src/renderer/state/use-authenticator.ts'), 'utf8')).replace(/\r\n/g, '\n');
+    expect(hook).toContain('cancelAttempt(request.attemptId)');
+    expect(hook).toContain('catch (error)');
+    expect(hook).toContain('try { await refresh(); } catch');
+    expect(source).not.toContain('catch (error) { setPreview(null)');
   });
 });
 
@@ -362,7 +454,7 @@ describe('main-process restricted capability seam', () => {
   });
   it('checks the live School-mode restriction for every authenticator IPC route', async () => {
     const source = await readFile(path.join(process.cwd(), 'src/main/main.ts'), 'utf8');
-    for (const channel of ['authenticator:status', 'authenticator:preview', 'authenticator:prepare', 'authenticator:confirm', 'authenticator:cancel', 'authenticator:list']) {
+    for (const channel of ['authenticator:status', 'authenticator:preview', 'authenticator:prepare', 'authenticator:cancel-attempt', 'authenticator:confirm', 'authenticator:cancel', 'authenticator:list']) {
       expect(source).toContain(`ipcMain.handle('${channel}'`);
     }
     expect(source).toContain('schoolMode.isRestricted()');
@@ -484,13 +576,25 @@ describe('main-process restricted capability seam', () => {
     expect(vault.entries.size).toBe(0);
   });
 
+  it('marks a published confirmation as uncertain when rollback fails', async () => {
+    const vault = new DeferredVault();
+    vault.uncertainSave = true;
+    vault.failRemove = true;
+    const service = new AuthenticatorService(vault);
+    const prepared = await service.prepare({ source: 'manual', secret: SECRET, issuer: 'Acme', account: 'alice', algorithm: 'sha1', digits: 6, periodSeconds: 30 });
+    const right = generateTotp({ secret: SECRET, algorithm: 'sha1', digits: 6, periodSeconds: 30 }).code;
+    const confirmation = await service.confirm({ registrationId: prepared.registrationId!, code: right });
+    expect(confirmation).toMatchObject({ ok: false, uncertain: true });
+    expect(vault.entries).toHaveProperty('size', 1);
+  });
+
   it('clears the renderer manual secret when switching registration source', async () => {
     const source = (await readFile(path.join(process.cwd(), 'src/renderer/pages/AuthenticatorPage.tsx'), 'utf8')).replace(/\r\n/g, '\n');
     expect(source).toContain("setSource(value as typeof source); setPreview(null); setSecret(''); setUri(''); setShowSecret(false);");
     expect(source).toContain('const displayCode = showingRolloverCode ? entry.nextCode : seconds === 0 ? null : entry.code;');
     expect(source).toContain('now < expiresAtMs + entry.periodSeconds * 1_000');
     expect(source).toContain("className=\"authenticator-next-code\"");
-    expect(source).toContain('disabled={Boolean(preview?.ok)}');
+    expect(source).toContain('disabled={Boolean(preview?.ok) || preparingRegistration}');
     expect(source).toContain('aria-live="polite" aria-atomic="true"');
     expect(source).toContain('groupedSecret(secret)');
     expect(source).toContain('Copy grouped Base32');
@@ -500,8 +604,12 @@ describe('main-process restricted capability seam', () => {
     expect(source).toContain('Copy otpauth URI');
     expect(source).toContain('discardPairing');
     expect(source).toContain('confirmingRegistrationId');
-    expect(source).toContain('disabled={!confirmationCode || confirmingRegistrationId === preview.registrationId}');
-    expect(source).toContain("setPreview(next);\n    setConfirmationCode('');\n    setShowSecret(false);");
+    expect(source).toContain('uncertainRegistrationId');
+    expect(source).toContain('disabled={!confirmationCode || confirmingRegistrationId === preview.registrationId || uncertainRegistrationId === preview.registrationId}');
+    expect(source).toContain('do not retry it');
+    expect(source).toContain('setPreview(next);');
+    expect(source).toContain("setConfirmationCode('');");
+    expect(source).toContain('setShowSecret(false);');
   });
 
   it('uses independent searchable keyboard pickers for source, algorithm, and digits', async () => {
