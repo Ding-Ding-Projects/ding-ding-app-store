@@ -376,7 +376,7 @@ describe('main-process restricted capability seam', () => {
   });
 
   it('clears the renderer manual secret when switching registration source', async () => {
-    const source = await readFile(path.join(process.cwd(), 'src/renderer/pages/AuthenticatorPage.tsx'), 'utf8');
+    const source = (await readFile(path.join(process.cwd(), 'src/renderer/pages/AuthenticatorPage.tsx'), 'utf8')).replace(/\r\n/g, '\n');
     expect(source).toContain("setSource(event.target.value as typeof source); setPreview(null); setSecret(''); setUri(''); setShowSecret(false);");
     expect(source).toContain('const displayCode = seconds === 0 ? null : entry.code;');
     expect(source).toContain('disabled={Boolean(preview?.ok)}');
