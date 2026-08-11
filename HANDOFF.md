@@ -1,5 +1,13 @@
 # Handoff
 
+## 2026-08-11 bounded authenticator preview
+
+- Added a real top-level Authenticator destination with a local RFC 6238 core covering SHA-1, SHA-256, and SHA-512, 6–8 digits, bounded periods, canonical Base32 validation, rollover countdown, and the published Appendix B vectors.
+- The service is intentionally one-shot and memory-only. It reports the operating-system credential vault as unavailable, clears submitted secrets, keeps secrets out of history/exports/logs/notifications, validates preload response shapes, rejects unknown renderer senders, and strips the test-only clock override at the IPC boundary.
+- School mode removes the tab, generated article/palette entries, notifications, and keyboard activation, and migrates legacy six-tab workspaces by inserting Authenticator at its canonical position without losing existing order, pins, or groups.
+- Documentation is mirrored into the offline bundle, static site, wiki, and memory-sync index. Full follow-up work—vault persistence, QR/`otpauth://` registration and pairing, saved entries, next-code peek, and protected secret history—remains explicitly pending.
+- Verification for this lane: focused authenticator/contracts/School tests passed 41/41; `npm run check` passed 293 root tests plus workspace suites; `npm run build` and `npm run docs:check` passed. No packaged hidden-desktop capture or vault-backed runtime is claimed.
+
 ## 2026-08-11 Workflow and local build entry points
 
 - Added root `build.bat` and `build-installer.bat` with silent `/s`, `--silent`, and `SILENT=1` modes. The shared PowerShell path resolves Node.js 22 through a user-scoped package-manager route or a SHA-256-verified canonical Node.js archive, runs locked `npm ci` and `npm run build`, clears only generated `dist`/`release` output, and fails closed on missing outputs.

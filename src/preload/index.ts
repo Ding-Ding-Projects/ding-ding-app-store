@@ -1,6 +1,9 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type {
   AppStoreUpdateState,
+  AuthenticatorPreviewRequest,
+  AuthenticatorPreviewResult,
+  AuthenticatorStatus,
   DingDingStoreApi,
   DimSumSurprise,
   ElementKey,
@@ -35,12 +38,39 @@ import type {
   SettingsProvenance,
   UserSettings,
 } from '../shared/contracts.js';
-
 const SOURCE_STATES = new Set(['queued', 'preparing', 'running', 'repairing', 'cancelling', 'succeeded', 'failed', 'cancelled']);
 const SOURCE_STREAMS = new Set(['system', 'progress', 'stdout', 'stderr']);
 const SOURCE_EVENT_KEYS = new Set(['jobId', 'appId', 'sequence', 'at', 'stream', 'state', 'text', 'progress', 'final']);
 const OPERATION_PHASES = new Set(['queued', 'resolving', 'downloading', 'extracting', 'launching', 'committing', 'installer-running', 'cancelling', 'succeeded', 'failed', 'cancelled', 'unknown']);
 const OPERATION_EVENT_KEYS = new Set(['operationId', 'appId', 'kind', 'phase', 'progress', 'bytesReceived', 'bytesTotal', 'cancellable', 'locked', 'message', 'final']);
+// Keep preload validation self-contained: this boundary must not load runtime
+// values from the shared contract module into the renderer bundle.
+const AUTHENTICATOR_ALGORITHM_SET = new Set<string>(['sha1', 'sha256', 'sha512']);
+const AUTHENTICATOR_DIGIT_SET = new Set<number>([6, 7, 8]);
+
+function parseAuthenticatorStatus(value: unknown): AuthenticatorStatus {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('The authenticator status response was invalid.');
+  const status = value as Record<string, unknown>;
+  const statusKeys = new Set(['available', 'vault', 'entryCount', 'checkedAt', 'message', 'messageYue']);
+  if (Object.keys(status).some((key) => !statusKeys.has(key))) throw new Error('The authenticator status response was invalid.');
+  if (typeof status.available !== 'boolean' || (status.vault !== 'unavailable' && status.vault !== 'os-credential-vault') || !Number.isInteger(status.entryCount) || Number(status.entryCount) < 0 || Number(status.entryCount) > 10_000 || typeof status.checkedAt !== 'string' || !Number.isFinite(Date.parse(status.checkedAt)) || typeof status.message !== 'string' || status.message.length > 512 || typeof status.messageYue !== 'string' || status.messageYue.length > 512) throw new Error('The authenticator status response was invalid.');
+  return Object.freeze({ available: status.available, vault: status.vault, entryCount: Number(status.entryCount), checkedAt: status.checkedAt, message: status.message, messageYue: status.messageYue });
+}
+
+function parseAuthenticatorPreviewResult(value: unknown): AuthenticatorPreviewResult {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('The authenticator preview response was invalid.');
+  const result = value as Record<string, unknown>;
+  const resultKeys = new Set(['ok', 'code', 'remainingSeconds', 'expiresAt', 'algorithm', 'digits', 'periodSeconds', 'storage', 'message', 'messageYue']);
+  if (Object.keys(result).some((key) => !resultKeys.has(key))) throw new Error('The authenticator preview response was invalid.');
+  if (typeof result.ok !== 'boolean' || (result.storage !== 'memory-only' && result.storage !== 'os-vault') || typeof result.message !== 'string' || result.message.length > 512 || typeof result.messageYue !== 'string' || result.messageYue.length > 512) throw new Error('The authenticator preview response was invalid.');
+  if (result.code !== undefined && (typeof result.code !== 'string' || !/^\d{6,8}$/.test(result.code))) throw new Error('The authenticator preview response was invalid.');
+  if (result.remainingSeconds !== undefined && (!Number.isInteger(result.remainingSeconds) || Number(result.remainingSeconds) < 0 || Number(result.remainingSeconds) > 3_600)) throw new Error('The authenticator preview response was invalid.');
+  if (result.expiresAt !== undefined && (typeof result.expiresAt !== 'string' || !Number.isFinite(Date.parse(result.expiresAt)))) throw new Error('The authenticator preview response was invalid.');
+  if (result.algorithm !== undefined && (typeof result.algorithm !== 'string' || !AUTHENTICATOR_ALGORITHM_SET.has(result.algorithm))) throw new Error('The authenticator preview response was invalid.');
+  if (result.digits !== undefined && (typeof result.digits !== 'number' || !AUTHENTICATOR_DIGIT_SET.has(result.digits))) throw new Error('The authenticator preview response was invalid.');
+  if (result.periodSeconds !== undefined && (!Number.isInteger(result.periodSeconds) || Number(result.periodSeconds) < 1 || Number(result.periodSeconds) > 3_600)) throw new Error('The authenticator preview response was invalid.');
+  return Object.freeze({ ok: result.ok, code: result.code as string | undefined, remainingSeconds: result.remainingSeconds as number | undefined, expiresAt: result.expiresAt as string | undefined, algorithm: result.algorithm as AuthenticatorPreviewResult['algorithm'], digits: result.digits as AuthenticatorPreviewResult['digits'], periodSeconds: result.periodSeconds as number | undefined, storage: result.storage, message: result.message, messageYue: result.messageYue });
+}
 
 function parseSourceIsolationStatus(value: unknown): SourceIsolationStatus {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('The source isolation status response was invalid.');
@@ -197,6 +227,10 @@ const api: DingDingStoreApi = {
       ipcRenderer.on('schedule:status', handler);
       return () => ipcRenderer.removeListener('schedule:status', handler);
     },
+  },
+  authenticator: {
+    status: async () => parseAuthenticatorStatus(await ipcRenderer.invoke('authenticator:status')),
+    preview: async (request: AuthenticatorPreviewRequest) => parseAuthenticatorPreviewResult(await ipcRenderer.invoke('authenticator:preview', request)),
   },
   dimSum: {
     startup: (): Promise<DimSumSurprise> => ipcRenderer.invoke('dim-sum:startup'),

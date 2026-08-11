@@ -74,6 +74,7 @@ The wiki mirrors the same canonical feature articles bundled into the applicatio
 
 - [Shared Status Hub](Status-Hub) — **limited** — Documents the interactive status and handoff surface, its session boundaries, and the evidence limits of this App Store bundle.
 - [Shared convenience skills](Convenience-Skills) — **limited** — Describes how shared skills are selected, mirrored, and kept provenance-aware without importing secrets or granting host authority.
+- [Local authenticator preview](Authenticator) — **limited** — Calculates one RFC 6238 code in memory while the operating-system vault and full authenticator remain unavailable.
 - [Secret and display-name mutation history](Secret-And-Display-Name-History) — **limited** — Records the shared instruction contract boundary for redacted local history of display-name and authenticator mutations.
 
 ## Security and privacy

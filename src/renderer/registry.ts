@@ -114,6 +114,7 @@ export const TAB_META: Record<TabId, { icon: string; en: string; yue: string }> 
   catalog: { icon: 'apps', en: 'Discover', yue: '搵 App' },
   installed: { icon: 'inventory_2', en: 'Installed', yue: '已安裝' },
   updates: { icon: 'system_update', en: 'Updates', yue: '更新' },
+  authenticator: { icon: 'key', en: 'Authenticator', yue: '驗證器' },
   docs: { icon: 'menu_book', en: 'Documentation', yue: '文件' },
   activity: { icon: 'history', en: 'Activity', yue: '記錄' },
   settings: { icon: 'settings', en: 'Settings', yue: '設定' },
@@ -425,6 +426,7 @@ export function buildRegistry(context: RegistryContext): Entry[] {
   const schoolHiddenText = (value: string) => /dim[ -]?sum|personal[ -]?vocab|cantonese|bilingual|funny level|幽默|粵語|點心/i.test(value);
 
   for (const surface of SURFACES) {
+    if (schoolModeEnabled && surface.surface === 'authenticator') continue;
     entries.push({
       id: `page:${surface.surface}`, kind: 'page', group: 'Pages', icon: surface.icon,
       en: `Open ${surface.en}`, yue: `開 ${surface.yue}`, keywords: surface.keywords,
@@ -433,7 +435,7 @@ export function buildRegistry(context: RegistryContext): Entry[] {
   }
 
   for (const article of GENERATED_DOCS) {
-    if ((schoolModeEnabled && article.id === 'school-mode') || (schoolModeEnabled && schoolHiddenText(`${article.id} ${article.title} ${article.titleYue} ${article.category}`))) continue;
+    if ((schoolModeEnabled && (article.id === 'school-mode' || article.id === 'authenticator')) || (schoolModeEnabled && schoolHiddenText(`${article.id} ${article.title} ${article.titleYue} ${article.category}`))) continue;
     const visibleArticle = article.id === 'school-mode' && schoolModeName !== 'School mode'
       ? { ...article, title: article.title.replaceAll('School mode', schoolModeName), titleYue: article.titleYue.replaceAll('School mode', schoolModeName) }
       : article;
@@ -501,6 +503,7 @@ export function buildRegistry(context: RegistryContext): Entry[] {
   );
 
   for (const surface of SURFACES) {
+    if (schoolModeEnabled && surface.surface === 'authenticator') continue;
     entries.push(command(`open-regex:${surface.surface}`, `Open regex builder for ${surface.en}`, `開 ${surface.yue} 嘅 regex 建造器`, 'regular_expression', ['regex', surface.surface], 'Search'));
     entries.push(command(`clear-search:${surface.surface}`, `Clear search in ${surface.en}`, `清除 ${surface.yue} 嘅搜尋`, 'search_off', ['clear', surface.surface], 'Search'));
   }
@@ -511,6 +514,7 @@ export function buildRegistry(context: RegistryContext): Entry[] {
   entries.push(command('open-regex:changelog', 'Open regex builder for the changelog', '開更新記錄嘅 regex 建造器', 'regular_expression', ['regex', 'changelog'], 'Search'));
 
   for (const tab of workspace.tabs) {
+    if (schoolModeEnabled && tab.id === 'authenticator') continue;
     const meta = TAB_META[tab.id];
     const tabTarget: EntryTarget = { tabId: tab.id, focusId: `tab-${tab.id}` };
     entries.push(command(`pin:${tab.id}`, tab.pinned ? `Unpin ${meta.en}` : `Pin ${meta.en}`, tab.pinned ? `取消釘住 ${meta.yue}` : `釘住 ${meta.yue}`, 'push_pin', [tab.id, 'pin'], 'Tabs', tabTarget));

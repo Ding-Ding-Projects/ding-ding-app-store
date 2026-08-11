@@ -400,7 +400,7 @@ export interface SettingsProvenance {
   fallback: UserSettings;
 }
 
-export const TAB_IDS = ['catalog', 'installed', 'updates', 'docs', 'activity', 'settings'] as const;
+export const TAB_IDS = ['catalog', 'installed', 'updates', 'authenticator', 'docs', 'activity', 'settings'] as const;
 export type TabId = (typeof TAB_IDS)[number];
 export const tabIdSchema = z.enum(TAB_IDS);
 
@@ -1064,6 +1064,48 @@ export interface DimSumSurprise {
   reason?: string;
 }
 
+/**
+ * Local-only authenticator contracts. A secret crosses the typed preview
+ * request boundary only for one calculation; it is never part of a response,
+ * settings document, history entry, export, notification, or log.
+ */
+export const AUTHENTICATOR_ALGORITHMS = ['sha1', 'sha256', 'sha512'] as const;
+export type AuthenticatorAlgorithm = (typeof AUTHENTICATOR_ALGORITHMS)[number];
+export const AUTHENTICATOR_DIGITS = [6, 7, 8] as const;
+export type AuthenticatorDigits = (typeof AUTHENTICATOR_DIGITS)[number];
+export const AUTHENTICATOR_MAX_SECRET_LENGTH = 256;
+
+export interface AuthenticatorStatus {
+  available: boolean;
+  vault: 'unavailable' | 'os-credential-vault';
+  entryCount: number;
+  checkedAt: string;
+  message: string;
+  messageYue: string;
+}
+
+export interface AuthenticatorPreviewRequest {
+  secret: string;
+  algorithm: AuthenticatorAlgorithm;
+  digits: AuthenticatorDigits;
+  periodSeconds: number;
+  /** Optional deterministic timestamp for tests; the UI omits it. */
+  atMs?: number;
+}
+
+export interface AuthenticatorPreviewResult {
+  ok: boolean;
+  code?: string;
+  remainingSeconds?: number;
+  expiresAt?: string;
+  algorithm?: AuthenticatorAlgorithm;
+  digits?: AuthenticatorDigits;
+  periodSeconds?: number;
+  storage: 'memory-only' | 'os-vault';
+  message: string;
+  messageYue: string;
+}
+
 export type ScheduleSaveResult =
   | { ok: true; status: ScheduleStatus }
   | { ok: false; message: string; issues: Array<{ field: string; message: string }> };
@@ -1157,6 +1199,10 @@ export interface DingDingStoreApi {
     save(config: ScheduleConfig): Promise<ScheduleSaveResult>;
     runNow(task: ScheduleTaskId): Promise<ScheduleStatus>;
     subscribe(listener: (status: ScheduleStatus) => void): () => void;
+  };
+  authenticator: {
+    status(): Promise<AuthenticatorStatus>;
+    preview(request: AuthenticatorPreviewRequest): Promise<AuthenticatorPreviewResult>;
   };
   dimSum: {
     startup(): Promise<DimSumSurprise>;
