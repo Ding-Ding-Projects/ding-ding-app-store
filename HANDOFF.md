@@ -1,5 +1,11 @@
 # Handoff
 
+## 2026-08-11 authenticator searchable picker follow-up
+
+- Replaced the Authenticator registration source, algorithm, and digits native selects with bounded keyboard-first listbox pickers. Each picker owns local plain-text and optional regex state, opens the shared anchored `RegexBuilder`, supports Arrow/Home/End/Enter/Escape navigation, reports no matches, and restores focus to its trigger. The source picker preserves its existing preview/secret/URI reset semantics, and all three pickers disable during an active pairing preview; School mode continues to suppress the whole Authenticator surface.
+- Updated the canonical memory-sync article plus generated offline docs, static-site article, and wiki mirror. README and ROADMAP now describe the shipped picker boundary and the remaining authenticator follow-up work accurately.
+- Focused verification: `npx vitest run tests/authenticator-registration.test.ts tests/contracts.test.ts` (59 tests passed), `npx tsc -p tsconfig.renderer.json --noEmit`, `npm run docs:generate`, and `git diff --check`. No packaged hidden-desktop capture is claimed because the Cheap Lowlevel route was not available in this lane.
+
 ## 2026-08-11 bounded tab/group locks and local Support Tickets
 
 - Added password-only UX locks for individual tabs and groups; activation, keyboard expansion/collapse, and group membership all fail closed until the locked target is unlocked. The lock is explicitly a self-imposed speed bump, not security/encryption, and safeStorage absence keeps controls unavailable.

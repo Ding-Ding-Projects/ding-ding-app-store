@@ -35,6 +35,7 @@
 - [x] Update schedule editor with last-run/next-run reporting and quiet hours
 - [x] Optional renderer-only notification narrator: persisted opt-in, English/Hong Kong Cantonese/both serialized delivery, stale queue replacement, category cooldowns, and quiet/reduced-sound accessibility yielding
 - [x] Bounded authenticator registration slice: local URI/Base32 metadata, in-process QR matrix, current-code pairing confirmation, safeStorage-backed metadata entries, current code/countdown list, School-mode suppression, and regex search
+- [x] Authenticator registration source, algorithm, and digit choices use independent keyboard-searchable pickers with anchored regex builders and preview-state disabling
 - [ ] Authenticator follow-up: QR image/clipboard/camera import, next-code peek, rename/delete/reorder/groups/bulk actions, deliberate secret export, and protected secret history/restore remain pending
 - [x] Truthful NotificationCenter bulk Recovery details with callback-free, operation-ID-free retained history and an explicit originating-surface retry boundary
 - [x] NotificationCenter language-mode coverage for history, filters, bulk actions, export/open states, accessibility names, empty state, and destructive confirmation
