@@ -73,7 +73,7 @@ describe('saved authenticator-entry management boundary', () => {
     expect(exported.content).toContain('Renamed\\|Path\\\\One');
     expect(exported.content).toContain('Work\\|Ops\\\\East');
     expect(exported.content).not.toContain('JBSWY3DPEHPK3PXP');
-    expect(exported.omittedFields).toEqual(['secret', 'uri', 'code', 'remainingSeconds', 'expiresAt']);
+    expect(exported.omittedFields).toEqual(['secret', 'uri', 'code', 'nextCode', 'remainingSeconds', 'expiresAt']);
     const csv = await service.export({ entryIds: [ID_A, ID_B], format: 'csv' });
     expect(csv.ok).toBe(true);
     expect(csv.content?.split('\n')[0]).toContain('schemaVersion,omittedFields,id');

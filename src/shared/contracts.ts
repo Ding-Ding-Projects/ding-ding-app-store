@@ -798,6 +798,7 @@ const ELEMENT_LIST = [
   { key: 'authenticator-entry-management', en: 'Authenticator entry management', yue: 'Authenticator 項目管理', group: 'controls', tokens: BOX_RAISED },
   { key: 'authenticator-entry-select', en: 'Authenticator entry selection', yue: 'Authenticator 項目揀選', group: 'controls', tokens: PILL },
   { key: 'authenticator-code', en: 'Authenticator code', yue: 'Authenticator 驗證碼', group: 'content', tokens: TEXT },
+  { key: 'authenticator-next-code', en: 'Authenticator next code', yue: 'Authenticator 下一個驗證碼', group: 'content', tokens: TEXT },
   { key: 'schedule-card', en: 'Schedule card', yue: '排程卡片', group: 'content', tokens: BOX_RAISED },
   { key: 'dialog', en: 'Dialog', yue: '對話框', group: 'feedback', tokens: BOX_RAISED },
   { key: 'command-palette', en: 'Command palette', yue: '指令面板', group: 'feedback', tokens: BOX_RAISED },
@@ -1267,6 +1268,8 @@ export interface AuthenticatorEntryMetadata {
 export interface AuthenticatorEntry extends AuthenticatorEntryMetadata {
   /** Current code is calculated in the main process and is never a secret. */
   code: string | null;
+  /** The next period code is calculated in the main process for rollover planning. */
+  nextCode: string | null;
   remainingSeconds: number | null;
   expiresAt: string | null;
 }
@@ -1376,7 +1379,7 @@ export interface AuthenticatorExportResult {
   messageYue: string;
 }
 
-export type AuthenticatorExportOmittedField = 'secret' | 'uri' | 'code' | 'remainingSeconds' | 'expiresAt';
+export type AuthenticatorExportOmittedField = 'secret' | 'uri' | 'code' | 'nextCode' | 'remainingSeconds' | 'expiresAt';
 
 export interface AuthenticatorListResult {
   entries: AuthenticatorEntry[];

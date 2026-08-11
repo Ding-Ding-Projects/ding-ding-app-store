@@ -107,7 +107,7 @@ function bulkDeleteFailure(message: string, messageYue: string, skippedIds: stri
   return { ok: false, deletedIds: [], skippedIds, uncertainIds, message, messageYue };
 }
 
-const EXPORT_OMITTED_FIELDS: AuthenticatorExportOmittedField[] = ['secret', 'uri', 'code', 'remainingSeconds', 'expiresAt'];
+const EXPORT_OMITTED_FIELDS: AuthenticatorExportOmittedField[] = ['secret', 'uri', 'code', 'nextCode', 'remainingSeconds', 'expiresAt'];
 
 function exportFailure(message: string, messageYue: string): AuthenticatorExportResult {
   return { ok: false, omittedFields: [...EXPORT_OMITTED_FIELDS], message, messageYue };
@@ -644,13 +644,13 @@ export class AuthenticatorService {
         content = `${headers.join(',')}\n${records.map((record) => [2, omittedFields.join(';'), record.id, record.issuer, record.account, record.label, record.algorithm, record.digits, record.periodSeconds, record.createdAt, record.updatedAt, record.order, record.group].map((value) => csvEscape(value as string | number | null)).join(',')).join('\n')}\n`;
         filename = 'authenticator-metadata.csv';
       } else {
-        content = `# Authenticator metadata export\n\nSecrets, otpauth URIs, current codes, countdowns, and expiry timestamps are intentionally omitted.\n\n| Label | Issuer | Account | Algorithm | Digits | Period | Group |\n| --- | --- | --- | --- | ---: | ---: | --- |\n${records.map((record) => `| ${markdownCell(record.label)} | ${markdownCell(record.issuer)} | ${markdownCell(record.account)} | ${record.algorithm} | ${record.digits} | ${record.periodSeconds} | ${markdownCell(record.group)} |`).join('\n')}\n`;
+        content = `# Authenticator metadata export\n\nSecrets, otpauth URIs, current codes, next-code peeks, countdowns, and expiry timestamps are intentionally omitted.\n\n| Label | Issuer | Account | Algorithm | Digits | Period | Group |\n| --- | --- | --- | --- | ---: | ---: | --- |\n${records.map((record) => `| ${markdownCell(record.label)} | ${markdownCell(record.issuer)} | ${markdownCell(record.account)} | ${record.algorithm} | ${record.digits} | ${record.periodSeconds} | ${markdownCell(record.group)} |`).join('\n')}\n`;
         filename = 'authenticator-metadata.md';
       }
       if (parsed.data.format === 'markdown') content = content.replace('# Authenticator metadata export\n\n', '# Authenticator metadata export\n\nEncoding: UTF-8; line endings: LF; schema: authenticator metadata v2.\n');
       if (!this.capabilityIsLive(generation)) return this.restrictedExport();
       if (Buffer.byteLength(content, 'utf8') > AUTHENTICATOR_MAX_EXPORT_LENGTH) return exportFailure('The metadata export exceeded its bounded size; no file was created.', 'Metadata 匯出超出大小上限；冇建立檔案。');
-      return { ok: true, format: parsed.data.format, filename, content, omittedFields, message: 'Metadata export is ready; secrets, otpauth URIs, and current codes were omitted.', messageYue: 'Metadata 匯出已準備好；秘密、otpauth URI 同目前驗證碼都冇包括。' };
+      return { ok: true, format: parsed.data.format, filename, content, omittedFields, message: 'Metadata export is ready; secrets, otpauth URIs, current codes, and next-code peeks were omitted.', messageYue: 'Metadata 匯出已準備好；秘密、otpauth URI、目前驗證碼同下一碼預覽都冇包括。' };
       } catch {
         return exportFailure('The authenticator metadata export could not be prepared safely.', '未能安全準備 authenticator metadata 匯出。');
       }
@@ -681,7 +681,7 @@ export class AuthenticatorService {
     if (!Number.isFinite(now) || now < 0 || now > MAX_TOTP_TIMESTAMP_MS) {
       if (!this.capabilityIsLive(generation)) return this.restrictedList();
       return {
-        entries: metadata.slice(0, AUTHENTICATOR_MAX_ENTRIES).map((item) => ({ ...item, code: null, remainingSeconds: null, expiresAt: null })),
+        entries: metadata.slice(0, AUTHENTICATOR_MAX_ENTRIES).map((item) => ({ ...item, code: null, nextCode: null, remainingSeconds: null, expiresAt: null })),
         storage: 'os-vault',
         message: 'The system clock is outside the supported range; authenticator codes are unavailable until it is corrected.',
         messageYue: '系統時鐘超出支援範圍；校正之前 authenticator 驗證碼都用唔到。',
@@ -692,15 +692,18 @@ export class AuthenticatorService {
       if (!this.capabilityIsLive(generation)) return this.restrictedList();
       if (!secret) {
         unavailableSecret = true;
-        entries.push({ ...item, code: null, remainingSeconds: null, expiresAt: null });
+        entries.push({ ...item, code: null, nextCode: null, remainingSeconds: null, expiresAt: null });
         continue;
       }
       try {
-        const result = generateTotp({ secret, algorithm: item.algorithm, digits: item.digits, periodSeconds: item.periodSeconds });
-        entries.push({ ...item, code: result.code, remainingSeconds: result.remainingSeconds, expiresAt: new Date(result.expiresAtMs).toISOString() });
+        const result = generateTotp({ secret, algorithm: item.algorithm, digits: item.digits, periodSeconds: item.periodSeconds, timestampMs: now });
+        const nextCode = result.expiresAtMs <= MAX_TOTP_TIMESTAMP_MS
+          ? generateTotp({ secret, algorithm: item.algorithm, digits: item.digits, periodSeconds: item.periodSeconds, timestampMs: result.expiresAtMs }).code
+          : null;
+        entries.push({ ...item, code: result.code, nextCode, remainingSeconds: result.remainingSeconds, expiresAt: new Date(result.expiresAtMs).toISOString() });
       } catch {
         unavailableSecret = true;
-        entries.push({ ...item, code: null, remainingSeconds: null, expiresAt: null });
+        entries.push({ ...item, code: null, nextCode: null, remainingSeconds: null, expiresAt: null });
       }
     }
     if (!this.capabilityIsLive(generation)) return this.restrictedList();

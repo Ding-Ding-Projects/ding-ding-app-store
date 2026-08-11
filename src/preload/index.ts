@@ -81,7 +81,7 @@ const AUTHENTICATOR_MAX_ACCOUNT_LENGTH = 256;
 const AUTHENTICATOR_MAX_LABEL_LENGTH = 512;
 const AUTHENTICATOR_MAX_GROUP_LENGTH = 64;
 const AUTHENTICATOR_MAX_EXPORT_LENGTH = 512_000;
-const AUTHENTICATOR_EXPORT_OMITTED_FIELDS = ['secret', 'uri', 'code', 'remainingSeconds', 'expiresAt'] as const;
+const AUTHENTICATOR_EXPORT_OMITTED_FIELDS = ['secret', 'uri', 'code', 'nextCode', 'remainingSeconds', 'expiresAt'] as const;
 
 function parseAuthenticatorStatus(value: unknown): AuthenticatorStatus {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('The authenticator status response was invalid.');
@@ -98,6 +98,9 @@ function parseAuthenticatorPreviewResult(value: unknown): AuthenticatorPreviewRe
   const resultKeys = new Set(['ok', 'code', 'remainingSeconds', 'expiresAt', 'algorithm', 'digits', 'periodSeconds', 'storage', 'message', 'messageYue']);
   if (Object.keys(result).some((key) => !resultKeys.has(key))) throw new Error('The authenticator preview response was invalid.');
   if (typeof result.ok !== 'boolean' || (result.storage !== 'memory-only' && result.storage !== 'os-vault') || typeof result.message !== 'string' || result.message.length > 512 || typeof result.messageYue !== 'string' || result.messageYue.length > 512) throw new Error('The authenticator preview response was invalid.');
+  const previewFields = [result.code, result.remainingSeconds, result.expiresAt, result.algorithm, result.digits, result.periodSeconds];
+  const previewFieldsComplete = previewFields.every((field) => field !== undefined && field !== null);
+  if (result.ok ? !previewFieldsComplete : previewFields.some((field) => field !== undefined)) throw new Error('The authenticator preview response was invalid.');
   if (result.code !== undefined && (typeof result.code !== 'string' || !/^\d{6,8}$/.test(result.code))) throw new Error('The authenticator preview response was invalid.');
   if (result.remainingSeconds !== undefined && (!Number.isInteger(result.remainingSeconds) || Number(result.remainingSeconds) < 0 || Number(result.remainingSeconds) > 3_600)) throw new Error('The authenticator preview response was invalid.');
   if (result.expiresAt !== undefined && (typeof result.expiresAt !== 'string' || !Number.isFinite(Date.parse(result.expiresAt)))) throw new Error('The authenticator preview response was invalid.');
@@ -110,8 +113,12 @@ function parseAuthenticatorPreviewResult(value: unknown): AuthenticatorPreviewRe
 function parseAuthenticatorEntryMetadata(value: unknown): AuthenticatorListResult['entries'][number] {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('The authenticator entry response was invalid.');
   const entry = value as Record<string, unknown>;
-  const metadataKeys = new Set(['id', 'issuer', 'account', 'label', 'algorithm', 'digits', 'periodSeconds', 'createdAt', 'updatedAt', 'order', 'group', 'code', 'remainingSeconds', 'expiresAt']);
+  const metadataKeys = new Set(['id', 'issuer', 'account', 'label', 'algorithm', 'digits', 'periodSeconds', 'createdAt', 'updatedAt', 'order', 'group', 'code', 'nextCode', 'remainingSeconds', 'expiresAt']);
   if (Object.keys(entry).some((key) => !metadataKeys.has(key))) throw new Error('The authenticator entry response was invalid.');
+  const transientValues = [entry.code, entry.nextCode, entry.remainingSeconds, entry.expiresAt];
+  const transientAbsent = transientValues.every((value) => value === null);
+  const transientComplete = transientValues.every((value) => value !== null && value !== undefined);
+  if (!transientAbsent && !transientComplete) throw new Error('The authenticator entry response was invalid.');
   if (typeof entry.id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(entry.id)
     || typeof entry.issuer !== 'string' || entry.issuer.length > AUTHENTICATOR_MAX_ISSUER_LENGTH
     || typeof entry.account !== 'string' || entry.account.length < 1 || entry.account.length > AUTHENTICATOR_MAX_ACCOUNT_LENGTH
@@ -124,6 +131,7 @@ function parseAuthenticatorEntryMetadata(value: unknown): AuthenticatorListResul
     || typeof entry.updatedAt !== 'string' || !Number.isFinite(Date.parse(entry.updatedAt))
     || !Number.isInteger(entry.order) || Number(entry.order) < 0 || Number(entry.order) >= AUTHENTICATOR_MAX_ENTRIES
     || (entry.code !== null && (typeof entry.code !== 'string' || !new RegExp(`^\\d{${entry.digits}}$`).test(entry.code)))
+    || (entry.nextCode !== null && (typeof entry.nextCode !== 'string' || !new RegExp(`^\\d{${entry.digits}}$`).test(entry.nextCode)))
     || (entry.remainingSeconds !== null && (!Number.isInteger(entry.remainingSeconds) || Number(entry.remainingSeconds) < 0 || Number(entry.remainingSeconds) > 3_600))
     || (entry.expiresAt !== null && (typeof entry.expiresAt !== 'string' || !Number.isFinite(Date.parse(entry.expiresAt))))) throw new Error('The authenticator entry response was invalid.');
   return Object.freeze({
@@ -137,16 +145,17 @@ function parseAuthenticatorEntryMetadata(value: unknown): AuthenticatorListResul
     createdAt: entry.createdAt,
      updatedAt: entry.updatedAt,
      order: Number(entry.order),
-     group: entry.group === undefined || entry.group === null ? null : String(entry.group),
+    group: entry.group === undefined || entry.group === null ? null : String(entry.group),
     code: entry.code as string | null,
+    nextCode: entry.nextCode as string | null,
     remainingSeconds: entry.remainingSeconds as number | null,
     expiresAt: entry.expiresAt as string | null,
   });
 }
 
 function parseAuthenticatorMetadata(value: unknown): AuthenticatorRegistrationPreviewResult['metadata'] {
-  const parsed = parseAuthenticatorEntryMetadata({ ...(value as Record<string, unknown>), code: null, remainingSeconds: null, expiresAt: null });
-  const { code: _code, remainingSeconds: _remainingSeconds, expiresAt: _expiresAt, ...metadata } = parsed;
+  const parsed = parseAuthenticatorEntryMetadata({ ...(value as Record<string, unknown>), code: null, nextCode: null, remainingSeconds: null, expiresAt: null });
+  const { code: _code, nextCode: _nextCode, remainingSeconds: _remainingSeconds, expiresAt: _expiresAt, ...metadata } = parsed;
   return Object.freeze(metadata) as AuthenticatorRegistrationPreviewResult['metadata'];
 }
 

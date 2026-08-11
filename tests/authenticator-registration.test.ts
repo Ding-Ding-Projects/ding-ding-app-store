@@ -8,7 +8,7 @@ import { canonicalAuthenticatorUri, parseAuthenticatorUri } from '../src/main/au
 import { SafeStorageAuthenticatorVault } from '../src/main/authenticator-vault.js';
 import type { AuthenticatorEntryMetadata } from '../src/shared/contracts.js';
 import type { AuthenticatorVault } from '../src/main/authenticator-vault-contract.js';
-import { generateTotp } from '../src/main/totp.js';
+import { generateTotp, MAX_TOTP_TIMESTAMP_MS } from '../src/main/totp.js';
 import { writeJsonAtomic } from '../src/main/json-store.js';
 import { moveAuthenticatorPickerFocus } from '../src/renderer/authenticator-picker-keyboard.js';
 
@@ -119,7 +119,7 @@ describe('otpauth URI and local QR registration boundary', () => {
     expect(JSON.stringify(qr)).not.toContain(SECRET);
   });
 
-  it('requires a current pairing code before persisting and lists metadata plus code only', async () => {
+  it('requires a current pairing code before persisting and lists metadata plus codes only', async () => {
     const vault = new MemoryVault();
     const service = new AuthenticatorService(vault);
     const prepared = await service.prepare({ source: 'otpauth-uri', uri: 'otpauth://totp/Acme:alice?secret=JBSWY3DPEHPK3PXP' });
@@ -137,6 +137,32 @@ describe('otpauth URI and local QR registration boundary', () => {
     expect(list.entries).toHaveLength(1);
     expect(list.entries[0]).toMatchObject({ issuer: 'Acme', account: 'alice', code: expect.stringMatching(/^\d{6}$/) });
     expect(JSON.stringify(list)).not.toContain(SECRET);
+  });
+
+  it('returns the next period code as a rollover peek without exposing the secret', async () => {
+    vi.useFakeTimers();
+    const atMs = 1_700_000_012_345;
+    vi.setSystemTime(atMs);
+    const vault = new MemoryVault();
+    const service = new AuthenticatorService(vault);
+    const prepared = await service.prepare({ source: 'manual', secret: SECRET, issuer: 'Acme', account: 'alice', algorithm: 'sha1', digits: 6, periodSeconds: 30 });
+    const current = generateTotp({ secret: SECRET, algorithm: 'sha1', digits: 6, periodSeconds: 30, timestampMs: atMs });
+    expect((await service.confirm({ registrationId: prepared.registrationId!, code: current.code })).ok).toBe(true);
+    const next = generateTotp({ secret: SECRET, algorithm: 'sha1', digits: 6, periodSeconds: 30, timestampMs: current.expiresAtMs });
+    const listed = await service.list();
+    expect(listed.entries[0]).toMatchObject({ code: current.code, nextCode: next.code });
+    expect(JSON.stringify(listed)).not.toContain(SECRET);
+  });
+
+  it('fails closed without a next-code peek at the supported maximum clock', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(MAX_TOTP_TIMESTAMP_MS);
+    const vault = new MemoryVault();
+    const service = new AuthenticatorService(vault);
+    vault.entries.set(metadata().id, { metadata: { ...metadata(), algorithm: 'sha512', digits: 8, periodSeconds: 3_600 }, secret: SECRET });
+    const current = generateTotp({ secret: SECRET, algorithm: 'sha512', digits: 8, periodSeconds: 3_600, timestampMs: MAX_TOTP_TIMESTAMP_MS });
+    const listed = await service.list();
+    expect(listed.entries[0]).toMatchObject({ code: current.code, nextCode: null });
   });
 
   it('accepts manual metadata without an issuer when the optional field is blank', async () => {
@@ -291,11 +317,38 @@ describe('preload authenticator response boundary', () => {
     })).toThrow();
     expect(() => preload.parseAuthenticatorMutation({ ok: true, message: 'saved', messageYue: '已儲存' })).toThrow();
     expect(() => preload.parseAuthenticatorList({
-      entries: [{ ...metadata(), code: null, remainingSeconds: null, expiresAt: null, secret: SECRET }],
+      entries: [{ ...metadata(), code: null, nextCode: null, remainingSeconds: null, expiresAt: null, secret: SECRET }],
       storage: 'os-vault',
       message: 'ok',
       messageYue: '好',
     })).toThrow();
+    const listed = preload.parseAuthenticatorList({
+      entries: [{ ...metadata(), code: '123456', nextCode: '654321', remainingSeconds: 12, expiresAt: '2026-08-11T00:00:30.000Z' }],
+      storage: 'os-vault',
+      message: 'ok',
+      messageYue: '好',
+    });
+    expect(listed.entries[0].nextCode).toBe('654321');
+    expect(() => preload.parseAuthenticatorList({
+      entries: [{ ...metadata(), code: null, nextCode: '654321', remainingSeconds: 12, expiresAt: '2026-08-11T00:00:30.000Z' }],
+      storage: 'os-vault',
+      message: 'ok',
+      messageYue: '好',
+    })).toThrow();
+    expect(() => preload.parseAuthenticatorList({
+      entries: [{ ...metadata(), code: '123456', nextCode: null, remainingSeconds: 12, expiresAt: '2026-08-11T00:00:30.000Z' }],
+      storage: 'os-vault',
+      message: 'ok',
+      messageYue: '好',
+    })).toThrow();
+    expect(() => preload.parseAuthenticatorList({
+      entries: [{ ...metadata(), code: '123456', nextCode: '12', remainingSeconds: 12, expiresAt: '2026-08-11T00:00:30.000Z' }],
+      storage: 'os-vault',
+      message: 'ok',
+      messageYue: '好',
+    })).toThrow();
+    expect(() => preload.parseAuthenticatorPreviewResult({ ok: true, storage: 'memory-only', message: 'incomplete', messageYue: '唔完整' })).toThrow();
+    expect(preload.parseAuthenticatorPreviewResult({ ok: true, code: '123456', remainingSeconds: 12, expiresAt: '2026-08-11T00:00:30.000Z', algorithm: 'sha1', digits: 6, periodSeconds: 30, storage: 'memory-only', message: 'ok', messageYue: '好' }).code).toBe('123456');
   });
 });
 
@@ -434,7 +487,9 @@ describe('main-process restricted capability seam', () => {
   it('clears the renderer manual secret when switching registration source', async () => {
     const source = (await readFile(path.join(process.cwd(), 'src/renderer/pages/AuthenticatorPage.tsx'), 'utf8')).replace(/\r\n/g, '\n');
     expect(source).toContain("setSource(value as typeof source); setPreview(null); setSecret(''); setUri(''); setShowSecret(false);");
-    expect(source).toContain('const displayCode = seconds === 0 ? null : entry.code;');
+    expect(source).toContain('const displayCode = showingRolloverCode ? entry.nextCode : seconds === 0 ? null : entry.code;');
+    expect(source).toContain('now < expiresAtMs + entry.periodSeconds * 1_000');
+    expect(source).toContain("className=\"authenticator-next-code\"");
     expect(source).toContain('disabled={Boolean(preview?.ok)}');
     expect(source).toContain('aria-live="polite" aria-atomic="true"');
     expect(source).toContain('groupedSecret(secret)');

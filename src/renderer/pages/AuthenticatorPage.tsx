@@ -156,6 +156,14 @@ function remaining(entry: AuthenticatorApi['entries'][number]): number | null {
   return Math.max(0, Math.ceil((Date.parse(entry.expiresAt) - Date.now()) / 1_000));
 }
 
+function rolloverPeekIsFresh(entry: AuthenticatorApi['entries'][number], now = Date.now()): boolean {
+  if (!entry.nextCode || !entry.expiresAt || !Number.isFinite(now)) return false;
+  const expiresAtMs = Date.parse(entry.expiresAt);
+  return Number.isFinite(expiresAtMs)
+    && now >= expiresAtMs
+    && now < expiresAtMs + entry.periodSeconds * 1_000;
+}
+
 function groupedSecret(secret: string): string {
   return secret.replace(/\s+/g, '').match(/.{1,4}/g)?.join(' ') ?? '';
 }
@@ -406,7 +414,7 @@ export function AuthenticatorPage({ settings, authenticator, notify, openRegex, 
             : authenticator.status ? label(viewSettings, authenticator.status.message, authenticator.status.messageYue) : label(viewSettings, 'Authenticator storage status is unavailable.', '驗證器儲存狀態暫時用唔到。')}
         </p>
         <p>{label(viewSettings, 'Secrets are accepted once for pairing, encrypted by the operating-system credential vault, and never returned in list metadata. QR generation is local and has no network path.', '秘密只喺配對時接收一次，由作業系統憑證庫加密；項目清單 metadata 唔會返回秘密。QR 喺本機產生，冇網絡路徑。')}</p>
-         <p className="supporting">{label(viewSettings, 'This bounded slice supports metadata-only rename, reorder, label-only groups, selection, and export. QR image import, camera scanning, next-code peek, secret export, and authenticator history/restore remain deferred.', '呢個有限功能支援淨 metadata 改名、排序、標籤分組、揀選同匯出。QR 圖片匯入、相機掃描、下一碼預覽、秘密匯出同 authenticator 歷史／還原仍然押後。')}</p>
+         <p className="supporting">{label(viewSettings, 'This bounded slice supports metadata-only rename, reorder, label-only groups, selection, export, and a local next-code peek. QR image import, camera scanning, secret export, and authenticator history/restore remain deferred.', '呢個有限功能支援淨 metadata 改名、排序、標籤分組、揀選、匯出同本機下一碼預覽。QR 圖片匯入、相機掃描、秘密匯出同 authenticator 歷史／還原仍然押後。')}</p>
       </section>
       <section className="settings-card" {...el('settings-card')}>
         <h2>{label(viewSettings, 'Register an authenticator entry', '註冊 authenticator 項目')}</h2>
@@ -492,7 +500,8 @@ export function AuthenticatorPage({ settings, authenticator, notify, openRegex, 
         </div>}
         {visibleEntries.length === 0 ? <p className="empty-state compact">{label(viewSettings, 'No saved entries match this search.', '冇已儲存項目配到呢個搜尋。')}</p> : <div className="authenticator-entry-list" role="list">{visibleEntries.map((entry) => {
            const seconds = remaining(entry);
-           const displayCode = seconds === 0 ? null : entry.code;
+           const showingRolloverCode = seconds === 0 && rolloverPeekIsFresh(entry);
+           const displayCode = showingRolloverCode ? entry.nextCode : seconds === 0 ? null : entry.code;
           const selected = selectedEntries.has(entry.id);
           return <article className={selected ? 'authenticator-entry selected' : 'authenticator-entry'} key={entry.id} role="listitem" {...el('authenticator-entry')}>
             <div className="authenticator-entry-heading">
@@ -500,7 +509,8 @@ export function AuthenticatorPage({ settings, authenticator, notify, openRegex, 
               {editingLabelId === entry.id ? <div className="button-row"><input aria-label={label(viewSettings, `Rename ${entry.label}`, `改名 ${entry.label}`)} maxLength={512} value={labelDrafts[entry.id] ?? entry.label} onChange={(event) => setLabelDrafts((current) => ({ ...current, [entry.id]: event.target.value }))} /><button className="text-button" type="button" onClick={() => void renameEntry(entry.id)}>{label(viewSettings, 'Save name', '儲存名稱')}</button><button className="text-button" type="button" onClick={() => setEditingLabelId(null)}>{label(viewSettings, 'Cancel', '取消')}</button></div> : <><h3>{entry.label}</h3><button className="text-button" type="button" onClick={() => { setLabelDrafts((current) => ({ ...current, [entry.id]: entry.label })); setEditingLabelId(entry.id); }}>{label(viewSettings, 'Rename', '改名')}</button></>}
               <p className="supporting">{entry.issuer ? `${entry.issuer} · ` : ''}{entry.account} · {entry.algorithm.toUpperCase()} · {entry.digits} digits · {entry.periodSeconds}s{entry.group ? ` · ${label(viewSettings, 'Group', '分組')}: ${entry.group}` : ''}</p>
             </div>
-            <div className="authenticator-code" {...el('authenticator-code')} aria-live="polite" aria-atomic="true" aria-label={label(viewSettings, `Current code ${displayCode ?? 'unavailable'}`, `目前驗證碼 ${displayCode ?? '暫時用唔到'}`)}>{displayCode ?? '—'}</div>
+            <div className="authenticator-code" {...el('authenticator-code')} aria-live="polite" aria-atomic="true" aria-label={label(viewSettings, `${showingRolloverCode ? 'Current code after rollover' : 'Current code'} ${displayCode ?? 'unavailable'}`, `${showingRolloverCode ? '換碼後目前驗證碼' : '目前驗證碼'} ${displayCode ?? '暫時用唔到'}`)}>{displayCode ?? '—'}</div>
+            {entry.nextCode && seconds !== null && seconds > 0 ? <div className="authenticator-next-code" {...el('authenticator-next-code')} aria-label={label(viewSettings, `Next code ${entry.nextCode}`, `下一個驗證碼 ${entry.nextCode}`)}><span className="supporting">{label(viewSettings, 'Next code', '下一個驗證碼')}</span><code>{entry.nextCode}</code></div> : null}
             <p className="supporting">{seconds === null ? label(viewSettings, 'Secret unavailable', '秘密暫時用唔到') : label(viewSettings, `${seconds} seconds until rollover`, `${seconds} 秒後換碼`)}</p>
             <div className="authenticator-entry-management" role="group" aria-label={label(viewSettings, `Manage ${entry.label}`, `管理 ${entry.label}`)}>
               <label>{label(viewSettings, 'Group label (optional)', '分組標籤（可選）')}<input maxLength={64} value={groupDrafts[entry.id] ?? entry.group ?? ''} onChange={(event) => setGroupDrafts((current) => ({ ...current, [entry.id]: event.target.value }))} /></label>

@@ -158,7 +158,7 @@ void app.whenReady().then(async () => {
   });
   const authenticatorRestrictedExport = (): AuthenticatorExportResult => ({
     ok: false,
-    omittedFields: ['secret', 'uri', 'code', 'remainingSeconds', 'expiresAt'],
+    omittedFields: ['secret', 'uri', 'code', 'nextCode', 'remainingSeconds', 'expiresAt'],
     message: 'Authenticator metadata export is unavailable while the shared restricted mode is enabled or unavailable.',
     messageYue: '共享限制模式開啟或不可用時，驗證器 metadata 匯出暫時唔可用。',
   });

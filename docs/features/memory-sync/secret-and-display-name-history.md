@@ -24,7 +24,7 @@ If settings persistence fails, the rename is not reported as successful. If the 
 
 ## Security considerations
 
-The Activity entry and ordinary exports contain no password, PIN, TOTP secret, QR URI, salt, verifier, or credential-vault value. Authenticator registration clears pending secrets after confirmation/expiry, returns only metadata and code display, and keeps safeStorage ciphertext outside ordinary exports/history. The authenticator metadata export explicitly omits `secret`, `uri`, `code`, `remainingSeconds`, and `expiresAt`; its CSV form has a documented UTF-8/LF metadata preamble and its Markdown form escapes label/group cells. A future history integration must add only redacted metadata snapshots; it must not put secrets into settings JSON, local Git blobs, exports, logs, screenshots, sync repositories, or public records.
+The Activity entry and ordinary exports contain no password, PIN, TOTP secret, QR URI, salt, verifier, or credential-vault value. Authenticator registration clears pending secrets after confirmation/expiry, returns only metadata and code display, and keeps safeStorage ciphertext outside ordinary exports/history. The authenticator metadata export explicitly omits `secret`, `uri`, `code`, `nextCode`, `remainingSeconds`, and `expiresAt`; its CSV form carries schema and omission columns for standards-compatible parsing, and its Markdown form escapes label/group cells. A future history integration must add only redacted metadata snapshots; it must not put secrets into settings JSON, local Git blobs, exports, logs, screenshots, sync repositories, or public records.
 
 ## Verification
 
