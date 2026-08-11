@@ -29,3 +29,4 @@ Finding reviewed public applications and understanding their release state.
 - [WinForge catalog record](../../catalog-apps/catalog-app-winforge.md) — Generated reviewed metadata for WinForge: installable, archive, and adapter winforge-portable-zip. *(generated catalog metadata)*
 - [WimForge catalog record](../../catalog-apps/catalog-app-wimforge.md) — Generated reviewed metadata for WimForge: installable, archive, and adapter wimforge-portable-zip. *(generated catalog metadata)*
 - [Photo Viewer catalog record](../../catalog-apps/catalog-app-photo-viewer.md) — Generated reviewed metadata for Photo Viewer: unsupported, unsupported, and adapter photo-viewer-empty-release. *(generated catalog metadata)*
+- [Amulet Map Editor catalog record](../../catalog-apps/catalog-app-material-minecraft-map-editor.md) — Generated reviewed metadata for Amulet Map Editor: installable, squirrel, and adapter material-minecraft-map-editor-squirrel. *(generated catalog metadata)*

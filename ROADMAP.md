@@ -15,7 +15,7 @@
 - [x] Installed-app discovery for reviewed Squirrel, MSI, and managed-portable records, including typed discovery-only upstream installs with no inherited install/update/uninstall authority, plus append-only history/export
 - [x] Truthful shared export registry: 18 history formats with UTF-8/LF/schema metadata, including bounded re-importable ZIP archives; nested documents remain complete JSON
 - [x] One-click install/source-install dispatch with strict catalog-ID and typed-decision boundary; destructive uninstall confirmation unchanged
-- [x] Closed release-adapter coverage for all 24 catalog records: 21 source-proven Windows routes and three explicit external blockers
+- [x] Closed release-adapter coverage for all 25 catalog records: 22 source-proven Windows routes and three explicit external blockers
 - [x] Execute and launch every reviewed portable adapter on disposable clean-Windows profiles through `.github/workflows/install-adapter-proof.yml`: `dim-sum-atlas` proof `31264987569`, `winforge` proof `31267799564`, and `wimforge` proof `31267915704` all returned `verdict=true` with install, rediscovery, uninstall, and cleanup evidence on `windows-2022`; the remaining non-portable matrix still needs its own proof lanes, while WinSshCopyId, Photo Viewer, and ha-bambulab retain their explicit upstream blockers
 - [x] Prove the first non-portable adapter on clean Windows: `qbittorrent-material-squirrel` proof `31268659194` returned `verdict=true` on `windows-2022` for commit `702501675210dd767953cfa7208e8f21e40c4f0a`, with direct SHA-256, empty initial target state, exact new registry ownership, Squirrel uninstall, and empty detected/persisted cleanup state
 - [x] Prove the first MSI adapter on clean Windows: `keepassxc-msi` proof `31269200281` returned `verdict=true` on `windows-2022` for commit `ce44857f49fc4c34e96189138db9a7652cda88ef`, with direct SHA-256, empty initial target state, exact registry ownership, MSI product-code uninstall, and empty detected/persisted cleanup state
@@ -33,6 +33,7 @@
 - [x] Truthful VS Code export launch outcomes: observed spawn succeeds; child errors and unconfirmed two-second launches fail closed while exports remain recoverable
 - [x] Update schedule editor with last-run/next-run reporting and quiet hours
 - [x] Optional renderer-only notification narrator: persisted opt-in, English/Hong Kong Cantonese/both serialized delivery, stale queue replacement, category cooldowns, and quiet/reduced-sound accessibility yielding
+- [ ] Limited shared-contract display-name history slice: settings mutations are recorded as typed local Activity events; protected history management, encrypted/redacted secret snapshots, and the built-in authenticator remain pending
 - [x] Truthful NotificationCenter bulk Recovery details with callback-free, operation-ID-free retained history and an explicit originating-surface retry boundary
 - [x] NotificationCenter language-mode coverage for history, filters, bulk actions, export/open states, accessibility names, empty state, and destructive confirmation
 - [x] Catalog/Installed/Updates language-mode coverage for bulk actions, status facts, loading/empty states, update controls, and selection accessibility names

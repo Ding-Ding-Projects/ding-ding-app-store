@@ -31,16 +31,17 @@ Finding reviewed public applications and understanding their release state.
 - [WinForge catalog record](../catalog-apps/catalog-app-winforge.md) — **limited** — *(generated catalog metadata)* — Generated reviewed metadata for WinForge: installable, archive, and adapter winforge-portable-zip.
 - [WimForge catalog record](../catalog-apps/catalog-app-wimforge.md) — **limited** — *(generated catalog metadata)* — Generated reviewed metadata for WimForge: installable, archive, and adapter wimforge-portable-zip.
 - [Photo Viewer catalog record](../catalog-apps/catalog-app-photo-viewer.md) — **limited** — *(generated catalog metadata)* — Generated reviewed metadata for Photo Viewer: unsupported, unsupported, and adapter photo-viewer-empty-release.
+- [Amulet Map Editor catalog record](../catalog-apps/catalog-app-material-minecraft-map-editor.md) — **limited** — *(generated catalog metadata)* — Generated reviewed metadata for Amulet Map Editor: installable, squirrel, and adapter material-minecraft-map-editor-squirrel.
 
 ## Installation and removal
 
 Verified install adapters, fail-closed source builds, removal, and pending automation.
 
 - [Verified installer operations](./installation/verified-installer-operations.md) — **limited** — Downloads one app-specific Squirrel, MSI, NSIS, jpackage, or portable-ZIP asset, verifies its bytes, and applies only a fixed reviewed adapter.
-- [One-click installation and adapter coverage](./installation/one-click-installation.md) — **limited** — Dispatches 21 reviewed release adapters without typed confirmation and reports three current public-release blockers instead of guessing commands.
+- [One-click installation and adapter coverage](./installation/one-click-installation.md) — **limited** — Dispatches 22 reviewed release adapters without typed confirmation and reports three current public-release blockers instead of guessing commands.
 - [Source-build security](./installation/source-build-security.md) — **limited** — Provides a typed, bounded source-job and repair runtime with a truthful Windows Sandbox capability probe, but deliberately withholds execution until an attested hard-disposable guest transport and reviewed recipe exist.
 - [Protected uninstall](./installation/uninstall.md) — **shipped** — Removes only an installation whose Squirrel, MSI, or managed-portable ownership route was recorded or safely rediscovered.
-- [Automatic repair and universal adapters](./installation/automatic-repair-and-universal-adapters.md) — **limited** — Keeps the typed terminal, pinned OpenCode, bounded repair, consent, and truthful Windows Sandbox capability refusal separate from the 24 reviewed release-adapter records.
+- [Automatic repair and universal adapters](./installation/automatic-repair-and-universal-adapters.md) — **limited** — Keeps the typed terminal, pinned OpenCode, bounded repair, consent, and truthful Windows Sandbox capability refusal separate from the 25 reviewed release-adapter records.
 
 ## Installed apps and history
 
@@ -87,6 +88,7 @@ Shared instruction provenance, offline bundles, and safe synchronization boundar
 
 - [Shared Status Hub](./memory-sync/status-hub.md) — **limited** — Documents the interactive status and handoff surface, its session boundaries, and the evidence limits of this App Store bundle.
 - [Shared convenience skills](./memory-sync/convenience-skills.md) — **limited** — Describes how shared skills are selected, mirrored, and kept provenance-aware without importing secrets or granting host authority.
+- [Secret and display-name mutation history](./memory-sync/secret-and-display-name-history.md) — **limited** — Records the shared instruction contract boundary for redacted local history of display-name and authenticator mutations.
 
 ## Security and privacy
 

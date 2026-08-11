@@ -18,7 +18,7 @@ The browser's own search covers titles, summaries, categories, status, and full 
 
 ## Configuration
 
-Documentation is generated at repository/build time by `npm run docs:generate`; the packaged app does not fetch articles from the network. `npm run docs:check` uses a hand-written category/article inventory and a separate hand-written 24-ID catalog inventory to compare canonical files, generated catalog records, category indexes, generated TypeScript, site JavaScript, site article mirrors, wiki pages, and UI wiring. Language/funny-level settings apply to browser chrome; canonical technical article text remains factual English in this revision, while generated records use the app display name as a bilingual-title fallback.
+Documentation is generated at repository/build time by `npm run docs:generate`; the packaged app does not fetch articles from the network. `npm run docs:check` uses a hand-written category/article inventory and a separate hand-written 25-ID catalog inventory to compare canonical files, generated catalog records, category indexes, generated TypeScript, site JavaScript, site article mirrors, wiki pages, and UI wiring. Language/funny-level settings apply to browser chrome; canonical technical article text remains factual English in this revision, while generated records use the app display name as a bilingual-title fallback.
 
 ## Failure modes
 
@@ -30,7 +30,7 @@ Articles are trusted repository content but still render as constructed React no
 
 ## Verification
 
-`npm run docs:check` reports exact category, canonical-article, and generated-catalog-record counts, validates the internal link graph, and byte-compares every generated output. Dedicated tests assert all 24 hand-written catalog IDs have generated offline articles, command-palette destinations, and fail-closed unknown-ID behaviour. Renderer type check and production build prove the offline TypeScript bundle compiles into the app. A packaged runtime interaction should still open representative related links, exercise search/regex, and confirm that the complete count matches the guard.
+`npm run docs:check` reports exact category, canonical-article, and generated-catalog-record counts, validates the internal link graph, and byte-compares every generated output. Dedicated tests assert all 25 hand-written catalog IDs have generated offline articles, command-palette destinations, and fail-closed unknown-ID behaviour. Renderer type check and production build prove the offline TypeScript bundle compiles into the app. A packaged runtime interaction should still open representative related links, exercise search/regex, and confirm that the complete count matches the guard.
 
 ## Suggested articles
 

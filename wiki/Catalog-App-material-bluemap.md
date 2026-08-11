@@ -6,7 +6,7 @@
 
 ## Behaviour
 
-This record describes the reviewed catalog entry `material-bluemap`. Its public source repository is [material-bluemap](https://github.com/Ding-Ding-Projects/material-bluemap). The current availability is **Installable through a reviewed adapter** and the declared package type is **squirrel**. The closed adapter identifier is `material-bluemap-squirrel`.
+This record describes the reviewed catalog entry `material-bluemap`. Its public source repository is [worldlens](https://github.com/Ding-Ding-Projects/worldlens). The current availability is **Installable through a reviewed adapter** and the declared package type is **squirrel**. The closed adapter identifier is `material-bluemap-squirrel`.
 
 The current adapter state is: Reviewed Squirrel.Windows adapter. The adapter has a fixed, application-specific release contract; this article deliberately does not reproduce executable names, arguments, download URLs, or filesystem locations.
 
@@ -24,7 +24,7 @@ This generated record contains only reviewed identifiers and public repository l
 
 ## Verification
 
-The documentation generator checks this article against the hand-written 24-ID catalog and adapter metadata inventories, then includes it in the offline TypeScript bundle, static-site article bundle, wiki mirror, documentation search, and command palette. That proves generated metadata coverage only. It does not claim a clean-Windows installation, update, source build, application launch, or published release verification for this application.
+The documentation generator checks this article against the hand-written 25-ID catalog and adapter metadata inventories, then includes it in the offline TypeScript bundle, static-site article bundle, wiki mirror, documentation search, and command palette. That proves generated metadata coverage only. It does not claim a clean-Windows installation, update, source build, application launch, or published release verification for this application.
 
 ## Suggested articles
 

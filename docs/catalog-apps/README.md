@@ -28,6 +28,7 @@ These records are generated from the reviewed local catalog allowlist and adapte
 - [WinForge catalog record](./catalog-app-winforge.md) — Generated reviewed metadata for WinForge: installable, archive, and adapter winforge-portable-zip.
 - [WimForge catalog record](./catalog-app-wimforge.md) — Generated reviewed metadata for WimForge: installable, archive, and adapter wimforge-portable-zip.
 - [Photo Viewer catalog record](./catalog-app-photo-viewer.md) — Generated reviewed metadata for Photo Viewer: unsupported, unsupported, and adapter photo-viewer-empty-release.
+- [Amulet Map Editor catalog record](./catalog-app-material-minecraft-map-editor.md) — Generated reviewed metadata for Amulet Map Editor: installable, squirrel, and adapter material-minecraft-map-editor-squirrel.
 
 ## Boundaries
 

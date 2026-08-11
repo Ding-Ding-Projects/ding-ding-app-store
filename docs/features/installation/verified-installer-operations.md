@@ -16,7 +16,7 @@ The main process exposes a strict `{ appId, decision: "cancel-install" }` cancel
 
 ## Configuration
 
-All privileged values live in `src/main/install-adapters.ts`. Each of the 24 IDs has one unique adapter ID; supported records include an anchored asset pattern, fixed family/arguments, exact detection identity, and source evidence. Unsupported records contain a structured blocker code and explanation. `data/catalog.v1.json` names the adapter but cannot override its executable, arguments, checksum, or paths.
+All privileged values live in `src/main/install-adapters.ts`. Each of the 25 IDs has one unique adapter ID; supported records include an anchored asset pattern, fixed family/arguments, exact detection identity, and source evidence. Unsupported records contain a structured blocker code and explanation. `data/catalog.v1.json` names the adapter but cannot override its executable, arguments, checksum, or paths.
 
 Portable ZIP extraction uses the bundled `yauzl` library, so a fresh Windows profile does not need PowerShell, 7-Zip, or another archive program. Runtime dependencies belong to the selected upstream release package; no build toolchain is installed by this release-asset path.
 
@@ -30,7 +30,7 @@ The renderer supplies no executable data. GitHub asset metadata or a separately 
 
 ## Verification
 
-Focused automated coverage exercises all 24 adapter identities and 21 current supported asset names, the three explicit blockers, digest companion parsing, real ZIP extraction/collision/symlink/pre-start and mid-stream cancellation cases, partial-write completion, portable commit/rollback failures, incomplete registry snapshots, registry fingerprint mutation, exact display names, safe executable roots, and the typed progress/cancellation renderer boundary. Static contracts cover fixed process controls, post-close size/hash verification, exact changed-entry ownership, phase/byte event bounds, accessible initiating-surface status, and the typed cancellation channel. The full repository check and build compile the main process, preload, shared contracts, renderer, workspaces, and documentation mirrors together.
+Focused automated coverage exercises all 25 adapter identities and 22 current supported asset names, the three explicit blockers, digest companion parsing, real ZIP extraction/collision/symlink/pre-start and mid-stream cancellation cases, partial-write completion, portable commit/rollback failures, incomplete registry snapshots, registry fingerprint mutation, exact display names, safe executable roots, and the typed progress/cancellation renderer boundary. Static contracts cover fixed process controls, post-close size/hash verification, exact changed-entry ownership, phase/byte event bounds, accessible initiating-surface status, and the typed cancellation channel. The full repository check and build compile the main process, preload, shared contracts, renderer, workspaces, and documentation mirrors together.
 
 No clean-Windows installer was executed by this implementation lane. The adapter contracts are source- and release-audited; fresh-VM completion, UAC behavior where a package requires elevation, real cancellation, and installed application launch remain runtime evidence rather than inferred success.
 

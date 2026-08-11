@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { DEFAULT_USER_SETTINGS } from '../shared/contracts.js';
 import type { SettingsProvenance, UserSettings } from '../shared/contracts.js';
 import { writeJsonAtomic } from './json-store.js';
+import type { HistoryService } from './history-service.js';
 
 const settingsSchema = z.object({
   language: z.enum(['en', 'yue', 'bilingual']),
@@ -24,6 +25,8 @@ const settingsSchema = z.object({
 export class SettingsService {
   private readonly filePath = path.join(app.getPath('userData'), 'settings.v1.json');
   private lastProvenance: SettingsProvenance = { source: 'fallback', fallback: { ...DEFAULT_USER_SETTINGS } };
+
+  constructor(private readonly history?: Pick<HistoryService, 'record'>) {}
 
   async load(): Promise<UserSettings> {
     return (await this.loadWithProvenance()).settings;
@@ -50,8 +53,22 @@ export class SettingsService {
   }
 
   async save(input: UserSettings): Promise<UserSettings> {
+    const previous = await this.load();
     const value = settingsSchema.parse(input);
     await writeJsonAtomic(this.filePath, value);
+    if (previous.displayName !== value.displayName && this.history) {
+      try {
+        await this.history.record({
+          appId: 'ding-ding-app-store',
+          displayName: value.displayName,
+          kind: 'settings',
+          ok: true,
+          message: 'Display name changed; the local history entry contains no credential material.',
+        });
+      } catch {
+        // Settings persistence remains successful when the best-effort audit write is unavailable.
+      }
+    }
     this.lastProvenance = { source: 'persisted', fallback: { ...DEFAULT_USER_SETTINGS } };
     return value;
   }

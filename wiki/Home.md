@@ -29,14 +29,15 @@ The wiki mirrors the same canonical feature articles bundled into the applicatio
 - [WinForge catalog record](Catalog-App-winforge) — **limited** — Generated reviewed metadata for WinForge: installable, archive, and adapter winforge-portable-zip.
 - [WimForge catalog record](Catalog-App-wimforge) — **limited** — Generated reviewed metadata for WimForge: installable, archive, and adapter wimforge-portable-zip.
 - [Photo Viewer catalog record](Catalog-App-photo-viewer) — **limited** — Generated reviewed metadata for Photo Viewer: unsupported, unsupported, and adapter photo-viewer-empty-release.
+- [Amulet Map Editor catalog record](Catalog-App-material-minecraft-map-editor) — **limited** — Generated reviewed metadata for Amulet Map Editor: installable, squirrel, and adapter material-minecraft-map-editor-squirrel.
 
 ## Installation and removal
 
 - [Verified installer operations](Verified-Installer-Operations) — **limited** — Downloads one app-specific Squirrel, MSI, NSIS, jpackage, or portable-ZIP asset, verifies its bytes, and applies only a fixed reviewed adapter.
-- [One-click installation and adapter coverage](One-Click-Installation) — **limited** — Dispatches 21 reviewed release adapters without typed confirmation and reports three current public-release blockers instead of guessing commands.
+- [One-click installation and adapter coverage](One-Click-Installation) — **limited** — Dispatches 22 reviewed release adapters without typed confirmation and reports three current public-release blockers instead of guessing commands.
 - [Source-build security](Source-Build-Security) — **limited** — Provides a typed, bounded source-job and repair runtime with a truthful Windows Sandbox capability probe, but deliberately withholds execution until an attested hard-disposable guest transport and reviewed recipe exist.
 - [Protected uninstall](Uninstall) — **shipped** — Removes only an installation whose Squirrel, MSI, or managed-portable ownership route was recorded or safely rediscovered.
-- [Automatic repair and universal adapters](Automatic-Repair-and-Universal-Adapters) — **limited** — Keeps the typed terminal, pinned OpenCode, bounded repair, consent, and truthful Windows Sandbox capability refusal separate from the 24 reviewed release-adapter records.
+- [Automatic repair and universal adapters](Automatic-Repair-and-Universal-Adapters) — **limited** — Keeps the typed terminal, pinned OpenCode, bounded repair, consent, and truthful Windows Sandbox capability refusal separate from the 25 reviewed release-adapter records.
 
 ## Installed apps and history
 
@@ -73,6 +74,7 @@ The wiki mirrors the same canonical feature articles bundled into the applicatio
 
 - [Shared Status Hub](Status-Hub) — **limited** — Documents the interactive status and handoff surface, its session boundaries, and the evidence limits of this App Store bundle.
 - [Shared convenience skills](Convenience-Skills) — **limited** — Describes how shared skills are selected, mirrored, and kept provenance-aware without importing secrets or granting host authority.
+- [Secret and display-name mutation history](Secret-And-Display-Name-History) — **limited** — Records the shared instruction contract boundary for redacted local history of display-name and authenticator mutations.
 
 ## Security and privacy
 

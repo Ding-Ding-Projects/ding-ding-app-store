@@ -1,5 +1,12 @@
 # Handoff
 
+## 2026-08-11 Catalog and shared-contract expansion
+
+- Added the reviewed `material-minecraft-map-editor` catalog record as `Amulet Map Editor` with its Squirrel adapter, pinned packaging evidence, and public release `0.10.0-dev.567`. The release body reports `1256 passed, 8 skipped, 1 warning, 24 errors, 332 subtests passed`; this catalog slice records that result as non-green upstream evidence and does not claim clean-machine installation or UI proof.
+- Corrected the existing `material-bluemap` discovery repository to canonical `worldlens` without changing its stable app ID or adapter, avoiding a duplicate record while restoring live organization lookup.
+- Added a limited display-name mutation history event: changing the persisted app display name records a typed `settings` Activity entry and keeps the existing settings snapshot path. The stricter shared contract for protected history managers, encrypted or redacted secret snapshots, and an in-app authenticator remains explicitly pending; no credential material is stored or claimed.
+- Local verification for this expansion is recorded after the focused catalog/history Chuts and the full repository check/build; cloud workflow and release results must still be tied to the final exact commit before they are called verified.
+
 ## 2026-08-09 Changelog viewer language-mode coverage
 
 - ChangelogViewer now routes every viewer-owned status, date-validation message, bulk/copy/export action and outcome, Visual Studio Code state, commit-navigation control, accessibility label, and empty state through English, playful Hong Kong Cantonese, or bilingual copy. Release and calendar dates follow the app language instead of the operating-system display locale; exact versions, source timestamps, and full SHAs remain factual.
@@ -70,7 +77,7 @@
 
 ## Current state
 
-The repository contains a sandboxed Electron/React/TypeScript shell, reviewed 24-application catalog, stable-release/update comparison, SHA-256-gated installer path, protected uninstall path, App Store self-updater state machine, Material Design 3 navigation, language/funny-level settings, regex builder, command palette, real local operation history with export, generated offline documentation, and a fail-closed common automatic source-repair runtime.
+The repository contains a sandboxed Electron/React/TypeScript shell, reviewed 25-application catalog, stable-release/update comparison, SHA-256-gated installer path, protected uninstall path, App Store self-updater state machine, Material Design 3 navigation, language/funny-level settings, regex builder, command palette, real local operation history with export, generated offline documentation, and a fail-closed common automatic source-repair runtime.
 
 ## 2026-08-08 truthful tab shortcut registry
 

@@ -24,7 +24,7 @@ This generated record contains only reviewed identifiers and public repository l
 
 ## Verification
 
-The documentation generator checks this article against the hand-written 24-ID catalog and adapter metadata inventories, then includes it in the offline TypeScript bundle, static-site article bundle, wiki mirror, documentation search, and command palette. That proves generated metadata coverage only. It does not claim a clean-Windows installation, update, source build, application launch, or published release verification for this application.
+The documentation generator checks this article against the hand-written 25-ID catalog and adapter metadata inventories, then includes it in the offline TypeScript bundle, static-site article bundle, wiki mirror, documentation search, and command palette. That proves generated metadata coverage only. It does not claim a clean-Windows installation, update, source build, application launch, or published release verification for this application.
 
 ## Suggested articles
 

@@ -1,16 +1,18 @@
-# Bambu Studio catalog record
+# Amulet Map Editor catalog record
+
+> **Status: limited.** This wiki page is generated from reviewed local catalog metadata.
 
 > **Generated catalog metadata.** This article is assembled from the reviewed local catalog and adapter inventory. It is not provider-authored documentation and does not scrape repository text, copy external assets, or expose installer commands.
 
 ## Behaviour
 
-This record describes the reviewed catalog entry `bambu-studio`. Its public source repository is [BambuStudio](https://github.com/Ding-Ding-Projects/BambuStudio). The current availability is **Installable through a reviewed adapter** and the declared package type is **nsis**. The closed adapter identifier is `bambu-studio-nsis`.
+This record describes the reviewed catalog entry `material-minecraft-map-editor`. Its public source repository is [material-minecraft-map-editor](https://github.com/Ding-Ding-Projects/material-minecraft-map-editor). The current availability is **Installable through a reviewed adapter** and the declared package type is **squirrel**. The closed adapter identifier is `material-minecraft-map-editor-squirrel`.
 
-The current adapter state is: Reviewed NSIS adapter. The adapter has a fixed, application-specific release contract; this article deliberately does not reproduce executable names, arguments, download URLs, or filesystem locations.
+The current adapter state is: Reviewed Squirrel.Windows adapter. The adapter has a fixed, application-specific release contract; this article deliberately does not reproduce executable names, arguments, download URLs, or filesystem locations.
 
 ## Configuration
 
-The catalog record is source-controlled. The renderer may request this application by its typed identifier and a user decision, but it cannot alter the repository, source manifest, package type, adapter, download, command, argument, or local destination. The source manifest marker is `CMakeLists.txt`; it is metadata only and is not a source-build recipe.
+The catalog record is source-controlled. The renderer may request this application by its typed identifier and a user decision, but it cannot alter the repository, source manifest, package type, adapter, download, command, argument, or local destination. The source manifest marker is `pyproject.toml`; it is metadata only and is not a source-build recipe.
 
 ## Failure modes
 
@@ -26,9 +28,9 @@ The documentation generator checks this article against the hand-written 25-ID c
 
 ## Suggested articles
 
-- [Catalog discovery](../features/discovery/catalog-discovery.md)
-- [Verified installer operations](../features/installation/verified-installer-operations.md)
-- [Per-app update checker](../features/updates/per-app-update-checker.md)
-- [Source-build security](../features/installation/source-build-security.md)
-- [Privacy and security](../features/security/privacy-and-security.md)
-- [Verification and evidence](../features/verification/verification.md)
+- [Catalog discovery](Catalog-Discovery)
+- [Verified installer operations](Verified-Installer-Operations)
+- [Per-app update checker](Per-App-Update-Checker)
+- [Source-build security](Source-Build-Security)
+- [Privacy and security](Privacy-and-Security)
+- [Verification and evidence](Verification)

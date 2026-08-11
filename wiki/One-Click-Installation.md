@@ -4,7 +4,7 @@
 
 ## Behaviour
 
-Selecting **Install** or **Reinstall** immediately submits only the catalog application identifier and the closed `install` decision. The main process selects one of 24 hand-written adapter records; the renderer cannot submit an executable, URL, path, argument, checksum, dependency, or package type. Twenty-one records currently have a reviewed Windows release route. Three are explicitly unavailable and cannot be mislabeled installable.
+Selecting **Install** or **Reinstall** immediately submits only the catalog application identifier and the closed `install` decision. The main process selects one of 25 hand-written adapter records; the renderer cannot submit an executable, URL, path, argument, checksum, dependency, or package type. Twenty-two records currently have a reviewed Windows release route. Three are explicitly unavailable and cannot be mislabeled installable. The new record is Amulet Map Editor, whose public release has an unsigned Squirrel.Windows Setup.exe but no packaged runtime/UI proof in this repository.
 
 | Application | Reviewed route | Current public evidence or blocker |
 | --- | --- | --- |
@@ -31,6 +31,7 @@ Selecting **Install** or **Reinstall** immediately submits only the catalog appl
 | Home Assistant Bambu Lab | External target required | `bambu_lab.zip` is a HACS custom component. Fresh Windows has no canonical local Home Assistant configuration target; selecting a remote instance requires host/account authorization that cannot be inferred. |
 | WinForge | Managed portable ZIP | `WinForge-portable-x64-1.1.326.zip`; workflow validates `WinForge.exe` and archive paths. |
 | WimForge | Managed portable ZIP | `WimForge-portable-x64-0.1.42.zip`; self-contained Qt archive with `WimForge.exe`. |
+| Amulet Map Editor | Squirrel | `Setup.exe`; release `0.10.0-dev.567` records pinned Squirrel.Windows packaging and a non-green upstream test report. |
 | Photo Viewer | Unavailable | Public `v0.1.0` release contains zero assets. Its source declares a future NSIS target but no published installer exists. |
 
 Uninstall remains behind the native two-key plus full-slider confirmation because it removes user-visible state. Installation and source-repair stay separate: ordinary release installation never imports or invokes the disposable/OpenCode runtime.
@@ -55,7 +56,7 @@ Installed ownership is captured from exactly one new or changed registry entry b
 
 ## Verification
 
-The hand-written coverage test enumerates all 24 application IDs, asserts 24 unique adapter IDs, proves every installable row maps to a supported adapter with the same package type, rejects unsupported rows labeled installable, and exercises one current asset filename for each of the 21 supported applications. Behavioural tests create real ZIPs to cover empty files, symlinks, Windows case collisions, reserved device aliases, pre-start cancellation, and active-writer cancellation/drain; exercise partial writes; and inject portable commit, cleanup, rollback, and rollback-failure outcomes. Focused registry tests cover incomplete ownership snapshots, fingerprint mutation, exact names, MSI product codes, and safe roots/basenames. Source-contract checks cover bounded redirects/timeouts, hidden shell-free process trees, typed cancellation, exact changed-entry ownership, and separation from the repair runtime.
+The hand-written coverage test enumerates all 25 application IDs, asserts 25 unique adapter IDs, proves every installable row maps to a supported adapter with the same package type, rejects unsupported rows labeled installable, and exercises one current asset filename for each of the 22 supported applications. Behavioural tests create real ZIPs to cover empty files, symlinks, Windows case collisions, reserved device aliases, pre-start cancellation, and active-writer cancellation/drain; exercise partial writes; and inject portable commit, cleanup, rollback, and rollback-failure outcomes. Focused registry tests cover incomplete ownership snapshots, fingerprint mutation, exact names, MSI product codes, and safe roots/basenames. Source-contract checks cover bounded redirects/timeouts, hidden shell-free process trees, typed cancellation, exact changed-entry ownership, and separation from the repair runtime.
 
 The dispatch-only `.github/workflows/install-adapter-proof.yml` workflow targets the three reviewed portable ZIP adapters (`dim-sum-atlas`, `winforge`, and `wimforge`) plus one explicitly reviewed non-portable Squirrel adapter (`qbittorrent-material`) on a pinned GitHub-hosted `windows-2022` cloud runner. The allowlist is a typed main-process contract rather than the complete adapter registry, so adding a catalog record does not silently authorize cloud execution. The workflow bootstraps the locked dependencies, builds the real main process and preload, launches `scripts/prove-install-adapter.mjs` through Electron with a disposable app-data root, records bounded progress plus before/after installed detection, and cleans up through the reviewed uninstall route.
 

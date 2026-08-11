@@ -78,7 +78,7 @@ void app.whenReady().then(async () => {
     if (!contents || contents.isDestroyed()) return;
     try { contents.send('operations:progress', event); } catch { /* Renderer teardown must never interrupt a privileged install. */ }
   });
-  const settings = new SettingsService();
+  const settings = new SettingsService(history);
   const schoolMode = new SchoolModeService();
   const sourceJobs = new SourceJobService(
     catalog,

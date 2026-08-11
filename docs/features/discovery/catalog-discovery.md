@@ -30,7 +30,7 @@ Requests are restricted to `https://api.github.com`, use a 15-second timeout, re
 
 ## Verification
 
-The catalog schema, origin restriction, cache fallback, renderer boundary, and public-only filtering are directly implemented in `src/main/catalog-service.ts`. Generated-documentation tests independently preserve the hand-written 24-ID inventory, exact generated article IDs, catalogue/adapter alignment, command-palette reachability, and fail-closed unknown IDs. The packaged runtime capture in `docs/assets/screenshots/catalog-runtime.png` proves the built catalog surface rendered against the public organization at the captured revision. It does not prove that every listed application has a working adapter.
+The catalog schema, origin restriction, cache fallback, renderer boundary, and public-only filtering are directly implemented in `src/main/catalog-service.ts`. Generated-documentation tests independently preserve the hand-written 25-ID inventory, exact generated article IDs, catalogue/adapter alignment, command-palette reachability, and fail-closed unknown IDs. The packaged runtime capture in `docs/assets/screenshots/catalog-runtime.png` proves the built catalog surface rendered against the public organization at the captured revision. It does not prove that every listed application has a working adapter.
 
 ## Suggested articles
 

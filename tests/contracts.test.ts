@@ -352,7 +352,7 @@ describe('one-click adapter coverage record', () => {
     const coverage = await read('docs/features/installation/one-click-installation.md');
     for (const app of catalog.apps) expect(coverage).toContain(`| ${app.displayName} |`);
     for (const requirement of [
-      'Twenty-one records',
+      'Twenty-two records',
       'Win SSH Copy ID',
       'Home Assistant Bambu Lab',
       'Photo Viewer',

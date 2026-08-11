@@ -35,7 +35,7 @@ const EXPECTED_APP_IDS = [
   'qbittorrent-material', 'material-winscp', 'dim-sum-atlas', 'win-ssh-copy-id',
   'material-office', 'minecraft-world-downloader', 'codex-material', 'libreoffice-material',
   'thunderbird-desktop', 'bambu-studio', 'keepassxc', 'jdownloader-material', 'ha-bambulab',
-  'winforge', 'wimforge', 'photo-viewer',
+  'winforge', 'wimforge', 'photo-viewer', 'material-minecraft-map-editor',
 ] as const;
 
 const LATEST_ASSET_FIXTURES: Readonly<Record<string, string>> = {
@@ -60,12 +60,13 @@ const LATEST_ASSET_FIXTURES: Readonly<Record<string, string>> = {
   'jdownloader-material': 'JDownloader-Material-windows-x64.exe',
   winforge: 'WinForge-portable-x64-1.1.326.zip',
   wimforge: 'WimForge-portable-x64-0.1.42.zip',
+  'material-minecraft-map-editor': 'Setup.exe',
 };
 
 describe('hand-written universal install adapter coverage', () => {
-  it('enumerates exactly the 24 reviewed catalog IDs', () => {
+  it('enumerates exactly the 25 reviewed catalog IDs', () => {
     expect(CATALOG_APP_IDS).toEqual(EXPECTED_APP_IDS);
-    expect(new Set(INSTALL_ADAPTER_IDS).size).toBe(24);
+    expect(new Set(INSTALL_ADAPTER_IDS).size).toBe(25);
     expect(() => validateAdapterCoverage()).not.toThrow();
   });
 
@@ -85,7 +86,7 @@ describe('hand-written universal install adapter coverage', () => {
   });
 
   it('selects exactly one audited current release asset for every supported application', () => {
-    expect(Object.keys(LATEST_ASSET_FIXTURES)).toHaveLength(21);
+    expect(Object.keys(LATEST_ASSET_FIXTURES)).toHaveLength(22);
     for (const [appId, assetName] of Object.entries(LATEST_ASSET_FIXTURES)) {
       const adapter = adapterFor(appId);
       expect(adapter.supported).toBe(true);

@@ -5,7 +5,7 @@
     {"id":"lowlevel-computer-use-mcp","repository":"lowlevel-computer-use-mcp","displayName":"Lowlevel Computer Use MCP","availability":"installable","packageType":"squirrel","adapterId":"lowlevel-computer-use-mcp-squirrel","wiki":true,"sourceManifest":"pyproject.toml"},
     {"id":"material-download-manager","repository":"material-download-manager","displayName":"Material Download Manager","availability":"installable","packageType":"squirrel","adapterId":"material-download-manager-squirrel","wiki":true,"sourceManifest":"design/package.json"},
     {"id":"material-designer","repository":"material-designer","displayName":"Material Designer","availability":"installable","packageType":"squirrel","adapterId":"material-designer-squirrel","wiki":true,"sourceManifest":"design/package.json"},
-    {"id":"material-bluemap","repository":"material-bluemap","displayName":"Material BlueMap","availability":"installable","packageType":"squirrel","adapterId":"material-bluemap-squirrel","wiki":true,"sourceManifest":"design/package.json"},
+    {"id":"material-bluemap","repository":"worldlens","displayName":"Material BlueMap","availability":"installable","packageType":"squirrel","adapterId":"material-bluemap-squirrel","wiki":true,"sourceManifest":"design/package.json"},
     {"id":"desktop-material","repository":"desktop-material","displayName":"Desktop Material","availability":"installable","packageType":"squirrel","adapterId":"desktop-material-squirrel","wiki":true,"sourceManifest":"package.json"},
     {"id":"home-assistant-ac-defender","repository":"HomeAssistantAcDefender","displayName":"Home Assistant AC Defender","availability":"installable","packageType":"squirrel","adapterId":"home-assistant-ac-defender-squirrel","wiki":true,"sourceManifest":"desktop-electron/package.json"},
     {"id":"material-email","repository":"material-email","displayName":"Material Email","availability":"installable","packageType":"nsis","adapterId":"material-email-nsis","wiki":true,"sourceManifest":"package.json"},
@@ -25,6 +25,7 @@
     {"id":"ha-bambulab","repository":"ha-bambulab","displayName":"Home Assistant Bambu Lab","availability":"unsupported","packageType":"unsupported","adapterId":"ha-bambulab-external-home-assistant","wiki":true,"sourceManifest":"custom_components/bambu_lab/manifest.json"},
     {"id":"winforge","repository":"WinForge","displayName":"WinForge","availability":"installable","packageType":"archive","adapterId":"winforge-portable-zip","wiki":true,"sourceManifest":"WinForge.sln"},
     {"id":"wimforge","repository":"WimForge","displayName":"WimForge","availability":"installable","packageType":"archive","adapterId":"wimforge-portable-zip","wiki":true,"sourceManifest":"CMakeLists.txt"},
-    {"id":"photo-viewer","repository":"Photo-Viewer","displayName":"Photo Viewer","availability":"unsupported","packageType":"unsupported","adapterId":"photo-viewer-empty-release","wiki":true,"sourceManifest":"package.json"}
+    {"id":"photo-viewer","repository":"Photo-Viewer","displayName":"Photo Viewer","availability":"unsupported","packageType":"unsupported","adapterId":"photo-viewer-empty-release","wiki":true,"sourceManifest":"package.json"},
+    {"id":"material-minecraft-map-editor","repository":"material-minecraft-map-editor","displayName":"Amulet Map Editor","availability":"installable","packageType":"squirrel","adapterId":"material-minecraft-map-editor-squirrel","wiki":true,"sourceManifest":"pyproject.toml"}
   ]
 }

@@ -182,7 +182,7 @@ export function installationManagementState(record: InstalledAppRecord | undefin
   return record.ownership && record.uninstall ? 'store-managed' : 'discovery-only';
 }
 
-export type OperationKind = 'install' | 'build' | 'uninstall' | 'update';
+export type OperationKind = 'install' | 'build' | 'uninstall' | 'update' | 'settings';
 export type HistoryExportFormat = 'json' | 'jsonl' | 'yaml' | 'toml' | 'xml' | 'csv' | 'tsv' | 'markdown' | 'html' | 'sql' | 'typescript' | 'javascript' | 'python' | 'go' | 'rust' | 'json-schema' | 'protobuf' | 'zip';
 
 export const HISTORY_ARCHIVE_MAX_ENTRIES = 10_000;

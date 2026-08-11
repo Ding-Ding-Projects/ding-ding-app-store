@@ -7,7 +7,7 @@ export const CATALOG_APP_IDS = [
   'qbittorrent-material', 'material-winscp', 'dim-sum-atlas', 'win-ssh-copy-id',
   'material-office', 'minecraft-world-downloader', 'codex-material', 'libreoffice-material',
   'thunderbird-desktop', 'bambu-studio', 'keepassxc', 'jdownloader-material', 'ha-bambulab',
-  'winforge', 'wimforge', 'photo-viewer',
+  'winforge', 'wimforge', 'photo-viewer', 'material-minecraft-map-editor',
 ] as const;
 
 export type CatalogAppId = (typeof CATALOG_APP_IDS)[number];
@@ -21,7 +21,7 @@ export const INSTALL_ADAPTER_IDS = [
   'minecraft-world-downloader-nsis', 'codex-material-msi', 'libreoffice-material-msi',
   'thunderbird-desktop-mozilla-nsis', 'bambu-studio-nsis', 'keepassxc-msi',
   'jdownloader-material-jpackage', 'ha-bambulab-external-home-assistant', 'winforge-portable-zip',
-  'wimforge-portable-zip', 'photo-viewer-empty-release',
+  'wimforge-portable-zip', 'photo-viewer-empty-release', 'material-minecraft-map-editor-squirrel',
 ] as const;
 
 export type InstallAdapterId = (typeof INSTALL_ADAPTER_IDS)[number];
@@ -139,6 +139,7 @@ export const INSTALL_ADAPTERS: Readonly<Record<CatalogAppId, InstallAdapter>> = 
   winforge: portable('winforge-portable-zip', 'winforge', /^WinForge-portable-x64-[0-9A-Za-z.+-]+\.zip$/, 'WinForge.exe', ['.github/workflows/release.yml: validated self-contained portable archive with WinForge.exe']),
   wimforge: portable('wimforge-portable-zip', 'wimforge', /^WimForge-portable-x64-[0-9A-Za-z.+-]+\.zip$/, 'WimForge.exe', ['.github/workflows/release.yml: self-contained portable Qt archive']),
   'photo-viewer': { id: 'photo-viewer-empty-release', appId: 'photo-viewer', supported: false, family: 'unsupported', packageType: 'unsupported', blockerCode: 'empty-release', blocker: 'The latest public release exists but contains no assets, so there is no installer byte stream to verify or run.', evidence: ['release v0.1.0 had zero assets on 2026-08-07', 'package.json proves a future NSIS target but not a published installer'] },
+  'material-minecraft-map-editor': squirrel('material-minecraft-map-editor-squirrel', 'material-minecraft-map-editor', /^Setup\.exe$/, ['Amulet Map Editor', 'Amulet'], ['installer/amulet.manifest: Amulet assembly identity', 'installer/build-squirrel.ps1: pinned Squirrel.Windows packaging and Amulet.exe validation', 'release 0.10.0-dev.567: unsigned Setup.exe; the release body records a non-green upstream test report']),
 };
 
 export function adapterFor(appId: string): InstallAdapter {
@@ -157,7 +158,7 @@ export function validateAdapterCoverage(): void {
   const keys = Object.keys(INSTALL_ADAPTERS).sort();
   const expected = [...CATALOG_APP_IDS].sort();
   if (keys.length !== expected.length || keys.some((key, index) => key !== expected[index])) {
-    throw new Error('The hand-written 24-application adapter map is incomplete.');
+    throw new Error('The hand-written 25-application adapter map is incomplete.');
   }
   for (const appId of CATALOG_APP_IDS) {
     const adapter = INSTALL_ADAPTERS[appId];

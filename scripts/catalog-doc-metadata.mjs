@@ -33,6 +33,7 @@ export const CATALOG_ADAPTER_DOCUMENTATION = Object.freeze({
   winforge: { adapterId: 'winforge-portable-zip', status: 'reviewed', family: 'managed portable ZIP' },
   wimforge: { adapterId: 'wimforge-portable-zip', status: 'reviewed', family: 'managed portable ZIP' },
   'photo-viewer': { adapterId: 'photo-viewer-empty-release', status: 'blocked', blocker: 'The latest public release exists but contains no assets, so there is no installer byte stream to verify or run.' },
+  'material-minecraft-map-editor': { adapterId: 'material-minecraft-map-editor-squirrel', status: 'reviewed', family: 'Squirrel.Windows' },
 });
 
 export function catalogArticleId(appId) {

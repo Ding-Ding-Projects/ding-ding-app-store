@@ -4,7 +4,7 @@ title: Automatic repair and universal adapters
 titleYue: 自動修復同通用安裝配接器
 category: installation
 status: limited
-summary: Keeps the typed terminal, pinned OpenCode, bounded repair, consent, and truthful Windows Sandbox capability refusal separate from the 24 reviewed release-adapter records.
+summary: Keeps the typed terminal, pinned OpenCode, bounded repair, consent, and truthful Windows Sandbox capability refusal separate from the 25 reviewed release-adapter records.
 ---
 # Automatic repair and universal adapters
 
@@ -14,7 +14,7 @@ The common automatic-repair runtime now has strict `start`/`cancel`/`retry` IPC 
 
 The source runtime defines reviewed pinned revisions, canonical dependency archives and SHA-256 digests, fixed executable/argument vectors, expected outputs, global and per-step limits, one-job capacity, finite repair attempts, exact-step reruns, diff/file/tree bounds, cancellation, and ownership-marked cleanup. It pins OpenCode `1.18.15`: official Windows x64 archive SHA-256 `a80785874978ccbb93b7bfe4345f5aed41696f5ae76c109cd6dbbb934dbe795d` and extracted executable SHA-256 `fd254474def7ee35f07416cf4674c361f07e7bcd9c7ffb284af21bb011066ee3`. The `ensurePinnedOpenCode` helper can reuse or download that exact archive only inside an attested guest-owned child directory, validates both hashes/version, rejects symlinks, and removes the temporary archive after extraction; it never searches the host PATH or overwrites an invalid binary.
 
-The release-installer lane now has a hand-written adapter record for every one of the 24 catalog IDs: 21 supported release routes and three explicit public-state blockers. That work does not weaken or replace this source runtime. The shipped source recipe catalog remains empty and production uses a fail-closed Windows Sandbox adapter: it can report `WindowsSandbox.exe` presence and the missing guest transport, but it never launches a host process. Therefore no repository, dependency, source build, application run, or OpenCode repair executes in the current package.
+The release-installer lane now has a hand-written adapter record for every one of the 25 catalog IDs: 22 supported release routes and three explicit public-state blockers. That work does not weaken or replace this source runtime. The shipped source recipe catalog remains empty and production uses a fail-closed Windows Sandbox adapter: it can report `WindowsSandbox.exe` presence and the missing guest transport, but it never launches a host process. Therefore no repository, dependency, source build, application run, or OpenCode repair executes in the current package.
 
 The Settings surface and the read-only terminal simulator now call the typed isolation-status bridge directly. The Settings → General card is visible without a search prerequisite, and the command palette offers **Open source execution isolation details** to focus it. Both surfaces show the provider, exact fail-closed reason, bounded evidence, remediation, and the last check time, with a retry-status action. This makes the missing guest transport visible before a source job is attempted; it does not add a shell prompt, accept commands, or enable host execution.
 

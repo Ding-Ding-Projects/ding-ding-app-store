@@ -69,6 +69,7 @@ export function ActivityPage({ entries, revisions, loading, settings, openRegex,
     build: label(settings, 'Build', '建置'),
     uninstall: label(settings, 'Uninstall', '解除安裝'),
     update: label(settings, 'Update', '更新'),
+    settings: label(settings, 'Settings', '設定'),
   })[action];
   const filtered = useMemo(() => {
     let source = entries;

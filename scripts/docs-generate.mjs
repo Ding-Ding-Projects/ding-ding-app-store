@@ -51,6 +51,7 @@ const articles = [
   ['offline-documentation-browser', 'Offline documentation browser', '離線文件瀏覽器', 'documentation', 'Offline-Documentation-Browser', 'shipped', ['search-and-regex-builder', 'command-palette', 'verification']],
   ['status-hub', 'Shared Status Hub', '共用 Status Hub', 'memory-sync', 'Status-Hub', 'limited', ['convenience-skills', 'offline-documentation-browser', 'privacy-and-security', 'verification']],
   ['convenience-skills', 'Shared convenience skills', '共用便利技能', 'memory-sync', 'Convenience-Skills', 'limited', ['status-hub', 'privacy-and-security', 'source-build-security', 'verification']],
+  ['secret-and-display-name-history', 'Secret and display-name mutation history', '秘密同顯示名稱變更歷史', 'memory-sync', 'Secret-And-Display-Name-History', 'limited', ['history-versioning', 'settings-language-and-display-name', 'privacy-and-security', 'verification']],
   ['privacy-and-security', 'Privacy and security', '私隱同安全', 'security', 'Privacy-and-Security', 'shipped', ['verified-installer-operations', 'source-build-security', 'verification']],
   ['verification', 'Verification and evidence', '驗證同證據', 'verification', 'Verification', 'shipped', ['catalog-discovery', 'offline-documentation-browser', 'app-store-self-updater']],
 ].map(([id, title, titleYue, category, wiki, status, related]) => ({ id, title, titleYue, category, wiki, status, related }));
@@ -97,7 +98,7 @@ This generated record contains only reviewed identifiers and public repository l
 
 ## Verification
 
-The documentation generator checks this article against the hand-written 24-ID catalog and adapter metadata inventories, then includes it in the offline TypeScript bundle, static-site article bundle, wiki mirror, documentation search, and command palette. That proves generated metadata coverage only. It does not claim a clean-Windows installation, update, source build, application launch, or published release verification for this application.
+The documentation generator checks this article against the hand-written 25-ID catalog and adapter metadata inventories, then includes it in the offline TypeScript bundle, static-site article bundle, wiki mirror, documentation search, and command palette. That proves generated metadata coverage only. It does not claim a clean-Windows installation, update, source build, application launch, or published release verification for this application.
 
 ## Suggested articles
 
