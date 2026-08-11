@@ -14,17 +14,19 @@ Verification reports a specific revision and labels every evidence class indepen
 
 Each release resolves the first unused bilingual dim-sum code name whose image is already a published `catalog-v1*` asset in the public `Ding-Ding-Projects/dim-sum-photos` catalog. The release title and notes link that public photo; this repository does not copy or attach it. Catalog failure is recorded but does not block the software release.
 
-The release workflow runs for ordinary branch pushes and manual dispatches only. Its branch filter deliberately excludes generated release-tag pushes, preventing a newly published immutable tag from recursively starting a second release for the same source commit while preserving the exact source-target verification, unsigned Squirrel assets, timing, line-count, and dim-sum metadata contract.
+The release workflow runs for ordinary branch pushes and manual dispatches only. Its branch filter deliberately excludes generated release-tag pushes, preventing a newly published immutable tag from recursively starting a second release for the same source commit while preserving the exact source-target verification, unsigned Squirrel assets, timing, line-count, and dim-sum metadata contract. Actions only builds, packages, and publishes: tests, lint, and type-checks remain local checks and never gate a cloud release.
+
+The repository root also carries `build.bat` and `build-installer.bat`. Both accept `/s`, `--silent`, or `SILENT=1`; they resolve Node.js 22 from a user-scoped installation or a SHA-256-verified Node.js archive, run the locked `npm ci` path, and fail on the first missing output. `build-installer.bat` uses the same Squirrel.Windows packaging route as the release workflow, verifies `Setup.exe`, `RELEASES`, the full `.nupkg`, and an unsigned Authenticode state, then writes a local SHA-256 manifest tied to the source commit. The installer script never publishes, tags, dews, or invokes signing.
 
 The repository keeps genuine hidden-desktop captures for the catalog, installed, updates, documentation, activity, settings, appearance settings, command palette, and tab-action surfaces. The documentation generator supplies a reproducible count and exact synchronized-output check rather than relying on a manual file list.
 
 ## Configuration
 
-Run `npm run docs:check` for documentation coverage, `npm test` for focused root tests, `npm run check` for the combined documentation/type/test/workspace gate, `npm run build` for renderer/main/preload output, and the project's sanctioned hidden-desktop harness for interactive Windows evidence. Record the exact command, revision, test count, artifact, and external run URL.
+Run `npm run docs:check` for documentation coverage, `npm test` for focused root tests, `npm run check` for the combined documentation/type/test/workspace check, `npm run build` for renderer/main/preload output, `build.bat /s` for the fresh-machine local build path, `build-installer.bat /s` for the unsigned Squirrel installer path, and the project's sanctioned hidden-desktop harness for interactive Windows evidence. Record the exact command, revision, test count, artifact, and external run URL.
 
 ## Failure modes
 
-Missing dependencies, stale generated docs, a failed link, type failure, test failure, build failure, unavailable headless route, absent package, cancelled or superseded workflow, missing release asset, or feed 404 remains a named boundary. Mockups, source screenshots, queued runs, and static assertions cannot substitute for a real packaged state.
+Missing dependencies, stale generated docs, a failed link, type failure, test failure, build failure, unavailable headless route, absent package, cancelled or superseded workflow, missing release asset, unsigned-state mismatch, or feed 404 remains a named boundary. Mockups, source screenshots, queued runs, and static assertions cannot substitute for a real packaged state. A cloud workflow does not claim tests or lint ran; those results belong to the local verification record.
 
 ## Security considerations
 

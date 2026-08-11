@@ -3,7 +3,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const root = path.resolve(import.meta.dirname, '..');
-const read = (file: string) => readFile(path.join(root, file), 'utf8');
+const read = async (file: string) => (await readFile(path.join(root, file), 'utf8')).replace(/\r\n?/g, '\n');
 
 describe('GitHub-hosted workflow and bootstrap contract', () => {
   it('keeps validation and release jobs on pinned cloud runner images', async () => {
