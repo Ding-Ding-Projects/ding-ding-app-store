@@ -236,7 +236,7 @@ export interface HistoryArchiveExport {
 }
 
 export type ExternalEditorId = 'vscode';
-export type ExportRecordKind = 'catalog' | 'installed' | 'activity' | 'notifications' | 'changelog' | 'docs' | 'settings' | 'appearance' | 'tabs' | 'authenticator';
+export type ExportRecordKind = 'catalog' | 'installed' | 'activity' | 'history-revisions' | 'notifications' | 'changelog' | 'docs' | 'settings' | 'appearance' | 'tabs' | 'authenticator';
 export type ExternalEditorEdition = 'stable' | 'insiders' | 'portable' | 'unknown';
 
 export interface ExternalEditorPreference {
@@ -274,7 +274,7 @@ export const externalEditorPreferenceSchema = z.strictObject({
 
 export const externalEditorOpenRequestSchema = z.strictObject({
   editor: z.literal('vscode'),
-  recordKind: z.enum(['catalog', 'installed', 'activity', 'notifications', 'changelog', 'docs', 'settings', 'appearance', 'tabs', 'authenticator']),
+  recordKind: z.enum(['catalog', 'installed', 'activity', 'history-revisions', 'notifications', 'changelog', 'docs', 'settings', 'appearance', 'tabs', 'authenticator']),
   suggestedName: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,96}$/).refine((value) => !value.includes('..'), 'Suggested filename cannot contain repeated dots.'),
   mime: z.enum(['application/json', 'application/x-ndjson', 'application/yaml', 'application/toml', 'application/xml', 'text/csv', 'text/tab-separated-values', 'text/markdown', 'text/html', 'application/sql', 'text/x-typescript', 'text/javascript', 'text/x-python', 'text/x-go', 'text/x-rustsrc', 'application/schema+json', 'text/x-protobuf', 'text/plain']),
   content: z.string().max(256_000),

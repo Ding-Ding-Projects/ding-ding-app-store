@@ -1,4 +1,5 @@
 export type HistoryDatePreset = 'all' | 'today' | '7d' | '30d';
+export type HistoryDateLanguage = 'en' | 'yue' | 'bilingual';
 
 export type HistoryDateRange = {
   start: string;
@@ -16,7 +17,7 @@ export function dateKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
-export function parseHistoryDate(value: string, language: 'en' | 'yue' = 'en'): number | null {
+export function parseHistoryDate(value: string, language: HistoryDateLanguage = 'en'): number | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
   const iso = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -25,16 +26,24 @@ export function parseHistoryDate(value: string, language: 'en' | 'yue' = 'en'): 
   if (slash) {
     const first = Number(slash[1]);
     const second = Number(slash[2]);
-    const month = language === 'yue' ? second : first;
-    const day = language === 'yue' ? first : second;
-    return validDate(Number(slash[3]), month, day)?.getTime() ?? Number.NaN;
+    const year = Number(slash[3]);
+    const english = validDate(year, first, second);
+    const cantonese = validDate(year, second, first);
+    if (language === 'yue') return cantonese?.getTime() ?? Number.NaN;
+    if (language === 'bilingual') {
+      // Bilingual mode accepts either common order. When both are valid, keep
+      // the English-first interpretation deterministic; ISO remains available
+      // whenever the user wants to remove that ambiguity.
+      return (second > 12 ? english : first > 12 ? cantonese : english ?? cantonese)?.getTime() ?? Number.NaN;
+    }
+    return english?.getTime() ?? Number.NaN;
   }
   if (/^\d{1,4}([-/]\d{0,2})?$/.test(trimmed)) return Number.NaN;
   const parsed = Date.parse(trimmed);
   return Number.isFinite(parsed) ? parsed : Number.NaN;
 }
 
-export function resolveHistoryDateRange(start: string, end: string, language: 'en' | 'yue' = 'en'): HistoryDateRange {
+export function resolveHistoryDateRange(start: string, end: string, language: HistoryDateLanguage = 'en'): HistoryDateRange {
   const startTime = parseHistoryDate(start, language);
   const endTime = parseHistoryDate(end, language);
   if (Number.isNaN(startTime)) return { start, end, error: 'Start date is incomplete or invalid. Your typed value was kept.' };
@@ -43,7 +52,7 @@ export function resolveHistoryDateRange(start: string, end: string, language: 'e
   return { start, end, error: '' };
 }
 
-export function matchesHistoryDate(occurredAt: string, range: HistoryDateRange, language: 'en' | 'yue' = 'en'): boolean {
+export function matchesHistoryDate(occurredAt: string, range: HistoryDateRange, language: HistoryDateLanguage = 'en'): boolean {
   if (range.error) return false;
   const occurred = new Date(occurredAt).getTime();
   if (!Number.isFinite(occurred)) return false;

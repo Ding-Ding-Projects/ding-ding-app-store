@@ -76,8 +76,15 @@
   .history-row p { margin: 6px 0 0; color: var(--outline); overflow-wrap: anywhere; }
   .history-revisions { margin: 18px 0; padding: 14px; border: 1px solid color-mix(in srgb, var(--outline) 32%, transparent); border-radius: 18px; background: var(--surface-container-low); }
   .history-revisions > summary { cursor: pointer; font-weight: 750; }
+  .revision-bulk-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 14px; padding: 10px; border-radius: 12px; background: var(--surface-container-high); }
+  .revision-bulk-toolbar strong { margin-right: auto; }
+  .revision-bulk-toolbar label { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+  .revision-bulk-toolbar select { min-height: 40px; padding: 7px 10px; border: 1px solid var(--outline); border-radius: 10px; color: inherit; background: var(--surface); font: inherit; }
   .revision-list { display: grid; gap: 10px; margin: 14px 0 0; padding: 0; list-style: none; }
-  .revision-row { display: grid; gap: 8px; padding: 12px; border: 1px solid color-mix(in srgb, var(--outline) 24%, transparent); border-radius: 14px; background: var(--surface-container); }
+  .revision-row { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 12px; padding: 12px; border: 1px solid color-mix(in srgb, var(--outline) 24%, transparent); border-radius: 14px; background: var(--surface-container); }
+  .revision-row.selected { outline: 2px solid var(--primary); outline-offset: 2px; }
+  .revision-row > .revision-actions, .revision-row > .revision-diff, .revision-row > .revision-label-form { grid-column: 1 / -1; }
+  .revision-row .selection-check { align-self: start; min-height: 44px; }
   .revision-copy { display: grid; gap: 4px; min-width: 0; }
   .revision-copy span, .revision-copy small { color: var(--outline); overflow-wrap: anywhere; }
   .revision-actions { display: flex; flex-wrap: wrap; gap: 8px; }

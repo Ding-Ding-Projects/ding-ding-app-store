@@ -6,6 +6,9 @@ describe('history date filter', () => {
     expect(Number.isFinite(parseHistoryDate('2026-08-08'))).toBe(true);
     expect(Number.isFinite(parseHistoryDate('08/08/2026'))).toBe(true);
     expect(Number.isFinite(parseHistoryDate('08/08/2026', 'yue'))).toBe(true);
+    expect(parseHistoryDate('13/08/2026', 'bilingual')).toBe(parseHistoryDate('13/08/2026', 'yue'));
+    expect(parseHistoryDate('08/13/2026', 'bilingual')).toBe(parseHistoryDate('08/13/2026', 'en'));
+    expect(parseHistoryDate('08/08/2026', 'bilingual')).toBe(parseHistoryDate('08/08/2026', 'en'));
     expect(Number.isNaN(parseHistoryDate('2026-02'))).toBe(true);
     expect(Number.isNaN(parseHistoryDate('2026-02-31'))).toBe(true);
   });

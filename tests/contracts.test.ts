@@ -246,7 +246,7 @@ describe('split renderer keeps every product contract in its own file', () => {
 
   it('keeps the activity filters, search, and export controls on the activity page', async () => {
     const activity = await read('src/renderer/pages/ActivityPage.tsx');
-    expect(activity).toContain('Search activity by app, action, or message');
+    expect(activity).toContain('Search activity and local versions');
     expect(activity).toContain('const actionKinds = useMemo');
     expect(activity).toContain('const actionCounts = useMemo');
     expect(activity).toContain('choose one or more');
@@ -334,7 +334,7 @@ describe('activity history and export', () => {
   it('renders real activity with search, action/result/date filters, and export controls', async () => {
     const app = await readRendererSources();
     expect(app).toMatch(/function (HistoryPanel|ActivityPage)\(/);
-    expect(app).toContain("Search activity by app, action, or message");
+    expect(app).toContain("Search activity and local versions");
     expect(app).toContain('const actionKinds = useMemo');
     expect(app).toContain('const actionCounts = useMemo');
     expect(app).toContain("'all', 'ok', 'failed'");

@@ -215,7 +215,7 @@ describe('global renderer UI completion', () => {
 
   it('routes every Activity control and state label through the persisted language mode', async () => {
     const activity = await read('src/renderer/pages/ActivityPage.tsx');
-    expect(activity).toContain("placeholder={label(settings, 'Search activity by app, action, or message'");
+    expect(activity).toContain("placeholder={label(settings, 'Search activity and local versions'");
     expect(activity).toContain("label(settings, 'Filter by result', '按結果篩選')");
     expect(activity).toContain("label(settings, 'Filter by date', '按日期篩選')");
     expect(activity).toContain("label(settings, 'Select all shown', '揀晒目前顯示')");

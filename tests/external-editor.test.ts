@@ -59,6 +59,8 @@ describe('external editor and export boundary', () => {
 
   it('accepts only typed, bounded export metadata', () => {
     expect(externalEditorOpenRequestSchema.safeParse({ editor: 'vscode', recordKind: 'settings', suggestedName: 'settings.json', mime: 'application/json', content: '{"schemaVersion":1}' }).success).toBe(true);
+    expect(externalEditorOpenRequestSchema.safeParse({ editor: 'vscode', recordKind: 'history-revisions', suggestedName: 'ding-ding-app-store-history-revisions.json', mime: 'application/json', content: '{"schemaVersion":1,"kind":"history-revisions","records":[]}' }).success).toBe(true);
+    expect(externalEditorOpenRequestSchema.safeParse({ editor: 'vscode', recordKind: 'history-revision', suggestedName: 'history.json', mime: 'application/json', content: '{}' }).success).toBe(false);
     expect(externalEditorOpenRequestSchema.safeParse({ editor: 'vscode', recordKind: 'settings', suggestedName: '../settings.json', mime: 'application/json', content: '{}' }).success).toBe(false);
     expect(externalEditorOpenRequestSchema.safeParse({ editor: 'vscode', recordKind: 'settings', suggestedName: 'settings.json', mime: 'application/json', content: 'x'.repeat(256_001) }).success).toBe(false);
     expect(externalEditorOpenRequestSchema.safeParse({ editor: 'vscode', recordKind: 'settings', suggestedName: 'settings.json', mime: 'application/json', content: '{}', executable: 'cmd.exe' }).success).toBe(false);
@@ -108,6 +110,8 @@ describe('external editor and export boundary', () => {
       message: 'Installed successfully.', occurredAt: '2026-08-08T16:00:00.000Z',
     }]);
     try {
+      const openedRevision = await service.openExport({ editor: 'vscode', recordKind: 'history-revisions', suggestedName: 'ding-ding-app-store-history-revisions.json', mime: 'application/json', content: '{"schemaVersion":1,"kind":"history-revisions","records":[]}' });
+      expect(openedRevision).toEqual({ ok: true, editor: 'vscode' });
       const archiveRoot = `${electronDataRoot}\\direct`;
       const { mkdir, writeFile } = await import('node:fs/promises');
       await mkdir(archiveRoot, { recursive: true });

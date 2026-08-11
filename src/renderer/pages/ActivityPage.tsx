@@ -12,14 +12,23 @@ import { isExternalEditorBridgeAvailable, openArchiveInVsCode, openExportInVsCod
 import type { Notify } from '../notify';
 import { dateKey, matchesHistoryDate, presetRange, resolveHistoryDateRange } from '../history-date-filter';
 import { DestructiveConfirmDialog } from '../components/DestructiveConfirmDialog';
+import { exportHistoryRevisions, HISTORY_REVISION_EXPORT_FORMATS, type HistoryRevisionExportFormat } from '../history-revision-export';
+import { filterHistoryRevisions, historyMutationMessage, invertRevisionSelection, selectRevisionRange } from '../history-revisions';
 
 type HistoryResult = 'all' | 'ok' | 'failed';
 
 function historyDateError(settings: UserSettings, error: string): string {
-  if (!error || settings.language === 'en') return error;
-  if (error.startsWith('Start date must be before')) return '開始日期要早過結束日期；你輸入嘅內容保留返。';
-  if (error.startsWith('Start date')) return '開始日期未完整或者無效；你輸入嘅內容保留返。';
-  return '結束日期未完整或者無效；你輸入嘅內容保留返。';
+  if (!error) return error;
+  if (error.startsWith('Start date must be before')) return label(settings, 'Start date must be before the end date. Your typed values were kept.', '開始日期要早過結束日期；你輸入嘅內容保留返。');
+  if (error.startsWith('Start date')) return label(settings, 'Start date is incomplete or invalid. Your typed value was kept.', '開始日期未完整或者無效；你輸入嘅內容保留返。');
+  return label(settings, 'End date is incomplete or invalid. Your typed value was kept.', '結束日期未完整或者無效；你輸入嘅內容保留返。');
+}
+
+function revisionFailure(settings: UserSettings, fallbackEnglish: string, fallbackCantonese: string, detail?: unknown): string {
+  const raw = detail instanceof Error && detail.message ? detail.message : typeof detail === 'string' ? detail : '';
+  if (settings.language === 'en') return raw || fallbackEnglish;
+  if (settings.language === 'yue') return raw ? `${fallbackCantonese}（${raw}）` : fallbackCantonese;
+  return raw ? `${fallbackEnglish} · ${fallbackCantonese} (${raw})` : `${fallbackEnglish} · ${fallbackCantonese}`;
 }
 
 export function ActivityPage({ entries, revisions, loading, settings, openRegex, onRegexHandled, notify, onHistoryChanged }: {
@@ -41,9 +50,14 @@ export function ActivityPage({ entries, revisions, loading, settings, openRegex,
   const [restoreRevision, setRestoreRevision] = useState<HistoryRevision | null>(null);
   const [labelRevision, setLabelRevision] = useState<HistoryRevision | null>(null);
   const [labelDraft, setLabelDraft] = useState('');
+  const [selectedRevisions, setSelectedRevisions] = useState<Set<string>>(() => new Set());
+  const [revisionExportBusy, setRevisionExportBusy] = useState<HistoryRevisionExportFormat | null>(null);
+  const [revisionEditorBusy, setRevisionEditorBusy] = useState(false);
+  const [revisionExportFormat, setRevisionExportFormat] = useState<HistoryRevisionExportFormat>('json');
   const lastSelected = useRef<number | null>(null);
+  const lastSelectedRevision = useRef<string | null>(null);
   const matcher = useMemo(() => makeMatcher(search.state), [search.state]);
-  const dateRange = useMemo(() => resolveHistoryDateRange(dateStart, dateEnd, settings.language === 'yue' ? 'yue' : 'en'), [dateStart, dateEnd, settings.language]);
+  const dateRange = useMemo(() => resolveHistoryDateRange(dateStart, dateEnd, settings.language), [dateStart, dateEnd, settings.language]);
   const calendarDays = useMemo(() => {
     const [year, month] = calendarMonth.split('-').map(Number);
     const first = new Date(year, month - 1, 1);
@@ -75,15 +89,26 @@ export function ActivityPage({ entries, revisions, loading, settings, openRegex,
     let source = entries;
     if (kinds.size) source = source.filter((entry) => kinds.has(entry.kind));
     if (result !== 'all') source = source.filter((entry) => (result === 'ok' ? entry.ok : !entry.ok));
-    source = source.filter((entry) => matchesHistoryDate(entry.occurredAt, dateRange, settings.language === 'yue' ? 'yue' : 'en'));
+    source = source.filter((entry) => matchesHistoryDate(entry.occurredAt, dateRange, settings.language));
     return source.filter((entry) => matcher(`${entry.displayName}\n${entry.kind}\n${entry.message}`));
   }, [entries, kinds, result, dateRange, matcher, settings.language]);
   useEffect(() => {
     const ids = new Set(entries.map((entry) => entry.id));
     setSelected((current) => new Set([...current].filter((id) => ids.has(id))));
   }, [entries]);
+  const filteredRevisions = useMemo(() => filterHistoryRevisions(revisions, matcher, dateRange, settings.language), [revisions, dateRange, matcher, settings.language]);
+  useEffect(() => {
+    const ids = new Set(revisions.map((revision) => revision.id));
+    setSelectedRevisions((current) => new Set([...current].filter((id) => ids.has(id))));
+    if (lastSelectedRevision.current !== null && !ids.has(lastSelectedRevision.current)) lastSelectedRevision.current = null;
+  }, [revisions]);
+  useEffect(() => {
+    if (lastSelectedRevision.current !== null && !filteredRevisions.some((revision) => revision.id === lastSelectedRevision.current)) lastSelectedRevision.current = null;
+  }, [filteredRevisions]);
   const selectedEntries = filtered.filter((entry) => selected.has(entry.id));
   const exportEntries = selectedEntries.length ? selectedEntries : filtered;
+  const selectedRevisionRows = filteredRevisions.filter((revision) => selectedRevisions.has(revision.id));
+  const revisionsToExport = selectedRevisionRows.length ? selectedRevisionRows : filteredRevisions;
 
   const runExport = async () => {
     const definition = historyExportFormat(exportFormat);
@@ -143,6 +168,43 @@ export function ActivityPage({ entries, revisions, loading, settings, openRegex,
     lastSelected.current = index;
   };
 
+  const selectRevisionAt = (index: number, checked: boolean, shiftKey: boolean) => {
+    setSelectedRevisions((current) => selectRevisionRange(filteredRevisions, current, index, checked, shiftKey ? lastSelectedRevision.current : null));
+    lastSelectedRevision.current = filteredRevisions[index]?.id ?? null;
+  };
+
+  const runRevisionExport = () => {
+    if (!revisionsToExport.length) return;
+    setRevisionExportBusy(revisionExportFormat);
+    try {
+      const content = exportHistoryRevisions(revisionsToExport, revisionExportFormat);
+      const extension = revisionExportFormat === 'json' ? 'json' : 'md';
+      const mime = revisionExportFormat === 'json' ? 'application/json' : 'text/markdown';
+      downloadText(`ding-ding-app-store-history-revisions.${extension}`, content, mime);
+      notify({ ok: true, message: label(settings, `Exported ${revisionsToExport.length} local version metadata records as ${revisionExportFormat.toUpperCase()}.`, `用 ${revisionExportFormat.toUpperCase()} 匯出咗 ${revisionsToExport.length} 筆本機版本 metadata。`) });
+    } catch (error) {
+      notify({ ok: false, message: revisionFailure(settings, 'The local version metadata export could not be written.', '本機版本 metadata 匯出唔成功。', error) });
+    } finally {
+      setRevisionExportBusy(null);
+    }
+  };
+
+  const openRevisionExportInCode = async () => {
+    if (!revisionsToExport.length || revisionEditorBusy) return;
+    setRevisionEditorBusy(true);
+    try {
+      const content = exportHistoryRevisions(revisionsToExport, revisionExportFormat);
+      const extension = revisionExportFormat === 'json' ? 'json' : 'md';
+      const mime = revisionExportFormat === 'json' ? 'application/json' : 'text/markdown';
+      const result = await openExportInVsCode({ recordKind: 'history-revisions', suggestedName: `ding-ding-app-store-history-revisions.${extension}`, mime, content });
+      notify({ ok: result.ok, message: result.ok ? label(settings, `Opened ${revisionsToExport.length} local version metadata records in Visual Studio Code.`, `已經喺 Visual Studio Code 開咗 ${revisionsToExport.length} 筆本機版本 metadata。`) : revisionFailure(settings, 'The local version metadata could not be opened in Visual Studio Code.', '本機版本 metadata 無法喺 Visual Studio Code 開啟。', result.message) });
+    } catch (error) {
+      notify({ ok: false, message: revisionFailure(settings, 'The local version metadata could not be opened in Visual Studio Code.', '本機版本 metadata 無法喺 Visual Studio Code 開啟。', error) });
+    } finally {
+      setRevisionEditorBusy(false);
+    }
+  };
+
   const showDiff = async (revision: HistoryRevision) => {
     if (revisionDiffs[revision.id] !== undefined) {
       setRevisionDiffs((current) => { const next = { ...current }; delete next[revision.id]; return next; });
@@ -151,8 +213,8 @@ export function ActivityPage({ entries, revisions, loading, settings, openRegex,
     setRevisionBusy(revision.id);
     try {
       const value = await window.dingDingStore.history.diff(revision.id);
-      setRevisionDiffs((current) => ({ ...current, [revision.id]: value || 'No textual state changes in this revision.' }));
-    } catch (error) { notify({ ok: false, message: (error as Error).message }); }
+      setRevisionDiffs((current) => ({ ...current, [revision.id]: value || label(settings, 'No textual state changes in this revision.', '呢個版本冇文字狀態變更。') }));
+    } catch (error) { notify({ ok: false, message: revisionFailure(settings, 'The local version diff could not be loaded.', '本機版本差異無法載入。', error) }); }
     finally { setRevisionBusy(null); }
   };
 
@@ -161,9 +223,9 @@ export function ActivityPage({ entries, revisions, loading, settings, openRegex,
     setRevisionBusy(labelRevision.id);
     try {
       const result = await window.dingDingStore.history.label(labelRevision.id, labelDraft);
-      notify(result);
+      notify({ ok: result.ok, message: historyMutationMessage(settings, 'label', labelRevision, labelDraft, result) });
       if (result.ok) { setLabelRevision(null); setLabelDraft(''); await onHistoryChanged(); }
-    } catch (error) { notify({ ok: false, message: (error as Error).message }); }
+    } catch (error) { notify({ ok: false, message: revisionFailure(settings, 'The local version label could not be saved.', '本機版本標籤儲存唔成功。', error) }); }
     finally { setRevisionBusy(null); }
   };
 
@@ -172,9 +234,9 @@ export function ActivityPage({ entries, revisions, loading, settings, openRegex,
     setRevisionBusy(restoreRevision.id);
     try {
       const result = await window.dingDingStore.history.restore(restoreRevision.id);
-      notify(result);
+      notify({ ok: result.ok, message: historyMutationMessage(settings, 'restore', restoreRevision, restoreRevision.label, result) });
       if (result.ok) await onHistoryChanged();
-    } catch (error) { notify({ ok: false, message: (error as Error).message }); }
+    } catch (error) { notify({ ok: false, message: revisionFailure(settings, 'The local version could not be restored.', '本機版本還原唔成功。', error) }); }
     finally { setRevisionBusy(null); setRestoreRevision(null); }
   };
 
@@ -197,7 +259,7 @@ export function ActivityPage({ entries, revisions, loading, settings, openRegex,
   };
 
   return <>
-    <SearchBox surface="activity" settings={settings} placeholder={label(settings, 'Search activity by app, action, or message', '按 app、動作或者訊息搵操作記錄')} openBuilder={openRegex} onBuilderHandled={onRegexHandled} />
+    <SearchBox surface="activity" settings={settings} placeholder={label(settings, 'Search activity and local versions', '搜尋操作記錄同本機版本')} openBuilder={openRegex} onBuilderHandled={onRegexHandled} />
     <section className="history-panel">
         <div className="chip-row" role="group" aria-label={label(settings, 'Filter by action; choose one or more', '按動作篩選；可以揀一個或多個')}>
           <button aria-pressed={!kinds.size} onClick={() => setKinds(new Set())}>{label(settings, 'All actions', '全部動作')} ({entries.length})</button>
@@ -226,14 +288,24 @@ export function ActivityPage({ entries, revisions, loading, settings, openRegex,
       </details>
       <div className="chip-row" role="group" aria-label={label(settings, 'Filter by date', '按日期篩選')}>{(['all', 'today', '7d', '30d'] as const).map((value) => <button key={value} aria-pressed={preset === value} onClick={() => setPresetAndRange(value)}>{value === 'all' ? label(settings, 'All time', '全部時間') : value === 'today' ? label(settings, 'Today', '今日') : value === '7d' ? label(settings, '7 days', '七日') : label(settings, '30 days', '三十日')}</button>)}</div>
       <details className="history-revisions" open={revisions.length > 0}>
-        <summary>{label(settings, 'Local versions', '本機版本')} ({revisions.length})</summary>
-        <p className="supporting">{label(settings, 'These versions contain App Store-owned settings, installed records, workspace tabs, appearance, schedules, run metadata, and external-editor preference. Credentials, secrets, staged update paths, and user project files are excluded. Restore creates a new revision; it never rewrites local history.', '呢啲版本包括 App Store 自己嘅設定、已安裝記錄、工作區分頁、外觀、排程、執行資料同外部編輯器偏好。憑證、秘密、更新暫存路徑同你嘅專案檔案唔會包括。還原會新增版本，唔會改寫本機歷史。')}</p>
-        {revisions.length ? <ol className="revision-list">{revisions.map((revision) => <li key={revision.id} className="revision-row">
-          <div className="revision-copy"><strong>{revision.label}</strong><span>{new Date(revision.occurredAt).toLocaleString()} · <code>{revision.id.slice(0, 12)}</code></span><small>{revision.changedFiles.length ? revision.changedFiles.join(', ') : label(settings, 'No tracked file delta', '冇追蹤檔案變更')}</small></div>
-          <div className="revision-actions"><button className="text-button" aria-label={label(settings, `${revisionDiffs[revision.id] === undefined ? 'View' : 'Hide'} diff for ${revision.label}`, `${revisionDiffs[revision.id] === undefined ? '查看' : '隱藏'}「${revision.label}」嘅差異`)} disabled={revisionBusy === revision.id} onClick={() => void showDiff(revision)}>{revisionDiffs[revision.id] === undefined ? label(settings, 'View diff', '查看差異') : label(settings, 'Hide diff', '隱藏差異')}</button><button className="text-button" aria-label={label(settings, `Label revision ${revision.label}`, `標籤版本「${revision.label}」`)} disabled={!revision.restorable || revisionBusy === revision.id} onClick={() => { setLabelRevision(revision); setLabelDraft(revision.label); }}>{label(settings, 'Label', '標籤')}</button><button className="text-button" aria-label={label(settings, `Restore revision ${revision.label}`, `還原版本「${revision.label}」`)} disabled={!revision.restorable || revisionBusy === revision.id} onClick={() => setRestoreRevision(revision)}>{label(settings, 'Restore', '還原')}</button></div>
+        <summary>{label(settings, 'Local versions', '本機版本')} ({filteredRevisions.length} / {revisions.length})</summary>
+        <p className="supporting">{label(settings, 'These versions contain App Store-owned settings, installed records, workspace tabs, appearance, schedules, run metadata, and external-editor preference. Credentials, secrets, staged update paths, and user project files are excluded. The Activity search and date filters apply here too. Restore creates a new revision; it never rewrites local history.', '呢啲版本包括 App Store 自己嘅設定、已安裝記錄、工作區分頁、外觀、排程、執行資料同外部編輯器偏好。憑證、秘密、更新暫存路徑同你嘅專案檔案唔會包括。操作記錄嘅搜尋同日期篩選亦會套用喺度。還原會新增版本，唔會改寫本機歷史。')}</p>
+        <div className="revision-bulk-toolbar" aria-label={label(settings, 'Local version bulk actions', '本機版本批量操作')}>
+          <strong aria-live="polite">{label(settings, `${selectedRevisionRows.length} selected · ${filteredRevisions.length} shown · ${revisions.length} total`, `揀咗 ${selectedRevisionRows.length} · 顯示 ${filteredRevisions.length} · 總共 ${revisions.length}`)}</strong>
+          <button type="button" className="text-button" disabled={!filteredRevisions.length} onClick={() => setSelectedRevisions((current) => new Set([...current, ...filteredRevisions.map((revision) => revision.id)]))}>{label(settings, 'Select all shown', '揀晒目前顯示')}</button>
+          <button type="button" className="text-button" disabled={!filteredRevisions.length} onClick={() => setSelectedRevisions((current) => invertRevisionSelection(filteredRevisions, current))}>{label(settings, 'Invert shown', '反轉目前顯示')}</button>
+          <button type="button" className="text-button" disabled={!selectedRevisions.size} onClick={() => { setSelectedRevisions(new Set()); lastSelectedRevision.current = null; }}>{label(settings, 'Clear', '清除')}</button>
+          <label>{label(settings, 'Revision export format', '版本輸出格式')}<select aria-label={label(settings, 'Revision export format', '版本輸出格式')} value={revisionExportFormat} onChange={(event) => setRevisionExportFormat(event.target.value as HistoryRevisionExportFormat)}>{HISTORY_REVISION_EXPORT_FORMATS.map((format) => <option key={format} value={format}>{format === 'json' ? 'JSON' : 'Markdown'}</option>)}</select></label>
+          <button type="button" className="text-button" disabled={revisionExportBusy !== null || !revisionsToExport.length} onClick={runRevisionExport}><Icon>download</Icon>{revisionExportBusy ? label(settings, 'Exporting…', '匯出緊…') : label(settings, 'Export versions', '匯出版本')}</button>
+          <button type="button" className="text-button" disabled={revisionEditorBusy || !revisionsToExport.length || !isExternalEditorBridgeAvailable()} title={isExternalEditorBridgeAvailable() ? undefined : label(settings, 'Unavailable: this build has no reviewed Visual Studio Code adapter.', '未能使用：呢個版本冇已審核嘅 Visual Studio Code adapter。')} onClick={() => void openRevisionExportInCode()}><Icon>code</Icon>{revisionEditorBusy ? label(settings, 'Opening…', '開緊…') : isExternalEditorBridgeAvailable() ? label(settings, 'Open versions in VS Code', '喺 VS Code 開版本') : label(settings, 'VS Code unavailable', 'VS Code 未能使用')}</button>
+        </div>
+        {revisions.length ? filteredRevisions.length ? <ol className="revision-list">{filteredRevisions.map((revision, index) => <li key={revision.id} className={`revision-row${selectedRevisions.has(revision.id) ? ' selected' : ''}`}>
+          <label className="selection-check"><input type="checkbox" checked={selectedRevisions.has(revision.id)} onClick={(event) => selectRevisionAt(index, event.currentTarget.checked, event.shiftKey)} onChange={() => undefined} /><span className="visually-hidden">{label(settings, `Select local version ${revision.label}`, `揀選本機版本「${revision.label}」`)}</span></label>
+          <div className="revision-copy"><strong>{revision.label}</strong><span>{new Date(revision.occurredAt).toLocaleString(settings.language === 'yue' ? 'zh-HK' : 'en-CA')} · <code>{revision.id.slice(0, 12)}</code></span><small>{revision.changedFiles.length ? revision.changedFiles.join(', ') : label(settings, 'No tracked file delta', '冇追蹤檔案變更')}</small></div>
+          <div className="revision-actions"><button type="button" className="text-button" aria-label={label(settings, `${revisionDiffs[revision.id] === undefined ? 'View' : 'Hide'} diff for ${revision.label}`, `${revisionDiffs[revision.id] === undefined ? '查看' : '隱藏'}「${revision.label}」嘅差異`)} disabled={revisionBusy === revision.id} onClick={() => void showDiff(revision)}>{revisionDiffs[revision.id] === undefined ? label(settings, 'View diff', '查看差異') : label(settings, 'Hide diff', '隱藏差異')}</button><button type="button" className="text-button" aria-label={label(settings, `Label revision ${revision.label}`, `標籤版本「${revision.label}」`)} disabled={!revision.restorable || revisionBusy === revision.id} onClick={() => { setLabelRevision(revision); setLabelDraft(revision.label); }}>{label(settings, 'Label', '標籤')}</button><button type="button" className="text-button" aria-label={label(settings, `Restore revision ${revision.label}`, `還原版本「${revision.label}」`)} disabled={!revision.restorable || revisionBusy === revision.id} onClick={() => setRestoreRevision(revision)}>{label(settings, 'Restore', '還原')}</button></div>
           {revisionDiffs[revision.id] !== undefined && <pre className="revision-diff" aria-label={label(settings, `Diff for ${revision.label}`, `「${revision.label}」嘅差異`)}>{revisionDiffs[revision.id]}</pre>}
           {labelRevision?.id === revision.id && <form className="revision-label-form" onSubmit={(event) => { event.preventDefault(); void saveRevisionLabel(); }}><label>{label(settings, 'Revision label', '版本標籤')}<input autoFocus maxLength={80} value={labelDraft} onChange={(event) => setLabelDraft(event.target.value)} /></label><button className="filled-button" disabled={revisionBusy === revision.id || !labelDraft.trim()} type="submit">{label(settings, 'Save label', '儲存標籤')}</button><button className="text-button" type="button" onClick={() => setLabelRevision(null)}>{label(settings, 'Cancel', '取消')}</button></form>}
-        </li>)}</ol> : <p className="empty-state compact">{label(settings, 'No local snapshots yet. A successful App Store operation creates the first version.', '仲未有本機快照。App Store 操作成功後會建立第一個版本。')}</p>}
+        </li>)}</ol> : <div className="empty-state compact"><Icon>search_off</Icon><p>{label(settings, 'No local versions match the current search or date filters.', '冇本機版本符合目前嘅搜尋或者日期篩選。')}</p></div> : <p className="empty-state compact">{label(settings, 'No local snapshots yet. A successful App Store operation creates the first version.', '仲未有本機快照。App Store 操作成功後會建立第一個版本。')}</p>}
       </details>
       <div className="card-actions">
         <button className="text-button" disabled={copyBusy} onClick={() => void copyJson()}><Icon>content_copy</Icon>{copyBusy ? label(settings, 'Copying…', '複製緊…') : label(settings, 'Copy JSON', '複製 JSON')}</button>

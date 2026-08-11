@@ -6,6 +6,12 @@
 - The typed shared contract, preload validator, metadata-only export omission list, Authenticator page copy, README, ROADMAP, canonical memory-sync article, and generated documentation are updated together. QR image/clipboard/camera import, deliberate secret export, stable groups, shift-range selection, and protected authenticator history remain explicitly deferred.
 - Focused verification so far: authenticator registration/management/authenticator tests 41/41; main and renderer TypeScript checks green. Full repository Chuts, docs generation/check, build, commit, dew, and cloud release evidence remain pending for this slice.
 
+## 2026-08-11 Local versions revision parity
+
+- The Local versions browser now shares Activity search/date projection, keeps version selection independent from operation rows, supports click plus Shift-range selection, visible-scope select-all/invert/clear, and reports selected/shown/total counts.
+- Selected versions or the filtered view export as metadata-only JSON or Markdown under `ding-ding-app-store.history-revisions.v1`; each document declares UTF-8/LF and omits snapshot bytes, credentials, and secrets. The reviewed Visual Studio Code bridge accepts the typed `history-revisions` record kind. Restore remains a single-target destructive-confirmed action.
+- Focused verification is tracked in `tests/history-revisions.test.ts` alongside history/UI contracts. Packaged Local versions capture remains unclaimed because the sanctioned hidden-desktop capture route is unavailable.
+
 ## 2026-08-11 crash-recoverable history restore transaction
 
 - Restore now stages all seven state files plus their prior bytes beneath a fixed application-data `restore-transaction` journal. Staged files and the manifest are flushed before replacement; an `applying`/`applied`/`recording`/rollback-phase journal left by an interrupted process is recovered on startup before state services read application data. The recording phase carries the exact expected restore commit subject, so startup keeps applied bytes only when that commit is present; otherwise it rolls them back. Invalid, oversized, duplicate, or non-allowlisted manifest entries fail closed, and normal completion removes the journal after the restore revision is recorded.
