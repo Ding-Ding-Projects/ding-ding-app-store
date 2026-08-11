@@ -90,9 +90,15 @@ npm install
 npm run check
 npm run build
 npm run dist
+# Fresh-machine, no-prompt build
+build.bat /s
+# Fresh-machine, unsigned Squirrel.Windows installer
+build-installer.bat /s
 ```
 
 The application uses Squirrel.Windows. A successful package must contain `Setup.exe`, `RELEASES`, and a full `.nupkg`, and the executable must be verified as unsigned.
+
+`build.bat` and `build-installer.bat` install or reuse Node.js 22 in a user-scoped location, use the locked `npm ci` path, and accept `/s`, `--silent`, or `SILENT=1` for automation. The installer script writes `release/local-installer-manifest.json` with the source commit, artifact sizes, and SHA-256 digests. It never publishes a release, pushes a tag, or invokes code signing.
 
 The tab rail is a real persisted workspace: it defaults to the left edge but can dock to any edge, keeps pinned tabs protected, gives every strip/group/group-name/master search its own regex builder state, and previews **Close tabs containing text** / **Close tabs not containing text** before a second confirmation click. Closed tabs remain recoverable from the tab-actions panel; the final open tab cannot be closed.
 
