@@ -390,5 +390,6 @@ describe('main-process restricted capability seam', () => {
     expect(source).toContain('discardPairing');
     expect(source).toContain('confirmingRegistrationId');
     expect(source).toContain('disabled={!confirmationCode || confirmingRegistrationId === preview.registrationId}');
+    expect(source).toContain("setPreview(next);\n    setConfirmationCode('');\n    setShowSecret(false);");
   });
 });
