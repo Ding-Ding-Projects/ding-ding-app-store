@@ -326,13 +326,21 @@ void app.whenReady().then(async () => {
   ipcMain.handle('history:label', (event, revisionId: unknown, requestedLabel: unknown) => event.sender === mainWindow?.webContents && typeof revisionId === 'string' && typeof requestedLabel === 'string'
     ? stateMutationQueue.run(() => history.label(revisionId, requestedLabel))
     : { ok: false, message: 'Blocked local history label request from an unknown renderer.' });
-  ipcMain.handle('history:restore', (event, revisionId: unknown) => event.sender === mainWindow?.webContents && typeof revisionId === 'string'
-    ? stateMutationQueue.run(async () => {
-      const result = await history.restore(revisionId);
-      if (result.ok) await scheduler.reloadFromDisk();
-      return result;
-    })
-    : { ok: false, message: 'Blocked local history restore request from an unknown renderer.' });
+  ipcMain.handle('history:restore', (event, revisionId: unknown) => {
+    if (event.sender !== mainWindow?.webContents || typeof revisionId !== 'string') {
+      return { ok: false, message: 'Blocked local history restore request from an unknown renderer.' };
+    }
+    const barrier = stateMutationQueue.beginBarrier();
+    return stateMutationQueue.runBarrier(async () => {
+      try {
+        const result = await history.restore(revisionId);
+        if (result.ok) await scheduler.reloadFromDisk();
+        return result;
+      } finally {
+        stateMutationQueue.endBarrier(barrier);
+      }
+    });
+  });
   ipcMain.handle('workspace:load', () => workspace.load());
   ipcMain.handle('workspace:save', (_event, value: TabWorkspace) => stateMutationQueue.run(() => workspace.save(value)));
   ipcMain.handle('workspace:reset', () => stateMutationQueue.run(() => workspace.reset()));

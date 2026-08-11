@@ -97,6 +97,11 @@ export function useSchedule(notify: Notify): ScheduleApi {
       setIssues(result.issues);
       notify({ ok: false, message: result.message.slice(0, 200) });
       return false;
+    } catch (error) {
+      const message = (error as Error).message.slice(0, 200);
+      setIssues([]);
+      notify({ ok: false, message: `Schedule was not saved: ${message}` });
+      return false;
     } finally {
       setSaving(false);
     }
@@ -121,6 +126,12 @@ export function useSchedule(notify: Notify): ScheduleApi {
       dirtyRef.current = true;
       setDirty(true);
       notify({ ok: false, message: result.message.slice(0, 200) });
+      return false;
+    } catch (error) {
+      const message = (error as Error).message.slice(0, 200);
+      dirtyRef.current = true;
+      setDirty(true);
+      notify({ ok: false, message: `Schedule was not saved: ${message}` });
       return false;
     } finally {
       setSaving(false);

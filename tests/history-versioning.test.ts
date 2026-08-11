@@ -82,7 +82,9 @@ describe('local history/version browser contract', () => {
     expect(app).toContain('loadInstalled()');
     expect(app).toContain('key={settingsReloadKey}');
     expect(main).toContain('StateMutationQueue');
-    expect(main).toContain("stateMutationQueue.run(async () => {");
+    expect(main).toContain('const barrier = stateMutationQueue.beginBarrier();');
+    expect(main).toContain('stateMutationQueue.runBarrier(async () => {');
+    expect(main).toContain('stateMutationQueue.endBarrier(barrier);');
     expect(main).toContain('scheduler.reloadFromDisk()');
     expect(main).toContain("ipcMain.handle('schedule:load', () => stateMutationQueue.run(() => scheduler.reloadFromDisk()))");
     expect(main).toContain("externalEditor.addValidated()) : null");
