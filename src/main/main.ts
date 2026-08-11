@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, ipcMain, session, shell } from 'electron';
 import squirrelStartup from 'electron-squirrel-startup';
 import { z } from 'zod';
-import type { AuthenticatorPreviewRequest, ElementKey, ElementOverride, ExternalEditorOpenRequest, ExternalEditorPreference, HistoryExportFormat, InstallCancelRequest, LockCredentialRequest, LockSetRequest, LockTarget, OperationRequest, SchoolModeConfigureRequest, SchoolModeCredentialChangeRequest, SchoolModeRenameRequest, SchoolModeToggleRequest, SchoolModeVerifyRequest, SourceJobCancelRequest, SourceJobRequest, SupportTicketCreateRequest, TabWorkspace, UserSettings } from '../shared/contracts.js';
+import type { AuthenticatorListResult, AuthenticatorMutationResult, AuthenticatorPreviewRequest, AuthenticatorPreviewResult, AuthenticatorRegistrationConfirmRequest, AuthenticatorRegistrationPreviewResult, AuthenticatorRegistrationRequest, AuthenticatorStatus, ElementKey, ElementOverride, ExternalEditorOpenRequest, ExternalEditorPreference, HistoryExportFormat, InstallCancelRequest, LockCredentialRequest, LockSetRequest, LockTarget, OperationRequest, SchoolModeConfigureRequest, SchoolModeCredentialChangeRequest, SchoolModeRenameRequest, SchoolModeToggleRequest, SchoolModeVerifyRequest, SourceJobCancelRequest, SourceJobRequest, SupportTicketCreateRequest, TabWorkspace, UserSettings } from '../shared/contracts.js';
 import { AppearanceService } from './appearance-service.js';
 import { CatalogService } from './catalog-service.js';
 import { HistoryService } from './history-service.js';
@@ -23,6 +23,7 @@ import { ExternalScheduledSettingsService } from './external-scheduled-settings-
 import { HomeAssistantVault } from './home-assistant-vault.js';
 import { SchoolModeService } from './school-mode-service.js';
 import { AuthenticatorService } from './authenticator-service.js';
+import { SafeStorageAuthenticatorVault } from './authenticator-vault.js';
 import { LockSupportService } from './lock-support-service.js';
 
 const scheduleTaskSchema = z.enum(['self-update', 'catalog-refresh']);
@@ -31,6 +32,21 @@ const dirname = path.dirname(fileURLToPath(import.meta.url));
 let mainWindow: BrowserWindow | null = null;
 
 if (squirrelStartup) app.quit();
+
+// Keep one main process as the sole writer for application-data records. A
+// second launch activates the existing window instead of racing metadata and
+// ciphertext publication from another process.
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+if (!hasSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  });
+}
 
 function createWindow(): BrowserWindow {
   const window = new BrowserWindow({
@@ -68,6 +84,7 @@ function createWindow(): BrowserWindow {
 }
 
 void app.whenReady().then(async () => {
+  if (!hasSingleInstanceLock) return;
   session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
   session.defaultSession.setPermissionCheckHandler(() => false);
 
@@ -82,14 +99,54 @@ void app.whenReady().then(async () => {
   });
   const settings = new SettingsService(history);
   const schoolMode = new SchoolModeService();
-  const authenticator = new AuthenticatorService();
+  const authenticator = new AuthenticatorService(new SafeStorageAuthenticatorVault());
   const lockSupport = new LockSupportService(history);
   const unsubscribeSchoolMode = schoolMode.subscribe((snapshot) => {
+    authenticator.setRestricted(snapshot.sync.status !== 'ready' || snapshot.state?.enabled === true);
     const contents = mainWindow?.webContents;
     if (!contents || contents.isDestroyed()) return;
     try { contents.send('school-mode:changed', snapshot); } catch { /* Renderer teardown must not stop shared-state observation. */ }
   });
   await schoolMode.start();
+  const authenticatorRestrictedStatus = (): AuthenticatorStatus => ({
+    available: false,
+    vault: 'unavailable',
+    entryCount: 0,
+    checkedAt: new Date().toISOString(),
+    message: 'Authenticator is unavailable while the shared restricted mode is enabled or unavailable.',
+    messageYue: '共享限制模式開啟或不可用時，驗證器暫時唔可用。',
+  });
+  const authenticatorRestrictedPreview = (): AuthenticatorPreviewResult => ({
+    ok: false,
+    storage: 'memory-only',
+    message: 'Authenticator preview is unavailable while the shared restricted mode is enabled or unavailable.',
+    messageYue: '共享限制模式開啟或不可用時，驗證器預覽暫時唔可用。',
+  });
+  const authenticatorRestrictedRegistration = (): AuthenticatorRegistrationPreviewResult => ({
+    ok: false,
+    storage: 'memory-only',
+    message: 'Authenticator registration is unavailable while the shared restricted mode is enabled or unavailable.',
+    messageYue: '共享限制模式開啟或不可用時，驗證器登記暫時唔可用。',
+  });
+  const authenticatorRestrictedMutation = (): AuthenticatorMutationResult => ({
+    ok: false,
+    message: 'Authenticator pairing is unavailable while the shared restricted mode is enabled or unavailable.',
+    messageYue: '共享限制模式開啟或不可用時，驗證器配對暫時唔可用。',
+  });
+  const authenticatorRestrictedList = (): AuthenticatorListResult => ({
+    entries: [],
+    storage: 'memory-only',
+    message: 'Authenticator entries are unavailable while the shared restricted mode is enabled or unavailable.',
+    messageYue: '共享限制模式開啟或不可用時，驗證器項目暫時唔可用。',
+  });
+  const authenticatorAllowed = async (): Promise<boolean> => {
+    try {
+      const restricted = await schoolMode.isRestricted();
+      authenticator.setRestricted(restricted);
+      return !restricted;
+    }
+    catch { authenticator.setRestricted(true); return false; }
+  };
   app.once('will-quit', () => {
     unsubscribeSchoolMode();
     schoolMode.dispose();
@@ -168,15 +225,39 @@ void app.whenReady().then(async () => {
   ipcMain.handle('school-mode:set-enabled', (event, request: SchoolModeToggleRequest) => event.sender === mainWindow?.webContents ? schoolMode.setEnabled(request) : Promise.reject(new Error('Blocked School mode request from an unknown renderer.')));
   ipcMain.handle('school-mode:change-credential', (event, request: SchoolModeCredentialChangeRequest) => event.sender === mainWindow?.webContents ? schoolMode.changeCredential(request) : Promise.reject(new Error('Blocked School mode request from an unknown renderer.')));
   ipcMain.handle('school-mode:verify', (event, request: SchoolModeVerifyRequest) => event.sender === mainWindow?.webContents ? schoolMode.verify(request) : false);
-  ipcMain.handle('authenticator:status', (event) => event.sender === mainWindow?.webContents
-    ? authenticator.status()
-    : Promise.reject(new Error('Blocked authenticator status request from an unknown renderer.')));
+  ipcMain.handle('authenticator:status', async (event) => {
+    if (event.sender !== mainWindow?.webContents) return Promise.reject(new Error('Blocked authenticator status request from an unknown renderer.'));
+    if (!(await authenticatorAllowed())) return authenticatorRestrictedStatus();
+    return authenticator.status();
+  });
   ipcMain.handle('authenticator:preview', (event, request: unknown) => {
     if (event.sender !== mainWindow?.webContents) return Promise.reject(new Error('Blocked authenticator preview request from an unknown renderer.'));
     // The renderer may submit only the typed preview fields. A deterministic
     // test clock is intentionally stripped at this privileged boundary.
     const candidate = request && typeof request === 'object' ? { ...(request as Record<string, unknown>), atMs: undefined } : request;
-    return authenticator.preview(candidate as AuthenticatorPreviewRequest);
+    return authenticatorAllowed().then((allowed) => allowed
+      ? authenticator.preview(candidate as AuthenticatorPreviewRequest)
+      : authenticatorRestrictedPreview());
+  });
+  ipcMain.handle('authenticator:prepare', (event, request: unknown) => {
+    if (event.sender !== mainWindow?.webContents) return Promise.reject(new Error('Blocked authenticator registration request from an unknown renderer.'));
+    return authenticatorAllowed().then((allowed) => allowed
+      ? authenticator.prepare(request as AuthenticatorRegistrationRequest)
+      : authenticatorRestrictedRegistration());
+  });
+  ipcMain.handle('authenticator:confirm', (event, request: unknown) => {
+    if (event.sender !== mainWindow?.webContents) return Promise.reject(new Error('Blocked authenticator pairing request from an unknown renderer.'));
+    return authenticatorAllowed().then((allowed) => allowed
+      ? authenticator.confirm(request as AuthenticatorRegistrationConfirmRequest)
+      : authenticatorRestrictedMutation());
+  });
+  ipcMain.handle('authenticator:cancel', (event, registrationId: unknown) => {
+    if (event.sender !== mainWindow?.webContents) return Promise.reject(new Error('Blocked authenticator cancellation request from an unknown renderer.'));
+    authenticator.cancel(typeof registrationId === 'string' ? registrationId : '');
+  });
+  ipcMain.handle('authenticator:list', (event) => {
+    if (event.sender !== mainWindow?.webContents) return Promise.reject(new Error('Blocked authenticator list request from an unknown renderer.'));
+    return authenticatorAllowed().then((allowed) => allowed ? authenticator.list() : authenticatorRestrictedList());
   });
   ipcMain.handle('locks:load', (event) => event.sender === mainWindow?.webContents ? lockSupport.loadLocks() : Promise.reject(new Error('Blocked lock request from an unknown renderer.')));
   ipcMain.handle('locks:set', (event, request: LockSetRequest) => event.sender === mainWindow?.webContents ? lockSupport.setLock(request) : Promise.reject(new Error('Blocked lock request from an unknown renderer.')));

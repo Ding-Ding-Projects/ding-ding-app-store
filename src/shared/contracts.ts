@@ -1206,6 +1206,79 @@ export type AuthenticatorAlgorithm = (typeof AUTHENTICATOR_ALGORITHMS)[number];
 export const AUTHENTICATOR_DIGITS = [6, 7, 8] as const;
 export type AuthenticatorDigits = (typeof AUTHENTICATOR_DIGITS)[number];
 export const AUTHENTICATOR_MAX_SECRET_LENGTH = 256;
+export const AUTHENTICATOR_MAX_ENTRIES = 256;
+export const AUTHENTICATOR_MAX_ISSUER_LENGTH = 128;
+export const AUTHENTICATOR_MAX_ACCOUNT_LENGTH = 256;
+export const AUTHENTICATOR_MAX_URI_LENGTH = 2_048;
+
+export interface AuthenticatorEntryMetadata {
+  id: string;
+  issuer: string;
+  account: string;
+  label: string;
+  algorithm: AuthenticatorAlgorithm;
+  digits: AuthenticatorDigits;
+  periodSeconds: number;
+  createdAt: string;
+  updatedAt: string;
+  order: number;
+}
+
+export interface AuthenticatorEntry extends AuthenticatorEntryMetadata {
+  /** Current code is calculated in the main process and is never a secret. */
+  code: string | null;
+  remainingSeconds: number | null;
+  expiresAt: string | null;
+}
+
+export interface AuthenticatorQrMatrix {
+  schemaVersion: 1;
+  size: number;
+  /** One bounded row per module; values are only `0` and `1`. */
+  modules: string[];
+  errorCorrectionLevel: 'M';
+}
+
+export type AuthenticatorRegistrationRequest =
+  | { source: 'otpauth-uri'; uri: string }
+  | {
+      source: 'manual';
+      secret: string;
+      issuer: string;
+      account: string;
+      algorithm: AuthenticatorAlgorithm;
+      digits: AuthenticatorDigits;
+      periodSeconds: number;
+    };
+
+export interface AuthenticatorRegistrationPreviewResult {
+  ok: boolean;
+  registrationId?: string;
+  metadata?: AuthenticatorEntryMetadata;
+  qr?: AuthenticatorQrMatrix;
+  storage: 'memory-only' | 'os-vault';
+  message: string;
+  messageYue: string;
+}
+
+export interface AuthenticatorRegistrationConfirmRequest {
+  registrationId: string;
+  code: string;
+}
+
+export interface AuthenticatorMutationResult {
+  ok: boolean;
+  entry?: AuthenticatorEntryMetadata;
+  message: string;
+  messageYue: string;
+}
+
+export interface AuthenticatorListResult {
+  entries: AuthenticatorEntry[];
+  storage: 'memory-only' | 'os-vault';
+  message: string;
+  messageYue: string;
+}
 
 export interface AuthenticatorStatus {
   available: boolean;
@@ -1350,6 +1423,10 @@ export interface DingDingStoreApi {
   authenticator: {
     status(): Promise<AuthenticatorStatus>;
     preview(request: AuthenticatorPreviewRequest): Promise<AuthenticatorPreviewResult>;
+    prepare(request: AuthenticatorRegistrationRequest): Promise<AuthenticatorRegistrationPreviewResult>;
+    confirm(request: AuthenticatorRegistrationConfirmRequest): Promise<AuthenticatorMutationResult>;
+    cancel(registrationId: string): Promise<void>;
+    list(): Promise<AuthenticatorListResult>;
   };
   dimSum: {
     startup(): Promise<DimSumSurprise>;

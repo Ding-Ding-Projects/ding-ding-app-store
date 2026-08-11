@@ -34,8 +34,8 @@
 - [x] Truthful VS Code export launch outcomes: observed spawn succeeds; child errors and unconfirmed two-second launches fail closed while exports remain recoverable
 - [x] Update schedule editor with last-run/next-run reporting and quiet hours
 - [x] Optional renderer-only notification narrator: persisted opt-in, English/Hong Kong Cantonese/both serialized delivery, stale queue replacement, category cooldowns, and quiet/reduced-sound accessibility yielding
-- [x] Limited shared-contract display-name history slice: settings mutations are recorded as typed local Activity events, and a top-level Authenticator tab provides a one-shot RFC 6238 preview without persistence
-- [ ] Full authenticator follow-up: OS credential-vault persistence, QR/`otpauth://` registration and pairing, saved entries, next-code peek, and protected secret history remain pending
+- [x] Bounded authenticator registration slice: local URI/Base32 metadata, in-process QR matrix, current-code pairing confirmation, safeStorage-backed metadata entries, current code/countdown list, School-mode suppression, and regex search
+- [ ] Authenticator follow-up: QR image/clipboard/camera import, next-code peek, rename/delete/reorder/groups/bulk actions, deliberate secret export, and protected secret history/restore remain pending
 - [x] Truthful NotificationCenter bulk Recovery details with callback-free, operation-ID-free retained history and an explicit originating-surface retry boundary
 - [x] NotificationCenter language-mode coverage for history, filters, bulk actions, export/open states, accessibility names, empty state, and destructive confirmation
 - [x] Catalog/Installed/Updates language-mode coverage for bulk actions, status facts, loading/empty states, update controls, and selection accessibility names
