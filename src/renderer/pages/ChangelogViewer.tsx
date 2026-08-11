@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import type { ExternalEditorResult, OperationResult, UserSettings } from '../../shared/contracts';
-import { CHANGELOG_ENTRIES, changelogMarkdown, validateChangelog } from '../changelog';
+import { CHANGELOG_ENTRIES, changelogMarkdown, projectChangelogEntries, validateChangelog } from '../changelog';
 import { SearchBox } from '../components/SearchBox';
 import { downloadText } from '../files';
 import { Icon } from '../icons';
@@ -135,31 +135,32 @@ export function unexpectedFailureMessage(settings: UserSettings, code: Unexpecte
   return `${changelogMessage(settings, 'error', enFallback, yueFallback)} [${code}]`;
 }
 
-export function ChangelogViewer({ settings, notify, openRegex, onRegexHandled }: { settings: UserSettings; notify: Notify; openRegex: boolean; onRegexHandled(): void }) {
+export function ChangelogViewer({ settings, notify, openRegex, onRegexHandled, restricted = false, schoolModeName = 'School mode' }: { settings: UserSettings; notify: Notify; openRegex: boolean; onRegexHandled(): void; restricted?: boolean; schoolModeName?: string }) {
   const search = useSurfaceSearch('changelog');
   const matcher = useMemo(() => makeMatcher(search.state), [search.state]);
+  const visibleEntries = useMemo(() => projectChangelogEntries(CHANGELOG_ENTRIES, restricted, schoolModeName), [restricted, schoolModeName]);
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
-  const newestReleaseDate = useMemo(() => new Date(Math.max(...CHANGELOG_ENTRIES.map((entry) => Date.parse(entry.releasedAt)))), []);
+  const newestReleaseDate = useMemo(() => new Date(Math.max(...visibleEntries.map((entry) => Date.parse(entry.releasedAt)), Date.now())), [visibleEntries]);
   const [calendarMonth, setCalendarMonth] = useState(() => dateKey(new Date()).slice(0, 7));
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const lastSelected = useRef<number | null>(null);
   const startTime = parseChangelogDate(start);
   const endTime = parseChangelogDate(end, true);
   const dateError = Number.isNaN(startTime) ? changelogMessage(settings, 'error', 'Start date is incomplete or invalid.', '開始日期未完整或者無效。') : Number.isNaN(endTime) ? changelogMessage(settings, 'error', 'End date is incomplete or invalid.', '結束日期未完整或者無效。') : startTime !== null && endTime !== null && startTime > endTime ? changelogMessage(settings, 'error', 'Start date must be before the end date.', '開始日期要早過結束日期。') : '';
-  const dataIssues = validateChangelog(CHANGELOG_ENTRIES);
-  const filtered = useMemo(() => CHANGELOG_ENTRIES.filter((entry) => {
+  const dataIssues = validateChangelog(visibleEntries);
+  const filtered = useMemo(() => visibleEntries.filter((entry) => {
     const timestamp = Date.parse(entry.releasedAt);
     if (dateError) return false;
     if (startTime !== null && timestamp < startTime) return false;
     if (endTime !== null && timestamp > endTime) return false;
     return matcher(`${entry.version}\n${entry.commit}\n${entry.changes.join('\n')}`);
-  }), [dateError, startTime, endTime, matcher]);
+  }), [dateError, startTime, endTime, matcher, visibleEntries]);
   const selectedEntries = filtered.filter((entry) => selected.has(entry.version));
   const exportEntries = selectedEntries.length ? selectedEntries : filtered;
   const setPreset = (days: number | null) => {
     if (days === null) { setStart(''); setEnd(''); return; }
-    const newest = new Date(Math.max(...CHANGELOG_ENTRIES.map((entry) => Date.parse(entry.releasedAt))));
+    const newest = new Date(Math.max(...visibleEntries.map((entry) => Date.parse(entry.releasedAt)), Date.now()));
     const oldest = new Date(newest.getTime() - days * 86_400_000);
     setStart(dateKey(oldest)); setEnd(dateKey(newest));
     setCalendarMonth(dateKey(newest).slice(0, 7));

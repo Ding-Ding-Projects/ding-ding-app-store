@@ -349,32 +349,89 @@ export interface UserSettings {
  * projection; the verifier salt and digest remain in the main process.
  */
 export type SchoolUnlockKind = 'pin' | 'password' | 'passkey';
+export type SchoolSupportedUnlockKind = Exclude<SchoolUnlockKind, 'passkey'>;
 export interface SchoolModeState {
-  schemaVersion: 1;
+  schemaVersion: 2;
+  recordId: string | null;
+  revision: number;
   enabled: boolean;
   displayName: string;
   unlockKind: SchoolUnlockKind | null;
 }
+export type SchoolModeUnavailableReason = 'read-failed' | 'parse-failed' | 'watch-failed' | 'write-failed' | 'conflict' | 'service-closed' | 'bridge-failed';
+export type SchoolModeSyncStatus =
+  | { status: 'ready'; watching: boolean }
+  | { status: 'unavailable'; watching: boolean; reason: SchoolModeUnavailableReason };
+export interface SchoolModeSnapshot {
+  schemaVersion: 1;
+  observationSequence: number;
+  state: SchoolModeState | null;
+  configured: boolean;
+  sync: SchoolModeSyncStatus;
+}
 export interface SchoolModeConfigureRequest {
+  expectedRecordId: string | null;
+  expectedRevision: number;
   displayName: string;
-  unlockKind: SchoolUnlockKind;
+  unlockKind: SchoolSupportedUnlockKind;
   credential: string;
 }
 export interface SchoolModeRenameRequest {
+  expectedRecordId: string | null;
+  expectedRevision: number;
   displayName: string;
   credential?: string;
 }
 export interface SchoolModeToggleRequest {
+  expectedRecordId: string | null;
+  expectedRevision: number;
   enabled: boolean;
   credential?: string;
 }
 export interface SchoolModeVerifyRequest {
   credential: string;
 }
+export interface SchoolModeCredentialChangeRequest {
+  expectedRecordId: string | null;
+  expectedRevision: number;
+  currentCredential: string;
+  nextCredential: string;
+  unlockKind: SchoolSupportedUnlockKind;
+}
+export const SCHOOL_MODE_MUTATION_CODES = [
+  'invalid-configure',
+  'invalid-name',
+  'invalid-toggle',
+  'invalid-credential-change',
+  'invalid-pin',
+  'invalid-password',
+  'already-configured',
+  'configured',
+  'credential-rejected',
+  'name-unchanged',
+  'name-saved',
+  'not-configured',
+  'passkey-unsupported',
+  'already-enabled',
+  'already-disabled',
+  'enabled',
+  'disabled',
+  'credential-changed-pin',
+  'credential-changed-password',
+  'read-failed',
+  'parse-failed',
+  'write-failed',
+  'conflict',
+  'service-closed',
+  'revision-exhausted',
+  'state-unavailable',
+  'bridge-failed',
+] as const;
+export type SchoolModeMutationCode = typeof SCHOOL_MODE_MUTATION_CODES[number];
 export interface SchoolModeMutationResult {
   ok: boolean;
-  state: SchoolModeState;
-  message: string;
+  snapshot: SchoolModeSnapshot;
+  code: SchoolModeMutationCode;
 }
 
 /** The compiled-in settings are a public contract: every settings explanation names these values. */
@@ -1122,11 +1179,13 @@ export interface DingDingStoreApi {
     provenance(): Promise<SettingsProvenance>;
   };
   schoolMode: {
-    load(): Promise<SchoolModeState>;
+    load(): Promise<SchoolModeSnapshot>;
     configure(request: SchoolModeConfigureRequest): Promise<SchoolModeMutationResult>;
     rename(request: SchoolModeRenameRequest): Promise<SchoolModeMutationResult>;
     setEnabled(request: SchoolModeToggleRequest): Promise<SchoolModeMutationResult>;
+    changeCredential(request: SchoolModeCredentialChangeRequest): Promise<SchoolModeMutationResult>;
     verify(request: SchoolModeVerifyRequest): Promise<boolean>;
+    subscribe(listener: (snapshot: SchoolModeSnapshot) => void, onUnavailable?: () => void): () => void;
   };
   history: {
     list(): Promise<HistoryEntry[]>;

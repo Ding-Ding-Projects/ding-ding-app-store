@@ -1,4 +1,5 @@
 import { GENERATED_CHANGELOG_ENTRIES } from './generated-changelog';
+import { schoolModeDocumentText } from '../shared/school-mode';
 
 export interface ChangelogEntry {
   version: string;
@@ -9,6 +10,27 @@ export interface ChangelogEntry {
 
 /** Build-time data boundary. Release automation may replace the generated module before Vite runs. */
 export const CHANGELOG_ENTRIES: readonly ChangelogEntry[] = Object.freeze(GENERATED_CHANGELOG_ENTRIES.map((entry) => Object.freeze({ ...entry, changes: Object.freeze([...entry.changes]) })));
+
+/**
+ * Project release notes at the renderer boundary while the shared mode is
+ * restricted. Version, date, and commit facts remain intact; only hidden
+ * capability lines are omitted and the current chosen mode name is applied.
+ * The same projected records feed search, rendering, copy, and export.
+ */
+export function projectChangelogEntries(
+  entries: readonly ChangelogEntry[],
+  restricted: boolean,
+  displayName: string,
+): readonly ChangelogEntry[] {
+  if (!restricted) return entries;
+  return entries.flatMap((entry) => {
+    const changes = entry.changes
+      .filter((change) => !/\b(?:language(?: mode)?|funny(?: level)?|voice|narrator)\b|粵語|幽默|旁白|dim[ -]?sum|personal[ -]?vocab/i.test(change))
+      .map((change) => schoolModeDocumentText(change, displayName).trim())
+      .filter(Boolean);
+    return changes.length ? [{ ...entry, changes: Object.freeze(changes) }] : [];
+  });
+}
 
 export function validateChangelog(entries: readonly ChangelogEntry[]): string[] {
   const issues: string[] = [];

@@ -68,6 +68,7 @@ function TaskStatusCard({ task, settings, onRun, running }: { task: ScheduleTask
 
 const RULE_KEYS = ['language', 'englishFunnyLevel', 'cantoneseFunnyLevel', 'theme', 'density', 'accent', 'displayName'] as const;
 type RuleKey = (typeof RULE_KEYS)[number];
+const RESTRICTED_RULE_KEYS = new Set<RuleKey>(['language', 'englishFunnyLevel', 'cantoneseFunnyLevel']);
 const WEEKDAYS = [
   ['1', 'Mon', '一'], ['2', 'Tue', '二'], ['3', 'Wed', '三'], ['4', 'Thu', '四'], ['5', 'Fri', '五'], ['6', 'Sat', '六'], ['7', 'Sun', '日'],
 ] as const;
@@ -82,8 +83,8 @@ function ruleValue(rule: ScheduledSettingRule, key: RuleKey): string {
   return value === undefined ? '' : String(value);
 }
 
-function RuleCard({ rule, sourceStatus, settings, onChange, onRemove }: { rule: ScheduledSettingRule; sourceStatus?: { state: string; message: string | null }; settings: UserSettings; onChange(rule: ScheduledSettingRule): void; onRemove(): void }) {
-  const selectedKey = (RULE_KEYS.find((key) => rule.values[key] !== undefined) ?? 'theme') as RuleKey;
+function RuleCard({ rule, sourceStatus, settings, availableKeys, onChange, onRemove }: { rule: ScheduledSettingRule; sourceStatus?: { state: string; message: string | null }; settings: UserSettings; availableKeys: readonly RuleKey[]; onChange(rule: ScheduledSettingRule): void; onRemove(): void }) {
+  const selectedKey = (availableKeys.find((key) => rule.values[key] !== undefined) ?? 'theme') as RuleKey;
   const homeAssistantSource = rule.source.kind === 'home-assistant' ? rule.source : null;
   const setValue = (key: RuleKey, value: string) => {
     const values = { ...rule.values } as ScheduledSettingRule['values'];
@@ -102,7 +103,7 @@ function RuleCard({ rule, sourceStatus, settings, onChange, onRemove }: { rule: 
       <div className="scheduled-rule-heading"><input aria-label={label(settings, 'Enable rule', '啟用規則')} type="checkbox" checked={rule.enabled} onChange={(event) => onChange({ ...rule, enabled: event.target.checked })} /><input aria-label={label(settings, 'Rule label', '規則名稱')} value={rule.label} maxLength={64} onChange={(event) => onChange({ ...rule, label: event.target.value })} /><button className="text-button" onClick={onRemove}><Icon>delete</Icon>{label(settings, 'Remove', '移除')}</button></div>
       <details className="setting-help"><summary>{label(settings, 'What this rule controls', '呢條規則控制咩')}</summary><p>{label(settings, 'This rule temporarily changes one supported setting inside its date, time, weekday, and time-zone window. Lower priority numbers win ties; the saved base value returns when no rule matches.', '呢條規則喺指定日期、時間、星期同時區時段暫時改一個支援設定；優先次序數字越細越先，冇規則配到就返去已儲存基礎值。')}</p><p className="provenance-line">{label(settings, 'Current rule value: unsaved draft until you save this schedule.', '目前規則值：儲存排程之前都係未儲存草稿。')}</p></details>
       <div className="scheduled-rule-grid">
-        <label>{label(settings, 'Setting to override', '要覆蓋嘅設定')}<select value={selectedKey} onChange={(event) => setValue(event.target.value as RuleKey, ruleValue(rule, event.target.value as RuleKey))}>{RULE_KEYS.map((key) => <option key={key} value={key}>{key}</option>)}</select></label>
+        <label>{label(settings, 'Setting to override', '要覆蓋嘅設定')}<select value={selectedKey} onChange={(event) => setValue(event.target.value as RuleKey, ruleValue(rule, event.target.value as RuleKey))}>{availableKeys.map((key) => <option key={key} value={key}>{key}</option>)}</select></label>
         <label>{label(settings, 'Scheduled value', '排程值')}{selectedKey === 'language' ? <select value={ruleValue(rule, selectedKey)} onChange={(event) => setValue(selectedKey, event.target.value)}><option value="en">English</option><option value="yue">香港粵語</option><option value="bilingual">English + 香港粵語</option></select> : selectedKey === 'theme' ? <select value={ruleValue(rule, selectedKey)} onChange={(event) => setValue(selectedKey, event.target.value)}><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select> : selectedKey === 'density' ? <select value={ruleValue(rule, selectedKey)} onChange={(event) => setValue(selectedKey, event.target.value)}><option value="comfortable">Comfortable</option><option value="compact">Compact</option><option value="spacious">Spacious</option></select> : selectedKey === 'accent' ? <ColorTranslatorControl settings={settings} value={ruleValue(rule, selectedKey) || '#6750A4'} labelText={label(settings, 'Scheduled accent', '排程主色')} onChange={(next) => setValue(selectedKey, next)} /> : <input type={selectedKey.includes('FunnyLevel') ? 'number' : 'text'} min={1} max={5} value={ruleValue(rule, selectedKey)} onChange={(event) => setValue(selectedKey, event.target.value)} />}</label>
         <label>{label(settings, 'Start date (optional)', '開始日期（可留空）')}<input type="date" value={rule.startDate ?? ''} onChange={(event) => onChange({ ...rule, startDate: event.target.value || null })} /></label>
         <label>{label(settings, 'End date (optional)', '結束日期（可留空）')}<input type="date" value={rule.endDate ?? ''} onChange={(event) => onChange({ ...rule, endDate: event.target.value || null })} /></label>
@@ -126,12 +127,16 @@ function RuleCard({ rule, sourceStatus, settings, onChange, onRemove }: { rule: 
   );
 }
 
-export function ScheduleEditor({ settings, schedule }: { settings: UserSettings; schedule: ScheduleApi }) {
+export function ScheduleEditor({ settings, schedule, restricted = false }: { settings: UserSettings; schedule: ScheduleApi; restricted?: boolean }) {
   useTick();
   const { draft, status, dirty, saving, issues } = schedule;
   const quietSpansMidnight = draft.quietHours.endMinute < draft.quietHours.startMinute;
   const source = status?.configSource ?? 'fallback';
   const issueFor = (field: string) => issues.find((issue) => issue.field.startsWith(field))?.message;
+  const availableRuleKeys = restricted ? RULE_KEYS.filter((key) => !RESTRICTED_RULE_KEYS.has(key)) : [...RULE_KEYS];
+  const visibleRules = restricted
+    ? draft.rules.filter((rule) => !RULE_KEYS.some((key) => RESTRICTED_RULE_KEYS.has(key) && rule.values[key] !== undefined))
+    : draft.rules;
 
   return (
     <section className="schedule-grid">
@@ -171,12 +176,14 @@ export function ScheduleEditor({ settings, schedule }: { settings: UserSettings;
 
       <div className="settings-card schedule-card" {...el('schedule-card')}>
         <h2>{label(settings, 'Scheduled settings', '排程設定')}</h2>
-        <p className="supporting">{label(settings, 'Temporarily override language, funny levels, theme, density, accent, or display name during a local date/time window. Rules are evaluated in their saved time zone; lower priority numbers win ties. Your base settings remain recoverable when a window ends.', '喺指定本地日期／時間暫時覆蓋語言、幽默程度、主題、密度、主色或者顯示名稱。規則用儲存嘅時區判斷；優先次序數字越細越先。時段完咗之後會返去原本設定。')}</p>
+        <p className="supporting">{restricted
+          ? 'Temporarily override the available appearance settings during a local date/time window. Saved restricted choices remain stored and return when restricted presentation ends.'
+          : label(settings, 'Temporarily override language, funny levels, theme, density, accent, or display name during a local date/time window. Rules are evaluated in their saved time zone; lower priority numbers win ties. Your base settings remain recoverable when a window ends.', '喺指定本地日期／時間暫時覆蓋語言、幽默程度、主題、密度、主色或者顯示名稱。規則用儲存嘅時區判斷；優先次序數字越細越先。時段完咗之後會返去原本設定。')}</p>
         <p className="supporting">{label(settings, 'External sources are read only by the main process. A missing Home Assistant vault token appears as a source failure and never creates a schedule field for a secret.', '外部來源只會由主程序讀取。Home Assistant 憑證庫冇 token 會顯示來源失敗，唔會喺排程整一個秘密欄位。')}</p>
-        {draft.rules.map((rule) => <RuleCard key={rule.id} rule={rule} sourceStatus={status?.externalSources.find((item) => item.ruleId === rule.id)} settings={settings} onChange={(next) => schedule.setRules(draft.rules.map((item) => item.id === next.id ? next : item))} onRemove={() => schedule.setRules(draft.rules.filter((item) => item.id !== rule.id))} />)}
+        {visibleRules.map((rule) => <RuleCard key={rule.id} rule={rule} sourceStatus={status?.externalSources.find((item) => item.ruleId === rule.id)} settings={settings} availableKeys={availableRuleKeys} onChange={(next) => schedule.setRules(draft.rules.map((item) => item.id === next.id ? next : item))} onRemove={() => schedule.setRules(draft.rules.filter((item) => item.id !== rule.id))} />)}
         <button className="tonal-button" onClick={() => schedule.setRules([...draft.rules, newRule()])}><Icon>add</Icon>{label(settings, 'Add scheduled setting', '加排程設定')}</button>
-        <ScheduleExplanation settings={settings} keyName="rules" source={source} dirty={schedule.dirty} />
-        {issueFor('rules') && <p className="field-error" role="alert">{issueFor('rules')}</p>}
+        {!restricted && <ScheduleExplanation settings={settings} keyName="rules" source={source} dirty={schedule.dirty} />}
+        {!restricted && issueFor('rules') && <p className="field-error" role="alert">{issueFor('rules')}</p>}
       </div>
 
       <div className="settings-card schedule-card" {...el('schedule-card')}>
@@ -260,7 +267,7 @@ export function ScheduleEditor({ settings, schedule }: { settings: UserSettings;
       </div>
 
       <div className="settings-actions">
-        <button className="text-button" onClick={() => schedule.resetDefaults()}><Icon>restart_alt</Icon>{label(settings, 'Reset to defaults', '還原預設')}</button>
+        {!restricted && <button className="text-button" onClick={() => schedule.resetDefaults()}><Icon>restart_alt</Icon>{label(settings, 'Reset to defaults', '還原預設')}</button>}
         <button className="text-button" disabled={!dirty} onClick={() => schedule.discard()}>{label(settings, 'Discard changes', '放棄改動')}</button>
         <button className="filled-button" disabled={!dirty || saving} onClick={() => void schedule.save()}>{saving ? label(settings, 'Saving…', '儲存緊…') : label(settings, 'Save schedule', '儲存排程')}</button>
       </div>

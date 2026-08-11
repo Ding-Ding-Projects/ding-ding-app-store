@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, ipcMain, session, shell } from 'electron';
 import squirrelStartup from 'electron-squirrel-startup';
 import { z } from 'zod';
-import type { ElementKey, ElementOverride, ExternalEditorOpenRequest, ExternalEditorPreference, HistoryExportFormat, InstallCancelRequest, OperationRequest, SchoolModeConfigureRequest, SchoolModeRenameRequest, SchoolModeToggleRequest, SchoolModeVerifyRequest, SourceJobCancelRequest, SourceJobRequest, TabWorkspace, UserSettings } from '../shared/contracts.js';
+import type { ElementKey, ElementOverride, ExternalEditorOpenRequest, ExternalEditorPreference, HistoryExportFormat, InstallCancelRequest, OperationRequest, SchoolModeConfigureRequest, SchoolModeCredentialChangeRequest, SchoolModeRenameRequest, SchoolModeToggleRequest, SchoolModeVerifyRequest, SourceJobCancelRequest, SourceJobRequest, TabWorkspace, UserSettings } from '../shared/contracts.js';
 import { AppearanceService } from './appearance-service.js';
 import { CatalogService } from './catalog-service.js';
 import { HistoryService } from './history-service.js';
@@ -80,6 +80,16 @@ void app.whenReady().then(async () => {
   });
   const settings = new SettingsService();
   const schoolMode = new SchoolModeService();
+  const unsubscribeSchoolMode = schoolMode.subscribe((snapshot) => {
+    const contents = mainWindow?.webContents;
+    if (!contents || contents.isDestroyed()) return;
+    try { contents.send('school-mode:changed', snapshot); } catch { /* Renderer teardown must not stop shared-state observation. */ }
+  });
+  await schoolMode.start();
+  app.once('will-quit', () => {
+    unsubscribeSchoolMode();
+    schoolMode.dispose();
+  });
   const sourceJobs = new SourceJobService(
     catalog,
     history,
@@ -152,6 +162,7 @@ void app.whenReady().then(async () => {
   ipcMain.handle('school-mode:configure', (event, request: SchoolModeConfigureRequest) => event.sender === mainWindow?.webContents ? schoolMode.configure(request) : Promise.reject(new Error('Blocked School mode request from an unknown renderer.')));
   ipcMain.handle('school-mode:rename', (event, request: SchoolModeRenameRequest) => event.sender === mainWindow?.webContents ? schoolMode.rename(request) : Promise.reject(new Error('Blocked School mode request from an unknown renderer.')));
   ipcMain.handle('school-mode:set-enabled', (event, request: SchoolModeToggleRequest) => event.sender === mainWindow?.webContents ? schoolMode.setEnabled(request) : Promise.reject(new Error('Blocked School mode request from an unknown renderer.')));
+  ipcMain.handle('school-mode:change-credential', (event, request: SchoolModeCredentialChangeRequest) => event.sender === mainWindow?.webContents ? schoolMode.changeCredential(request) : Promise.reject(new Error('Blocked School mode request from an unknown renderer.')));
   ipcMain.handle('school-mode:verify', (event, request: SchoolModeVerifyRequest) => event.sender === mainWindow?.webContents ? schoolMode.verify(request) : false);
   ipcMain.handle('history:list', () => history.list());
   ipcMain.handle('history:export', (_event, format: HistoryExportFormat) => history.export(format));

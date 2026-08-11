@@ -21,7 +21,7 @@ import type {
   DimSumSurprise,
 } from '../shared/contracts';
 import { resolveScheduledSettings } from '../shared/scheduled-settings';
-import { applySchoolModePresentation } from '../shared/school-mode';
+import { applySchoolModePresentation, schoolModeAllowsHistoryEntry, schoolModeAllowsNotification, schoolModeDisplayText, schoolModeHiddenApp, schoolModeHiddenContent, schoolModeProjectManagedUpdates, schoolModeRestrictedText } from '../shared/school-mode';
 import { ActionDialog } from './components/ActionDialog';
 import type { ActionKind, ImmediateActionKind } from './components/ActionDialog';
 import { AppearancePanel } from './components/AppearancePanel';
@@ -47,7 +47,7 @@ import type { SurfaceId } from './search';
 import { useAppearance, useAppearanceVars } from './state/use-appearance';
 import { useSchedule } from './state/use-schedule';
 import { useSettings } from './state/use-settings';
-import { useSchoolMode } from './state/use-school-mode';
+import { schoolModeMutationMessage, useSchoolMode } from './state/use-school-mode';
 import { useNotifications } from './state/use-notifications';
 import { useNarrator } from './state/use-narrator';
 import { newGroupId, orderedTabIds, useWorkspace } from './state/use-workspace';
@@ -67,7 +67,7 @@ export function App() {
   const notify = notifications.notify;
 
   const { settings: baseSettings, provenance: settingsProvenance, reload: reloadSettings, save: saveSettings, patch: patchSetting } = useSettings(notify);
-  const schoolMode = useSchoolMode(notify);
+  const schoolMode = useSchoolMode(notify, baseSettings);
   const workspace = useWorkspace(notify);
   const appearance = useAppearance(notify);
   const schedule = useSchedule(notify);
@@ -83,9 +83,43 @@ export function App() {
     const resolved = resolveScheduledSettings(baseSettings, schedule.draft, new Date(), externalOverrides);
     // School mode is an explicit presentation lock. The user's base language
     // and funny-level choices remain untouched and return when it is disabled.
-    return applySchoolModePresentation(resolved, schoolMode.state.enabled);
-  }, [baseSettings, schedule.draft, scheduleClock, externalOverrides, schoolMode.state.enabled]);
-  useNarrator(settings, schedule.draft, notifications.active);
+    return applySchoolModePresentation(resolved, schoolMode.restricted);
+  }, [baseSettings, schedule.draft, scheduleClock, externalOverrides, schoolMode.restricted]);
+  const schoolProjectionRef = useRef({ restricted: schoolMode.restricted, displayName: schoolMode.state.displayName });
+  schoolProjectionRef.current = { restricted: schoolMode.restricted, displayName: schoolMode.state.displayName };
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
+  const projectRuntimeText = useCallback((value: string, fallbackEn = 'Operation details unavailable while restricted.', fallbackYue = '限制時操作資料未提供.') => {
+    const current = schoolProjectionRef.current;
+    if (!current.restricted) return schoolModeDisplayText(value, current.displayName);
+    return schoolModeRestrictedText(value, current.displayName, label(settingsRef.current, fallbackEn, fallbackYue));
+  }, []);
+  const projectRuntimeAppName = useCallback((appId: string, name: string) => schoolProjectionRef.current.restricted || schoolModeHiddenApp(appId)
+    ? label(settingsRef.current, 'Application', '應用程式')
+    : name, []);
+  const visibleNotificationRecords = useMemo(() => notifications.records
+    .filter((record) => schoolModeAllowsNotification(record, schoolMode.restricted))
+    .filter((record) => !schoolMode.restricted || !schoolModeHiddenContent(JSON.stringify(record)))
+    .map((record) => ({
+      ...record,
+      title: schoolModeDisplayText(record.title, schoolMode.state.displayName),
+      message: record.schoolModeCode
+        ? schoolModeMutationMessage(record.schoolModeCode, schoolMode.state.displayName, settings, schoolMode.restricted)
+        : schoolModeDisplayText(record.message, schoolMode.state.displayName),
+    })), [notifications.records, schoolMode.restricted, schoolMode.state.displayName, settings]);
+  const visibleActiveNotices = useMemo(() => notifications.active
+    .filter((record) => schoolModeAllowsNotification(record, schoolMode.restricted))
+    .filter((record) => !schoolMode.restricted || !schoolModeHiddenContent(JSON.stringify(record)))
+    .map((record) => ({
+      ...record,
+      title: schoolModeDisplayText(record.title, schoolMode.state.displayName),
+      message: record.schoolModeCode
+        ? schoolModeMutationMessage(record.schoolModeCode, schoolMode.state.displayName, settings, schoolMode.restricted)
+        : schoolModeDisplayText(record.message, schoolMode.state.displayName),
+      undo: record.undo ? { ...record.undo, label: schoolModeDisplayText(record.undo.label, schoolMode.state.displayName) } : undefined,
+    })), [notifications.active, schoolMode.restricted, schoolMode.state.displayName, settings]);
+  const visibleUnreadCount = useMemo(() => visibleNotificationRecords.filter((record) => record.dismissedAt === null).length, [visibleNotificationRecords]);
+  useNarrator(settings, schedule.draft, visibleActiveNotices);
   const search = useSearchStates();
   useAppearanceVars(appearance.elements);
 
@@ -126,6 +160,8 @@ export function App() {
   const [subTab, setSubTab] = useState<SettingsSubTabId>('settings.general');
   const [docRequest, setDocRequest] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState('');
+  const safeFocusRef = useRef<HTMLElement>(null);
+  const previousSchoolRestriction = useRef(schoolMode.restricted);
   const [pendingToken, setPendingToken] = useState<{ token: TokenId; value: TokenValue } | null>(null);
   const [dimSum, setDimSum] = useState<DimSumSurprise | null>(null);
   const dimSumAttempted = useRef(false);
@@ -133,7 +169,13 @@ export function App() {
   useEffect(() => {
     // Do not draw the opt-out-free surprise until the shared mode record has
     // loaded; a slow IPC response must not leak a dim-sum surface first.
-    if (schoolMode.loading || schoolMode.state.enabled || dimSumAttempted.current || loading || !catalog || catalog.warning || ['available', 'downloading', 'ready', 'failed'].includes(updateState.status)) return;
+    if (schoolMode.restricted) {
+      dimSumAttempted.current = true;
+      setDimSum(null);
+      return;
+    }
+    if (dimSumAttempted.current || loading || !catalog || catalog.warning || ['available', 'downloading', 'ready', 'failed'].includes(updateState.status)) return;
+    let cancelled = false;
     let firstRun = false;
     try {
       firstRun = window.localStorage.getItem('ding-ding-first-run-complete') !== '1';
@@ -143,13 +185,27 @@ export function App() {
     const timer = window.setTimeout(() => {
       dimSumAttempted.current = true;
       if (Math.random() >= 0.1) return;
-      void window.dingDingStore.dimSum.startup().then((result) => { if (result.available) setDimSum(result); });
+      void window.dingDingStore.dimSum.startup().then((result) => { if (!cancelled && result.available) setDimSum(result); });
     }, 6_000);
-    return () => window.clearTimeout(timer);
-  }, [catalog, loading, schoolMode.loading, schoolMode.state.enabled, updateState.status]);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [catalog, loading, schoolMode.restricted, updateState.status]);
 
   const activeTab = workspace.workspace.activeTabId;
   const announce = useCallback((message: string) => setAnnouncement(message), []);
+
+  useEffect(() => {
+    const becameRestricted = !previousSchoolRestriction.current && schoolMode.restricted;
+    previousSchoolRestriction.current = schoolMode.restricted;
+    if (!becameRestricted) return;
+    // ActionDialog is aria-modal and may contain an app title that cannot be
+    // projected safely after a live restriction transition. Close every
+    // mounted confirmation, then return focus to the stable main target.
+    setAction(null);
+    setDimSum(null);
+    setPaletteOpen(false);
+    announce(label(settings, `${schoolMode.state.displayName} restricted presentation is active.`, `${schoolMode.state.displayName} 限制顯示已開啟。`));
+    window.setTimeout(() => safeFocusRef.current?.focus(), 0);
+  }, [announce, schoolMode.restricted, schoolMode.state.displayName, settings]);
   const closeNotificationCenter = useCallback(() => {
     setNotificationCenterOpen(false);
     window.setTimeout(() => notificationTriggerRef.current?.focus(), 0);
@@ -162,18 +218,18 @@ export function App() {
       setCatalog(snapshot);
       if (snapshot.warning) notify({
         ok: false,
-        message: snapshot.warning,
+        message: projectRuntimeText(snapshot.warning, 'Catalog details unavailable while restricted.', '限制時目錄資料未提供。'),
         recovery: { kind: 'retry-catalog-refresh', run: () => loadCatalog(true) },
       });
     } catch (error) {
       notify({
         ok: false,
-        message: (error as Error).message,
+        message: projectRuntimeText((error as Error).message, 'Catalog details unavailable while restricted.', '限制時目錄資料未提供。'),
         recovery: { kind: 'retry-catalog-refresh', run: () => loadCatalog(true) },
       });
     }
     finally { setLoading(false); }
-  }, [notify]);
+  }, [notify, projectRuntimeText]);
 
   const loadHistory = useCallback(async () => {
     setHistoryLoading(true);
@@ -192,30 +248,32 @@ export function App() {
 
   const loadInstalled = useCallback(async () => {
     try { setInstalled(await window.dingDingStore.operations.installed()); }
-    catch (error) { notify({ ok: false, message: (error as Error).message }); }
-  }, [notify]);
+    catch (error) { notify({ ok: false, message: projectRuntimeText((error as Error).message) }); }
+  }, [notify, projectRuntimeText]);
 
   const refreshSourceIsolation = useCallback(async () => {
     setSourceIsolationLoading(true);
     try {
       setSourceIsolationStatus(await window.dingDingStore.sourceJobs.status());
     } catch (error) {
-      notify({ ok: false, message: (error as Error).message });
+      notify({ ok: false, message: projectRuntimeText((error as Error).message) });
     } finally {
       setSourceIsolationLoading(false);
     }
-  }, [notify]);
+  }, [notify, projectRuntimeText]);
 
   useEffect(() => { void refreshSourceIsolation(); }, [refreshSourceIsolation]);
 
   const reportOperation = useCallback((result: { ok: boolean; message: string; messageYue?: string; operationId?: string }, recovery?: RecoveryAction) => {
-    const message = result.messageYue ? label(settings, result.message, result.messageYue) : result.message;
+    const message = schoolProjectionRef.current.restricted
+      ? label(settingsRef.current, result.ok ? 'Operation completed.' : 'Operation could not be completed.', result.ok ? '操作完成。' : '操作未能完成。')
+      : result.messageYue ? label(settingsRef.current, result.message, result.messageYue) : projectRuntimeText(result.message);
     notify({ ok: result.ok, message, operationId: result.operationId, recovery: result.ok ? undefined : recovery });
     announce(message);
     void loadHistory();
     void loadInstalled();
     if (result.ok) void loadCatalog(true);
-  }, [announce, loadCatalog, loadHistory, loadInstalled, notify, settings]);
+  }, [announce, loadCatalog, loadHistory, loadInstalled, notify, projectRuntimeText]);
 
   const retryStoreUpdateCheck = useCallback(async () => {
     try {
@@ -223,11 +281,11 @@ export function App() {
     } catch (error) {
       notify({
         ok: false,
-        message: (error as Error).message,
+        message: projectRuntimeText((error as Error).message, 'Update details unavailable while restricted.', '限制時更新資料未提供。'),
         recovery: { kind: 'retry-store-update-check', run: retryStoreUpdateCheck },
       });
     }
-  }, [notify]);
+  }, [notify, projectRuntimeText]);
 
   useEffect(() => {
     if (updateState.status !== 'failed') return;
@@ -236,10 +294,10 @@ export function App() {
     lastStoreFailure.current = signature;
     notify({
       ok: false,
-      message: updateState.message,
+      message: projectRuntimeText(updateState.message, 'Update details unavailable while restricted.', '限制時更新資料未提供。'),
       recovery: updateState.recoverable ? { kind: 'retry-store-update-check', run: retryStoreUpdateCheck } : undefined,
     });
-  }, [notify, retryStoreUpdateCheck, updateState]);
+  }, [notify, projectRuntimeText, retryStoreUpdateCheck, updateState]);
 
   const handleManagedUpdate = useCallback(async (kind: 'download' | 'cancel' | 'restart', app: CatalogApp, trigger: HTMLButtonElement) => {
     try {
@@ -247,12 +305,16 @@ export function App() {
         const state = await window.dingDingStore.updates.downloadApp({ appId: app.id, decision: 'download-update' });
         setManagedUpdates((current) => ({ ...current, [app.id]: state }));
         const message = 'message' in state ? state.message : undefined;
-        announce(state.status === 'ready' ? `${app.name} update is ready. Choose Restart to install update when the app is safe to restart.` : message ?? `${app.name} update ${state.status}.`);
-        notify({ ok: state.status === 'ready', message: state.status === 'ready' ? `${app.name} is downloaded and verified. It will not install until you choose Restart to install update.` : message ?? `${app.name} update ${state.status}.` });
+        const appLabel = projectRuntimeAppName(app.id, app.name);
+        const safeMessage = message ? projectRuntimeText(message, 'Update details unavailable while restricted.', '限制時更新資料未提供。') : undefined;
+        announce(state.status === 'ready' ? `${appLabel} update is ready. Choose Restart to install update when the app is safe to restart.` : safeMessage ?? `${appLabel} update ${state.status}.`);
+        notify({ ok: state.status === 'ready', message: state.status === 'ready' ? `${appLabel} is downloaded and verified. It will not install until you choose Restart to install update.` : safeMessage ?? `${appLabel} update ${state.status}.` });
       } else if (kind === 'cancel') {
         const state = await window.dingDingStore.updates.cancelApp({ appId: app.id, decision: 'cancel-update' });
         setManagedUpdates((current) => ({ ...current, [app.id]: state }));
-        notify({ ok: state.status === 'cancelled', message: 'message' in state ? state.message : `${app.name} update cancellation requested.` });
+        const appLabel = projectRuntimeAppName(app.id, app.name);
+        const safeMessage = 'message' in state ? projectRuntimeText(state.message, 'Update details unavailable while restricted.', '限制時更新資料未提供.') : undefined;
+        notify({ ok: state.status === 'cancelled', message: safeMessage ?? `${appLabel} update cancellation requested.` });
       } else {
         const result = await window.dingDingStore.updates.restartApp({ appId: app.id, decision: 'restart-to-install' });
         reportOperation(result);
@@ -262,7 +324,7 @@ export function App() {
         }
       }
     } catch (error) {
-      const message = (error as Error).message;
+      const message = projectRuntimeText((error as Error).message, 'Update details unavailable while restricted.', '限制時更新資料未提供。');
       notify({ ok: false, message, recovery: kind === 'download' ? {
         kind: 'retry-managed-update',
         run: () => handleManagedUpdate('download', app, trigger),
@@ -271,44 +333,46 @@ export function App() {
     } finally {
       window.setTimeout(() => trigger.focus(), 0);
     }
-  }, [announce, notify, reportOperation]);
+  }, [announce, notify, projectRuntimeAppName, projectRuntimeText, reportOperation]);
 
   const retrySourceJob = useCallback(async (jobId: string, appId: string, appName: string, returnFocus: HTMLButtonElement) => {
     if (operationRunningRef.current) return;
     operationRunningRef.current = true;
     setRunningAction({ kind: 'build', appId, completed: 0, total: 1 });
-    setSourceTerminal({ appId, appName, jobId, events: [], returnFocus });
+    setSourceTerminal({ appId, appName: projectRuntimeAppName(appId, appName), jobId, events: [], returnFocus });
     try {
       const result = await window.dingDingStore.sourceJobs.retry({ jobId, decision: 'retry' });
       if (result.ok && result.jobId) {
         setSourceTerminal((current) => current?.appId === appId ? { ...current, jobId: result.jobId!, events: [], fallbackMessage: undefined } : current);
         return;
       }
-      setSourceTerminal((current) => current?.appId === appId ? { ...current, fallbackMessage: result.message } : current);
+      setSourceTerminal((current) => current?.appId === appId ? { ...current, fallbackMessage: projectRuntimeText(result.message) } : current);
       reportOperation(result, { kind: 'retry-source-job', run: () => retrySourceJob(jobId, appId, appName, returnFocus) });
     } catch (error) {
-      const message = (error as Error).message;
+      const message = projectRuntimeText((error as Error).message);
       setSourceTerminal((current) => current?.appId === appId ? { ...current, fallbackMessage: message } : current);
       reportOperation({ ok: false, message }, { kind: 'retry-source-job', run: () => retrySourceJob(jobId, appId, appName, returnFocus) });
     } finally {
       operationRunningRef.current = false;
       setRunningAction(null);
     }
-  }, [reportOperation]);
+  }, [projectRuntimeAppName, projectRuntimeText, reportOperation]);
 
   const cancelInstall = useCallback(async (app: CatalogApp, trigger: HTMLButtonElement) => {
     const fallback = trigger.closest('.app-card')?.querySelector<HTMLElement>(`[data-install-action="${app.id}"]`) ?? trigger;
     cancellationFocusTargets.current.set(app.id, fallback);
     try {
       const result = await window.dingDingStore.operations.cancelInstall({ appId: app.id, decision: 'cancel-install' });
-      const message = result.messageYue ? label(settings, result.message, result.messageYue) : result.message;
+      const message = schoolProjectionRef.current.restricted
+        ? label(settingsRef.current, result.ok ? 'Cancellation completed.' : 'Cancellation could not be completed.', result.ok ? '取消完成。' : '取消未能完成。')
+        : result.messageYue ? label(settingsRef.current, result.message, result.messageYue) : projectRuntimeText(result.message);
       notify({ ok: result.ok, message });
       announce(message);
       if (!result.ok) {
         window.setTimeout(() => { if (fallback.isConnected) fallback.focus(); cancellationFocusTargets.current.delete(app.id); }, 0);
       }
     } catch (error) {
-      const message = (error as Error).message;
+      const message = projectRuntimeText((error as Error).message);
       notify({ ok: false, message });
       announce(message);
       window.setTimeout(() => { if (fallback.isConnected) fallback.focus(); cancellationFocusTargets.current.delete(app.id); }, 0);
@@ -316,7 +380,7 @@ export function App() {
       // A successful cancellation unmounts the Cancel button on the next
       // progress event; focus is restored by the final event handler below.
     }
-  }, [announce, notify, settings]);
+  }, [announce, notify, projectRuntimeText]);
 
   const receiveOperationProgress = useCallback((event: OperationProgressEvent) => {
     setOperationProgress((current) => {
@@ -348,10 +412,13 @@ export function App() {
     void window.dingDingStore.operations.status().then((events) => {
       if (!active) return;
       for (const event of events) receiveOperationProgress(event);
-    }).catch((error) => notify({ ok: false, message: (error as Error).message }));
+    }).catch((error) => notify({
+      ok: false,
+      message: projectRuntimeText((error as Error).message, 'Operation details unavailable while restricted.', '限制時操作資料未提供。'),
+    }));
     const remove = window.dingDingStore.operations.subscribe(receiveOperationProgress);
     return () => { active = false; remove(); };
-  }, [notify, receiveOperationProgress]);
+  }, [notify, projectRuntimeText, receiveOperationProgress]);
 
   useEffect(() => window.dingDingStore.sourceJobs.subscribe((event) => {
     setSourceTerminal((current) => {
@@ -400,12 +467,13 @@ export function App() {
     if (kind === 'build') {
       const selectedApp = selectedApps[0];
       setRunningAction({ kind, appId: selectedApp.id, completed: 0, total: 1 });
-      announce(`Preparing the source install for ${selectedApp.name}`);
-      setSourceTerminal({ appId: selectedApp.id, appName: selectedApp.name, jobId: null, events: [], returnFocus: trigger });
+      const selectedAppName = projectRuntimeAppName(selectedApp.id, selectedApp.name);
+      announce(`Preparing the source install for ${selectedAppName}`);
+      setSourceTerminal({ appId: selectedApp.id, appName: selectedAppName, jobId: null, events: [], returnFocus: trigger });
       try {
         const result = await window.dingDingStore.sourceJobs.start({ appId: selectedApp.id, decision: 'build' });
         if (!result.ok || !result.jobId) {
-          setSourceTerminal((current) => current && current.appId === selectedApp.id ? { ...current, fallbackMessage: result.message } : current);
+          setSourceTerminal((current) => current && current.appId === selectedApp.id ? { ...current, fallbackMessage: projectRuntimeText(result.message) } : current);
           reportOperation(result);
           operationRunningRef.current = false;
           setRunningAction(null);
@@ -414,7 +482,7 @@ export function App() {
           setSourceTerminal((current) => current && current.appId === selectedApp.id ? { ...current, jobId } : current);
         }
       } catch (error) {
-        const message = (error as Error).message;
+        const message = projectRuntimeText((error as Error).message);
         setSourceTerminal((current) => current && current.appId === selectedApp.id ? { ...current, fallbackMessage: message } : current);
         reportOperation({ ok: false, message });
         operationRunningRef.current = false;
@@ -426,7 +494,7 @@ export function App() {
       for (const [index, selectedApp] of selectedApps.entries()) {
         const next: RunningAction = { kind, appId: selectedApp.id, completed: index, total: selectedApps.length };
         setRunningAction(next);
-        announce(`Installing ${selectedApp.name}`);
+        announce(`Installing ${projectRuntimeAppName(selectedApp.id, selectedApp.name)}`);
         try {
           const result = await window.dingDingStore.operations.install({ appId: selectedApp.id, decision: 'install' });
             reportOperation(result, result.ok ? undefined : { kind: 'retry-installer', run: () => runImmediateBatch(kind, [selectedApp], trigger) });
@@ -439,7 +507,7 @@ export function App() {
       operationRunningRef.current = false;
       setRunningAction(null);
     }
-  }, [announce, notify, reportOperation]);
+  }, [announce, notify, projectRuntimeAppName, projectRuntimeText, reportOperation]);
 
   const startAction = useCallback(async (kind: ActionKind, selectedApp: CatalogApp, trigger: HTMLButtonElement) => {
     if (kind === 'uninstall') { setAction({ kind, apps: [selectedApp], returnFocus: trigger }); return; }
@@ -463,19 +531,51 @@ export function App() {
 
   const apps = useMemo(() => {
     const versions = new Map(installed.map((record) => [record.appId, record.version]));
-    return (catalog?.apps ?? []).map((item) => ({ ...item, installedVersion: versions.get(item.id) ?? item.installedVersion }));
-  }, [catalog, installed]);
+    return (catalog?.apps ?? [])
+      .map((item) => ({
+        ...item,
+        installedVersion: versions.get(item.id) ?? item.installedVersion,
+        description: schoolMode.restricted
+          ? (schoolModeRestrictedText(item.description, schoolMode.state.displayName, label(settings, 'Description unavailable while restricted.', '限制時描述未提供。')) || label(settings, 'Description unavailable while restricted.', '限制時描述未提供。'))
+          : item.description,
+        repository: schoolMode.restricted && schoolModeHiddenContent(item.repository) ? '' : item.repository,
+        latestReleaseUrl: schoolMode.restricted && schoolModeHiddenContent(item.latestReleaseUrl ?? '') ? null : item.latestReleaseUrl,
+      }))
+      .filter((item) => !schoolMode.restricted || !schoolModeHiddenApp(item.id));
+  }, [catalog, installed, schoolMode.restricted, schoolMode.state.displayName, settings]);
+  const visibleAppIds = useMemo(() => new Set(apps.map((app) => app.id)), [apps]);
+  const visibleManagedUpdates = useMemo(() => {
+    const projected = schoolModeProjectManagedUpdates(managedUpdates, visibleAppIds, schoolMode.restricted);
+    return schoolMode.restricted
+      ? Object.fromEntries(Object.entries(projected).map(([appId, state]) => [appId, state && 'message' in state ? { ...state, message: schoolModeRestrictedText(state.message, schoolMode.state.displayName, label(settings, 'Update details unavailable while restricted.', '限制時更新資料未提供。')) } : state]))
+      : projected;
+  }, [managedUpdates, schoolMode.restricted, schoolMode.state.displayName, settings, visibleAppIds]);
+  const visibleInstalled = useMemo(() => installed.filter((record) => visibleAppIds.has(record.appId)), [installed, visibleAppIds]);
+  const visibleHistory = useMemo(() => history
+    .filter(() => schoolModeAllowsHistoryEntry(schoolMode.restricted))
+    .filter((entry) => !schoolMode.restricted || !schoolModeHiddenContent(JSON.stringify(entry)))
+    .map((entry) => ({
+      ...entry,
+      displayName: schoolModeDisplayText(entry.displayName, schoolMode.state.displayName),
+      message: schoolModeDisplayText(entry.message, schoolMode.state.displayName),
+    })), [history, schoolMode.restricted, schoolMode.state.displayName]);
+  const visibleHistoryRevisions = useMemo(() => (schoolMode.restricted ? [] : historyRevisions)
+    .map((revision) => ({
+      ...revision,
+      subject: schoolModeDisplayText(revision.subject, schoolMode.state.displayName),
+      label: schoolModeDisplayText(revision.label, schoolMode.state.displayName),
+    })), [historyRevisions, schoolMode.restricted, schoolMode.state.displayName]);
 
   useEffect(() => {
     if (activeTab !== 'updates' || loading || !catalog) return;
-    const managedIds = new Set(installed.filter((record) => record.ownership && record.uninstall).map((record) => record.appId));
-    for (const app of catalog.apps.filter((item) => item.installedVersion && managedIds.has(item.id) && !managedChecks.current.has(item.id))) {
+    const managedIds = new Set(visibleInstalled.filter((record) => record.ownership && record.uninstall).map((record) => record.appId));
+    for (const app of apps.filter((item) => item.installedVersion && managedIds.has(item.id) && !managedChecks.current.has(item.id))) {
       managedChecks.current.add(app.id);
       void window.dingDingStore.updates.checkApp(app.id)
         .then((state) => setManagedUpdates((current) => ({ ...current, [app.id]: state })))
         .catch((error) => notify({
           ok: false,
-          message: (error as Error).message,
+          message: projectRuntimeText((error as Error).message, 'Update details unavailable while restricted.', '限制時更新資料未提供。'),
           recovery: {
             kind: 'retry-managed-update',
             run: async () => {
@@ -485,7 +585,7 @@ export function App() {
           },
         }));
     }
-  }, [activeTab, catalog, installed, loading, notify]);
+  }, [activeTab, apps, catalog, loading, notify, projectRuntimeText, visibleInstalled]);
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -784,7 +884,7 @@ export function App() {
     if (appearance.selectedKey) window.document.querySelector(`[data-el="${appearance.selectedKey}"]`)?.setAttribute('data-el-selected', 'true');
   }, [appearance.selectedKey, appearance.elements, activeTab, subTab]);
 
-  const updatesBadge = Boolean(catalog?.apps.some((app) => app.updateState === 'available') || Object.values(managedUpdates).some((state) => state.status === 'ready' || state.status === 'downloading') || updateState.status === 'ready');
+  const updatesBadge = Boolean(apps.some((app) => app.updateState === 'available') || Object.values(visibleManagedUpdates).some((state) => state.status === 'ready' || state.status === 'downloading') || updateState.status === 'ready');
   const updateVersion = updateState.status === 'available' || updateState.status === 'downloading' || updateState.status === 'ready' ? updateState.version : null;
   useEffect(() => {
     if (updateVersion && updateVersion !== dismissedUpdateVersion) setDismissedUpdateVersion(null);
@@ -795,21 +895,41 @@ export function App() {
       return;
     }
     const result = await window.dingDingStore.updates.restartStore();
-    notify({ ok: result.ok, message: result.message });
-  }, [action, notify, runningAction, schedule.dirty, sourceTerminal]);
+    notify({
+      ok: result.ok,
+      message: projectRuntimeText(result.message, 'Update details unavailable while restricted.', '限制時更新資料未提供。'),
+    });
+  }, [action, notify, projectRuntimeText, runningAction, schedule.dirty, sourceTerminal]);
   const entries = useMemo(() => buildRegistry({
     settings,
     workspace: workspace.workspace,
     appearance: appearance.document.elements,
     schedule: schedule.draft ?? DEFAULT_SCHEDULE,
-    apps: catalog?.apps ?? [],
-    schoolModeEnabled: schoolMode.state.enabled,
+    apps,
+    schoolModeEnabled: schoolMode.restricted,
     schoolModeName: schoolMode.state.displayName,
-  }), [settings, workspace.workspace, appearance.document, schedule.draft, catalog, schoolMode.state.enabled, schoolMode.state.displayName]);
+  }), [settings, workspace.workspace, appearance.document, schedule.draft, apps, schoolMode.restricted, schoolMode.state.displayName]);
 
   const meta = TAB_META[activeTab];
   const subtitle = PAGE_SUBTITLE[activeTab];
   const rail = workspace.workspace.rail;
+  const hiddenSourceTerminal = Boolean(sourceTerminal && schoolMode.restricted && schoolModeHiddenApp(sourceTerminal.appId));
+  const visibleSourceTerminal = useMemo(() => {
+    if (!sourceTerminal || !hiddenSourceTerminal) return sourceTerminal;
+    const latest = sourceTerminal.events.at(-1);
+    const neutralEvent: Readonly<SourceTerminalEvent> = {
+      jobId: sourceTerminal.jobId ?? '00000000-0000-4000-8000-000000000000',
+      appId: 'restricted-operation',
+      sequence: 0,
+      at: latest?.at ?? '1970-01-01T00:00:00.000Z',
+      stream: 'progress',
+      state: latest?.state ?? 'queued',
+      text: label(settings, 'Restricted operation status', '限制操作狀態'),
+      progress: latest?.progress ?? 0,
+      final: latest?.final ?? false,
+    };
+    return { ...sourceTerminal, appName: label(settings, 'Restricted operation', '限制操作'), events: [neutralEvent], fallbackMessage: undefined };
+  }, [hiddenSourceTerminal, settings, sourceTerminal]);
 
   return (
     <SearchContext.Provider value={search}>
@@ -827,7 +947,7 @@ export function App() {
           <strong {...el('titlebar-brand')}>{settings.displayName}</strong>
           <span className="dev-badge" {...el('titlebar-badge')}>Preview 0.1.0</span>
           <div className="drag-space" />
-          <button ref={notificationTriggerRef} className="notification-button" onClick={() => setNotificationCenterOpen(true)} aria-label={`Open notification centre, ${notifications.unreadCount} unread`}><Icon>notifications</Icon>{notifications.unreadCount > 0 && <span className="notification-count" aria-hidden="true">{Math.min(notifications.unreadCount, 99)}</span>}</button>
+          <button ref={notificationTriggerRef} className="notification-button" onClick={() => setNotificationCenterOpen(true)} aria-label={`Open notification centre, ${visibleUnreadCount} unread`}><Icon>notifications</Icon>{visibleUnreadCount > 0 && <span className="notification-count" aria-hidden="true">{Math.min(visibleUnreadCount, 99)}</span>}</button>
           <button onClick={() => window.dingDingStore.window.minimize()} aria-label="Minimize"><Icon>remove</Icon></button>
           <button onClick={() => window.dingDingStore.window.toggleMaximize()} aria-label="Maximize or restore"><Icon>crop_square</Icon></button>
           <button className="close-window" onClick={() => window.dingDingStore.window.close()} aria-label="Close"><Icon>close</Icon></button>
@@ -848,18 +968,20 @@ export function App() {
           onRenameHandled={() => setRenameRequest(null)}
         />
 
-        <main className="content" id="surface-panel" role="tabpanel" aria-labelledby={`tab-${activeTab}`} {...el('content-surface')}>
+        <main ref={safeFocusRef} className="content" id="surface-panel" role="tabpanel" tabIndex={-1} aria-labelledby={`tab-${activeTab}`} {...el('content-surface')}>
           {(((updateState.status === 'available' || updateState.status === 'downloading' || updateState.status === 'ready') && updateVersion !== dismissedUpdateVersion) || updateState.status === 'failed') && (
             <section className={`update-banner ${updateState.status}`} role="status" {...el('update-banner')}>
               <Icon>system_update</Icon>
               <div>
                 <strong>{updateState.status === 'ready' ? label(settings, `${settings.displayName} ${updateState.version} is ready`, `${settings.displayName} ${updateState.version} 準備好喇`) : updateState.status === 'available' ? label(settings, `Version ${updateState.version} is available`, `版本 ${updateState.version} 有得更新`) : updateState.status === 'downloading' ? label(settings, 'Downloading update…', '下載緊更新…') : label(settings, 'Update check failed', '更新檢查失敗')}</strong>
-                <p>{updateState.status === 'failed' ? updateState.message : label(settings, 'Unsigned artifact: HTTPS feed metadata and package hashes protect transport integrity; no code signature is claimed.', '未簽名檔案：HTTPS feed metadata 同 package hash 保護傳輸完整性，但唔宣稱有程式簽名。')}</p>
-                {(updateState.status === 'available' || updateState.status === 'downloading' || updateState.status === 'ready') && <p className="supporting">{label(settings, 'Package', '套件')} {updateState.package.fileName} · SHA-1 {updateState.package.sha1} · {updateState.package.bytes.toLocaleString()} bytes</p>}
+                <p>{updateState.status === 'failed'
+                  ? projectRuntimeText(updateState.message, 'Update details unavailable while restricted.', '限制時更新資料未提供。')
+                  : label(settings, 'Unsigned artifact: HTTPS feed metadata and package hashes protect transport integrity; no code signature is claimed.', '未簽名檔案：HTTPS feed metadata 同 package hash 保護傳輸完整性，但唔宣稱有程式簽名。')}</p>
+                {(updateState.status === 'available' || updateState.status === 'downloading' || updateState.status === 'ready') && <p className="supporting">{schoolMode.restricted ? label(settings, 'Package details unavailable while restricted.', '限制時套件資料未提供。') : <>{label(settings, 'Package', '套件')} {updateState.package.fileName} · SHA-1 {updateState.package.sha1} · {updateState.package.bytes.toLocaleString()} bytes</>}</p>}
                 {updateState.status === 'failed' && updateState.rollbackAvailable && <p className="supporting">{label(settings, 'The previous version remains untouched. Squirrel.Windows rollback was detected or may still be available; retry only after reviewing the release notes.', '上一個版本原封不動。偵測到 Squirrel.Windows rollback，或者 rollback 仍然可用；睇完 release notes 先再試。')}</p>}
               </div>
-              {(updateState.status === 'available' || updateState.status === 'ready') && <a className="text-button" href={updateState.releaseNotesUrl} onClick={(event) => { event.preventDefault(); void window.dingDingStore.updates.openReleaseNotes(updateState.releaseNotesUrl).then((result) => notify({ ok: result.ok, message: result.message })); }}>{label(settings, 'Release notes', 'Release notes')}</a>}
-              {updateState.status === 'available' && <button className="filled-button" onClick={() => void window.dingDingStore.updates.downloadStore().then(setUpdateState).catch((error) => notify({ ok: false, message: (error as Error).message, recovery: { kind: 'retry-store-update-check', run: retryStoreUpdateCheck } }))}>{label(settings, 'Download', '下載')}</button>}
+              {!schoolMode.restricted && (updateState.status === 'available' || updateState.status === 'ready') && <a className="text-button" href={updateState.releaseNotesUrl} onClick={(event) => { event.preventDefault(); void window.dingDingStore.updates.openReleaseNotes(updateState.releaseNotesUrl).then((result) => notify({ ok: result.ok, message: projectRuntimeText(result.message) })); }}>{label(settings, 'Release notes', 'Release notes')}</a>}
+              {updateState.status === 'available' && <button className="filled-button" onClick={() => void window.dingDingStore.updates.downloadStore().then(setUpdateState).catch((error) => notify({ ok: false, message: projectRuntimeText((error as Error).message), recovery: { kind: 'retry-store-update-check', run: retryStoreUpdateCheck } }))}>{label(settings, 'Download', '下載')}</button>}
               {updateState.status === 'downloading' && <button className="text-button" onClick={() => void window.dingDingStore.updates.cancelStoreDownload().then(setUpdateState)}>{label(settings, 'Cancel download', '取消下載')}</button>}
               {updateState.status === 'failed' && updateState.recoverable && <button className="filled-button" onClick={() => void retryStoreUpdateCheck()}>{label(settings, 'Retry check', '再檢查')}</button>}
               {updateState.status === 'ready' && <><button className="text-button" onClick={() => setDismissedUpdateVersion(updateState.version)}>{label(settings, 'Later', '遲啲先')}</button><button className="filled-button" onClick={() => void restartUpdate()}>{label(settings, 'Restart to install update', '重新啟動安裝更新')}</button></>}
@@ -883,12 +1005,12 @@ export function App() {
             <AppsPage
               mode={activeTab}
               apps={apps}
-              installed={installed}
+              installed={visibleInstalled}
               settings={settings}
               loading={loading}
               onAction={(kind, app, trigger) => void startAction(kind, app, trigger)}
               onManagedUpdate={(kind, app, trigger) => void handleManagedUpdate(kind, app, trigger)}
-              managedUpdates={managedUpdates}
+              managedUpdates={visibleManagedUpdates}
               onBulkAction={(kind, selectedApps, trigger) => void startBulkAction(kind, selectedApps, trigger)}
               runningAction={runningAction}
               operationProgress={operationProgress}
@@ -898,8 +1020,8 @@ export function App() {
               onRegexHandled={() => setRegexRequest(null)}
             />
           )}
-          {activeTab === 'docs' && <DocsPage settings={settings} schoolModeEnabled={schoolMode.state.enabled} schoolModeName={schoolMode.state.displayName} notify={notify} openRegex={regexRequest === 'docs'} onRegexHandled={() => setRegexRequest(null)} articleRequest={docRequest} onArticleHandled={() => setDocRequest(null)} />}
-          {activeTab === 'activity' && <ActivityPage entries={history} revisions={historyRevisions} loading={historyLoading} settings={settings} openRegex={regexRequest === 'activity'} onRegexHandled={() => setRegexRequest(null)} notify={notify} onHistoryChanged={reloadHistoryAndSettings} />}
+          {activeTab === 'docs' && <DocsPage settings={settings} schoolModeEnabled={schoolMode.restricted} schoolModeName={schoolMode.state.displayName} notify={notify} openRegex={regexRequest === 'docs'} onRegexHandled={() => setRegexRequest(null)} articleRequest={docRequest} onArticleHandled={() => setDocRequest(null)} />}
+          {activeTab === 'activity' && <ActivityPage entries={visibleHistory} revisions={visibleHistoryRevisions} loading={historyLoading} settings={settings} openRegex={regexRequest === 'activity'} onRegexHandled={() => setRegexRequest(null)} notify={notify} onHistoryChanged={reloadHistoryAndSettings} />}
           {activeTab === 'settings' && (
             <SettingsPage
               settings={baseSettings}
@@ -923,21 +1045,22 @@ export function App() {
 
         {panelOpen && appearance.editMode && <AppearancePanel appearance={appearance} settings={settings} notify={notify} onClose={() => setPanelOpen(false)} />}
 
-        {action && <ActionDialog action={action} settings={settings} onClose={closeAction} onResult={reportOperation} />}
+        {action && !schoolMode.restricted && <ActionDialog action={action} settings={settings} onClose={closeAction} onResult={reportOperation} />}
 
-        {notificationCenterOpen && <NotificationCenter records={notifications.records} settings={settings} persistenceAvailable={notifications.persistenceAvailable} onDismissMany={notifications.dismissMany} onDeleteMany={notifications.deleteMany} notify={notify} onClose={closeNotificationCenter} openRegex={regexRequest === 'notifications'} onRegexHandled={() => setRegexRequest(null)} />}
-        {sourceTerminal && (
+        {notificationCenterOpen && <NotificationCenter records={visibleNotificationRecords} settings={settings} persistenceAvailable={notifications.persistenceAvailable} onDismissMany={notifications.dismissMany} onDeleteMany={notifications.deleteMany} notify={notify} onClose={closeNotificationCenter} openRegex={regexRequest === 'notifications'} onRegexHandled={() => setRegexRequest(null)} />}
+        {visibleSourceTerminal && (
           <SourceTerminalPanel
-            appName={sourceTerminal.appName}
-            events={sourceTerminal.events}
-            fallbackMessage={sourceTerminal.fallbackMessage}
+            appName={visibleSourceTerminal.appName}
+            events={visibleSourceTerminal.events}
+            fallbackMessage={visibleSourceTerminal.fallbackMessage}
             isolationStatus={sourceIsolationStatus}
             isolationLoading={sourceIsolationLoading}
             onRefreshIsolation={() => void refreshSourceIsolation()}
             settings={settings}
-            onCancel={() => sourceTerminal.jobId && void window.dingDingStore.sourceJobs.cancel({ jobId: sourceTerminal.jobId, decision: 'cancel' })}
+            onCancel={() => sourceTerminal?.jobId && void window.dingDingStore.sourceJobs.cancel({ jobId: sourceTerminal.jobId, decision: 'cancel' })}
             onRetry={() => void retrySourceTerminal()}
             onClose={closeSourceTerminal}
+            allowRetry={!hiddenSourceTerminal}
           />
         )}
 
@@ -952,9 +1075,9 @@ export function App() {
           />
         )}
 
-        <SnackbarStack notices={notifications.active} settings={settings} onDismiss={notifications.dismiss} />
+        <SnackbarStack notices={visibleActiveNotices} settings={settings} onDismiss={notifications.dismiss} />
 
-        {dimSum && !schoolMode.state.enabled && (
+        {dimSum && !schoolMode.restricted && (
           <aside className="dim-sum-surprise" role="status" aria-live="polite">
             <img src={dimSum.photoUrl} alt={`${dimSum.alt ?? dimSum.nameEn ?? 'Dim sum'} · ${dimSum.nameZhHant ?? ''}`} />
             <div><strong>{label(settings, 'A little dim sum surprise', '有少少點心驚喜')}</strong><span>{label(settings, `${dimSum.nameEn} · ${dimSum.nameZhHant}`, `${dimSum.nameZhHant} · ${dimSum.nameEn}`)}</span></div>

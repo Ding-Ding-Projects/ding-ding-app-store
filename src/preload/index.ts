@@ -22,8 +22,10 @@ import type {
   ScheduleConfig,
   ScheduleStatus,
   ScheduleTaskId,
+  SchoolModeCredentialChangeRequest,
   SchoolModeConfigureRequest,
   SchoolModeRenameRequest,
+  SchoolModeSnapshot,
   SchoolModeToggleRequest,
   SchoolModeVerifyRequest,
   SourceJobCancelRequest,
@@ -35,13 +37,17 @@ import type {
   SettingsProvenance,
   UserSettings,
 } from '../shared/contracts.js';
+import {
+  parseSchoolModeMutationResult,
+  parseSchoolModeSnapshot,
+  parseSchoolModeVerifyResult,
+} from './school-mode-parser.js';
 
 const SOURCE_STATES = new Set(['queued', 'preparing', 'running', 'repairing', 'cancelling', 'succeeded', 'failed', 'cancelled']);
 const SOURCE_STREAMS = new Set(['system', 'progress', 'stdout', 'stderr']);
 const SOURCE_EVENT_KEYS = new Set(['jobId', 'appId', 'sequence', 'at', 'stream', 'state', 'text', 'progress', 'final']);
 const OPERATION_PHASES = new Set(['queued', 'resolving', 'downloading', 'extracting', 'launching', 'committing', 'installer-running', 'cancelling', 'succeeded', 'failed', 'cancelled', 'unknown']);
 const OPERATION_EVENT_KEYS = new Set(['operationId', 'appId', 'kind', 'phase', 'progress', 'bytesReceived', 'bytesTotal', 'cancellable', 'locked', 'message', 'final']);
-
 function parseSourceIsolationStatus(value: unknown): SourceIsolationStatus {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('The source isolation status response was invalid.');
   const status = value as Record<string, unknown>;
@@ -158,11 +164,20 @@ const api: DingDingStoreApi = {
     provenance: () => ipcRenderer.invoke('settings:provenance') as Promise<SettingsProvenance>,
   },
   schoolMode: {
-    load: () => ipcRenderer.invoke('school-mode:load'),
-    configure: (request: SchoolModeConfigureRequest) => ipcRenderer.invoke('school-mode:configure', request),
-    rename: (request: SchoolModeRenameRequest) => ipcRenderer.invoke('school-mode:rename', request),
-    setEnabled: (request: SchoolModeToggleRequest) => ipcRenderer.invoke('school-mode:set-enabled', request),
-    verify: (request: SchoolModeVerifyRequest) => ipcRenderer.invoke('school-mode:verify', request),
+    load: async () => parseSchoolModeSnapshot(await ipcRenderer.invoke('school-mode:load')),
+    configure: async (request: SchoolModeConfigureRequest) => parseSchoolModeMutationResult(await ipcRenderer.invoke('school-mode:configure', request)),
+    rename: async (request: SchoolModeRenameRequest) => parseSchoolModeMutationResult(await ipcRenderer.invoke('school-mode:rename', request)),
+    setEnabled: async (request: SchoolModeToggleRequest) => parseSchoolModeMutationResult(await ipcRenderer.invoke('school-mode:set-enabled', request)),
+    changeCredential: async (request: SchoolModeCredentialChangeRequest) => parseSchoolModeMutationResult(await ipcRenderer.invoke('school-mode:change-credential', request)),
+    verify: async (request: SchoolModeVerifyRequest) => parseSchoolModeVerifyResult(await ipcRenderer.invoke('school-mode:verify', request)),
+    subscribe: (listener: (snapshot: SchoolModeSnapshot) => void, onUnavailable?: () => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, value: unknown) => {
+        try { listener(parseSchoolModeSnapshot(value)); }
+        catch { onUnavailable?.(); /* Invalid or overprivileged snapshots never cross the preload boundary. */ }
+      };
+      ipcRenderer.on('school-mode:changed', handler);
+      return () => ipcRenderer.removeListener('school-mode:changed', handler);
+    },
   },
   history: {
     list: () => ipcRenderer.invoke('history:list'),

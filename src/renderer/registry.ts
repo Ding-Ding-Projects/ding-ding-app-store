@@ -19,6 +19,12 @@ import type {
 } from '../shared/contracts';
 import { GENERATED_DOCS } from './generated-docs';
 import type { SurfaceId } from './search';
+import {
+  SCHOOL_MODE_HIDDEN_ARTICLE_IDS,
+  schoolModeDisplayText,
+  schoolModeHiddenApp,
+  schoolModeHiddenArticle,
+} from '../shared/school-mode';
 
 /**
  * The command registry. Every page, command, setting, appearance control, and schedule field is one
@@ -329,6 +335,31 @@ export interface RegistryContext {
   schoolModeName?: string;
 }
 
+/**
+ * Search must not be a side door back into a capability hidden by the shared
+ * presentation lock. Keep this inventory deliberately narrow: it applies only
+ * to palette labels and keywords, never to unrelated catalog/history prose.
+ */
+const SCHOOL_MODE_FORBIDDEN_PALETTE_TERM = /\b(?:language|funny|voice|cantonese|bilingual|narrator)\b|粵語|幽默|旁白/i;
+
+function schoolModeRestrictedEntry(entry: Entry): Entry | null {
+  // The shared-mode action is the one intentional exception: its chosen name
+  // is user data and remains searchable even if it happens to contain a term.
+  if (entry.id === 'cmd:open-school-mode') {
+    return { ...entry, yue: entry.en };
+  }
+  const searchable = `${entry.en}\n${entry.keywords.join('\n')}`;
+  if (SCHOOL_MODE_FORBIDDEN_PALETTE_TERM.test(searchable)) return null;
+  return {
+    ...entry,
+    yue: entry.en,
+    keywords: entry.keywords.filter((keyword) => !SCHOOL_MODE_FORBIDDEN_PALETTE_TERM.test(keyword)),
+    control: entry.control?.kind === 'select'
+      ? { ...entry.control, options: entry.control.options.map((option) => ({ ...option, yue: option.en })) }
+      : entry.control,
+  };
+}
+
 const command = (id: CommandId, en: string, yue: string, icon: string, keywords: string[], group: EntryGroup, target?: EntryTarget): Entry => ({
   id: `cmd:${id}`, kind: 'command', group, icon, en, yue, keywords, action: { type: 'command', command: id, target },
 });
@@ -417,14 +448,16 @@ const appearanceControl = (token: TokenId, override: ElementOverride | undefined
 export function buildRegistry(context: RegistryContext): Entry[] {
   const { settings, workspace, appearance, schedule, apps, schoolModeEnabled = false, schoolModeName = 'School mode' } = context;
   const entries: Entry[] = [];
+  const visibleSurfaces = SURFACES.map((surface) => schoolModeEnabled && surface.surface === 'settings.general'
+    ? { ...surface, keywords: ['settings', 'shared', 'credential', 'source', 'repair'] }
+    : surface);
 
   const schoolHiddenSetting = (field: SettingField) => schoolModeEnabled && (
     field.key === 'language' || field.key === 'englishFunnyLevel' || field.key === 'cantoneseFunnyLevel' ||
     field.key === 'narratorLanguage' || field.key === 'narratorEnabled' || field.key === 'narratorReducedSound'
   );
-  const schoolHiddenText = (value: string) => /dim[ -]?sum|personal[ -]?vocab|cantonese|bilingual|funny level|幽默|粵語|點心/i.test(value);
 
-  for (const surface of SURFACES) {
+  for (const surface of visibleSurfaces) {
     entries.push({
       id: `page:${surface.surface}`, kind: 'page', group: 'Pages', icon: surface.icon,
       en: `Open ${surface.en}`, yue: `開 ${surface.yue}`, keywords: surface.keywords,
@@ -433,16 +466,19 @@ export function buildRegistry(context: RegistryContext): Entry[] {
   }
 
   for (const article of GENERATED_DOCS) {
-    if ((schoolModeEnabled && article.id === 'school-mode') || (schoolModeEnabled && schoolHiddenText(`${article.id} ${article.title} ${article.titleYue} ${article.category}`))) continue;
-    const visibleArticle = article.id === 'school-mode' && schoolModeName !== 'School mode'
-      ? { ...article, title: article.title.replaceAll('School mode', schoolModeName), titleYue: article.titleYue.replaceAll('School mode', schoolModeName) }
-      : article;
+    if (schoolModeEnabled && schoolModeHiddenArticle(article.id)) continue;
+    const restrictedTitle = article.id === 'settings-language-and-display-name' ? 'Settings and display name' : schoolModeDisplayText(article.title, schoolModeName);
+    const visibleArticle = {
+      ...article,
+      title: schoolModeEnabled ? restrictedTitle : schoolModeDisplayText(article.title, schoolModeName),
+      titleYue: schoolModeEnabled ? restrictedTitle : schoolModeDisplayText(article.titleYue, schoolModeName),
+    };
     entries.push(command(
       `open-doc:${visibleArticle.id}`,
       `Open article: ${visibleArticle.title}`,
       `開文章：${visibleArticle.titleYue}`,
       'menu_book',
-      [visibleArticle.id, visibleArticle.catalogAppId ?? '', visibleArticle.category, visibleArticle.status, visibleArticle.source ?? 'canonical', ...visibleArticle.related],
+      [visibleArticle.id, visibleArticle.catalogAppId ?? '', visibleArticle.category, visibleArticle.status, visibleArticle.source ?? 'canonical', ...visibleArticle.related.filter((relatedId) => !(SCHOOL_MODE_HIDDEN_ARTICLE_IDS as readonly string[]).includes(relatedId))],
       'Pages',
       { surface: 'docs', articleId: visibleArticle.id, focusId: `docs-tab-${visibleArticle.id}` },
     ));
@@ -482,9 +518,12 @@ export function buildRegistry(context: RegistryContext): Entry[] {
   }
 
   for (const field of SCHEDULE_FIELDS) {
+    const visibleKeywords = schoolModeEnabled && field.key === 'rules'
+      ? field.keywords.filter((keyword) => keyword !== 'language')
+      : field.keywords;
     entries.push({
       id: `sched:${field.key}`, kind: 'schedule', group: 'Schedule', icon: 'schedule',
-      en: `Schedule: ${field.en}`, yue: `排程：${field.yue}`, keywords: [field.key, ...field.keywords],
+      en: `Schedule: ${field.en}`, yue: `排程：${field.yue}`, keywords: [field.key, ...visibleKeywords],
       action: { type: 'set-schedule', key: field.key, value: null, target: scheduleTarget(field.key) },
       control: scheduleControl(field, schedule),
     });
@@ -496,11 +535,11 @@ export function buildRegistry(context: RegistryContext): Entry[] {
     command('open-changelog', 'Open the changelog viewer', '開更新記錄', 'history', ['release', 'version', 'commit'], 'Pages'),
     command('clear-all-searches', 'Clear all searches', '清除所有搜尋', 'search_off', ['reset', 'filter'], 'Search'),
     command('focus-tab-search', 'Focus tab search', '跳去分頁搜尋', 'search', ['tabs', 'filter', 'ctrl shift k'], 'Search'),
-    command('open-school-mode', `Open ${schoolModeName} settings`, `開 ${schoolModeName} 設定`, 'settings', [schoolModeName, 'school', 'mode', 'unlock', 'credential', 'reset'], 'Settings', { surface: 'settings.general', focusId: 'school-mode-title' }),
+    command('open-school-mode', `Open ${schoolModeName} settings`, `開 ${schoolModeName} 設定`, 'settings', schoolModeName === 'School mode' ? [schoolModeName, 'school', 'mode', 'unlock', 'credential', 'reset'] : [schoolModeName, 'unlock', 'credential', 'reset'], 'Settings', { surface: 'settings.general', focusId: 'school-mode-title' }),
     command('open-source-details', 'Open source execution isolation details', '開 source 執行隔離詳情', 'info', ['source', 'repair', 'OpenCode', 'isolation', 'guest', 'transport', 'sandbox', 'status'], 'Settings', { surface: 'settings.general', focusId: 'source-isolation-title' }),
   );
 
-  for (const surface of SURFACES) {
+  for (const surface of visibleSurfaces) {
     entries.push(command(`open-regex:${surface.surface}`, `Open regex builder for ${surface.en}`, `開 ${surface.yue} 嘅 regex 建造器`, 'regular_expression', ['regex', surface.surface], 'Search'));
     entries.push(command(`clear-search:${surface.surface}`, `Clear search in ${surface.en}`, `清除 ${surface.yue} 嘅搜尋`, 'search_off', ['clear', surface.surface], 'Search'));
   }
@@ -538,12 +577,14 @@ export function buildRegistry(context: RegistryContext): Entry[] {
     command('collapse-all-groups', 'Collapse all groups', '收埋所有分組', 'chevron_right', ['group'], 'Tabs'),
     command('show-overflow', 'Show the tab overflow menu', '顯示分頁溢出選單', 'more_horiz', ['overflow'], 'Tabs'),
     command('reset-tabs', 'Reset tab layout', '重設分頁版面', 'restart_alt', ['reset', 'tabs'], 'Tabs'),
-    command('export-tabs', 'Export tab layout', '匯出分頁版面', 'download', ['export', 'tabs'], 'Tabs'),
-    command('open-tabs-in-code', 'Open tab layout export in VS Code', '喺 VS Code 開分頁版面匯出', 'code', ['export', 'tabs', 'vscode'], 'Tabs'),
-    command('import-tabs', 'Import tab layout', '匯入分頁版面', 'upload', ['import', 'tabs'], 'Tabs'),
     command('toggle-badges', workspace.rail.showBadges ? 'Hide tab badges' : 'Show tab badges', workspace.rail.showBadges ? '收起分頁徽章' : '顯示分頁徽章', 'tab', ['badge'], 'Tabs'),
     command('toggle-color-bar', workspace.rail.showGroupColorBar ? 'Hide group colour bar' : 'Show group colour bar', workspace.rail.showGroupColorBar ? '收起分組色條' : '顯示分組色條', 'palette', ['group', 'colour'], 'Tabs'),
     command('toggle-pinned-icon-only', workspace.rail.pinnedIconOnly ? 'Show labels on pinned tabs' : 'Show pinned tabs as icons only', workspace.rail.pinnedIconOnly ? '釘住分頁顯示文字' : '釘住分頁淨係顯示圖示', 'push_pin', ['pin'], 'Tabs'),
+  );
+  if (!schoolModeEnabled) entries.push(
+    command('export-tabs', 'Export tab layout', '匯出分頁版面', 'download', ['export', 'tabs'], 'Tabs'),
+    command('open-tabs-in-code', 'Open tab layout export in VS Code', '喺 VS Code 開分頁版面匯出', 'code', ['export', 'tabs', 'vscode'], 'Tabs'),
+    command('import-tabs', 'Import tab layout', '匯入分頁版面', 'upload', ['import', 'tabs'], 'Tabs'),
   );
   for (const row of RAIL_COMMANDS) entries.push(command(row.command, row.en, row.yue, 'tab', ['rail', 'layout'], 'Tabs'));
 
@@ -575,7 +616,7 @@ export function buildRegistry(context: RegistryContext): Entry[] {
   }
 
   for (const app of apps) {
-    if (schoolModeEnabled && schoolHiddenText(`${app.id} ${app.name} ${app.repository}`)) continue;
+    if (schoolModeEnabled && schoolModeHiddenApp(app.id)) continue;
     entries.push({
       id: `app:${app.id}`, kind: 'app', group: 'Apps', icon: 'deployed_code',
       en: app.name, yue: app.name, keywords: [app.repository, app.packageType, app.updateState],
@@ -583,7 +624,10 @@ export function buildRegistry(context: RegistryContext): Entry[] {
     });
   }
 
-  return entries;
+  return schoolModeEnabled ? entries.flatMap((entry) => {
+    const projected = schoolModeRestrictedEntry(entry);
+    return projected ? [projected] : [];
+  }) : entries;
 }
 
 export const ALL_SURFACE_IDS: readonly SurfaceId[] = SURFACE_IDS;

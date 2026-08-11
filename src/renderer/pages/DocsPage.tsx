@@ -11,6 +11,7 @@ import { makeMatcher, useSurfaceSearch } from '../search';
 import { downloadText } from '../files';
 import { isExternalEditorBridgeAvailable, openExportInVsCode } from '../external-editor';
 import type { Notify } from '../notify';
+import { schoolModeDisplayText, schoolModeDocumentText, schoolModeHiddenArticle } from '../../shared/school-mode';
 
 export const docs = GENERATED_DOCS;
 
@@ -27,11 +28,27 @@ export function DocsPage({ settings, schoolModeEnabled = false, schoolModeName =
   const search = useSurfaceSearch('docs');
   const matcher = useMemo(() => makeMatcher(search.state), [search.state]);
   const availableDocs = useMemo(() => docs
-    .filter((article) => !(schoolModeEnabled && article.id === 'school-mode'))
+    .filter((article) => !(schoolModeEnabled && schoolModeHiddenArticle(article.id)))
     .map((article) => {
-      if (schoolModeName === 'School mode' || article.id !== 'school-mode') return article;
-      const replace = (value: string) => value.replaceAll('School mode', schoolModeName).replaceAll('school mode', schoolModeName);
-      return { ...article, title: replace(article.title), titleYue: replace(article.titleYue), summary: replace(article.summary), body: replace(article.body) };
+      if (schoolModeEnabled) {
+        const title = article.id === 'settings-language-and-display-name'
+          ? 'Settings and display name'
+          : schoolModeDocumentText(article.title, schoolModeName) || 'Documentation';
+        return {
+          ...article,
+          title,
+          titleYue: title,
+          summary: schoolModeDocumentText(article.summary, schoolModeName) || 'Documentation available in restricted presentation.',
+          body: schoolModeDocumentText(article.body, schoolModeName),
+        };
+      }
+      return {
+        ...article,
+        title: schoolModeDisplayText(article.title, schoolModeName),
+        titleYue: schoolModeDisplayText(article.titleYue, schoolModeName),
+        summary: schoolModeDisplayText(article.summary, schoolModeName),
+        body: schoolModeDisplayText(article.body, schoolModeName),
+      };
     }), [schoolModeEnabled, schoolModeName]);
   const shown = useMemo(() => availableDocs.filter((article) => matcher(`${article.title}\n${article.titleYue}\n${article.category}\n${article.status}\n${article.summary}\n${article.body}`)), [availableDocs, matcher]);
   const knownIds = useMemo(() => new Set(availableDocs.map((article) => article.id)), [availableDocs]);

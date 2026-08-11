@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RECOVERY_ACTION_KINDS } from '../notify';
 import type { ActiveNotice, Notice, NotificationRecord, Notify, RecoveryActionMetadata } from '../notify';
+import { SCHOOL_MODE_MUTATION_CODES, type SchoolModeMutationCode } from '../../shared/contracts';
 
 export const NOTIFICATION_STORAGE_KEY = 'ding-ding-app-store.notifications.v1';
 export const MAX_NOTIFICATION_RECORDS = 250;
@@ -14,6 +15,12 @@ function recoveryMetadata(value: unknown): RecoveryActionMetadata | undefined {
   const kind = (value as { kind?: unknown }).kind;
   return typeof kind === 'string' && (RECOVERY_ACTION_KINDS as readonly string[]).includes(kind)
     ? { kind: kind as RecoveryActionMetadata['kind'] }
+    : undefined;
+}
+
+function schoolModeCode(value: unknown): SchoolModeMutationCode | undefined {
+  return typeof value === 'string' && (SCHOOL_MODE_MUTATION_CODES as readonly string[]).includes(value)
+    ? value as SchoolModeMutationCode
     : undefined;
 }
 
@@ -44,6 +51,7 @@ export function parseNotificationRecords(value: string | null): NotificationReco
         createdAt: record.createdAt,
         dismissedAt: record.dismissedAt,
         recovery: recoveryMetadata((record as { recovery?: unknown }).recovery),
+        schoolModeCode: schoolModeCode((record as { schoolModeCode?: unknown }).schoolModeCode),
       }))
       .slice(0, MAX_NOTIFICATION_RECORDS);
   } catch {
@@ -95,6 +103,7 @@ export function useNotifications(): NotificationApi {
       dismissedAt: null,
       undo: notice.undo,
       recovery: notice.recovery,
+      schoolModeCode: notice.schoolModeCode,
     };
     // Keep only auditable metadata. Runtime callbacks are intentionally not serializable.
     setRecords((current) => [{
@@ -107,6 +116,7 @@ export function useNotifications(): NotificationApi {
       createdAt: record.createdAt,
       dismissedAt: record.dismissedAt,
       recovery: record.recovery ? { kind: record.recovery.kind } : undefined,
+      schoolModeCode: record.schoolModeCode,
     }, ...current].slice(0, MAX_NOTIFICATION_RECORDS));
     setActive((current) => [...current, record].slice(-4));
   }, []);

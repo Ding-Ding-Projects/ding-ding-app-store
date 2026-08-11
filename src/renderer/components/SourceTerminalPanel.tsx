@@ -7,7 +7,7 @@ import { SourceIsolationStatusCard } from './SourceIsolationStatusCard';
 
 const ACTIVE_STATES = new Set<SourceJobState>(['queued', 'preparing', 'running', 'repairing', 'cancelling']);
 
-export function SourceTerminalPanel({ appName, events, fallbackMessage, isolationStatus, isolationLoading, onRefreshIsolation, settings, onCancel, onRetry, onClose }: {
+export function SourceTerminalPanel({ appName, events, fallbackMessage, isolationStatus, isolationLoading, onRefreshIsolation, settings, onCancel, onRetry, onClose, allowRetry = true }: {
   appName: string;
   events: readonly Readonly<SourceTerminalEvent>[];
   fallbackMessage?: string;
@@ -18,6 +18,7 @@ export function SourceTerminalPanel({ appName, events, fallbackMessage, isolatio
   onCancel(): void;
   onRetry(): void;
   onClose(): void;
+  allowRetry?: boolean;
 }) {
   const output = useRef<HTMLDivElement>(null);
   const panel = useRef<HTMLElement>(null);
@@ -78,7 +79,7 @@ export function SourceTerminalPanel({ appName, events, fallbackMessage, isolatio
           <button className="text-button danger" disabled={state === 'cancelling'} onClick={onCancel}><Icon>cancel</Icon>{state === 'cancelling' ? label(settings, 'Cancelling…', '取消緊…') : label(settings, 'Cancel source job', '取消 source 工作')}</button>
         ) : (
           <>
-            {(state === 'failed' || state === 'cancelled') && <button className="text-button" onClick={onRetry}><Icon>refresh</Icon>{label(settings, 'Retry automatically', '自動再試')}</button>}
+            {allowRetry && (state === 'failed' || state === 'cancelled') && <button className="text-button" onClick={onRetry}><Icon>refresh</Icon>{label(settings, 'Retry automatically', '自動再試')}</button>}
             <button className="filled-button" onClick={onClose}><Icon>done</Icon>{label(settings, 'Close', '關閉')}</button>
           </>
         )}
