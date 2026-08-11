@@ -97,6 +97,7 @@ export function AuthenticatorPage({ settings, authenticator, notify, openRegex, 
     const next = await authenticator.prepare(request);
     setPreview(next);
     setConfirmationCode('');
+    setShowSecret(false);
     notify({ ok: next.ok, message: label(viewSettings, next.message, next.messageYue) });
   };
 
