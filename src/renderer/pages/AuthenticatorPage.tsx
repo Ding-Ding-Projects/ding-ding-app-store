@@ -12,6 +12,7 @@ import type { Notify } from '../notify';
 import { makeMatcher, useSurfaceSearch } from '../search';
 import type { SearchState } from '../search';
 import type { AuthenticatorApi } from '../state/use-authenticator';
+import { moveAuthenticatorPickerFocus } from '../authenticator-picker-keyboard';
 import { isExternalEditorBridgeAvailable, openExportInVsCode } from '../external-editor';
 
 const ALGORITHMS: readonly { value: AuthenticatorAlgorithm; en: string; yue: string }[] = [
@@ -89,12 +90,11 @@ function AuthenticatorPicker({ id, labelText, settings, value, options, disabled
     if (target?.closest('.regex-builder')) return;
     if (event.key === 'Escape') { event.preventDefault(); setQuery(''); setRegex(null); close(); return; }
     const targetRole = target?.getAttribute('role');
-    if (targetRole !== 'option' && targetRole !== 'listbox') return;
+    const isSearchInput = target?.matches('input[type="search"]') ?? false;
+    if (targetRole !== 'option' && targetRole !== 'listbox' && !isSearchInput) return;
     if (!visibleOptions.length) return;
-    if (event.key === 'ArrowDown' || event.key === 'ArrowRight') { event.preventDefault(); setActiveIndex((index) => (index + 1) % visibleOptions.length); return; }
-    if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') { event.preventDefault(); setActiveIndex((index) => (index - 1 + visibleOptions.length) % visibleOptions.length); return; }
-    if (event.key === 'Home') { event.preventDefault(); setActiveIndex(0); return; }
-    if (event.key === 'End') { event.preventDefault(); setActiveIndex(visibleOptions.length - 1); return; }
+    const nextIndex = moveAuthenticatorPickerFocus(event.key, activeIndex, visibleOptions.length);
+    if (nextIndex !== null) { event.preventDefault(); setActiveIndex(nextIndex); return; }
     if (event.key === 'Enter') { event.preventDefault(); choose(visibleOptions[activeIndex] ?? visibleOptions[0]); }
   };
 

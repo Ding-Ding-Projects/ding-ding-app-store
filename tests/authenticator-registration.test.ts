@@ -10,6 +10,7 @@ import type { AuthenticatorEntryMetadata } from '../src/shared/contracts.js';
 import type { AuthenticatorVault } from '../src/main/authenticator-vault-contract.js';
 import { generateTotp } from '../src/main/totp.js';
 import { writeJsonAtomic } from '../src/main/json-store.js';
+import { moveAuthenticatorPickerFocus } from '../src/renderer/authenticator-picker-keyboard.js';
 
 vi.mock('electron', () => ({
   app: { getPath: () => os.tmpdir() },
@@ -299,6 +300,13 @@ describe('preload authenticator response boundary', () => {
 });
 
 describe('main-process restricted capability seam', () => {
+  it('moves the live picker focus from the filter input without wrapping bugs', () => {
+    expect(moveAuthenticatorPickerFocus('ArrowDown', 0, 3)).toBe(1);
+    expect(moveAuthenticatorPickerFocus('ArrowUp', 0, 3)).toBe(2);
+    expect(moveAuthenticatorPickerFocus('Home', 2, 3)).toBe(0);
+    expect(moveAuthenticatorPickerFocus('End', 0, 3)).toBe(2);
+    expect(moveAuthenticatorPickerFocus('Enter', 1, 3)).toBeNull();
+  });
   it('checks the live School-mode restriction for every authenticator IPC route', async () => {
     const source = await readFile(path.join(process.cwd(), 'src/main/main.ts'), 'utf8');
     for (const channel of ['authenticator:status', 'authenticator:preview', 'authenticator:prepare', 'authenticator:confirm', 'authenticator:cancel', 'authenticator:list']) {
@@ -452,7 +460,9 @@ describe('main-process restricted capability seam', () => {
     expect(source).toContain('aria-selected={option.value === value}');
     expect(source).toContain("if (event.key === 'Escape')");
     expect(source).toContain("target?.closest('.regex-builder')");
-    expect(source).toContain("if (targetRole !== 'option' && targetRole !== 'listbox') return;");
+    expect(source).toContain("if (targetRole !== 'option' && targetRole !== 'listbox' && !isSearchInput) return;");
+    expect(source).toContain("target?.matches('input[type=\"search\"]')");
+    expect(source).toContain('moveAuthenticatorPickerFocus(event.key, activeIndex, visibleOptions.length)');
     expect(source).toContain('{open && !disabled && <section');
     expect(source).toContain("setQuery(''); setRegex(null); close();");
     expect(source).toContain('initialPattern={regex?.pattern} initialFlags={regex?.flags}');
@@ -467,10 +477,7 @@ describe('main-process restricted capability seam', () => {
     expect(styles).toContain('.authenticator-picker-popover { top: calc(100% + 6px); right: auto; left: 0; width: min(520px, calc(100vw - 48px)); padding: 12px; overflow: auto; }');
     expect(styles).toContain('.authenticator-picker-search { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto;');
     expect(styles).toContain('.authenticator-picker-search > .regex-builder { position: relative; top: auto; right: auto; grid-column: 1 / -1; width: 100%; max-height: min(560px, calc(100vh - 220px));');
-    expect(source).toContain("event.key === 'ArrowDown' || event.key === 'ArrowRight'");
-    expect(source).toContain("event.key === 'ArrowUp' || event.key === 'ArrowLeft'");
-    expect(source).toContain("event.key === 'Home'");
-    expect(source).toContain("event.key === 'End'");
+    expect(source).toContain('moveAuthenticatorPickerFocus(event.key, activeIndex, visibleOptions.length)');
     expect(source).toContain('RegexBuilder query={query}');
     expect(source).toContain('setRegex({ pattern, flags })');
     expect(source).toContain('setQuery(event.target.value); if (regex) setRegex({ ...regex, pattern: event.target.value });');
