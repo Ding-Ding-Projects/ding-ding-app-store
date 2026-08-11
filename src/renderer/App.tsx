@@ -717,13 +717,16 @@ export function App() {
     const [verb, ...rest] = command.split(':');
     const arg = rest.join(':');
     const [first, second] = rest;
-    if (schoolMode.state.enabled && (arg === 'authenticator' || first === 'authenticator')) return;
+    if (schoolMode.state.enabled && (arg === 'authenticator' || first === 'authenticator' || command.startsWith('authenticator-'))) return;
     switch (verb) {
       case 'refresh-catalog': case 'refresh-catalog-now': void loadCatalog(true); return;
       case 'open-notifications': setNotificationCenterOpen(true); return;
       case 'open-changelog': openSurface('settings.about'); focusLater('changelog-title'); return;
       case 'open-school-mode': openSurface('settings.general'); focusLater('school-mode-title'); return;
       case 'open-source-details': openSurface('settings.general'); focusLater('source-isolation-title'); return;
+      case 'authenticator-rename': case 'authenticator-group': case 'authenticator-reorder': case 'authenticator-select':
+      case 'authenticator-export': case 'authenticator-delete': case 'authenticator-bulk-delete':
+        openSurface('authenticator'); focusLater('authenticator-entry-management'); return;
       case 'clear-all-searches': search.dispatch({ type: 'clear-all' }); announce('All searches cleared'); return;
       case 'focus-tab-search': focusLater('search-tabs'); return;
       case 'open-regex': openSurface(arg as SurfaceId); setRegexRequest(arg as SurfaceId); return;

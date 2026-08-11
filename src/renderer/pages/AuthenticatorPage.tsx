@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { FormEvent } from 'react';
-import type { AuthenticatorAlgorithm, AuthenticatorDigits, AuthenticatorRegistrationPreviewResult, UserSettings } from '../../shared/contracts';
+import type { AuthenticatorAlgorithm, AuthenticatorDigits, AuthenticatorExportFormat, AuthenticatorRegistrationPreviewResult, UserSettings } from '../../shared/contracts';
 import { SearchBox } from '../components/SearchBox';
 import { RegexBuilder } from '../components/RegexBuilder';
+import { DestructiveConfirmDialog } from '../components/DestructiveConfirmDialog';
 import { el } from '../el';
 import { Icon } from '../icons';
 import { label } from '../i18n';
@@ -11,6 +12,7 @@ import type { Notify } from '../notify';
 import { makeMatcher, useSurfaceSearch } from '../search';
 import type { SearchState } from '../search';
 import type { AuthenticatorApi } from '../state/use-authenticator';
+import { isExternalEditorBridgeAvailable, openExportInVsCode } from '../external-editor';
 
 const ALGORITHMS: readonly { value: AuthenticatorAlgorithm; en: string; yue: string }[] = [
   { value: 'sha1', en: 'SHA-1', yue: 'SHA-1' },
@@ -190,9 +192,25 @@ export function AuthenticatorPage({ settings, authenticator, notify, openRegex, 
   const [confirmationCode, setConfirmationCode] = useState('');
   const [confirmingRegistrationId, setConfirmingRegistrationId] = useState<string | null>(null);
   const [clock, setClock] = useState(0);
+  const [selectedEntries, setSelectedEntries] = useState<Set<string>>(new Set());
+  const [editingLabelId, setEditingLabelId] = useState<string | null>(null);
+  const [labelDrafts, setLabelDrafts] = useState<Record<string, string>>({});
+  const [groupDrafts, setGroupDrafts] = useState<Record<string, string>>({});
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [exportFormat, setExportFormat] = useState<AuthenticatorExportFormat>('json');
   const viewSettings = settings;
-  const visible = matcher('Authenticator registration otpauth URI Base32 secret issuer account algorithm digits period credential vault QR pairing current code countdown saved entries local search');
-  const visibleEntries = useMemo(() => authenticator.entries.filter((entry) => matcher(`${entry.label} ${entry.issuer} ${entry.account} ${entry.algorithm} ${entry.digits} ${entry.periodSeconds}`)), [authenticator.entries, matcher, clock]);
+  const visible = matcher('Authenticator registration otpauth URI Base32 secret issuer account algorithm digits period credential vault QR pairing current code countdown saved entries local search rename delete reorder group group label save group move up move down select bulk export refresh metadata 改名 刪除 排序 分組 揀選 匯出');
+  const visibleEntries = useMemo(() => authenticator.entries.filter((entry) => matcher(`${entry.label} ${entry.issuer} ${entry.account} ${entry.group ?? ''} ${entry.algorithm} ${entry.digits} ${entry.periodSeconds} rename delete reorder group group label save group move up move down select bulk export refresh metadata 改名 刪除 排序 分組 揀選 匯出`)), [authenticator.entries, matcher, clock]);
+  const selectedVisibleIds = useMemo(() => visibleEntries.map((entry) => entry.id).filter((id) => selectedEntries.has(id)), [selectedEntries, visibleEntries]);
+  const searchFingerprint = `${search.state.query}\u0000${search.state.regex?.pattern ?? ''}\u0000${search.state.regex?.flags ?? ''}`;
+  const previousSearchFingerprint = useRef(searchFingerprint);
+  useEffect(() => {
+    if (previousSearchFingerprint.current === searchFingerprint) return;
+    previousSearchFingerprint.current = searchFingerprint;
+    const visibleIds = new Set(visibleEntries.map((entry) => entry.id));
+    setSelectedEntries((current) => new Set([...current].filter((id) => visibleIds.has(id))));
+  }, [searchFingerprint, visibleEntries]);
 
   useEffect(() => {
     let timer: number | undefined;
@@ -292,6 +310,84 @@ export function AuthenticatorPage({ settings, authenticator, notify, openRegex, 
     }
   };
 
+  const mutationNotice = (result: { ok: boolean; message: string; messageYue: string }) => notify({ ok: result.ok, message: label(viewSettings, result.message, result.messageYue) });
+  const renameEntry = async (entryId: string) => {
+    try {
+      const result = await authenticator.rename({ entryId, label: labelDrafts[entryId] ?? '' });
+      mutationNotice(result);
+      if (result.ok) setEditingLabelId(null);
+    } catch { notify({ ok: false, message: label(viewSettings, 'The authenticator rename bridge was unavailable; no change was claimed.', '驗證器改名橋接暫時用唔到；冇聲稱已改動。') }); }
+  };
+  const setEntryGroup = async (entryId: string) => {
+    try {
+      const result = await authenticator.setGroup({ entryId, group: (groupDrafts[entryId] ?? '').trim() || null });
+      mutationNotice(result);
+      if (result.ok) setGroupDrafts((current) => ({ ...current, [entryId]: result.entry?.group ?? '' }));
+    } catch { notify({ ok: false, message: label(viewSettings, 'The authenticator group bridge was unavailable; no change was claimed.', '驗證器分組橋接暫時用唔到；冇聲稱已改動。') }); }
+  };
+  const moveEntry = async (entryId: string, order: number) => {
+    try {
+      const result = await authenticator.reorder({ entryId, order });
+      mutationNotice(result);
+    } catch { notify({ ok: false, message: label(viewSettings, 'The authenticator reorder bridge was unavailable; no change was claimed.', '驗證器排序橋接暫時用唔到；冇聲稱已改動。') }); }
+  };
+  const downloadMetadata = async () => {
+    if (!selectedVisibleIds.length) return;
+    try {
+      const result = await authenticator.export({ entryIds: selectedVisibleIds, format: exportFormat });
+      mutationNotice(result);
+      if (!result.ok || !result.content || !result.filename) return;
+      const blob = new Blob([result.content], { type: exportFormat === 'json' ? 'application/json;charset=utf-8' : 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = result.filename;
+      anchor.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    } catch { notify({ ok: false, message: label(viewSettings, 'The authenticator metadata export bridge was unavailable; no file was created.', '驗證器 metadata 匯出橋接暫時用唔到；冇建立檔案。') }); }
+  };
+  const openMetadataInVsCode = async () => {
+    if (!selectedVisibleIds.length || !isExternalEditorBridgeAvailable()) return;
+    try {
+      const result = await authenticator.export({ entryIds: selectedVisibleIds, format: exportFormat });
+      mutationNotice(result);
+      if (!result.ok || !result.content || !result.filename) return;
+      const mime = exportFormat === 'json' ? 'application/json' : exportFormat === 'csv' ? 'text/csv' : 'text/markdown';
+      const opened = await openExportInVsCode({ recordKind: 'authenticator', suggestedName: result.filename, mime, content: result.content });
+      notify({ ok: opened.ok, message: opened.ok ? label(viewSettings, 'Authenticator metadata export opened in Visual Studio Code.', '已喺 Visual Studio Code 開啟 authenticator metadata 匯出。') : opened.message });
+    } catch { notify({ ok: false, message: label(viewSettings, 'The authenticator Visual Studio Code export bridge was unavailable; no open was claimed.', '驗證器 Visual Studio Code 匯出橋接暫時用唔到；冇聲稱已開啟。') }); }
+  };
+  const deleteEntry = async (entryId: string) => {
+    try {
+      const result = await authenticator.remove({ entryId, confirmed: true });
+      if (result.uncertain) {
+        if (result.deletedId) setSelectedEntries((current) => new Set(current).add(result.deletedId!));
+        mutationNotice({ ...result, ok: false, message: label(viewSettings, 'Deletion reached an uncertain vault state; the entry remains selected for review and must not be retried yet.', '刪除令憑證庫狀態未能確定；項目保持揀選畀你檢查，暫時唔好重試。'), messageYue: '刪除令憑證庫狀態未能確定；項目保持揀選畀你檢查，暫時唔好重試。' });
+        return;
+      }
+      mutationNotice(result);
+      if (result.ok) {
+        setSelectedEntries((current) => { const next = new Set(current); next.delete(entryId); return next; });
+        setDeleteTarget(null);
+      }
+    } catch { notify({ ok: false, message: label(viewSettings, 'The authenticator delete bridge was unavailable; the entry remains selected.', '驗證器刪除橋接暫時用唔到；項目仍然揀住。') }); }
+  };
+  const deleteSelected = async () => {
+    if (!selectedVisibleIds.length) return;
+    try {
+      const result = await authenticator.bulkRemove({ entryIds: selectedVisibleIds, confirmed: true });
+      mutationNotice(result);
+      if (result.deletedIds.length || result.uncertainIds.length) setSelectedEntries((current) => { const next = new Set(current); for (const id of result.deletedIds) if (!result.uncertainIds.includes(id)) next.delete(id); for (const id of result.uncertainIds) next.add(id); return next; });
+      if (result.ok) setBulkDeleteOpen(false);
+    } catch { notify({ ok: false, message: label(viewSettings, 'The authenticator bulk-delete bridge was unavailable; the selection remains for review.', '驗證器批量刪除橋接暫時用唔到；揀選保留畀你檢查。') }); }
+  };
+  useEffect(() => {
+    const liveIds = new Set(authenticator.entries.map((entry) => entry.id));
+    setSelectedEntries((current) => new Set([...current].filter((id) => liveIds.has(id))));
+    setLabelDrafts((current) => Object.fromEntries(authenticator.entries.map((entry) => [entry.id, current[entry.id] ?? entry.label])));
+    setGroupDrafts((current) => Object.fromEntries(authenticator.entries.map((entry) => [entry.id, current[entry.id] ?? entry.group ?? ''])));
+  }, [authenticator.entries]);
+
   return <>
     <SearchBox
       surface="authenticator"
@@ -310,7 +406,7 @@ export function AuthenticatorPage({ settings, authenticator, notify, openRegex, 
             : authenticator.status ? label(viewSettings, authenticator.status.message, authenticator.status.messageYue) : label(viewSettings, 'Authenticator storage status is unavailable.', '驗證器儲存狀態暫時用唔到。')}
         </p>
         <p>{label(viewSettings, 'Secrets are accepted once for pairing, encrypted by the operating-system credential vault, and never returned in list metadata. QR generation is local and has no network path.', '秘密只喺配對時接收一次，由作業系統憑證庫加密；項目清單 metadata 唔會返回秘密。QR 喺本機產生，冇網絡路徑。')}</p>
-        <p className="supporting">{label(viewSettings, 'This bounded slice does not claim QR image import, camera scanning, rename, reorder, groups, bulk actions, next-code peek, or deliberate secret export.', '呢個有限功能冇聲稱支援 QR 圖片匯入、相機掃描、改名、排序、分組、批量操作、下一碼預覽或者刻意匯出秘密。')}</p>
+         <p className="supporting">{label(viewSettings, 'This bounded slice supports metadata-only rename, reorder, label-only groups, selection, and export. QR image import, camera scanning, next-code peek, secret export, and authenticator history/restore remain deferred.', '呢個有限功能支援淨 metadata 改名、排序、標籤分組、揀選同匯出。QR 圖片匯入、相機掃描、下一碼預覽、秘密匯出同 authenticator 歷史／還原仍然押後。')}</p>
       </section>
       <section className="settings-card" {...el('settings-card')}>
         <h2>{label(viewSettings, 'Register an authenticator entry', '註冊 authenticator 項目')}</h2>
@@ -384,16 +480,40 @@ export function AuthenticatorPage({ settings, authenticator, notify, openRegex, 
       </section>
       <section className="settings-card" {...el('settings-card')}>
         <div className="section-heading"><div><h2>{label(viewSettings, 'Saved entries', '已儲存項目')}</h2><p className="supporting">{label(viewSettings, 'Current codes and countdowns are calculated in the main process; the renderer receives metadata and code display only.', '目前驗證碼同倒數由主程序計算；renderer 只會收到 metadata 同驗證碼顯示。')}</p></div><button className="text-button" type="button" onClick={() => void authenticator.refresh()} disabled={authenticator.listLoading}>{label(viewSettings, 'Refresh codes', '重新整理驗證碼')}</button></div>
-        {visibleEntries.length === 0 ? <p className="empty-state compact">{label(viewSettings, 'No saved entries match this search.', '冇已儲存項目配到呢個搜尋。')}</p> : <div className="authenticator-entry-list">{visibleEntries.map((entry) => {
-          const seconds = remaining(entry);
-          const displayCode = seconds === 0 ? null : entry.code;
-          return <article className="authenticator-entry" key={entry.id}>
-            <div><h3>{entry.label}</h3><p className="supporting">{entry.issuer ? `${entry.issuer} · ` : ''}{entry.account} · {entry.algorithm.toUpperCase()} · {entry.digits} digits · {entry.periodSeconds}s</p></div>
-            <div className="authenticator-code" aria-live="polite" aria-atomic="true" aria-label={label(viewSettings, `Current code ${displayCode ?? 'unavailable'}`, `目前驗證碼 ${displayCode ?? '暫時用唔到'}`)}>{displayCode ?? '—'}</div>
+        {visibleEntries.length > 0 && <div id="authenticator-entry-management" className="bulk-toolbar" role="group" aria-label={label(viewSettings, 'Authenticator bulk actions', '驗證器批量操作')}>
+          <strong aria-live="polite" {...el('authenticator-entry-management')}>{label(viewSettings, `${selectedEntries.size} selected · ${selectedVisibleIds.length} in this view · ${visibleEntries.length} shown`, `揀咗 ${selectedEntries.size} · 呢個畫面有 ${selectedVisibleIds.length} · 顯示 ${visibleEntries.length}`)}</strong>
+          <button className="text-button" type="button" onClick={() => setSelectedEntries((current) => { const next = new Set(current); for (const entry of visibleEntries) next.add(entry.id); return next; })}>{label(viewSettings, 'Select all shown', '揀晒目前顯示')}</button>
+          <button className="text-button" type="button" onClick={() => setSelectedEntries((current) => { const next = new Set(current); for (const entry of visibleEntries) next.has(entry.id) ? next.delete(entry.id) : next.add(entry.id); return next; })}>{label(viewSettings, 'Invert shown', '反轉目前顯示')}</button>
+          <button className="text-button" type="button" disabled={!selectedVisibleIds.length} onClick={() => setSelectedEntries(new Set())}>{label(viewSettings, 'Clear selection', '清除揀選')}</button>
+          <AuthenticatorPicker id="authenticator-export-format" labelText={label(viewSettings, 'Export format', '匯出格式')} settings={viewSettings} value={exportFormat} disabled={!selectedVisibleIds.length} options={[{ value: 'json', label: 'JSON' }, { value: 'csv', label: 'CSV' }, { value: 'markdown', label: 'Markdown' }]} onChange={(value) => setExportFormat(value as AuthenticatorExportFormat)} />
+          <button className="text-button" type="button" disabled={!selectedVisibleIds.length} onClick={() => void downloadMetadata()}>{label(viewSettings, 'Export metadata (secrets omitted)', '匯出 metadata（不包括秘密）')}</button>
+          <button className="text-button" type="button" disabled={!selectedVisibleIds.length || !isExternalEditorBridgeAvailable()} title={isExternalEditorBridgeAvailable() ? undefined : label(viewSettings, 'Unavailable: this build has no validated Visual Studio Code adapter.', '未能使用：呢個版本冇已審核嘅 Visual Studio Code 適配器。')} onClick={() => void openMetadataInVsCode()}>{label(viewSettings, 'Open export in VS Code', '喺 VS Code 開匯出')}</button>
+          <button className="text-button danger" type="button" disabled={!selectedVisibleIds.length} onClick={() => setBulkDeleteOpen(true)}>{label(viewSettings, 'Delete selected', '刪除已揀選')}</button>
+        </div>}
+        {visibleEntries.length === 0 ? <p className="empty-state compact">{label(viewSettings, 'No saved entries match this search.', '冇已儲存項目配到呢個搜尋。')}</p> : <div className="authenticator-entry-list" role="list">{visibleEntries.map((entry) => {
+           const seconds = remaining(entry);
+           const displayCode = seconds === 0 ? null : entry.code;
+          const selected = selectedEntries.has(entry.id);
+          return <article className={selected ? 'authenticator-entry selected' : 'authenticator-entry'} key={entry.id} role="listitem" {...el('authenticator-entry')}>
+            <div className="authenticator-entry-heading">
+              <label className="authenticator-entry-select" {...el('authenticator-entry-select')}><input type="checkbox" checked={selected} aria-label={label(viewSettings, `Select ${entry.label}`, `揀選 ${entry.label}`)} onChange={(event) => setSelectedEntries((current) => { const next = new Set(current); if (event.target.checked) next.add(entry.id); else next.delete(entry.id); return next; })} />{label(viewSettings, 'Select', '揀選')}</label>
+              {editingLabelId === entry.id ? <div className="button-row"><input aria-label={label(viewSettings, `Rename ${entry.label}`, `改名 ${entry.label}`)} maxLength={512} value={labelDrafts[entry.id] ?? entry.label} onChange={(event) => setLabelDrafts((current) => ({ ...current, [entry.id]: event.target.value }))} /><button className="text-button" type="button" onClick={() => void renameEntry(entry.id)}>{label(viewSettings, 'Save name', '儲存名稱')}</button><button className="text-button" type="button" onClick={() => setEditingLabelId(null)}>{label(viewSettings, 'Cancel', '取消')}</button></div> : <><h3>{entry.label}</h3><button className="text-button" type="button" onClick={() => { setLabelDrafts((current) => ({ ...current, [entry.id]: entry.label })); setEditingLabelId(entry.id); }}>{label(viewSettings, 'Rename', '改名')}</button></>}
+              <p className="supporting">{entry.issuer ? `${entry.issuer} · ` : ''}{entry.account} · {entry.algorithm.toUpperCase()} · {entry.digits} digits · {entry.periodSeconds}s{entry.group ? ` · ${label(viewSettings, 'Group', '分組')}: ${entry.group}` : ''}</p>
+            </div>
+            <div className="authenticator-code" {...el('authenticator-code')} aria-live="polite" aria-atomic="true" aria-label={label(viewSettings, `Current code ${displayCode ?? 'unavailable'}`, `目前驗證碼 ${displayCode ?? '暫時用唔到'}`)}>{displayCode ?? '—'}</div>
             <p className="supporting">{seconds === null ? label(viewSettings, 'Secret unavailable', '秘密暫時用唔到') : label(viewSettings, `${seconds} seconds until rollover`, `${seconds} 秒後換碼`)}</p>
+            <div className="authenticator-entry-management" role="group" aria-label={label(viewSettings, `Manage ${entry.label}`, `管理 ${entry.label}`)}>
+              <label>{label(viewSettings, 'Group label (optional)', '分組標籤（可選）')}<input maxLength={64} value={groupDrafts[entry.id] ?? entry.group ?? ''} onChange={(event) => setGroupDrafts((current) => ({ ...current, [entry.id]: event.target.value }))} /></label>
+              <button className="text-button" type="button" onClick={() => void setEntryGroup(entry.id)}>{label(viewSettings, 'Save group', '儲存分組')}</button>
+              <button className="text-button" type="button" disabled={entry.order <= 0} onClick={() => void moveEntry(entry.id, entry.order - 1)}>{label(viewSettings, 'Move up', '上移')}</button>
+              <button className="text-button" type="button" disabled={entry.order >= authenticator.entries.length - 1} onClick={() => void moveEntry(entry.id, entry.order + 1)}>{label(viewSettings, 'Move down', '下移')}</button>
+              <button className="text-button danger" type="button" onClick={() => setDeleteTarget(entry.id)}>{label(viewSettings, 'Delete', '刪除')}</button>
+            </div>
           </article>;
         })}</div>}
       </section>
     </section>}
+    {deleteTarget && <DestructiveConfirmDialog settings={viewSettings} title={label(viewSettings, 'Delete this authenticator entry?', '刪除呢個 authenticator 項目？')} description={label(viewSettings, 'This permanently deletes the selected metadata and its credential-vault ciphertext. The action is not covered by authenticator history restore in this bounded slice.', '呢個操作會永久刪除所揀 metadata 同憑證庫密文；呢個有限功能嘅 authenticator 歷史還原唔包括呢個操作。')} actionLabel={label(viewSettings, 'DELETE ENTRY', '刪除項目')} onClose={() => setDeleteTarget(null)} onConfirm={() => deleteEntry(deleteTarget)} />}
+    {bulkDeleteOpen && <DestructiveConfirmDialog settings={viewSettings} title={label(viewSettings, `Delete ${selectedVisibleIds.length} authenticator entries?`, `刪除 ${selectedVisibleIds.length} 個 authenticator 項目？`)} description={label(viewSettings, `This permanently deletes ${selectedVisibleIds.length} selected entries and their credential-vault ciphertexts. Selected labels: ${selectedVisibleIds.slice(0, 8).map((id) => visibleEntries.find((entry) => entry.id === id)?.label ?? id).join(', ')}${selectedVisibleIds.length > 8 ? '…' : ''}. Skipped or uncertain items will remain listed. Review this exact preview before authorizing.`, `呢個操作會永久刪除 ${selectedVisibleIds.length} 個揀選項目同佢哋嘅憑證庫密文。已揀標籤：${selectedVisibleIds.slice(0, 8).map((id) => visibleEntries.find((entry) => entry.id === id)?.label ?? id).join('、')}${selectedVisibleIds.length > 8 ? '…' : ''}。跳過或者未能確定嘅項目會繼續顯示。授權前請檢查呢個預覽。`)} actionLabel={label(viewSettings, `DELETE ${selectedVisibleIds.length} ENTRIES`, `刪除 ${selectedVisibleIds.length} 個項目`)} onClose={() => setBulkDeleteOpen(false)} onConfirm={() => deleteSelected()} />}
   </>;
 }

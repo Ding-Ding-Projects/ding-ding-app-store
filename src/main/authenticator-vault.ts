@@ -2,9 +2,10 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { app, safeStorage } from 'electron';
+import { AUTHENTICATOR_MAX_ENTRIES } from '../shared/contracts.js';
 import type { AuthenticatorEntryMetadata } from '../shared/contracts.js';
 import { writeJsonAtomic } from './json-store.js';
-import type { AuthenticatorVault, AuthenticatorVaultSaveOptions, AuthenticatorVaultStatus } from './authenticator-vault-contract.js';
+import type { AuthenticatorVault, AuthenticatorVaultMetadataWriteOptions, AuthenticatorVaultSaveOptions, AuthenticatorVaultStatus } from './authenticator-vault-contract.js';
 import { entryMetadataSchema, metadataDocumentSchema } from './authenticator-metadata.js';
 
 export interface SafeStorageAuthenticatorVaultOptions {
@@ -23,6 +24,18 @@ export interface SafeStorageAuthenticatorVaultOptions {
 // cannot diverge when two confirmations arrive together.
 const sharedVaultSerials = new Map<string, Promise<void>>();
 
+function assertMetadataInvariants(entries: readonly AuthenticatorEntryMetadata[]): void {
+  if (entries.length > AUTHENTICATOR_MAX_ENTRIES) throw new Error('The authenticator metadata list exceeded its bounded size.');
+  const ids = new Set<string>();
+  const orders = new Set<number>();
+  for (const entry of entries) {
+    if (ids.has(entry.id) || orders.has(entry.order)) throw new Error('The authenticator metadata file contained duplicate identifiers or order values.');
+    ids.add(entry.id);
+    orders.add(entry.order);
+  }
+  for (let index = 0; index < entries.length; index += 1) if (!orders.has(index)) throw new Error('The authenticator metadata file contained a non-contiguous order.');
+}
+
 /**
  * Stores only redacted metadata in JSON and each secret as a separate
  * safeStorage ciphertext. The per-entry filename is an opaque UUID; no secret
@@ -34,7 +47,7 @@ export class SafeStorageAuthenticatorVault implements AuthenticatorVault {
   private readonly isEncryptionAvailable: () => boolean;
   private readonly encryptString: (value: string) => Buffer;
   private readonly decryptString: (value: Buffer) => string;
-  private readonly writeMetadata: (filePath: string, value: unknown, options?: { shouldPublish?: () => boolean }) => Promise<void>;
+  private readonly writeMetadataFile: (filePath: string, value: unknown, options?: { shouldPublish?: () => boolean }) => Promise<void>;
   private readonly renameSecret: (from: string, to: string) => Promise<void>;
   constructor(options: SafeStorageAuthenticatorVaultOptions = {}) {
     const userData = options.metadataPath && options.secretsDirectory ? '' : app.getPath('userData');
@@ -43,7 +56,7 @@ export class SafeStorageAuthenticatorVault implements AuthenticatorVault {
     this.isEncryptionAvailable = options.isEncryptionAvailable ?? (() => safeStorage.isEncryptionAvailable());
     this.encryptString = options.encryptString ?? ((value) => safeStorage.encryptString(value));
     this.decryptString = options.decryptString ?? ((value) => safeStorage.decryptString(value));
-    this.writeMetadata = options.writeMetadata ?? ((filePath, value, writeOptions) => writeJsonAtomic(filePath, value, { shouldPublish: writeOptions?.shouldPublish }));
+    this.writeMetadataFile = options.writeMetadata ?? ((filePath, value, writeOptions) => writeJsonAtomic(filePath, value, { shouldPublish: writeOptions?.shouldPublish }));
     this.renameSecret = options.renameSecret ?? rename;
   }
 
@@ -61,9 +74,59 @@ export class SafeStorageAuthenticatorVault implements AuthenticatorVault {
     }
     const parsed = metadataDocumentSchema.safeParse(value);
     if (!parsed.success) throw new Error('The authenticator metadata file was invalid.');
-    return parsed.data.entries
+    const entries = parsed.data.entries
+      .map((entry) => ({ ...entry, group: 'group' in entry ? (entry.group ?? null) : null }))
       .slice()
       .sort((left, right) => left.order - right.order || left.createdAt.localeCompare(right.createdAt)) as AuthenticatorEntryMetadata[];
+    assertMetadataInvariants(entries);
+    return entries;
+  }
+
+  async writeMetadata(entries: readonly AuthenticatorEntryMetadata[], options: AuthenticatorVaultMetadataWriteOptions = {}): Promise<void> {
+    return this.withSharedSerial(async () => {
+      if (await this.status() === 'unavailable') throw new Error('The operating-system credential vault is unavailable.');
+      const parsed = entries.map((entry) => entryMetadataSchema.parse(entry) as AuthenticatorEntryMetadata);
+      assertMetadataInvariants(parsed);
+      const document = metadataDocumentSchema.parse({ schemaVersion: 2, entries: parsed });
+      const documentBefore = { schemaVersion: 2, entries: await this.listMetadata() };
+      const metadataBeforeBytes = await this.readMetadataBytes();
+      let metadataPublished = false;
+      let metadataWriteAttempted = false;
+      if (options.shouldCommit && !options.shouldCommit()) {
+        const cancelled = new Error('Authenticator metadata publication was cancelled.') as NodeJS.ErrnoException;
+        cancelled.code = 'ECANCELED';
+        throw cancelled;
+      }
+      try {
+        // The injected writer is a deliberately narrow seam for tests and
+        // embedders. It may publish and then reject, so record that a write
+        // was attempted and verify the on-disk bytes before deciding whether
+        // rollback is required.
+        metadataWriteAttempted = true;
+        await this.writeMetadataFile(this.metadataPath, document, { shouldPublish: options.shouldCommit });
+        metadataPublished = true;
+        if (options.shouldCommit && !options.shouldCommit()) {
+          const cancelled = new Error('Authenticator metadata publication was cancelled.') as NodeJS.ErrnoException;
+          cancelled.code = 'ECANCELED';
+          throw cancelled;
+        }
+      } catch (error) {
+        let metadataChanged = metadataPublished;
+        if (metadataWriteAttempted && !metadataChanged) {
+          metadataChanged = await this.metadataChangedSince(metadataBeforeBytes);
+        }
+        if (metadataChanged) {
+          try { await this.writeMetadataFile(this.metadataPath, documentBefore); }
+          catch {
+            const uncertain = new Error('Authenticator metadata publication failed and its rollback could not be verified.') as NodeJS.ErrnoException;
+            uncertain.code = 'EINTEGRITY';
+            (uncertain as NodeJS.ErrnoException & { committed?: boolean }).committed = true;
+            throw uncertain;
+          }
+        }
+        throw error;
+      }
+    });
   }
 
   async save(entry: AuthenticatorEntryMetadata, secret: string, options: AuthenticatorVaultSaveOptions = {}): Promise<void> {
@@ -75,8 +138,9 @@ export class SafeStorageAuthenticatorVault implements AuthenticatorVault {
     const metadata = entryMetadataSchema.parse(entry) as AuthenticatorEntryMetadata;
     const encrypted = this.encryptString(secret);
     await mkdir(this.secretsDirectory, { recursive: true });
-    const entriesBefore = await this.listMetadata();
-    const documentBefore = { schemaVersion: 1, entries: entriesBefore };
+    const entriesBefore = (await this.listMetadata()).map((entry, index) => ({ ...entry, order: index }));
+    const documentBefore = { schemaVersion: 2, entries: entriesBefore };
+    const metadataBeforeBytes = await this.readMetadataBytes();
     const secretPath = this.secretPath(metadata.id);
     let previousSecret: Buffer | null = null;
     try { previousSecret = await readFile(secretPath); } catch (error) {
@@ -85,6 +149,7 @@ export class SafeStorageAuthenticatorVault implements AuthenticatorVault {
     const temporarySecretPath = path.join(this.secretsDirectory, `.${metadata.id}.${randomUUID()}.tmp`);
     let published = false;
     let metadataPublished = false;
+    let metadataWriteAttempted = false;
     try {
       this.ensureCommit(options);
       await writeFile(temporarySecretPath, encrypted, { mode: 0o600, flag: 'wx' });
@@ -92,30 +157,40 @@ export class SafeStorageAuthenticatorVault implements AuthenticatorVault {
       await this.renameSecret(temporarySecretPath, secretPath);
       published = true;
       const entries = entriesBefore.filter((item) => item.id !== metadata.id);
-      entries.push(metadata);
+      entries.push({ ...metadata, order: entries.length });
       this.ensureCommit(options);
-      await this.writeMetadata(this.metadataPath, { schemaVersion: 1, entries }, { shouldPublish: options.shouldCommit });
+      metadataWriteAttempted = true;
+      await this.writeMetadataFile(this.metadataPath, { schemaVersion: 2, entries }, { shouldPublish: options.shouldCommit });
       metadataPublished = true;
       this.ensureCommit(options);
     } catch (error) {
+      let rollbackFailed = false;
+      let metadataChanged = metadataPublished;
+      if (metadataWriteAttempted && !metadataChanged) metadataChanged = await this.metadataChangedSince(metadataBeforeBytes);
       await unlink(temporarySecretPath).catch(() => undefined);
+      if (metadataChanged) await this.writeMetadataFile(this.metadataPath, documentBefore).catch(() => { rollbackFailed = true; });
       if (published) {
-        if (previousSecret) await writeFile(secretPath, previousSecret, { mode: 0o600 }).catch(() => undefined);
-        else await unlink(secretPath).catch(() => undefined);
+        if (previousSecret) await writeFile(secretPath, previousSecret, { mode: 0o600 }).catch(() => { rollbackFailed = true; });
+        else await unlink(secretPath).catch(() => { rollbackFailed = true; });
       }
-      if (metadataPublished) await this.writeMetadata(this.metadataPath, documentBefore).catch(() => undefined);
+      if (rollbackFailed) {
+        const uncertain = new Error('Authenticator vault publication failed and its rollback could not be verified.') as NodeJS.ErrnoException;
+        uncertain.code = 'EINTEGRITY';
+        (uncertain as NodeJS.ErrnoException & { committed?: boolean }).committed = published || metadataChanged;
+        throw uncertain;
+      }
       throw error;
     }
   }
 
-  async remove(entryId: string): Promise<void> {
-    return this.withSharedSerial(() => this.removeUnlocked(entryId));
+  async remove(entryId: string, options: AuthenticatorVaultSaveOptions = {}): Promise<void> {
+    return this.withSharedSerial(() => this.removeUnlocked(entryId, options));
   }
 
-  private async removeUnlocked(entryId: string): Promise<void> {
+  private async removeUnlocked(entryId: string, options: AuthenticatorVaultSaveOptions): Promise<void> {
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(entryId)) return;
     if (await this.status() === 'unavailable') throw new Error('The operating-system credential vault is unavailable.');
-    const entriesBefore = await this.listMetadata();
+    const entriesBefore = (await this.listMetadata()).map((entry, index) => ({ ...entry, order: index }));
     const found = entriesBefore.some((entry) => entry.id === entryId);
     const secretPath = this.secretPath(entryId);
     let previousSecret: Buffer | null = null;
@@ -123,16 +198,40 @@ export class SafeStorageAuthenticatorVault implements AuthenticatorVault {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw new Error('The authenticator ciphertext could not be read safely.');
     }
     if (!found) {
-      await unlink(secretPath).catch(() => undefined);
+      // Do not mutate an orphan ciphertext for an unknown identifier. A stale
+      // request must be a no-op even if the capability flips while it runs.
       return;
     }
+    this.ensureCommit(options);
+    const documentBefore = { schemaVersion: 2, entries: entriesBefore };
+    const metadataBeforeBytes = await this.readMetadataBytes();
+    let metadataPublished = false;
+    let metadataWriteAttempted = false;
+    let secretRemoved = false;
     try {
-      await unlink(secretPath).catch((error) => {
+      try {
+        await unlink(secretPath);
+        secretRemoved = true;
+      } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-      });
-      await this.writeMetadata(this.metadataPath, { schemaVersion: 1, entries: entriesBefore.filter((entry) => entry.id !== entryId) });
+      }
+      this.ensureCommit(options);
+      metadataWriteAttempted = true;
+      await this.writeMetadataFile(this.metadataPath, { schemaVersion: 2, entries: entriesBefore.filter((entry) => entry.id !== entryId).map((entry, index) => ({ ...entry, order: index })) }, { shouldPublish: options.shouldCommit });
+      metadataPublished = true;
+      this.ensureCommit(options);
     } catch (error) {
-      if (previousSecret) await writeFile(secretPath, previousSecret, { mode: 0o600 }).catch(() => undefined);
+      let rollbackFailed = false;
+      let metadataChanged = metadataPublished;
+      if (metadataWriteAttempted && !metadataChanged) metadataChanged = await this.metadataChangedSince(metadataBeforeBytes);
+      if (previousSecret) await writeFile(secretPath, previousSecret, { mode: 0o600 }).catch(() => { rollbackFailed = true; });
+      if (metadataChanged) await this.writeMetadataFile(this.metadataPath, documentBefore).catch(() => { rollbackFailed = true; });
+      if (rollbackFailed) {
+        const uncertain = new Error('Authenticator deletion failed and its rollback could not be verified.') as NodeJS.ErrnoException;
+        uncertain.code = 'EINTEGRITY';
+        (uncertain as NodeJS.ErrnoException & { committed?: boolean }).committed = metadataChanged || secretRemoved;
+        throw uncertain;
+      }
       throw error;
     }
   }
@@ -156,6 +255,28 @@ export class SafeStorageAuthenticatorVault implements AuthenticatorVault {
       const cancelled = new Error('Authenticator vault publication was cancelled.');
       (cancelled as NodeJS.ErrnoException).code = 'ECANCELED';
       throw cancelled;
+    }
+  }
+
+  private async readMetadataBytes(): Promise<Buffer | null> {
+    try {
+      return await readFile(this.metadataPath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+      throw new Error('The previous authenticator metadata could not be read safely.');
+    }
+  }
+
+  private async metadataChangedSince(before: Buffer | null): Promise<boolean> {
+    try {
+      const after = await readFile(this.metadataPath);
+      return before === null || !after.equals(before);
+    } catch (error) {
+      // A missing or unreadable target after an attempted write is a mutation
+      // we cannot safely classify; restore the prior document and surface an
+      // integrity failure if that recovery also fails.
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return before !== null;
+      return true;
     }
   }
 
