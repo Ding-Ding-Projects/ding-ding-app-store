@@ -62,7 +62,7 @@ import { openExportInVsCode } from './external-editor';
 const PAGE_SUBTITLE: Partial<Record<TabId, { en: string; yue: string }>> = {
   catalog: { en: 'Trusted apps, their releases, and their complete documentation in one place.', yue: '可信 apps、release 同完整文件，一個位睇晒。' },
   updates: { en: 'Check every installed app and the store itself without surprise restarts.', yue: '檢查所有已安裝 app 同商店自己，唔會突然重開。' },
-  authenticator: { en: 'Calculate local RFC 6238 one-time codes without storing secrets.', yue: '本機計算 RFC 6238 一次性驗證碼，唔會儲存秘密。' },
+  authenticator: { en: 'Pair local TOTP entries with a credential-vault boundary and live codes.', yue: '喺憑證庫邊界配對本機 TOTP 項目，同埋睇即時驗證碼。' },
   activity: { en: 'Every install, build, and uninstall you ran, with exact results and export.', yue: '你做過嘅安裝、build 同解除安裝，連結果同匯出都齊。' },
   docs: { en: 'Every shipped feature has an offline article, including tabs, appearance, and the schedule.', yue: '每個功能都有離線文章，分頁、外觀同排程都有。' },
   settings: { en: 'Every section has its own search, its own tab navigation, and its own reset.', yue: '每個分類都有自己嘅搜尋、分頁同重設。' },

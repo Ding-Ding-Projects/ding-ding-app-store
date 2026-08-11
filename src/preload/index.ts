@@ -3,6 +3,11 @@ import type {
   AppStoreUpdateState,
   AuthenticatorPreviewRequest,
   AuthenticatorPreviewResult,
+  AuthenticatorListResult,
+  AuthenticatorMutationResult,
+  AuthenticatorRegistrationConfirmRequest,
+  AuthenticatorRegistrationPreviewResult,
+  AuthenticatorRegistrationRequest,
   AuthenticatorStatus,
   DingDingStoreApi,
   DimSumSurprise,
@@ -60,6 +65,10 @@ const OPERATION_EVENT_KEYS = new Set(['operationId', 'appId', 'kind', 'phase', '
 // values from the shared contract module into the renderer bundle.
 const AUTHENTICATOR_ALGORITHM_SET = new Set<string>(['sha1', 'sha256', 'sha512']);
 const AUTHENTICATOR_DIGIT_SET = new Set<number>([6, 7, 8]);
+const AUTHENTICATOR_STORAGE_SET = new Set<string>(['memory-only', 'os-vault']);
+const AUTHENTICATOR_MAX_ENTRIES = 256;
+const AUTHENTICATOR_MAX_ISSUER_LENGTH = 128;
+const AUTHENTICATOR_MAX_ACCOUNT_LENGTH = 256;
 
 function parseAuthenticatorStatus(value: unknown): AuthenticatorStatus {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('The authenticator status response was invalid.');
@@ -83,6 +92,86 @@ function parseAuthenticatorPreviewResult(value: unknown): AuthenticatorPreviewRe
   if (result.digits !== undefined && (typeof result.digits !== 'number' || !AUTHENTICATOR_DIGIT_SET.has(result.digits))) throw new Error('The authenticator preview response was invalid.');
   if (result.periodSeconds !== undefined && (!Number.isInteger(result.periodSeconds) || Number(result.periodSeconds) < 1 || Number(result.periodSeconds) > 3_600)) throw new Error('The authenticator preview response was invalid.');
   return Object.freeze({ ok: result.ok, code: result.code as string | undefined, remainingSeconds: result.remainingSeconds as number | undefined, expiresAt: result.expiresAt as string | undefined, algorithm: result.algorithm as AuthenticatorPreviewResult['algorithm'], digits: result.digits as AuthenticatorPreviewResult['digits'], periodSeconds: result.periodSeconds as number | undefined, storage: result.storage, message: result.message, messageYue: result.messageYue });
+}
+
+function parseAuthenticatorEntryMetadata(value: unknown): AuthenticatorListResult['entries'][number] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('The authenticator entry response was invalid.');
+  const entry = value as Record<string, unknown>;
+  const metadataKeys = new Set(['id', 'issuer', 'account', 'label', 'algorithm', 'digits', 'periodSeconds', 'createdAt', 'updatedAt', 'order', 'code', 'remainingSeconds', 'expiresAt']);
+  if (Object.keys(entry).some((key) => !metadataKeys.has(key))) throw new Error('The authenticator entry response was invalid.');
+  if (typeof entry.id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(entry.id)
+    || typeof entry.issuer !== 'string' || entry.issuer.length > AUTHENTICATOR_MAX_ISSUER_LENGTH
+    || typeof entry.account !== 'string' || entry.account.length < 1 || entry.account.length > AUTHENTICATOR_MAX_ACCOUNT_LENGTH
+    || typeof entry.label !== 'string' || entry.label.length < 1 || entry.label.length > AUTHENTICATOR_MAX_ISSUER_LENGTH + AUTHENTICATOR_MAX_ACCOUNT_LENGTH + 3
+    || typeof entry.algorithm !== 'string' || !AUTHENTICATOR_ALGORITHM_SET.has(entry.algorithm)
+    || typeof entry.digits !== 'number' || !AUTHENTICATOR_DIGIT_SET.has(entry.digits)
+    || !Number.isInteger(entry.periodSeconds) || Number(entry.periodSeconds) < 1 || Number(entry.periodSeconds) > 3_600
+    || typeof entry.createdAt !== 'string' || !Number.isFinite(Date.parse(entry.createdAt))
+    || typeof entry.updatedAt !== 'string' || !Number.isFinite(Date.parse(entry.updatedAt))
+    || !Number.isInteger(entry.order) || Number(entry.order) < 0 || Number(entry.order) >= AUTHENTICATOR_MAX_ENTRIES
+    || (entry.code !== null && (typeof entry.code !== 'string' || !new RegExp(`^\\d{${entry.digits}}$`).test(entry.code)))
+    || (entry.remainingSeconds !== null && (!Number.isInteger(entry.remainingSeconds) || Number(entry.remainingSeconds) < 0 || Number(entry.remainingSeconds) > 3_600))
+    || (entry.expiresAt !== null && (typeof entry.expiresAt !== 'string' || !Number.isFinite(Date.parse(entry.expiresAt))))) throw new Error('The authenticator entry response was invalid.');
+  return Object.freeze({
+    id: entry.id,
+    issuer: entry.issuer,
+    account: entry.account,
+    label: entry.label,
+    algorithm: entry.algorithm as AuthenticatorListResult['entries'][number]['algorithm'],
+    digits: entry.digits as AuthenticatorListResult['entries'][number]['digits'],
+    periodSeconds: Number(entry.periodSeconds),
+    createdAt: entry.createdAt,
+    updatedAt: entry.updatedAt,
+    order: Number(entry.order),
+    code: entry.code as string | null,
+    remainingSeconds: entry.remainingSeconds as number | null,
+    expiresAt: entry.expiresAt as string | null,
+  });
+}
+
+function parseAuthenticatorMetadata(value: unknown): AuthenticatorRegistrationPreviewResult['metadata'] {
+  const parsed = parseAuthenticatorEntryMetadata({ ...(value as Record<string, unknown>), code: null, remainingSeconds: null, expiresAt: null });
+  const { code: _code, remainingSeconds: _remainingSeconds, expiresAt: _expiresAt, ...metadata } = parsed;
+  return Object.freeze(metadata) as AuthenticatorRegistrationPreviewResult['metadata'];
+}
+
+function parseAuthenticatorQr(value: unknown): NonNullable<AuthenticatorRegistrationPreviewResult['qr']> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('The authenticator QR response was invalid.');
+  const qr = value as Record<string, unknown>;
+  const keys = new Set(['schemaVersion', 'size', 'modules', 'errorCorrectionLevel']);
+  if (Object.keys(qr).some((key) => !keys.has(key)) || qr.schemaVersion !== 1 || qr.errorCorrectionLevel !== 'M' || !Number.isInteger(qr.size) || Number(qr.size) < 21 || Number(qr.size) > 177 || !Array.isArray(qr.modules) || qr.modules.length !== Number(qr.size) || qr.modules.some((row) => typeof row !== 'string' || row.length !== Number(qr.size) || !/^[01]+$/.test(row))) throw new Error('The authenticator QR response was invalid.');
+  return Object.freeze({ schemaVersion: 1, size: Number(qr.size), modules: [...qr.modules] as string[], errorCorrectionLevel: 'M' as const });
+}
+
+function parseAuthenticatorRegistrationPreview(value: unknown): AuthenticatorRegistrationPreviewResult {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('The authenticator registration response was invalid.');
+  const result = value as Record<string, unknown>;
+  const keys = new Set(['ok', 'registrationId', 'metadata', 'qr', 'storage', 'message', 'messageYue']);
+  if (Object.keys(result).some((key) => !keys.has(key)) || typeof result.ok !== 'boolean' || !AUTHENTICATOR_STORAGE_SET.has(String(result.storage)) || typeof result.message !== 'string' || result.message.length > 512 || typeof result.messageYue !== 'string' || result.messageYue.length > 512) throw new Error('The authenticator registration response was invalid.');
+  if (result.registrationId !== undefined && (typeof result.registrationId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(result.registrationId))) throw new Error('The authenticator registration response was invalid.');
+  const metadata = result.metadata === undefined ? undefined : parseAuthenticatorMetadata(result.metadata);
+  if (result.qr !== undefined) parseAuthenticatorQr(result.qr);
+  if (result.ok && (typeof result.registrationId !== 'string' || result.metadata === undefined || result.qr === undefined)) throw new Error('The authenticator registration response was invalid.');
+  return Object.freeze({ ok: result.ok, registrationId: result.registrationId as string | undefined, metadata, qr: result.qr === undefined ? undefined : parseAuthenticatorQr(result.qr), storage: result.storage as AuthenticatorRegistrationPreviewResult['storage'], message: result.message, messageYue: result.messageYue });
+}
+
+function parseAuthenticatorMutation(value: unknown): AuthenticatorMutationResult {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('The authenticator mutation response was invalid.');
+  const result = value as Record<string, unknown>;
+  const keys = new Set(['ok', 'entry', 'message', 'messageYue']);
+  if (Object.keys(result).some((key) => !keys.has(key)) || typeof result.ok !== 'boolean' || typeof result.message !== 'string' || result.message.length > 512 || typeof result.messageYue !== 'string' || result.messageYue.length > 512) throw new Error('The authenticator mutation response was invalid.');
+  if (result.ok && result.entry === undefined) throw new Error('The authenticator mutation response was invalid.');
+  return Object.freeze({ ok: result.ok, entry: result.entry === undefined ? undefined : parseAuthenticatorMetadata(result.entry), message: result.message, messageYue: result.messageYue });
+}
+
+function parseAuthenticatorList(value: unknown): AuthenticatorListResult {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('The authenticator list response was invalid.');
+  const result = value as Record<string, unknown>;
+  const keys = new Set(['entries', 'storage', 'message', 'messageYue']);
+  if (Object.keys(result).some((key) => !keys.has(key)) || !Array.isArray(result.entries) || result.entries.length > AUTHENTICATOR_MAX_ENTRIES || !AUTHENTICATOR_STORAGE_SET.has(String(result.storage)) || typeof result.message !== 'string' || result.message.length > 512 || typeof result.messageYue !== 'string' || result.messageYue.length > 512) throw new Error('The authenticator list response was invalid.');
+  const entries = result.entries.map(parseAuthenticatorEntryMetadata);
+  if (new Set(entries.map((entry) => entry.id)).size !== entries.length) throw new Error('The authenticator list response was invalid.');
+  return Object.freeze({ entries, storage: result.storage as AuthenticatorListResult['storage'], message: result.message, messageYue: result.messageYue });
 }
 
 function parseSourceIsolationStatus(value: unknown): SourceIsolationStatus {
@@ -266,6 +355,13 @@ const api: DingDingStoreApi = {
   authenticator: {
     status: async () => parseAuthenticatorStatus(await ipcRenderer.invoke('authenticator:status')),
     preview: async (request: AuthenticatorPreviewRequest) => parseAuthenticatorPreviewResult(await ipcRenderer.invoke('authenticator:preview', request)),
+    prepare: async (request: AuthenticatorRegistrationRequest) => parseAuthenticatorRegistrationPreview(await ipcRenderer.invoke('authenticator:prepare', request)),
+    confirm: async (request: AuthenticatorRegistrationConfirmRequest) => parseAuthenticatorMutation(await ipcRenderer.invoke('authenticator:confirm', request)),
+    cancel: async (registrationId: string) => {
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(registrationId)) throw new Error('The authenticator registration identifier was invalid.');
+      await ipcRenderer.invoke('authenticator:cancel', registrationId);
+    },
+    list: async () => parseAuthenticatorList(await ipcRenderer.invoke('authenticator:list')),
   },
   dimSum: {
     startup: (): Promise<DimSumSurprise> => ipcRenderer.invoke('dim-sum:startup'),
@@ -286,3 +382,15 @@ const api: DingDingStoreApi = {
 };
 
 contextBridge.exposeInMainWorld('dingDingStore', Object.freeze(api));
+
+// Exported only for the pure preload contract tests; the renderer receives
+// the frozen bridge above and cannot import this module directly.
+export {
+  parseAuthenticatorEntryMetadata,
+  parseAuthenticatorList,
+  parseAuthenticatorMutation,
+  parseAuthenticatorPreviewResult,
+  parseAuthenticatorQr,
+  parseAuthenticatorRegistrationPreview,
+  parseAuthenticatorStatus,
+};

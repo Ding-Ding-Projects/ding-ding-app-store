@@ -89,7 +89,7 @@ Shared instruction provenance, offline bundles, and safe synchronization boundar
 
 - [Shared Status Hub](./memory-sync/status-hub.md) — **limited** — Documents the interactive status and handoff surface, its session boundaries, and the evidence limits of this App Store bundle.
 - [Shared convenience skills](./memory-sync/convenience-skills.md) — **limited** — Describes how shared skills are selected, mirrored, and kept provenance-aware without importing secrets or granting host authority.
-- [Local authenticator preview](./memory-sync/authenticator.md) — **limited** — Calculates one RFC 6238 code in memory while the operating-system vault and full authenticator remain unavailable.
+- [Local authenticator registration and entries](./memory-sync/authenticator.md) — **limited** — Registers bounded TOTP metadata through local otpauth or Base32 input, confirms pairing, and keeps secrets behind the operating-system credential vault.
 - [Secret and display-name mutation history](./memory-sync/secret-and-display-name-history.md) — **limited** — Records the shared instruction contract boundary for redacted local history of display-name and authenticator mutations.
 
 ## Security and privacy

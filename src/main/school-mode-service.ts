@@ -217,6 +217,22 @@ export class SchoolModeService {
     });
   }
 
+  /**
+   * Return whether restricted surfaces must fail closed right now.
+   *
+   * The authenticator is a privileged capability, so an unreadable or
+   * unavailable shared School-mode record is treated as restricted rather
+   * than silently falling back to an enabled-looking renderer state.
+   */
+  async isRestricted(): Promise<boolean> {
+    try {
+      const snapshot = await this.load();
+      return snapshot.sync.status !== 'ready' || snapshot.state?.enabled === true;
+    } catch {
+      return true;
+    }
+  }
+
   async configure(request: SchoolModeConfigureRequest): Promise<SchoolModeMutationResult> {
     if (this.isClosed()) return this.serviceClosedFailure();
     const parsed = configureRequestSchema.safeParse(request);

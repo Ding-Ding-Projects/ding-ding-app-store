@@ -52,7 +52,7 @@ const articles = [
   ['offline-documentation-browser', 'Offline documentation browser', '離線文件瀏覽器', 'documentation', 'Offline-Documentation-Browser', 'shipped', ['search-and-regex-builder', 'command-palette', 'verification']],
   ['status-hub', 'Shared Status Hub', '共用 Status Hub', 'memory-sync', 'Status-Hub', 'limited', ['convenience-skills', 'offline-documentation-browser', 'privacy-and-security', 'verification']],
   ['convenience-skills', 'Shared convenience skills', '共用便利技能', 'memory-sync', 'Convenience-Skills', 'limited', ['status-hub', 'privacy-and-security', 'source-build-security', 'verification']],
-  ['authenticator', 'Local authenticator preview', '本機驗證器預覽', 'memory-sync', 'Authenticator', 'limited', ['secret-and-display-name-history', 'tab-navigation', 'search-and-regex-builder', 'school-mode', 'privacy-and-security', 'verification']],
+  ['authenticator', 'Local authenticator registration and entries', '本機驗證器登記同項目', 'memory-sync', 'Authenticator', 'limited', ['secret-and-display-name-history', 'tab-navigation', 'search-and-regex-builder', 'school-mode', 'privacy-and-security', 'verification']],
   ['secret-and-display-name-history', 'Secret and display-name mutation history', '秘密同顯示名稱變更歷史', 'memory-sync', 'Secret-And-Display-Name-History', 'limited', ['history-versioning', 'settings-language-and-display-name', 'privacy-and-security', 'verification']],
   ['privacy-and-security', 'Privacy and security', '私隱同安全', 'security', 'Privacy-and-Security', 'shipped', ['verified-installer-operations', 'source-build-security', 'verification']],
   ['verification', 'Verification and evidence', '驗證同證據', 'verification', 'Verification', 'shipped', ['catalog-discovery', 'offline-documentation-browser', 'app-store-self-updater']],

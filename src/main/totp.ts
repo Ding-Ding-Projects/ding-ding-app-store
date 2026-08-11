@@ -55,6 +55,24 @@ export function decodeBase32Secret(secret: string): Buffer {
   return Buffer.from(output);
 }
 
+/** Return the canonical unpadded representation used in local otpauth URIs. */
+export function normalizeBase32Secret(secret: string): string {
+  const bytes = decodeBase32Secret(secret);
+  let buffer = 0;
+  let bits = 0;
+  let output = '';
+  for (const byte of bytes) {
+    buffer = (buffer << 8) | byte;
+    bits += 8;
+    while (bits >= 5) {
+      bits -= 5;
+      output += BASE32_ALPHABET[(buffer >>> bits) & 0x1f];
+    }
+  }
+  if (bits > 0) output += BASE32_ALPHABET[(buffer << (5 - bits)) & 0x1f];
+  return output;
+}
+
 function validateInput(input: TotpInput): Required<TotpInput> {
   if (!AUTHENTICATOR_ALGORITHMS.includes(input.algorithm)) return fail('The authenticator algorithm is unsupported.');
   if (!AUTHENTICATOR_DIGITS.includes(input.digits)) return fail('The authenticator digit count is unsupported.');
