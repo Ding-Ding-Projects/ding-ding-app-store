@@ -13,7 +13,7 @@ import type { Notify } from '../notify';
 import { dateKey, matchesHistoryDate, presetRange, resolveHistoryDateRange } from '../history-date-filter';
 import { DestructiveConfirmDialog } from '../components/DestructiveConfirmDialog';
 import { exportHistoryRevisions, HISTORY_REVISION_EXPORT_FORMATS, type HistoryRevisionExportFormat } from '../history-revision-export';
-import { filterHistoryRevisions, historyMutationMessage, invertRevisionSelection, selectRevisionRange } from '../history-revisions';
+import { clearRevisionSelection, filterHistoryRevisions, historyMutationMessage, invertRevisionSelection, selectRevisionRange } from '../history-revisions';
 
 type HistoryResult = 'all' | 'ok' | 'failed';
 
@@ -108,6 +108,7 @@ export function ActivityPage({ entries, revisions, loading, settings, openRegex,
   const selectedEntries = filtered.filter((entry) => selected.has(entry.id));
   const exportEntries = selectedEntries.length ? selectedEntries : filtered;
   const selectedRevisionRows = filteredRevisions.filter((revision) => selectedRevisions.has(revision.id));
+  const hiddenSelectedRevisionCount = Math.max(0, selectedRevisions.size - selectedRevisionRows.length);
   const revisionsToExport = selectedRevisionRows.length ? selectedRevisionRows : filteredRevisions;
 
   const runExport = async () => {
@@ -291,10 +292,10 @@ export function ActivityPage({ entries, revisions, loading, settings, openRegex,
         <summary>{label(settings, 'Local versions', '本機版本')} ({filteredRevisions.length} / {revisions.length})</summary>
         <p className="supporting">{label(settings, 'These versions contain App Store-owned settings, installed records, workspace tabs, appearance, schedules, run metadata, and external-editor preference. Credentials, secrets, staged update paths, and user project files are excluded. The Activity search and date filters apply here too. Restore creates a new revision; it never rewrites local history.', '呢啲版本包括 App Store 自己嘅設定、已安裝記錄、工作區分頁、外觀、排程、執行資料同外部編輯器偏好。憑證、秘密、更新暫存路徑同你嘅專案檔案唔會包括。操作記錄嘅搜尋同日期篩選亦會套用喺度。還原會新增版本，唔會改寫本機歷史。')}</p>
         <div className="revision-bulk-toolbar" aria-label={label(settings, 'Local version bulk actions', '本機版本批量操作')}>
-          <strong aria-live="polite">{label(settings, `${selectedRevisionRows.length} selected · ${filteredRevisions.length} shown · ${revisions.length} total`, `揀咗 ${selectedRevisionRows.length} · 顯示 ${filteredRevisions.length} · 總共 ${revisions.length}`)}</strong>
+           <strong aria-live="polite">{label(settings, `${selectedRevisions.size} selected · ${selectedRevisionRows.length} shown selected · ${filteredRevisions.length} shown · ${revisions.length} total${hiddenSelectedRevisionCount ? ` · ${hiddenSelectedRevisionCount} hidden` : ''}`, `揀咗 ${selectedRevisions.size} · 顯示中揀咗 ${selectedRevisionRows.length} · 顯示 ${filteredRevisions.length} · 總共 ${revisions.length}${hiddenSelectedRevisionCount ? ` · 隱藏 ${hiddenSelectedRevisionCount}` : ''}`)}</strong>
           <button type="button" className="text-button" disabled={!filteredRevisions.length} onClick={() => setSelectedRevisions((current) => new Set([...current, ...filteredRevisions.map((revision) => revision.id)]))}>{label(settings, 'Select all shown', '揀晒目前顯示')}</button>
           <button type="button" className="text-button" disabled={!filteredRevisions.length} onClick={() => setSelectedRevisions((current) => invertRevisionSelection(filteredRevisions, current))}>{label(settings, 'Invert shown', '反轉目前顯示')}</button>
-          <button type="button" className="text-button" disabled={!selectedRevisions.size} onClick={() => { setSelectedRevisions(new Set()); lastSelectedRevision.current = null; }}>{label(settings, 'Clear', '清除')}</button>
+           <button type="button" className="text-button" disabled={!selectedRevisions.size} onClick={() => { setSelectedRevisions((current) => clearRevisionSelection(filteredRevisions, current)); if (lastSelectedRevision.current !== null && filteredRevisions.some((revision) => revision.id === lastSelectedRevision.current)) lastSelectedRevision.current = null; }}>{label(settings, 'Clear shown', '清除目前顯示')}</button>
           <label>{label(settings, 'Revision export format', '版本輸出格式')}<select aria-label={label(settings, 'Revision export format', '版本輸出格式')} value={revisionExportFormat} onChange={(event) => setRevisionExportFormat(event.target.value as HistoryRevisionExportFormat)}>{HISTORY_REVISION_EXPORT_FORMATS.map((format) => <option key={format} value={format}>{format === 'json' ? 'JSON' : 'Markdown'}</option>)}</select></label>
           <button type="button" className="text-button" disabled={revisionExportBusy !== null || !revisionsToExport.length} onClick={runRevisionExport}><Icon>download</Icon>{revisionExportBusy ? label(settings, 'Exporting…', '匯出緊…') : label(settings, 'Export versions', '匯出版本')}</button>
           <button type="button" className="text-button" disabled={revisionEditorBusy || !revisionsToExport.length || !isExternalEditorBridgeAvailable()} title={isExternalEditorBridgeAvailable() ? undefined : label(settings, 'Unavailable: this build has no reviewed Visual Studio Code adapter.', '未能使用：呢個版本冇已審核嘅 Visual Studio Code adapter。')} onClick={() => void openRevisionExportInCode()}><Icon>code</Icon>{revisionEditorBusy ? label(settings, 'Opening…', '開緊…') : isExternalEditorBridgeAvailable() ? label(settings, 'Open versions in VS Code', '喺 VS Code 開版本') : label(settings, 'VS Code unavailable', 'VS Code 未能使用')}</button>

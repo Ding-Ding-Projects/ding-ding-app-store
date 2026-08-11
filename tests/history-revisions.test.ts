@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFile } from 'node:fs/promises';
 import type { HistoryRevision, UserSettings } from '../src/shared/contracts';
 import { exportHistoryRevisions, historyRevisionExportDocument } from '../src/renderer/history-revision-export';
-import { filterHistoryRevisions, historyMutationMessage, invertRevisionSelection, selectRevisionRange } from '../src/renderer/history-revisions';
+import { clearRevisionSelection, filterHistoryRevisions, historyMutationMessage, invertRevisionSelection, selectRevisionRange } from '../src/renderer/history-revisions';
 import { makeMatcher } from '../src/renderer/search';
 import { resolveHistoryDateRange } from '../src/renderer/history-date-filter';
 
@@ -61,6 +61,8 @@ describe('Local versions revision parity', () => {
     const second = selectRevisionRange(rangeVisible, first, 1, true, 'a'.repeat(40));
     expect(second).toEqual(new Set(['a'.repeat(40), 'b'.repeat(40)]));
     expect(invertRevisionSelection(rangeVisible, second)).toEqual(new Set());
+    expect(clearRevisionSelection([revisions[0]], new Set(['a'.repeat(40), 'b'.repeat(40)])).has('a'.repeat(40))).toBe(false);
+    expect(clearRevisionSelection([revisions[0]], new Set(['a'.repeat(40), 'b'.repeat(40)])).has('b'.repeat(40))).toBe(true);
   });
 
   it('localizes label and restore outcomes without dropping their factual detail', () => {
@@ -84,6 +86,7 @@ describe('Local versions revision parity', () => {
     expect(activity).toContain('revision-bulk-toolbar');
     expect(activity).toContain('Select all shown');
     expect(activity).toContain('Invert shown');
+    expect(activity).toContain('Clear shown');
     expect(activity).toContain('Export versions');
     expect(activity).toContain('Open versions in VS Code');
     expect(activity).toContain('const [revisionEditorBusy, setRevisionEditorBusy]');

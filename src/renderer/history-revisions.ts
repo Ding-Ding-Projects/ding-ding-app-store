@@ -61,3 +61,8 @@ export function invertRevisionSelection(revisions: readonly HistoryRevision[], c
   }
   return next;
 }
+
+export function clearRevisionSelection(revisions: readonly HistoryRevision[], current: ReadonlySet<string>): Set<string> {
+  const visibleIds = new Set(revisions.map((revision) => revision.id));
+  return new Set([...current].filter((id) => !visibleIds.has(id)));
+}
