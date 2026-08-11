@@ -401,6 +401,9 @@ describe('main-process restricted capability seam', () => {
     expect(source).toContain('role="option"');
     expect(source).toContain('aria-selected={option.value === value}');
     expect(source).toContain("if (event.key === 'Escape')");
+    expect(source).toContain("event.target instanceof HTMLElement && event.target.closest('.regex-builder')");
+    expect(source).toContain("setQuery(''); setRegex(null); close();");
+    expect(source).toContain('initialPattern={regex?.pattern} initialFlags={regex?.flags}');
     expect(source).toContain("event.key === 'ArrowDown' || event.key === 'ArrowRight'");
     expect(source).toContain("event.key === 'ArrowUp' || event.key === 'ArrowLeft'");
     expect(source).toContain("event.key === 'Home'");
