@@ -1,5 +1,12 @@
 # Handoff
 
+## 2026-08-11 bounded tab/group locks and local Support Tickets
+
+- Added password-only UX locks for individual tabs and groups; activation, keyboard expansion/collapse, and group membership all fail closed until the locked target is unlocked. The lock is explicitly a self-imposed speed bump, not security/encryption, and safeStorage absence keeps controls unavailable.
+- Lock state stores only metadata plus OS-vault-backed credential references; password verification uses scrypt/timing-safe comparison, bounded IPC requests, atomic temp+rename writes, and metadata rollback. Credentials never enter settings, history, exports, tickets, or logs.
+- Added local Support Tickets with typed category/description/status progression, canned fictional response, exact app-data recovery folder path, and open-folder action. It never sends network requests and never deletes data in-app; users delete the folder themselves under the documented recovery route.
+- Verification: focused locks/support tests 5/5; combined locks/tab/contracts 36/36; full root Vitest 292/292 across 45 files; catalog 11/11, domain 20/20, offline-docs 20/20; typechecks, docs, build, and diff checks green. CI run `31467997968` green for the source jer; Release `31467997964` remained queued at handoff. No packaged hidden-desktop capture or runtime vault proof is claimed. OTP/TOTP, per-property appearance locks, and a master credential remain explicitly pending.
+
 ## 2026-08-11 bounded authenticator preview
 
 - Added a real top-level Authenticator destination with a local RFC 6238 core covering SHA-1, SHA-256, and SHA-512, 6–8 digits, bounded periods, canonical Base32 validation, rollover countdown, and the published Appendix B vectors.

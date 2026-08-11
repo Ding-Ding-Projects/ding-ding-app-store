@@ -125,6 +125,7 @@ export const SETTINGS_SUB_TABS = [
   { id: 'settings.appearance', surface: 'settings.appearance', icon: 'palette', en: 'Appearance', yue: '外觀' },
   { id: 'settings.schedule', surface: 'settings.schedule', icon: 'schedule', en: 'Schedule', yue: '排程' },
   { id: 'settings.about', surface: 'settings.about', icon: 'info', en: 'About', yue: '關於' },
+  { id: 'settings.support', surface: 'settings.support', icon: 'support_agent', en: 'Locks & Support', yue: '鎖同支援' },
 ] as const;
 
 export type SettingsSubTabId = (typeof SETTINGS_SUB_TABS)[number]['id'];
@@ -137,6 +138,7 @@ export const SURFACES: readonly SurfaceRow[] = [
   { surface: 'settings.appearance', icon: 'palette', en: 'Settings · Appearance', yue: '設定 · 外觀', keywords: ['theme', 'density', 'accent', 'rail', 'tabs'] },
   { surface: 'settings.schedule', icon: 'schedule', en: 'Settings · Schedule', yue: '設定 · 排程', keywords: ['update', 'interval', 'quiet'] },
   { surface: 'settings.about', icon: 'info', en: 'Settings · About', yue: '設定 · 關於', keywords: ['version', 'licence', 'unsigned', 'changelog', 'external editor', 'vscode'] },
+  { surface: 'settings.support', icon: 'support_agent', en: 'Settings · Locks & Support', yue: '設定 · 鎖同支援', keywords: ['tab', 'group', 'lock', 'password', 'support', 'ticket', 'recovery'] },
 ];
 
 export type SettingKind = 'select' | 'range' | 'color' | 'text' | 'switch';

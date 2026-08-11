@@ -12,7 +12,7 @@
     .tab-search { padding-left: 6px; }
     .tab-search > input, .tab-search .regex-chip { display: none; }
     .palette-hint { justify-content: center; }
-    .docs-layout, .settings-grid, .schedule-grid { grid-template-columns: 1fr; }
+    .docs-layout, .settings-grid, .lock-support-grid, .schedule-grid { grid-template-columns: 1fr; }
     .docs-layout nav { position: static; }
     .appearance-panel { top: auto; left: 0; right: 0; bottom: 0; width: 100%; max-height: 62vh; border-left: 0; border-top: 1px solid color-mix(in srgb, var(--outline) 40%, transparent); }
     .date-range { grid-template-columns: 1fr 1fr; }
@@ -53,5 +53,6 @@
     .bulk-toolbar button { flex: 1 1 145px; }
     .changelog-viewer { padding: 16px; }
     .sub-tab-row button { flex: 1 1 120px; }
+    .ticket-row { flex-direction: column; }
   }
 }

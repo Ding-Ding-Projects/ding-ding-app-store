@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, ipcMain, session, shell } from 'electron';
 import squirrelStartup from 'electron-squirrel-startup';
 import { z } from 'zod';
-import type { AuthenticatorPreviewRequest, ElementKey, ElementOverride, ExternalEditorOpenRequest, ExternalEditorPreference, HistoryExportFormat, InstallCancelRequest, OperationRequest, SchoolModeConfigureRequest, SchoolModeRenameRequest, SchoolModeToggleRequest, SchoolModeVerifyRequest, SourceJobCancelRequest, SourceJobRequest, TabWorkspace, UserSettings } from '../shared/contracts.js';
+import type { AuthenticatorPreviewRequest, ElementKey, ElementOverride, ExternalEditorOpenRequest, ExternalEditorPreference, HistoryExportFormat, InstallCancelRequest, LockCredentialRequest, LockSetRequest, LockTarget, OperationRequest, SchoolModeConfigureRequest, SchoolModeRenameRequest, SchoolModeToggleRequest, SchoolModeVerifyRequest, SourceJobCancelRequest, SourceJobRequest, SupportTicketCreateRequest, TabWorkspace, UserSettings } from '../shared/contracts.js';
 import { AppearanceService } from './appearance-service.js';
 import { CatalogService } from './catalog-service.js';
 import { HistoryService } from './history-service.js';
@@ -23,6 +23,7 @@ import { ExternalScheduledSettingsService } from './external-scheduled-settings-
 import { HomeAssistantVault } from './home-assistant-vault.js';
 import { SchoolModeService } from './school-mode-service.js';
 import { AuthenticatorService } from './authenticator-service.js';
+import { LockSupportService } from './lock-support-service.js';
 
 const scheduleTaskSchema = z.enum(['self-update', 'catalog-refresh']);
 
@@ -82,6 +83,7 @@ void app.whenReady().then(async () => {
   const settings = new SettingsService(history);
   const schoolMode = new SchoolModeService();
   const authenticator = new AuthenticatorService();
+  const lockSupport = new LockSupportService(history);
   const sourceJobs = new SourceJobService(
     catalog,
     history,
@@ -165,6 +167,15 @@ void app.whenReady().then(async () => {
     const candidate = request && typeof request === 'object' ? { ...(request as Record<string, unknown>), atMs: undefined } : request;
     return authenticator.preview(candidate as AuthenticatorPreviewRequest);
   });
+  ipcMain.handle('locks:load', (event) => event.sender === mainWindow?.webContents ? lockSupport.loadLocks() : Promise.reject(new Error('Blocked lock request from an unknown renderer.')));
+  ipcMain.handle('locks:set', (event, request: LockSetRequest) => event.sender === mainWindow?.webContents ? lockSupport.setLock(request) : Promise.reject(new Error('Blocked lock request from an unknown renderer.')));
+  ipcMain.handle('locks:unlock', (event, request: LockCredentialRequest) => event.sender === mainWindow?.webContents ? lockSupport.unlock(request) : Promise.reject(new Error('Blocked lock request from an unknown renderer.')));
+  ipcMain.handle('locks:lock-again', (event, target: LockTarget) => event.sender === mainWindow?.webContents ? lockSupport.lockAgain(target) : Promise.reject(new Error('Blocked lock request from an unknown renderer.')));
+  ipcMain.handle('locks:remove', (event, request: LockCredentialRequest) => event.sender === mainWindow?.webContents ? lockSupport.remove(request) : Promise.reject(new Error('Blocked lock request from an unknown renderer.')));
+  ipcMain.handle('support:load', (event) => event.sender === mainWindow?.webContents ? lockSupport.loadSupport() : Promise.reject(new Error('Blocked Support Tickets request from an unknown renderer.')));
+  ipcMain.handle('support:create', (event, request: SupportTicketCreateRequest) => event.sender === mainWindow?.webContents ? lockSupport.createTicket(request) : Promise.reject(new Error('Blocked Support Tickets request from an unknown renderer.')));
+  ipcMain.handle('support:advance', (event, ticketId: unknown) => event.sender === mainWindow?.webContents && typeof ticketId === 'string' ? lockSupport.advanceTicket(ticketId) : Promise.reject(new Error('Blocked Support Tickets request from an unknown renderer.')));
+  ipcMain.handle('support:open-recovery-folder', (event) => event.sender === mainWindow?.webContents ? lockSupport.openRecoveryFolder() : Promise.reject(new Error('Blocked Support Tickets request from an unknown renderer.')));
   ipcMain.handle('history:list', () => history.list());
   ipcMain.handle('history:export', (_event, format: HistoryExportFormat) => history.export(format));
   ipcMain.handle('history:archive', (event, request: unknown) => event.sender === mainWindow?.webContents

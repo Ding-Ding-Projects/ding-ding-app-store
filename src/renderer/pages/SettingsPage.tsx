@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { SchoolUnlockKind, SettingsProvenance, SourceIsolationStatus, UserSettings } from '../../shared/contracts';
+import type { LockTarget, SchoolUnlockKind, SettingsProvenance, SourceIsolationStatus, UserSettings } from '../../shared/contracts';
 import { SearchBox } from '../components/SearchBox';
 import { ExternalEditorSettings } from '../components/ExternalEditorSettings';
 import { el } from '../el';
@@ -13,6 +13,8 @@ import type { SurfaceId } from '../search';
 import type { AppearanceApi } from '../state/use-appearance';
 import type { ScheduleApi } from '../state/use-schedule';
 import type { SchoolModeApi } from '../state/use-school-mode';
+import type { LocksApi } from '../state/use-locks';
+import type { SupportApi } from '../state/use-support';
 import { defaultSettings } from '../state/use-settings';
 import type { WorkspaceApi } from '../state/use-workspace';
 import { AppearanceEditor } from './AppearanceEditor';
@@ -23,6 +25,7 @@ import { serializeStructuredExport } from '../../shared/export-registry';
 import { isExternalEditorBridgeAvailable, openExportInVsCode } from '../external-editor';
 import { ColorTranslatorControl } from '../components/ColorTranslatorControl';
 import { SourceIsolationStatusCard } from '../components/SourceIsolationStatusCard';
+import { LockSupportPage } from './LockSupportPage';
 
 const ABOUT_ROWS = [
   { en: 'Version', yue: '版本', body: 'Ding Ding App Store preview 0.1.0.' },
@@ -51,7 +54,7 @@ function SettingExplanation({ settings, field, provenance }: { settings: UserSet
   );
 }
 
-export function SettingsPage({ settings, settingsProvenance, sourceIsolationStatus, sourceIsolationLoading, onRefreshSourceIsolation, onSave, workspace, appearance, schedule, schoolMode, notify, subTab, onSubTab, regexRequest, onRegexHandled }: {
+export function SettingsPage({ settings, settingsProvenance, sourceIsolationStatus, sourceIsolationLoading, onRefreshSourceIsolation, onSave, workspace, appearance, schedule, schoolMode, locks, support, lockTargetRequest, notify, subTab, onSubTab, regexRequest, onRegexHandled }: {
   settings: UserSettings;
   settingsProvenance: SettingsProvenance;
   sourceIsolationStatus: SourceIsolationStatus | null;
@@ -62,6 +65,9 @@ export function SettingsPage({ settings, settingsProvenance, sourceIsolationStat
   appearance: AppearanceApi;
   schedule: ScheduleApi;
   schoolMode: SchoolModeApi;
+  locks: LocksApi;
+  support: SupportApi;
+  lockTargetRequest: LockTarget | null;
   notify: Notify;
   subTab: SettingsSubTabId;
   onSubTab(id: SettingsSubTabId): void;
@@ -94,7 +100,8 @@ export function SettingsPage({ settings, settingsProvenance, sourceIsolationStat
   const appearanceSearch = useSurfaceSearch('settings.appearance');
   const scheduleSearch = useSurfaceSearch('settings.schedule');
   const about = useSurfaceSearch('settings.about');
-  const states = { 'settings.general': general, 'settings.appearance': appearanceSearch, 'settings.schedule': scheduleSearch, 'settings.about': about } as const;
+  const supportSearch = useSurfaceSearch('settings.support');
+  const states = { 'settings.general': general, 'settings.appearance': appearanceSearch, 'settings.schedule': scheduleSearch, 'settings.about': about, 'settings.support': supportSearch } as const;
   const active = states[subTab];
   const matcher = useMemo(() => makeMatcher(active.state), [active.state]);
 
@@ -111,6 +118,7 @@ export function SettingsPage({ settings, settingsProvenance, sourceIsolationStat
     'settings.about': ABOUT_ROWS.filter((row) => matcher(`${row.en}\n${row.yue}\n${aboutRowBody(row, settings.displayName)}`)).length
       + (matcher('external editor Visual Studio Code VS Code exports') ? 1 : 0)
       + (matcher('changelog releases versions dates commits') ? 1 : 0),
+    'settings.support': 1,
   // Keep the display-name dependency explicit for the existing settings
   // provenance contract: }), [matcher, settings.displayName]);
   }), [matcher, schoolEnabled, schoolLabel, settings.displayName]);
@@ -258,6 +266,9 @@ export function SettingsPage({ settings, settingsProvenance, sourceIsolationStat
             </section>
             {matcher('changelog releases versions dates commits') && <ChangelogViewer settings={settings} notify={notify} openRegex={regexRequest === 'changelog'} onRegexHandled={onRegexHandled} />}
           </>
+        )}
+        {subTab === 'settings.support' && counts[subTab] > 0 && (
+          <LockSupportPage settings={viewSettings} workspace={workspace.workspace} locks={locks} support={support} notify={notify} matcher={matcher} initialTarget={lockTargetRequest} />
         )}
       </div>
     </>

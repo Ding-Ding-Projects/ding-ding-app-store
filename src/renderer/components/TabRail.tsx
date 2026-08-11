@@ -1,7 +1,7 @@
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ComponentPropsWithRef, KeyboardEvent as ReactKeyboardEvent, ReactNode, RefObject } from 'react';
 import { MAX_TAB_GROUPS, TAB_GROUP_COLORS } from '../../shared/contracts';
-import type { TabGroup, TabId, TabState, TabWorkspace, UserSettings } from '../../shared/contracts';
+import type { LockTarget, TabGroup, TabId, TabState, TabWorkspace, UserSettings } from '../../shared/contracts';
 import { el } from '../el';
 import { Icon } from '../icons';
 import { label } from '../i18n';
@@ -9,6 +9,7 @@ import { GROUP_COLOR_LABELS, TAB_META } from '../registry';
 import { EMPTY_SEARCH, compile, highlight, makeMatcher, SearchContext, useSurfaceSearch } from '../search';
 import { newGroupId, regionsOf } from '../state/use-workspace';
 import type { RegionKind, WorkspaceAction } from '../state/use-workspace';
+import type { LocksApi } from '../state/use-locks';
 import { SearchBox, searchInputId } from './SearchBox';
 import { dialogCopy } from '../dialog-emoji';
 
@@ -93,16 +94,18 @@ export interface TabRailProps {
   onTabRegexHandled(): void;
   renameGroupId: string | null;
   onRenameHandled(): void;
+  locks?: LocksApi;
   onEditAppearance(target: MenuTarget, returnFocus: HTMLElement | null): void;
   schoolModeEnabled?: boolean;
+  onManageLock?(target: LockTarget): void;
 }
 
 type HeaderProps = ComponentPropsWithRef<'button'> & {
-  group: TabGroup; settings: UserSettings; expanded: boolean; bodyId: string; renaming: boolean;
+  group: TabGroup; settings: UserSettings; expanded: boolean; bodyId: string; renaming: boolean; locked: boolean;
   onRename(name: string | null): void; onToggle(): void;
 };
 
-export function TabGroupHeader({ group, settings, expanded, bodyId, renaming, onRename, onToggle, ...rest }: HeaderProps) {
+export function TabGroupHeader({ group, settings, expanded, bodyId, renaming, locked, onRename, onToggle, ...rest }: HeaderProps) {
   if (renaming) {
     return (
       <div className="tab-group-header renaming">
@@ -125,16 +128,17 @@ export function TabGroupHeader({ group, settings, expanded, bodyId, renaming, on
       <span className="tab-group-caret" aria-hidden="true"><Icon>chevron_right</Icon></span>
       <span className="tab-group-dot" data-color={group.color} aria-hidden="true" />
       <span className="tab-group-name">{group.name}</span>
+      {locked && <span className="tab-lock" aria-label={label(settings, 'Locked group', '已鎖定分組')}><Icon>lock</Icon></span>}
     </button>
   );
 }
 
 type ItemProps = ComponentPropsWithRef<'button'> & {
-  row: TabRowOnly; settings: UserSettings; active: boolean; badge: boolean;
+  row: TabRowOnly; settings: UserSettings; active: boolean; badge: boolean; locked: boolean;
   showColorBar: boolean; iconOnly: boolean; groupColor: string | null; searchLabel: ReactNode; dropTarget: boolean;
 };
 
-export function TabRailItem({ row, settings, active, badge, showColorBar, iconOnly, groupColor, searchLabel, dropTarget, ...rest }: ItemProps) {
+export function TabRailItem({ row, settings, active, badge, locked, showColorBar, iconOnly, groupColor, searchLabel, dropTarget, ...rest }: ItemProps) {
   const meta = TAB_META[row.tab.id];
   return (
     <button
@@ -153,6 +157,7 @@ export function TabRailItem({ row, settings, active, badge, showColorBar, iconOn
       <Icon>{meta.icon}</Icon>
       {!iconOnly && <span className="tab-label">{searchLabel}</span>}
       {row.tab.pinned && <span className="tab-pin" aria-label={label(settings, 'Pinned', '已釘住')}><Icon>push_pin</Icon></span>}
+      {locked && <span className="tab-lock" aria-label={label(settings, 'Locked tab', '已鎖定分頁')}><Icon>lock</Icon></span>}
       {badge && <span className="nav-dot" aria-label="Updates available" />}
     </button>
   );
@@ -179,21 +184,26 @@ export function TabOverflowSheet({ rows, settings, onActivate, onClose }: {
   );
 }
 
-export function TabContextMenu({ target, workspace, settings, dispatch, onClose, onRename, onMovePicker, onEditAppearance, returnFocus, announce }: {
+export function TabContextMenu({ target, workspace, settings, locks, dispatch, onClose, onRename, onMovePicker, onEditAppearance, returnFocus, onManageLock, announce }: {
   target: MenuTarget; workspace: TabWorkspace; settings: UserSettings;
   dispatch(action: WorkspaceAction): void; onClose(): void; onRename(groupId: string): void; onMovePicker(tabId: TabId): void;
-  onEditAppearance?(target: MenuTarget, returnFocus: HTMLElement | null): void; returnFocus?: HTMLElement | null; announce(message: string): void;
+  locks?: LocksApi;
+  onEditAppearance?(target: MenuTarget, returnFocus: HTMLElement | null): void; returnFocus?: HTMLElement | null; onManageLock?(target: LockTarget): void; announce(message: string): void;
 }) {
   const menuSearch = useSurfaceSearch('tabs.menu');
   const menuMatcher = useMemo(() => makeMatcher(menuSearch.state), [menuSearch.state]);
+  const [credential, setCredential] = useState('');
   const item = (text: string, node: ReactNode) => menuMatcher(text) ? node : null;
   useEffect(() => { menuSearch.clear(); // Search state is intentionally reset for each newly opened target.
+    setCredential('');
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [target]);
   const close = (message?: string) => { if (message) announce(message); onClose(); };
   if (target.kind === 'group') {
     const group = workspace.groups.find((item) => item.id === target.groupId);
     if (!group) return null;
+    const lockTarget: LockTarget = { targetKind: 'group', targetId: group.id };
+    const lock = locks?.state.records.find((record) => record.targetKind === 'group' && record.targetId === group.id);
     return (
       <div className="popover tab-context-menu" role="menu" aria-label={label(settings, 'Group actions', '分組操作')}>
         <SearchBox surface="tabs.menu" settings={settings} placeholder={label(settings, 'Search menu actions', '搜尋選單操作')} />
@@ -207,6 +217,9 @@ export function TabContextMenu({ target, workspace, settings, dispatch, onClose,
           ))}
         </div>)}
         {item('Edit group appearance appearance colour font', <button role="menuitem" key="appearance" onClick={() => { onEditAppearance?.(target, returnFocus ?? null); onClose(); }}>{label(settings, 'Edit group appearance…', '編輯分組外觀…')}</button>)}
+        {item('Manage group lock', <button role="menuitem" key="lock-manage" onClick={() => { onManageLock?.(lockTarget); onClose(); }}>{lock ? label(settings, 'Manage group lock', '管理分組鎖') : label(settings, 'Set group lock…', '設定分組鎖…')}</button>)}
+        {lock?.locked && item('Unlock group', <div key="unlock" className="menu-credential-row"><label htmlFor={`unlock-group-${group.id}`}>{label(settings, 'Password', '密碼')}<input id={`unlock-group-${group.id}`} type="password" autoComplete="current-password" value={credential} onChange={(event) => setCredential(event.target.value)} /></label><button role="menuitem" disabled={!locks?.state.vaultAvailable || credential.length < 4} onClick={() => void locks?.unlock({ ...lockTarget, credential })}>{label(settings, 'Unlock this session', '今次工作階段解鎖')}</button><small>{label(settings, `Forgotten it? Delete ${locks?.state.recoveryPath ?? ''} yourself.`, `唔記得？自己刪除 ${locks?.state.recoveryPath ?? ''}。`)} <button type="button" className="text-button" onClick={() => { onManageLock?.(lockTarget); onClose(); }}>{label(settings, 'Open Support Tickets', '開支援票')}</button></small></div>)}
+        {lock && !lock.locked && item('Lock group again', <button role="menuitem" key="lock-again" onClick={() => void locks?.lockAgain(lockTarget)}>{label(settings, 'Lock group again', '重新鎖定分組')}</button>)}
         {item('Delete group', <button role="menuitem" key="delete" className="danger" onClick={() => { dispatch({ type: 'group-delete', groupId: group.id }); close('Group deleted; its tabs moved out of the group'); }}>{label(settings, 'Delete group (tabs are kept)', '刪除分組（分頁會留低）')}</button>)}
       </div>
     );
@@ -214,6 +227,8 @@ export function TabContextMenu({ target, workspace, settings, dispatch, onClose,
   const tab = workspace.tabs.find((item) => item.id === target.id);
   if (!tab) return null;
   const meta = TAB_META[tab.id];
+  const lockTarget: LockTarget = { targetKind: 'tab', targetId: tab.id };
+  const lock = locks?.state.records.find((record) => record.targetKind === 'tab' && record.targetId === tab.id);
   const togglePin = () => { dispatch({ type: 'pin', id: tab.id, pinned: 'toggle' }); close(tab.pinned ? `${meta.en} unpinned` : `${meta.en} pinned`); };
   const move = (direction: -1 | 1) => { dispatch({ type: 'move', id: tab.id, direction }); close(`${meta.en} moved ${direction < 0 ? 'up' : 'down'}`); };
   const createGroup = () => {
@@ -243,6 +258,9 @@ export function TabContextMenu({ target, workspace, settings, dispatch, onClose,
       {!tab.pinned && workspace.groups.some((group) => group.id !== tab.groupId) && item('Move into group', <button role="menuitem" key="move-group" onClick={() => { onMovePicker(tab.id); onClose(); }}>{label(settings, 'Move… into group…', '移動…去分組…')}</button>)}
       {tab.groupId && item('Remove from group', <button role="menuitem" key="remove" onClick={() => { dispatch({ type: 'group-remove', id: tab.id }); close(`${meta.en} removed from its group`); }}>{label(settings, 'Remove from group', '離開分組')}</button>)}
       {item('Edit tab appearance appearance colour font', <button role="menuitem" key="appearance" onClick={() => { onEditAppearance?.(target, returnFocus ?? null); onClose(); }}>{label(settings, 'Edit tab appearance…', '編輯分頁外觀…')}</button>)}
+      {item('Manage tab lock', <button role="menuitem" key="lock-manage" onClick={() => { onManageLock?.(lockTarget); onClose(); }}>{lock ? label(settings, 'Manage tab lock', '管理分頁鎖') : label(settings, 'Set tab lock…', '設定分頁鎖…')}</button>)}
+      {lock?.locked && item('Unlock tab', <div key="unlock" className="menu-credential-row"><label htmlFor={`unlock-tab-${tab.id}`}>{label(settings, 'Password', '密碼')}<input id={`unlock-tab-${tab.id}`} type="password" autoComplete="current-password" value={credential} onChange={(event) => setCredential(event.target.value)} /></label><button role="menuitem" disabled={!locks?.state.vaultAvailable || credential.length < 4} onClick={() => void locks?.unlock({ ...lockTarget, credential })}>{label(settings, 'Unlock this session', '今次工作階段解鎖')}</button><small>{label(settings, `Forgotten it? Delete ${locks?.state.recoveryPath ?? ''} yourself.`, `唔記得？自己刪除 ${locks?.state.recoveryPath ?? ''}。`)} <button type="button" className="text-button" onClick={() => { onManageLock?.(lockTarget); onClose(); }}>{label(settings, 'Open Support Tickets', '開支援票')}</button></small></div>)}
+      {lock && !lock.locked && item('Lock tab again', <button role="menuitem" key="lock-again" onClick={() => void locks?.lockAgain(lockTarget)}>{label(settings, 'Lock tab again', '重新鎖定分頁')}</button>)}
     </div>
   );
 }
@@ -352,7 +370,7 @@ export function TabBulkClosePanel({ workspace, settings, dispatch, announce, sch
   );
 }
 
-export function TabRail({ settings, workspace, dispatch, updatesBadge, onOpenPalette, announce, openOverflow, onOverflowHandled, openTabRegex, onTabRegexHandled, renameGroupId: renameRequest, onRenameHandled, onEditAppearance, schoolModeEnabled = false }: TabRailProps) {
+export function TabRail({ settings, workspace, dispatch, locks, updatesBadge, onOpenPalette, announce, openOverflow, onOverflowHandled, openTabRegex, onTabRegexHandled, renameGroupId: renameRequest, onRenameHandled, onEditAppearance, schoolModeEnabled = false, onManageLock }: TabRailProps) {
   const search = useSurfaceSearch('tabs');
   const groupNames = useSurfaceSearch('tabs.groups');
   const master = useSurfaceSearch('tabs.master');
@@ -366,6 +384,7 @@ export function TabRail({ settings, workspace, dispatch, updatesBadge, onOpenPal
   const [overflowOpen, setOverflowOpen] = useState(false);
   const [dragId, setDragId] = useState<TabId | null>(null);
   const [dropKey, setDropKey] = useState<string | null>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
 
   const matcher = useMemo(() => makeMatcher(search.state), [search.state]);
@@ -466,10 +485,24 @@ export function TabRail({ settings, workspace, dispatch, updatesBadge, onOpenPal
     setMenu(next);
   }, []);
 
+  const isLocked = useCallback((target: LockTarget) => Boolean(locks?.isLocked(target)), [locks]);
+
   const activate = useCallback((id: TabId) => {
+    const tab = workspace.tabs.find((candidate) => candidate.id === id);
+    const groupTarget = tab?.groupId ? { targetKind: 'group' as const, targetId: tab.groupId } : null;
+    if (groupTarget && isLocked(groupTarget)) {
+      setMenu({ kind: 'group', groupId: groupTarget.targetId });
+      announce('This tab is inside a locked group. Unlock the group before opening it.');
+      return;
+    }
+    if (isLocked({ targetKind: 'tab', targetId: id })) {
+      setMenu({ kind: 'tab', id });
+      announce('This tab is locked. Unlock it before opening it.');
+      return;
+    }
     dispatch({ type: 'activate', id });
     setFocusKey(`t:${id}`);
-  }, [dispatch]);
+  }, [announce, dispatch, isLocked, workspace.tabs]);
 
   const moveFocus = (from: number, delta: number) => {
     if (!visibleRows.length) return;
@@ -508,18 +541,31 @@ export function TabRail({ settings, workspace, dispatch, updatesBadge, onOpenPal
     if (key === 'Enter' || key === ' ') {
       event.preventDefault();
       if (row.kind === 'tab') activate(row.tab.id);
-      else dispatch({ type: 'group-collapse', groupId: row.group.id, collapsed: 'toggle' });
+      else if (isLocked({ targetKind: 'group', targetId: row.group.id })) {
+        setMenu({ kind: 'group', groupId: row.group.id });
+        announce('This group is locked. Unlock it before changing its state.');
+      } else dispatch({ type: 'group-collapse', groupId: row.group.id, collapsed: 'toggle' });
       return;
     }
     if (key === 'ArrowRight') {
       event.preventDefault();
-      if (row.kind === 'header' && row.group.collapsed) dispatch({ type: 'group-collapse', groupId: row.group.id, collapsed: false });
+      if (row.kind === 'header' && row.group.collapsed) {
+        if (isLocked({ targetKind: 'group', targetId: row.group.id })) {
+          setMenu({ kind: 'group', groupId: row.group.id });
+          announce('This group is locked. Unlock it before expanding it.');
+        } else dispatch({ type: 'group-collapse', groupId: row.group.id, collapsed: false });
+      }
       else openMenuFor(row.kind === 'tab' ? { kind: 'tab', id: row.tab.id } : { kind: 'group', groupId: row.group.id }, event.currentTarget);
       return;
     }
     if (key === 'ArrowLeft') {
       event.preventDefault();
-      if (row.kind === 'header') dispatch({ type: 'group-collapse', groupId: row.group.id, collapsed: true });
+      if (row.kind === 'header') {
+        if (isLocked({ targetKind: 'group', targetId: row.group.id })) {
+          setMenu({ kind: 'group', groupId: row.group.id });
+          announce('This group is locked. Unlock it before collapsing it.');
+        } else dispatch({ type: 'group-collapse', groupId: row.group.id, collapsed: true });
+      }
       else if (row.groupId) focusStop(`h:${row.groupId}`);
       return;
     }
@@ -546,6 +592,7 @@ export function TabRail({ settings, workspace, dispatch, updatesBadge, onOpenPal
         settings={settings}
         active={workspace.activeTabId === row.tab.id}
         badge={workspace.rail.showBadges && row.tab.id === 'updates' && updatesBadge}
+        locked={isLocked({ targetKind: 'tab', targetId: row.tab.id })}
         showColorBar={workspace.rail.showGroupColorBar}
         groupColor={groupColorOf(row.groupId)}
         iconOnly={iconOnly}
@@ -589,6 +636,7 @@ export function TabRail({ settings, workspace, dispatch, updatesBadge, onOpenPal
             group={row.group}
             settings={settings}
             expanded={!row.group.collapsed}
+            locked={isLocked({ targetKind: 'group', targetId: row.group.id })}
             bodyId={bodyId}
             renaming={renamingGroupId === row.group.id}
             ref={registerStop(row.key)}
@@ -596,7 +644,13 @@ export function TabRail({ settings, workspace, dispatch, updatesBadge, onOpenPal
             onFocus={() => setFocusKey(row.key)}
             onKeyDown={(event) => onRowKeyDown(event, headerIndex, row)}
             onContextMenu={(event) => { event.preventDefault(); openMenuFor({ kind: 'group', groupId: row.group.id }, event.currentTarget); }}
-            onToggle={() => dispatch({ type: 'group-collapse', groupId: row.group.id, collapsed: 'toggle' })}
+            onToggle={() => {
+              const target = { targetKind: 'group' as const, targetId: row.group.id };
+              if (isLocked(target)) {
+                setMenu({ kind: 'group', groupId: row.group.id });
+                announce('This group is locked. Unlock it before changing its state.');
+              } else dispatch({ type: 'group-collapse', groupId: row.group.id, collapsed: 'toggle' });
+            }}
             onRename={(name) => {
               if (name !== null) dispatch({ type: 'group-rename', groupId: row.group.id, name });
               setRenamingGroupId(null);
@@ -664,7 +718,7 @@ export function TabRail({ settings, workspace, dispatch, updatesBadge, onOpenPal
       )}
       {overflowOpen && <TabOverflowSheet rows={overflowRows} settings={settings} onActivate={activate} onClose={() => setOverflowOpen(false)} />}
       {menu && (
-        <TabContextMenu target={menu} workspace={workspace} settings={settings} dispatch={dispatch} announce={announce} onRename={(groupId) => setRenamingGroupId(groupId)} onMovePicker={(tabId) => setMovePickerTabId(tabId)} onEditAppearance={onEditAppearance} returnFocus={returnFocusRef.current} onClose={() => setMenu(null)} />
+        <TabContextMenu target={menu} workspace={workspace} settings={settings} locks={locks} dispatch={dispatch} announce={announce} onRename={(groupId) => setRenamingGroupId(groupId)} onMovePicker={(tabId) => setMovePickerTabId(tabId)} onEditAppearance={onEditAppearance} returnFocus={returnFocusRef.current} onManageLock={onManageLock} onClose={() => { setMenu(null); window.setTimeout(() => returnFocusRef.current?.focus(), 0); }} />
       )}
       {movePickerTabId && <TabMoveGroupPicker tabId={movePickerTabId} workspace={workspace} settings={settings} dispatch={dispatch} announce={announce} onClose={() => setMovePickerTabId(null)} />}
       <button className="palette-hint" onClick={onOpenPalette} {...el('palette-hint')}>

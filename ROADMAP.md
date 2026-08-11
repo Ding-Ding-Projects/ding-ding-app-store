@@ -25,6 +25,7 @@
 - [x] Local operation history: every install/build/uninstall outcome recorded, filterable by action/result/date, exported as 18 truthful formats including re-importable ZIP
 - [x] Local version browser: bounded Git snapshots with diff, labels, and explicit before/after restore revisions for settings, installed records, workspace, appearance, schedules, run metadata, and external-editor preference; credential vaults and staged update paths remain excluded
 - [x] Persistent tab rail with left/right/top/bottom docking, pinning, grouping, overflow, four independent regex-backed tab searches, searchable Move… into group… picker, reversible bulk close/reopen, and full keyboard control
+- [x] Limited tab/group password UX locks with session relock, honest operating-system vault-unavailable state, Help/Settings/target-menu Support Tickets, and user-led application-data reset; per-property and OTP locks remain explicitly outside this slice
 - [x] Single-source tab shortcut registry with live pin/group/search/move handlers, searchable context-menu key caps, and semantic `aria-keyshortcuts`
 - [x] Independent search state and a full regex builder on every surface, including the command palette
 - [x] Per-element appearance editor with live preview, reset, export, and import

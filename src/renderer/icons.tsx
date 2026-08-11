@@ -6,6 +6,7 @@ export const iconMap: Record<string, string> = {
   push_pin: '⚲', folder: '▭', more_horiz: '⋯', expand_more: '⌄', chevron_right: '›', drag_indicator: '⠿',
   palette: '◑', schedule: '◷', restart_alt: '⟳', upload: '↑', tab: '▱', info: 'ⓘ', edit: '✎', undo: '↶',
   keyboard: '⌨', contrast: '◐', visibility: '◉', key: '⚿', notifications: '♧', code: '</>', open_in_new: '↗', notifications_off: '♧',
+  lock: '🔒', lock_open: '🔓', warning: '⚠', support_agent: '♟', confirmation_number: '▤', folder_open: '▱',
 };
 
 export function Icon({ children }: { children: string }) {

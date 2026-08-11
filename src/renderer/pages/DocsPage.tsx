@@ -14,7 +14,7 @@ import type { Notify } from '../notify';
 
 export const docs = GENERATED_DOCS;
 
-export function DocsPage({ settings, schoolModeEnabled = false, schoolModeName = 'School mode', notify, openRegex, onRegexHandled, articleRequest, onArticleHandled }: {
+export function DocsPage({ settings, schoolModeEnabled = false, schoolModeName = 'School mode', notify, openRegex, onRegexHandled, articleRequest, onArticleHandled, onOpenSupport }: {
   settings: UserSettings;
   schoolModeEnabled?: boolean;
   schoolModeName?: string;
@@ -22,6 +22,7 @@ export function DocsPage({ settings, schoolModeEnabled = false, schoolModeName =
   onRegexHandled(): void;
   articleRequest?: string | null;
   onArticleHandled?(): void;
+  onOpenSupport?(): void;
   notify: Notify;
 }) {
   const search = useSurfaceSearch('docs');
@@ -109,7 +110,7 @@ export function DocsPage({ settings, schoolModeEnabled = false, schoolModeName =
             {active.source === 'catalog-metadata' ? <p className="lede" aria-label="Article source">Generated catalog metadata</p> : null}
             <h1>{label(settings, active.title, active.titleYue)}</h1>
             <p className="lede">{active.summary}</p>
-            <div className="card-actions"><button className="text-button" onClick={() => void exportArticle(false)}><Icon>download</Icon>Export article</button><button className="text-button" disabled={!isExternalEditorBridgeAvailable()} onClick={() => void exportArticle(true)} title={isExternalEditorBridgeAvailable() ? undefined : 'Unavailable: no validated Visual Studio Code adapter.'}><Icon>code</Icon>Open article in VS Code</button></div>
+            <div className="card-actions"><button className="text-button" onClick={() => void exportArticle(false)}><Icon>download</Icon>Export article</button><button className="text-button" disabled={!isExternalEditorBridgeAvailable()} onClick={() => void exportArticle(true)} title={isExternalEditorBridgeAvailable() ? undefined : 'Unavailable: no validated Visual Studio Code adapter.'}><Icon>code</Icon>Open article in VS Code</button><button className="tonal-button" onClick={onOpenSupport}><Icon>support_agent</Icon>{label(settings, 'Open Locks & Support', '開鎖同支援')}</button></div>
             <MarkdownArticle article={active} onOpen={activate} knownIds={knownIds} />
           </article>
         </section>
