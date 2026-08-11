@@ -18,6 +18,7 @@ export const SCHOOL_MODE_HIDDEN_ARTICLE_IDS = [
   'catalog-language',
   'dim-sum-surprise',
   'optional-spoken-narrator',
+  'authenticator',
   'catalog-app-dim-sum-atlas',
 ] as const;
 
