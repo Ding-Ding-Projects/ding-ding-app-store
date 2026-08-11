@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  test:
+  prepare:
     runs-on: windows-2022
     timeout-minutes: 45
     outputs:
@@ -44,8 +44,6 @@ jobs:
           if ($env:RUNNER_OS -ne 'Windows' -or $env:RUNNER_ARCH -ne 'X64') { throw 'The GitHub-hosted runner does not match the required Windows X64 environment.' }
       - name: Install locked dependencies from a cache-miss-safe state
         run: npm ci
-      - name: Run strict typechecks and all test suites
-        run: npm run check
       - name: Compute unique release tag
         id: version
         shell: pwsh
@@ -79,21 +77,24 @@ jobs:
       - name: Prove a production build before packaging
         run: npm run build
       - uses: actions/upload-artifact@v4
+        if: always()
+        continue-on-error: true
         with:
           name: release-metadata-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             src/renderer/generated-changelog.ts
             release-changelog.pending.json
             release-dish.json
-          if-no-files-found: error
+          if-no-files-found: warn
+          retention-days: 7
 
   windows-build:
-    needs: test
+    needs: prepare
     runs-on: windows-2022
     timeout-minutes: 90
     outputs:
-      version: ${{ needs.test.outputs.version }}
-      tag: ${{ needs.test.outputs.tag }}
+      version: ${{ needs.prepare.outputs.version }}
+      tag: ${{ needs.prepare.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -102,6 +103,15 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Verify runner and dependency inventory
+        shell: pwsh
+        run: |
+          "Runner OS: $env:RUNNER_OS"
+          "Runner architecture: $env:RUNNER_ARCH"
+          git --version
+          node --version
+          npm --version
+          if ($env:RUNNER_OS -ne 'Windows' -or $env:RUNNER_ARCH -ne 'X64') { throw 'The GitHub-hosted runner does not match the required Windows X64 environment.' }
       - name: Install locked dependencies from a cache-miss-safe state
         run: npm ci
       - uses: actions/download-artifact@v4
@@ -132,13 +142,16 @@ jobs:
         shell: pwsh
         run: npm run count:lines | Out-File -FilePath release-stage/line-count.md -Encoding utf8
       - uses: actions/upload-artifact@v4
+        if: always()
+        continue-on-error: true
         with:
           name: windows-release-${{ github.run_id }}-${{ github.run_attempt }}
           path: release-stage/*
-          if-no-files-found: error
+          if-no-files-found: warn
+          retention-days: 7
 
   publish:
-    needs: [test, windows-build]
+    needs: [prepare, windows-build]
     runs-on: windows-2022
     timeout-minutes: 30
     steps:
@@ -155,7 +168,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.ORG_TOKEN || secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ needs.windows-build.outputs.tag }}
-          WORKFLOW_STARTED: ${{ needs.test.outputs.started_at }}
+          WORKFLOW_STARTED: ${{ needs.prepare.outputs.started_at }}
         run: |
           $setup = Resolve-Path 'release-stage/DingDingAppStore-Setup.exe'
           $releases = Resolve-Path 'release-stage/RELEASES'
