@@ -29,6 +29,11 @@
         <button id="palette-button" class="text-button" aria-haspopup="dialog">Command palette <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>F</kbd></button>
       </header>
 
+      <nav class="browser-tab-bar" aria-label="Open documentation tabs">
+        <div id="browser-tabs" role="tablist" aria-label="Open documentation tabs"></div>
+        <button id="new-doc-tab" class="tab-new" type="button" aria-label="Open the next documentation tab" title="Open the next documentation tab">+</button>
+      </nav>
+
       <section class="settings-card settings-surface" aria-labelledby="settings-title">
         <h2 id="settings-title">Documentation settings</h2>
         <div id="settings-tabs" class="settings-tabs" role="tablist" aria-label="Documentation settings sections">
@@ -75,6 +80,6 @@
     <div id="palette-results" role="listbox" aria-label="Command palette results"></div>
   </dialog>
   <script src="assets/articles.js"></script>
-  <script src="assets/app.js"></script>
+  <script type="module" src="assets/app.js"></script>
 </body>
 </html>

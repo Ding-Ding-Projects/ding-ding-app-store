@@ -5,13 +5,13 @@ Serve the repository root with any static server and open `site/index.html`. Git
 ## Included surfaces
 
 - The complete hand-written inventory of 8 categories and 19 canonical feature articles, including explicit **limited** and **pending** status.
-- Browser-style feature tabs with roving keyboard focus, category labels, remembered active article, and narrow-width overflow.
+- Browser-style feature tabs with roving keyboard focus, category labels, persisted open-route order, active hash routing, pin/close controls, keyboard reordering, and narrow-width overflow. This is a bounded site parity slice; desktop-only four-edge rail groups and destructive bulk-close actions remain explicitly app-only.
 - Full article text covering behaviour, configuration, failure modes, security considerations, verification, and suggested internal links.
-- Plain-text-first documentation search with its own adjacent guided regex builder, flags, sample, validation, live matches, and bounded inputs.
+- Plain-text-first documentation search with its own adjacent guided regex builder, flags, sample, validation, live matches, bounded inputs, and device-local query/pattern persistence. No search state leaves the browser.
 - Browser-style General, Appearance, and About settings tabs; every tab has the settings surface's own search and adjacent full regex builder.
 - English, Hong Kong Cantonese, and bilingual labels, independent English/Cantonese funny-level sliders, theme, density, and accent preferences stored per visitor.
 - `Ctrl+Shift+F` command palette covering every article and settings destination, with its own adjacent regex builder.
-- Material-style local tokens, visible focus, skip link, semantic tab/tab-panel roles, arrow/Home/End navigation, reduced-motion handling, honest empty states, and no network tracking.
+- Material-style local tokens, visible focus, skip link, semantic tab/tab-panel roles, arrow/Home/End navigation, reduced-motion handling, honest empty states, local hash routes, and no network tracking.
 
 ## Source and completeness
 
