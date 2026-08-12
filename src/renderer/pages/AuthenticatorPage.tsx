@@ -16,7 +16,6 @@ import { moveAuthenticatorPickerFocus } from '../authenticator-picker-keyboard';
 import { selectAuthenticatorRange, toggleAuthenticatorSelection } from '../authenticator-selection';
 import { isExternalEditorBridgeAvailable, openExportInVsCode } from '../external-editor';
 import { authenticatorRegistrationFailureNotice } from '../authenticator-registration-notifications';
-import { normalizeAuthenticatorImportText } from '../authenticator-import';
 
 const ALGORITHMS: readonly { value: AuthenticatorAlgorithm; en: string; yue: string }[] = [
   { value: 'sha1', en: 'SHA-1', yue: 'SHA-1' },
@@ -351,14 +350,16 @@ export function AuthenticatorPage({ settings, authenticator, notify, openRegex, 
   const importUriFromClipboard = async () => {
     if (importingClipboard || preparingRegistration || preview?.ok) return;
     setImportingClipboard(true);
+    const attemptId = globalThis.crypto.randomUUID();
     try {
-      const imported = normalizeAuthenticatorImportText(await window.dingDingStore.authenticator.readClipboardText());
       prepareGeneration.current += 1;
-      setSource('otpauth-uri'); setUri(imported); setPreview(null); setConfirmationCode(''); setShowSecret(false); setUncertainRegistrationId(null);
-      window.setTimeout(() => uriInputRef.current?.focus(), 0);
-      notify({ ok: true, message: label(viewSettings, 'An otpauth URI was imported from the local clipboard. Reveal or prepare it when ready.', '已由本機剪貼簿匯入 otpauth URI。準備好後可以顯示或者準備配對。') });
+      const imported = await window.dingDingStore.authenticator.prepareFromClipboard(attemptId);
+      setSource('otpauth-uri'); setPreview(imported); setConfirmationCode(''); setShowSecret(false); setUncertainRegistrationId(null);
+      window.setTimeout(() => document.getElementById(imported.ok ? 'authenticator-confirm-code' : 'authenticator-uri')?.focus(), 0);
+      notify({ ok: imported.ok, category: imported.ok ? 'success' : 'error', message: label(viewSettings, imported.ok ? 'The clipboard URI is ready for pairing confirmation.' : imported.message, imported.ok ? '剪貼簿 URI 已準備好確認配對。' : imported.messageYue) });
     } catch (error) {
-      notify({ ok: false, category: 'error', title: label(viewSettings, 'Clipboard import needs attention', '剪貼簿匯入要留意'), message: label(viewSettings, error instanceof Error ? error.message : 'The local clipboard could not be read.', '未能讀取本機剪貼簿。') });
+      try { await window.dingDingStore.authenticator.cancelAttempt(attemptId); } catch { /* preserve the original transport error */ }
+      notify({ ok: false, category: 'error', title: label(viewSettings, 'Clipboard import needs attention', '剪貼簿匯入要留意'), message: label(viewSettings, error instanceof Error ? error.message : 'The local clipboard could not be imported.', '未能匯入本機剪貼簿內容。') });
     } finally { setImportingClipboard(false); }
   };
 
