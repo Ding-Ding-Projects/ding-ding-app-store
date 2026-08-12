@@ -214,12 +214,17 @@ export function AuthenticatorPage({ settings, authenticator, notify, openRegex, 
   const [editingLabelId, setEditingLabelId] = useState<string | null>(null);
   const [labelDrafts, setLabelDrafts] = useState<Record<string, string>>({});
   const [groupDrafts, setGroupDrafts] = useState<Record<string, string>>({});
+  const [newGroupName, setNewGroupName] = useState('');
+  const [groupSearch, setGroupSearch] = useState('');
+  const [groupBuilderOpen, setGroupBuilderOpen] = useState(false);
+  const [groupRegex, setGroupRegex] = useState<SearchState['regex']>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<AuthenticatorExportFormat>('json');
   const viewSettings = settings;
   const visible = matcher('Authenticator registration otpauth URI Base32 secret issuer account algorithm digits period credential vault QR pairing current code countdown saved entries local search rename delete reorder group group label save group move up move down select bulk export refresh metadata 改名 刪除 排序 分組 揀選 匯出');
   const visibleEntries = useMemo(() => authenticator.entries.filter((entry) => matcher(`${entry.label} ${entry.issuer} ${entry.account} ${entry.group ?? ''} ${entry.algorithm} ${entry.digits} ${entry.periodSeconds} rename delete reorder group group label save group move up move down select bulk export refresh metadata 改名 刪除 排序 分組 揀選 匯出`)), [authenticator.entries, matcher, clock]);
+  const visibleGroups = useMemo(() => authenticator.groups.filter((group) => makeMatcher({ query: groupSearch, regex: groupRegex })(`${group.name} ${group.color}`)), [authenticator.groups, groupSearch, groupRegex]);
   const selectedVisibleIds = useMemo(() => visibleEntries.map((entry) => entry.id).filter((id) => selectedEntries.has(id)), [selectedEntries, visibleEntries]);
   const searchFingerprint = `${search.state.query}\u0000${search.state.regex?.pattern ?? ''}\u0000${search.state.regex?.flags ?? ''}`;
   const previousSearchFingerprint = useRef(searchFingerprint);
@@ -556,7 +561,7 @@ export function AuthenticatorPage({ settings, authenticator, notify, openRegex, 
                   <button className="text-button" type="button" onClick={() => setShowSecret((value) => !value)}>{showSecret ? label(viewSettings, 'Hide manual secret', '收埋手動秘密') : label(viewSettings, 'Reveal manual secret', '顯示手動秘密')}</button>
                   <button className="text-button" type="button" disabled={!showSecret || !secret} onClick={() => void copyManualSecret()}>{label(viewSettings, 'Copy grouped Base32', '複製分組 Base32')}</button>
                 </div>
-              </div>}
+                </div>}
               <form onSubmit={(event) => void confirmRegistration(event)}>
                 <label htmlFor="authenticator-confirm-code">{label(viewSettings, 'Current code from your authenticator', '你個 authenticator 嘅目前驗證碼')}<input id="authenticator-confirm-code" inputMode="numeric" pattern="[0-9]{6,8}" maxLength={8} value={confirmationCode} onChange={(event) => setConfirmationCode(event.target.value.replace(/\D/g, ''))} required /></label>
                 {uncertainRegistrationId === preview.registrationId && <p className="supporting" role="alert">{label(viewSettings, 'This pairing result is uncertain; do not retry it. Refresh the saved-entry list or discard this preview.', '呢個配對結果未能確定；唔好重試。請重新整理已儲存項目清單，或者丟棄呢個預覽。')}</p>}
@@ -569,6 +574,15 @@ export function AuthenticatorPage({ settings, authenticator, notify, openRegex, 
       </section>
       <section className="settings-card" {...el('settings-card')}>
         <div className="section-heading"><div><h2>{label(viewSettings, 'Saved entries', '已儲存項目')}</h2><p className="supporting">{label(viewSettings, 'Current codes and countdowns are calculated in the main process; the renderer receives metadata and code display only.', '目前驗證碼同倒數由主程序計算；renderer 只會收到 metadata 同驗證碼顯示。')}</p></div><button className="text-button" type="button" onClick={() => void authenticator.refresh()} disabled={authenticator.listLoading}>{label(viewSettings, 'Refresh codes', '重新整理驗證碼')}</button></div>
+        <div className="settings-card authenticator-groups" role="region" aria-label={label(viewSettings, 'Authenticator groups', 'Authenticator 分組')}>
+          <div className="section-heading"><div><h3>{label(viewSettings, 'Stable groups', '穩定分組')}</h3><p className="supporting">{label(viewSettings, 'Groups are local entities. Deleting one leaves its entries ungrouped; secrets and otpauth URIs stay in the credential vault.', '分組係本機實體。刪除分組會保留項目但取消分組；秘密同 otpauth URI 繼續留喺憑證庫。')}</p></div></div>
+          <div className="authenticator-picker-search"><Icon>search</Icon><input type="search" value={groupSearch} maxLength={160} aria-label={label(viewSettings, 'Search authenticator groups', '搜尋 Authenticator 分組')} placeholder={label(viewSettings, 'Search groups', '搜尋分組')} onChange={(event) => { setGroupSearch(event.target.value); if (groupRegex) setGroupRegex({ ...groupRegex, pattern: event.target.value }); }} /><button className="icon-button" type="button" aria-label={label(viewSettings, 'Open regex builder for authenticator groups', '開啟 Authenticator 分組正則建造器')} aria-expanded={groupBuilderOpen} onClick={() => setGroupBuilderOpen((current) => !current)}><Icon>regular_expression</Icon></button>{groupBuilderOpen && <RegexBuilder query={groupSearch} initialPattern={groupRegex?.pattern} initialFlags={groupRegex?.flags} settings={viewSettings} onClose={() => setGroupBuilderOpen(false)} onApply={(pattern, flags) => { setGroupSearch(pattern); setGroupRegex({ pattern, flags }); setGroupBuilderOpen(false); }} />}</div>
+          <div className="button-row"><input aria-label={label(viewSettings, 'New authenticator group name', '新 Authenticator 分組名稱')} maxLength={64} value={newGroupName} onChange={(event) => setNewGroupName(event.target.value)} /><button className="text-button" type="button" disabled={!newGroupName.trim()} onClick={() => void authenticator.createGroup({ name: newGroupName.trim() }).then((result) => { if (result.ok) setNewGroupName(''); })}>{label(viewSettings, 'Create group', '建立分組')}</button></div>
+          <div className="command-list" role="listbox" aria-label={label(viewSettings, 'Authenticator group list', 'Authenticator 分組清單')}>
+            {visibleGroups.map((group) => <div className="command-row" role="option" key={group.id}><span>{group.name} · {group.color}</span><button className="text-button" type="button" onClick={() => { const name = window.prompt(label(viewSettings, 'Rename authenticator group', '改名 Authenticator 分組'), group.name); if (name?.trim()) void authenticator.renameGroup({ groupId: group.id, name: name.trim() }); }}>{label(viewSettings, 'Rename', '改名')}</button><button className="text-button" type="button" onClick={() => void authenticator.reorderGroup({ groupId: group.id, order: Math.max(0, group.order - 1) })} disabled={group.order === 0}>{label(viewSettings, 'Move up', '上移')}</button><button className="text-button danger" type="button" onClick={() => { if (window.confirm(label(viewSettings, 'Delete this group? Entries will remain ungrouped.', '刪除呢個分組？項目會保留但取消分組。'))) void authenticator.deleteGroup({ groupId: group.id, confirmed: true }); }}>{label(viewSettings, 'Delete', '刪除')}</button></div>)}
+          </div>
+          <button className="text-button" type="button" disabled={!selectedVisibleIds.length} onClick={() => void authenticator.moveToGroup({ entryIds: selectedVisibleIds, groupId: visibleGroups[0]?.id ?? null })}>{label(viewSettings, 'Move selected to first matching group', '將揀選項目移去第一個配到嘅分組')}</button>
+        </div>
         {visibleEntries.length > 0 && <div id="authenticator-entry-management" className="bulk-toolbar" role="group" aria-label={label(viewSettings, 'Authenticator bulk actions', '驗證器批量操作')}>
           <strong aria-live="polite" {...el('authenticator-entry-management')}>{label(viewSettings, `${selectedEntries.size} selected · ${selectedVisibleIds.length} in this view · ${visibleEntries.length} shown`, `揀咗 ${selectedEntries.size} · 呢個畫面有 ${selectedVisibleIds.length} · 顯示 ${visibleEntries.length}`)}</strong>
           <p className="supporting">{label(viewSettings, 'Shift-click or press Shift+Space on a checkbox to select a visible range.', '按住 Shift 再撳 checkbox，或者按 Shift+Space，可以揀選目前顯示嘅範圍。')}</p>

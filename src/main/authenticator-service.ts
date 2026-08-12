@@ -20,6 +20,14 @@ import {
   type AuthenticatorExportResult,
   type AuthenticatorExportOmittedField,
   type AuthenticatorGroupRequest,
+  type AuthenticatorGroup,
+  type AuthenticatorGroupBulkMoveRequest,
+  type AuthenticatorGroupBulkMoveResult,
+  type AuthenticatorGroupCreateRequest,
+  type AuthenticatorGroupDeleteRequest,
+  type AuthenticatorGroupMutationResult,
+  type AuthenticatorGroupRenameRequest,
+  type AuthenticatorGroupReorderRequest,
   type AuthenticatorListResult,
   type AuthenticatorMutationResult,
   type AuthenticatorPreviewRequest,
@@ -34,7 +42,7 @@ import {
 import { createAuthenticatorQr } from './authenticator-qr.js';
 import { canonicalAuthenticatorUri, parseAuthenticatorUri, type ParsedAuthenticatorUri } from './authenticator-uri.js';
 import { UnavailableAuthenticatorVault, type AuthenticatorVault } from './authenticator-vault-contract.js';
-import { entryMetadataSchema } from './authenticator-metadata.js';
+import { authenticatorGroupSchema, entryMetadataSchema, normalizeAuthenticatorGroups } from './authenticator-metadata.js';
 import { generateTotp, MAX_TOTP_TIMESTAMP_MS, normalizeBase32Secret } from './totp.js';
 import type { HistoryService } from './history-service.js';
 
@@ -70,12 +78,18 @@ const MAX_CONFIRM_ATTEMPTS = 5;
 const uuidSchema = z.string().uuid();
 const entryIdRequestSchema = z.strictObject({ entryId: uuidSchema });
 const renameRequestSchema = z.strictObject({ entryId: uuidSchema, label: z.string().min(1).max(AUTHENTICATOR_MAX_LABEL_LENGTH) });
-const groupRequestSchema = z.strictObject({ entryId: uuidSchema, group: z.string().max(AUTHENTICATOR_MAX_GROUP_LENGTH).nullable() });
+const groupRequestSchema = z.strictObject({ entryId: uuidSchema, groupId: uuidSchema.nullable().optional(), group: z.string().max(AUTHENTICATOR_MAX_GROUP_LENGTH).nullable().optional() });
 const reorderRequestSchema = z.strictObject({ entryId: uuidSchema, order: z.number().int().min(0).max(AUTHENTICATOR_MAX_ENTRIES - 1) });
 const deleteRequestSchema = z.strictObject({ entryId: uuidSchema, confirmed: z.literal(true) });
 const uniqueIds = (ids: string[]) => new Set(ids).size === ids.length;
 const bulkDeleteRequestSchema = z.strictObject({ entryIds: z.array(uuidSchema).min(1).max(AUTHENTICATOR_MAX_ENTRIES).refine(uniqueIds), confirmed: z.literal(true) });
 const exportRequestSchema = z.strictObject({ entryIds: z.array(uuidSchema).min(1).max(AUTHENTICATOR_MAX_ENTRIES).refine(uniqueIds), format: z.enum(['json', 'csv', 'markdown']) });
+const groupCreateSchema = z.strictObject({ name: z.string().min(1).max(AUTHENTICATOR_MAX_GROUP_LENGTH), color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional() });
+const groupIdSchema = z.strictObject({ groupId: uuidSchema });
+const groupRenameSchema = z.strictObject({ groupId: uuidSchema, name: z.string().min(1).max(AUTHENTICATOR_MAX_GROUP_LENGTH) });
+const groupReorderSchema = z.strictObject({ groupId: uuidSchema, order: z.number().int().min(0).max(63) });
+const groupDeleteSchema = z.strictObject({ groupId: uuidSchema, confirmed: z.literal(true) });
+const groupMoveSchema = z.strictObject({ entryIds: z.array(uuidSchema).min(1).max(AUTHENTICATOR_MAX_ENTRIES).refine(uniqueIds), groupId: uuidSchema.nullable() });
 
 interface PendingRegistration {
   registrationId: string;
@@ -186,11 +200,21 @@ export class AuthenticatorService {
    * URIs, secrets, codes, QR data, ciphertext, and paths never cross this seam.
    */
   private async recordActivity(
-    action: 'created' | 'renamed' | 'group-changed' | 'reordered' | 'deleted' | 'bulk-deleted',
+    action: 'created' | 'renamed' | 'group-changed' | 'reordered' | 'deleted' | 'bulk-deleted' | 'group-created' | 'group-renamed' | 'group-reordered' | 'group-deleted' | 'group-moved',
     options: { entryId?: string; ok?: boolean; committedCount?: number; skippedCount?: number; uncertainCount?: number } = {},
   ): Promise<void> {
     if (!this.activityRecorder) return;
-    const enSubject = action === 'created'
+    const enSubject = action === 'group-created'
+      ? 'Created an authenticator group'
+      : action === 'group-renamed'
+        ? 'Renamed an authenticator group'
+        : action === 'group-reordered'
+          ? 'Reordered an authenticator group'
+          : action === 'group-deleted'
+            ? 'Deleted an authenticator group'
+            : action === 'group-moved'
+              ? 'Moved authenticator entries between groups'
+              : action === 'created'
       ? 'Created an authenticator entry'
       : action === 'renamed'
         ? 'Renamed an authenticator entry'
@@ -201,7 +225,17 @@ export class AuthenticatorService {
             : action === 'deleted'
               ? 'Deleted an authenticator entry'
               : 'Deleted authenticator entries';
-    const yueSubject = action === 'created'
+    const yueSubject = action === 'group-created'
+      ? '已建立驗證器分組'
+      : action === 'group-renamed'
+        ? '已改名驗證器分組'
+        : action === 'group-reordered'
+          ? '已重新排列驗證器分組'
+          : action === 'group-deleted'
+            ? '已刪除驗證器分組'
+            : action === 'group-moved'
+              ? '已移動驗證器項目分組'
+              : action === 'created'
       ? '已建立驗證器項目'
       : action === 'renamed'
         ? '已改名驗證器項目'
@@ -260,10 +294,20 @@ export class AuthenticatorService {
   private restrictedList(): AuthenticatorListResult {
     return {
       entries: [],
+      groups: [],
       storage: 'memory-only',
       message: 'Authenticator entries are unavailable while the shared restricted mode is enabled or unavailable.',
       messageYue: '共享限制模式開啟或不可用時，驗證器項目暫時唔可用。',
     };
+  }
+
+  private groups: AuthenticatorGroup[] = [];
+
+  private async readGroups(): Promise<AuthenticatorGroup[]> {
+    if (this.vault.listGroups) {
+      try { this.groups = normalizeAuthenticatorGroups(await this.vault.listGroups()); } catch { this.groups = []; }
+    }
+    return this.groups.map((group) => ({ ...group }));
   }
 
   private restrictedStatus(): AuthenticatorStatus {
@@ -310,9 +354,9 @@ export class AuthenticatorService {
     return this.capabilityIsLive(generation) ? metadata.slice(0, AUTHENTICATOR_MAX_ENTRIES) : null;
   }
 
-  private async publishMetadataMutation(before: AuthenticatorEntryMetadata[], next: AuthenticatorEntryMetadata[], generation: number): Promise<boolean | null> {
+  private async publishMetadataMutation(before: AuthenticatorEntryMetadata[], next: AuthenticatorEntryMetadata[], generation: number, groups: AuthenticatorGroup[] = this.groups): Promise<boolean | null> {
     try {
-      await this.vault.writeMetadata(next, { shouldCommit: () => this.capabilityIsLive(generation) });
+      await this.vault.writeMetadata(next, { shouldCommit: () => this.capabilityIsLive(generation), groups });
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'EINTEGRITY') return null;
       return (error as NodeJS.ErrnoException).code === 'ECANCELED' || !this.capabilityIsLive(generation) ? false : null;
@@ -321,7 +365,7 @@ export class AuthenticatorService {
     // The writer has its own publication fence, but a transition can happen
     // immediately after its atomic rename. Restore the previous redacted
     // document before reporting a restricted failure.
-    return await this.vault.writeMetadata(before).then(() => false, () => null);
+    return await this.vault.writeMetadata(before, { groups }).then(() => false, () => null);
   }
 
   private normalizeGroup(value: string | null): string | null {
@@ -584,15 +628,25 @@ export class AuthenticatorService {
         if (!before) return mutationFailure('Authenticator metadata is unavailable or restricted.', 'Authenticator metadata 暫時用唔到或者受到限制。');
         const existing = before.find((entry) => entry.id === parsed.data.entryId);
         if (!existing) return mutationFailure('That authenticator entry no longer exists.', '嗰個 authenticator 項目已經唔存在。');
-        const group = this.normalizeGroup(parsed.data.group);
-        const updated: AuthenticatorEntryMetadata = { ...existing, group, updatedAt: new Date().toISOString() };
+        const legacyLabel = parsed.data.group === undefined ? null : this.normalizeGroup(parsed.data.group ?? null);
+        const groups = await this.readGroups();
+        const groupId = parsed.data.groupId ?? (legacyLabel ? groups.find((item) => item.name === legacyLabel)?.id ?? null : null);
+        if (!groupId && legacyLabel) {
+          const migrated = authenticatorGroupSchema.parse({ id: randomUUID(), name: legacyLabel, color: '#6750A4', order: groups.length, collapsed: false });
+          groups.push(migrated);
+          this.groups = groups;
+          parsed.data.groupId = migrated.id;
+        }
+        if (parsed.data.groupId && !groups.some((item) => item.id === parsed.data.groupId)) return mutationFailure('That authenticator group no longer exists.', '嗰個 authenticator 分組已經唔存在。');
+        const group = groupId ? groups.find((item) => item.id === groupId)?.name ?? legacyLabel : legacyLabel;
+        const updated: AuthenticatorEntryMetadata = { ...existing, group, groupId, updatedAt: new Date().toISOString() };
         const next = before.map((entry) => entry.id === updated.id ? updated : entry);
-        const published = await this.publishMetadataMutation(before, next, generation);
+        const published = await this.publishMetadataMutation(before, next, generation, groups);
         if (published !== true) return published === false
           ? mutationFailure('The authenticator group change was cancelled because the shared restricted mode changed.', '共享限制模式有變，所以 authenticator 分組改動已取消。')
           : mutationFailure('The authenticator group change could not be published or rolled back safely.', '未能安全發佈或者回復 authenticator 分組改動。');
         await this.recordActivity('group-changed', { entryId: updated.id });
-        return { ok: true, entry: updated, message: group ? 'Authenticator entry joined a local label-only group; no secret was read.' : 'Authenticator entry left its local group; no secret was read.', messageYue: group ? 'Authenticator 項目已加入本機純標籤分組；冇讀取秘密。' : 'Authenticator 項目已離開本機分組；冇讀取秘密。' };
+        return { ok: true, entry: updated, message: group ? 'Authenticator entry joined a stable local group; no secret was read.' : 'Authenticator entry left its local group; no secret was read.', messageYue: group ? 'Authenticator 項目已加入本機穩定分組；冇讀取秘密。' : 'Authenticator 項目已離開本機分組；冇讀取秘密。' };
       } catch {
         return mutationFailure('The authenticator group could not be changed safely.', '未能安全改動 authenticator 分組。');
       }
@@ -625,6 +679,59 @@ export class AuthenticatorService {
         return mutationFailure('The authenticator entry could not be reordered safely.', '未能安全重新排列 authenticator 項目。');
       }
     });
+  }
+
+  async createGroup(request: AuthenticatorGroupCreateRequest): Promise<import('../shared/contracts.js').AuthenticatorGroupMutationResult> {
+    if (this.restricted) return { ok: false, message: 'Authenticator groups are unavailable while the shared restricted mode is enabled or unavailable.', messageYue: '共享限制模式開啟或不可用時，驗證器分組暫時用唔到。' };
+    const parsed = groupCreateSchema.safeParse(request);
+    if (!parsed.success) return { ok: false, message: 'The authenticator group request was invalid.', messageYue: 'Authenticator 分組要求無效。' };
+    return this.withMetadataSerial(async () => {
+      const generation = this.restrictionGeneration;
+      const before = await this.readMutableMetadata(generation);
+      if (!before) return { ok: false, message: 'Authenticator metadata is unavailable or restricted.', messageYue: 'Authenticator metadata 暫時用唔到或者受到限制。' };
+      const groups = await this.readGroups();
+      if (groups.length >= 64 || groups.some((group) => group.name === parsed.data.name.trim())) return { ok: false, message: 'That authenticator group name is already used or the group limit was reached.', messageYue: '呢個 authenticator 分組名稱已經用緊，或者已到分組上限。' };
+      const group = authenticatorGroupSchema.parse({ id: randomUUID(), name: parsed.data.name.trim(), color: parsed.data.color ?? '#6750A4', order: groups.length, collapsed: false });
+      const published = await this.publishMetadataMutation(before, before, generation, [...groups, group]);
+      if (published !== true) return { ok: false, message: 'The authenticator group could not be published safely.', messageYue: '未能安全發佈 authenticator 分組。' };
+      this.groups = [...groups, group];
+      await this.recordActivity('group-created');
+      return { ok: true, group, message: 'Authenticator group created without reading any secret.', messageYue: 'Authenticator 分組已建立，冇讀取任何秘密。' };
+    });
+  }
+
+  async renameGroup(request: AuthenticatorGroupRenameRequest): Promise<import('../shared/contracts.js').AuthenticatorGroupMutationResult> {
+    if (this.restricted) return { ok: false, message: 'Authenticator groups are unavailable while the shared restricted mode is enabled or unavailable.', messageYue: '共享限制模式開啟或不可用時，驗證器分組暫時用唔到。' };
+    const parsed = groupRenameSchema.safeParse(request);
+    if (!parsed.success) return { ok: false, message: 'The authenticator group rename request was invalid.', messageYue: 'Authenticator 分組改名要求無效。' };
+    return this.withMetadataSerial(async () => {
+      const generation = this.restrictionGeneration;
+      const before = await this.readMutableMetadata(generation); if (!before) return { ok: false, message: 'Authenticator metadata is unavailable or restricted.', messageYue: 'Authenticator metadata 暫時用唔到或者受到限制。' };
+      const groups = await this.readGroups(); const current = groups.find((group) => group.id === parsed.data.groupId); if (!current) return { ok: false, message: 'That authenticator group no longer exists.', messageYue: '嗰個 authenticator 分組已經唔存在。' };
+      const name = parsed.data.name.trim(); if (groups.some((group) => group.id !== current.id && group.name === name)) return { ok: false, message: 'That authenticator group name is already used.', messageYue: '呢個 authenticator 分組名稱已經用緊。' };
+      const nextGroups = groups.map((group) => group.id === current.id ? { ...group, name } : group);
+      const next = before.map((entry) => entry.groupId === current.id ? { ...entry, group: name, updatedAt: new Date().toISOString() } : entry);
+      const published = await this.publishMetadataMutation(before, next, generation, nextGroups);
+      if (published !== true) return { ok: false, message: 'The authenticator group rename could not be published safely.', messageYue: '未能安全發佈 authenticator 分組改名。' };
+      this.groups = nextGroups;
+      await this.recordActivity('group-renamed');
+      return { ok: true, group: nextGroups.find((group) => group.id === current.id), message: 'Authenticator group renamed; secrets were not read.', messageYue: 'Authenticator 分組已改名；冇讀取秘密。' };
+    });
+  }
+
+  async reorderGroup(request: AuthenticatorGroupReorderRequest): Promise<import('../shared/contracts.js').AuthenticatorGroupMutationResult> {
+    const parsed = groupReorderSchema.safeParse(request); if (!parsed.success || this.restricted) return { ok: false, message: 'The authenticator group reorder request was invalid or unavailable.', messageYue: 'Authenticator 分組排序要求無效或者暫時用唔到。' };
+    return this.withMetadataSerial(async () => { const generation = this.restrictionGeneration; const before = await this.readMutableMetadata(generation); if (!before) return { ok: false, message: 'Authenticator metadata is unavailable or restricted.', messageYue: 'Authenticator metadata 暫時用唔到或者受到限制。' }; const groups = await this.readGroups(); const current = groups.find((group) => group.id === parsed.data.groupId); if (!current) return { ok: false, message: 'That authenticator group no longer exists.', messageYue: '嗰個 authenticator 分組已經唔存在。' }; const ordered = groups.filter((group) => group.id !== current.id); ordered.splice(Math.min(parsed.data.order, ordered.length), 0, current); const nextGroups = ordered.map((group, order) => ({ ...group, order })); const published = await this.publishMetadataMutation(before, before, generation, nextGroups); if (published !== true) return { ok: false, message: 'The authenticator group reorder could not be published safely.', messageYue: '未能安全發佈 authenticator 分組排序。' }; this.groups = nextGroups; await this.recordActivity('group-reordered'); return { ok: true, group: nextGroups.find((group) => group.id === current.id), message: 'Authenticator group order updated.', messageYue: 'Authenticator 分組次序已更新。' }; });
+  }
+
+  async deleteGroup(request: AuthenticatorGroupDeleteRequest): Promise<import('../shared/contracts.js').AuthenticatorGroupMutationResult> {
+    const parsed = groupDeleteSchema.safeParse(request); if (!parsed.success || this.restricted) return { ok: false, message: 'The authenticator group delete request was invalid or unavailable.', messageYue: 'Authenticator 分組刪除要求無效或者暫時用唔到。' };
+    return this.withMetadataSerial(async () => { const generation = this.restrictionGeneration; const before = await this.readMutableMetadata(generation); if (!before) return { ok: false, message: 'Authenticator metadata is unavailable or restricted.', messageYue: 'Authenticator metadata 暫時用唔到或者受到限制。' }; const groups = await this.readGroups(); if (!groups.some((group) => group.id === parsed.data.groupId)) return { ok: false, message: 'That authenticator group no longer exists.', messageYue: '嗰個 authenticator 分組已經唔存在。' }; const nextGroups = groups.filter((group) => group.id !== parsed.data.groupId).map((group, order) => ({ ...group, order })); const next = before.map((entry) => entry.groupId === parsed.data.groupId ? { ...entry, groupId: null, group: null, updatedAt: new Date().toISOString() } : entry); const published = await this.publishMetadataMutation(before, next, generation, nextGroups); if (published !== true) return { ok: false, message: 'The authenticator group could not be deleted safely.', messageYue: '未能安全刪除 authenticator 分組。' }; this.groups = nextGroups; await this.recordActivity('group-deleted'); return { ok: true, message: 'Authenticator group deleted; entries were left ungrouped and secrets were untouched.', messageYue: 'Authenticator 分組已刪除；項目保留但冇分組，秘密冇郁過。' }; });
+  }
+
+  async moveToGroup(request: AuthenticatorGroupBulkMoveRequest): Promise<AuthenticatorGroupBulkMoveResult> {
+    const parsed = groupMoveSchema.safeParse(request); if (!parsed.success || this.restricted) return { ok: false, movedIds: [], skippedIds: parsed.success ? parsed.data.entryIds : [], message: 'The authenticator group move request was invalid or unavailable.', messageYue: 'Authenticator 分組移動要求無效或者暫時用唔到。' };
+    return this.withMetadataSerial(async () => { const generation = this.restrictionGeneration; const before = await this.readMutableMetadata(generation); if (!before) return { ok: false, movedIds: [], skippedIds: parsed.data.entryIds, message: 'Authenticator metadata is unavailable or restricted.', messageYue: 'Authenticator metadata 暫時用唔到或者受到限制。' }; const groups = await this.readGroups(); if (parsed.data.groupId && !groups.some((group) => group.id === parsed.data.groupId)) return { ok: false, movedIds: [], skippedIds: parsed.data.entryIds, message: 'That authenticator group no longer exists.', messageYue: '嗰個 authenticator 分組已經唔存在。' }; const ids = new Set(before.map((entry) => entry.id)); const candidateIds = parsed.data.entryIds.filter((id) => ids.has(id)); const skippedIds = parsed.data.entryIds.filter((id) => !ids.has(id)); const group = parsed.data.groupId ? groups.find((item) => item.id === parsed.data.groupId)?.name ?? null : null; const next = before.map((entry) => candidateIds.includes(entry.id) ? { ...entry, groupId: parsed.data.groupId, group, updatedAt: new Date().toISOString() } : entry); const published = await this.publishMetadataMutation(before, next, generation, groups); if (published !== true) return { ok: false, movedIds: [], skippedIds: parsed.data.entryIds, message: 'The authenticator group move could not be published safely.', messageYue: '未能安全發佈 authenticator 分組移動。' }; this.groups = groups; await this.recordActivity('group-moved', { committedCount: candidateIds.length, skippedCount: skippedIds.length }); return { ok: skippedIds.length === 0, movedIds: candidateIds, skippedIds, message: `Moved ${candidateIds.length} authenticator entries without reading secrets.`, messageYue: `已移動 ${candidateIds.length} 個 authenticator 項目，冇讀取秘密。` }; });
   }
 
   async remove(request: AuthenticatorDeleteRequest): Promise<AuthenticatorDeleteResult> {
@@ -750,6 +857,7 @@ export class AuthenticatorService {
     if (!this.capabilityIsLive(generation)) return this.restrictedList();
     if (vaultStatus === 'unavailable') return {
       entries: [],
+      groups: [],
       storage: 'memory-only',
       message: 'Saved authenticator entries are unavailable because the operating-system credential vault is unavailable.',
       messageYue: '作業系統憑證庫未能使用，所以已儲存嘅 authenticator 項目暫時用唔到。',
@@ -758,7 +866,7 @@ export class AuthenticatorService {
     try { metadata = await this.vault.listMetadata(); }
     catch {
       if (!this.capabilityIsLive(generation)) return this.restrictedList();
-      return { entries: [], storage: 'os-vault', message: 'Authenticator metadata could not be read safely.', messageYue: 'Authenticator metadata 未能安全讀取。' };
+      return { entries: [], groups: [], storage: 'os-vault', message: 'Authenticator metadata could not be read safely.', messageYue: 'Authenticator metadata 未能安全讀取。' };
     }
     if (!this.capabilityIsLive(generation)) return this.restrictedList();
     const entries: AuthenticatorEntry[] = [];
@@ -768,6 +876,7 @@ export class AuthenticatorService {
       if (!this.capabilityIsLive(generation)) return this.restrictedList();
       return {
         entries: metadata.slice(0, AUTHENTICATOR_MAX_ENTRIES).map((item) => ({ ...item, code: null, nextCode: null, remainingSeconds: null, expiresAt: null })),
+        groups: await this.readGroups(),
         storage: 'os-vault',
         message: 'The system clock is outside the supported range; authenticator codes are unavailable until it is corrected.',
         messageYue: '系統時鐘超出支援範圍；校正之前 authenticator 驗證碼都用唔到。',
@@ -795,6 +904,7 @@ export class AuthenticatorService {
     if (!this.capabilityIsLive(generation)) return this.restrictedList();
     return {
       entries,
+      groups: await this.readGroups(),
       storage: 'os-vault',
       message: unavailableSecret ? 'Some authenticator secrets could not be read from the credential vault; no plaintext fallback was attempted.' : 'Authenticator entries and current codes are calculated locally.',
       messageYue: unavailableSecret ? '部分 authenticator 秘密未能由憑證庫讀取；冇嘗試明文後備方案。' : 'Authenticator 項目同目前驗證碼都喺本機計算。',
