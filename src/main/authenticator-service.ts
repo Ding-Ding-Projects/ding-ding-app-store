@@ -36,6 +36,7 @@ import { canonicalAuthenticatorUri, parseAuthenticatorUri, type ParsedAuthentica
 import { UnavailableAuthenticatorVault, type AuthenticatorVault } from './authenticator-vault-contract.js';
 import { entryMetadataSchema } from './authenticator-metadata.js';
 import { generateTotp, MAX_TOTP_TIMESTAMP_MS, normalizeBase32Secret } from './totp.js';
+import type { HistoryService } from './history-service.js';
 
 const algorithmSchema = z.enum(AUTHENTICATOR_ALGORITHMS);
 const digitsSchema = z.union(AUTHENTICATOR_DIGITS.map((value) => z.literal(value)) as [z.ZodLiteral<6>, z.ZodLiteral<7>, z.ZodLiteral<8>]);
@@ -172,7 +173,78 @@ export class AuthenticatorService {
   private restricted = false;
   private restrictionGeneration = 0;
 
-  constructor(private readonly vault: AuthenticatorVault = new UnavailableAuthenticatorVault()) {}
+  constructor(
+    private readonly vault: AuthenticatorVault = new UnavailableAuthenticatorVault(),
+    private readonly activityRecorder?: Pick<HistoryService, 'record'>,
+  ) {}
+
+  /**
+   * Append a deliberately redacted Activity record after a mutation has
+   * already committed. The recorder is best-effort: a local-history failure
+   * must never change the truthful vault result. Only the fixed action and an
+   * opaque entry identifier or count are included; labels, accounts, groups,
+   * URIs, secrets, codes, QR data, ciphertext, and paths never cross this seam.
+   */
+  private async recordActivity(
+    action: 'created' | 'renamed' | 'group-changed' | 'reordered' | 'deleted' | 'bulk-deleted',
+    options: { entryId?: string; ok?: boolean; committedCount?: number; skippedCount?: number; uncertainCount?: number } = {},
+  ): Promise<void> {
+    if (!this.activityRecorder) return;
+    const enSubject = action === 'created'
+      ? 'Created an authenticator entry'
+      : action === 'renamed'
+        ? 'Renamed an authenticator entry'
+        : action === 'group-changed'
+          ? 'Changed an authenticator entry group label'
+          : action === 'reordered'
+            ? 'Reordered an authenticator entry'
+            : action === 'deleted'
+              ? 'Deleted an authenticator entry'
+              : 'Deleted authenticator entries';
+    const yueSubject = action === 'created'
+      ? '已建立驗證器項目'
+      : action === 'renamed'
+        ? '已改名驗證器項目'
+        : action === 'group-changed'
+          ? '已改動驗證器項目分組標籤'
+          : action === 'reordered'
+            ? '已重新排列驗證器項目'
+            : action === 'deleted'
+              ? '已刪除驗證器項目'
+              : '已刪除驗證器項目';
+    const entryId = options.entryId;
+    const committedCount = options.committedCount ?? (entryId ? 1 : 0);
+    const skippedCount = options.skippedCount ?? 0;
+    const uncertainCount = options.uncertainCount ?? 0;
+    const partial = action === 'bulk-deleted' && (skippedCount > 0 || uncertainCount > 0 || options.ok === false);
+    const enMetadata = entryId
+      ? `opaque entry ID ${entryId}`
+      : partial
+        ? `${committedCount} deleted, ${skippedCount} skipped, ${uncertainCount} uncertain`
+        : `${committedCount} entries`;
+    const yueMetadata = entryId
+      ? `不透明項目 ID ${entryId}`
+      : partial
+        ? `刪除 ${committedCount} 個、跳過 ${skippedCount} 個、未能確定 ${uncertainCount} 個`
+        : `${committedCount} 個項目`;
+    const enSubjectWithOutcome = partial ? `Partially deleted authenticator entries` : enSubject;
+    const yueSubjectWithOutcome = partial ? '部分驗證器項目已刪除' : yueSubject;
+    try {
+      await this.activityRecorder.record({
+        appId: 'authenticator',
+        displayName: 'Authenticator',
+        kind: 'settings',
+        ok: options.ok ?? true,
+        message: `${enSubjectWithOutcome} (${enMetadata}).`,
+        messageYue: `${yueSubjectWithOutcome}（${yueMetadata}。）`,
+      });
+    } catch {
+      // Activity is an audit aid, not the mutation's commit path. Keep the
+      // diagnostic fixed and secret-free so a recorder failure is observable
+      // without changing the truthful vault result or exposing raw errors.
+      console.warn('Authenticator Activity history record unavailable; mutation result was preserved.');
+    }
+  }
 
   /** Main-process School-mode transition hook; restricted mode clears pending secrets. */
   setRestricted(restricted: boolean): void {
@@ -424,19 +496,12 @@ export class AuthenticatorService {
         }
         savedMetadata = { ...pending.metadata, order: ordered.length, group: null };
         await this.vault.save(savedMetadata, pending.secret, { shouldCommit: () => this.capabilityIsLive(generation) && !pending.cancelled && this.pending.get(pending.registrationId) === pending });
-      });
-      pending.metadata = savedMetadata;
-      publishedByThisConfirmation = true;
-      if (!this.capabilityIsLive(generation) || pending.cancelled || this.pending.get(pending.registrationId) !== pending) {
-        const cancelled = pending.cancelled || this.pending.get(pending.registrationId) !== pending;
-        const rolledBack = publishedByThisConfirmation ? await this.rollbackAfterRestriction(pending.metadata.id) : true;
+        publishedByThisConfirmation = true;
+        pending.metadata = savedMetadata;
+        if (!this.capabilityIsLive(generation) || pending.cancelled || this.pending.get(pending.registrationId) !== pending) throw new Error('Authenticator pairing was cancelled before Activity publication.');
         this.removePending(parsed.data.registrationId);
-        if (cancelled) return cancelledPairingFailure(rolledBack);
-        return rolledBack
-          ? mutationFailure('Authenticator pairing was cancelled because the shared restricted mode changed; no entry was kept.', '共享限制模式有變，所以 authenticator 配對已取消；冇保留項目。')
-          : { ...mutationFailure('Authenticator pairing was cancelled by the shared restricted mode, but the saved entry could not be rolled back safely.', '共享限制模式取消咗 authenticator 配對，但未能安全回復已儲存項目。'), uncertain: true };
-      }
-      this.removePending(parsed.data.registrationId);
+        await this.recordActivity('created', { entryId: savedMetadata.id });
+      });
       return {
         ok: true,
         entry: savedMetadata,
@@ -500,6 +565,7 @@ export class AuthenticatorService {
         if (published !== true) return published === false
           ? mutationFailure('The authenticator rename was cancelled because the shared restricted mode changed.', '共享限制模式有變，所以 authenticator 改名已取消。')
           : mutationFailure('The authenticator rename could not be published or rolled back safely.', '未能安全發佈或者回復 authenticator 改名。');
+        await this.recordActivity('renamed', { entryId: updated.id });
         return { ok: true, entry: updated, message: 'Authenticator entry renamed; its credential-vault secret was not read or changed.', messageYue: 'Authenticator 項目已改名；憑證庫秘密冇被讀取或者改動。' };
       } catch {
         return mutationFailure('The authenticator entry could not be renamed safely.', '未能安全改動 authenticator 項目名稱。');
@@ -525,6 +591,7 @@ export class AuthenticatorService {
         if (published !== true) return published === false
           ? mutationFailure('The authenticator group change was cancelled because the shared restricted mode changed.', '共享限制模式有變，所以 authenticator 分組改動已取消。')
           : mutationFailure('The authenticator group change could not be published or rolled back safely.', '未能安全發佈或者回復 authenticator 分組改動。');
+        await this.recordActivity('group-changed', { entryId: updated.id });
         return { ok: true, entry: updated, message: group ? 'Authenticator entry joined a local label-only group; no secret was read.' : 'Authenticator entry left its local group; no secret was read.', messageYue: group ? 'Authenticator 項目已加入本機純標籤分組；冇讀取秘密。' : 'Authenticator 項目已離開本機分組；冇讀取秘密。' };
       } catch {
         return mutationFailure('The authenticator group could not be changed safely.', '未能安全改動 authenticator 分組。');
@@ -552,6 +619,7 @@ export class AuthenticatorService {
         if (published !== true) return published === false
           ? mutationFailure('The authenticator reorder was cancelled because the shared restricted mode changed.', '共享限制模式有變，所以 authenticator 排序已取消。')
           : mutationFailure('The authenticator reorder could not be published or rolled back safely.', '未能安全發佈或者回復 authenticator 排序。');
+        await this.recordActivity('reordered', { entryId: updated.id });
         return { ok: true, entry: updated, message: 'Authenticator entry order updated without reading any secret.', messageYue: 'Authenticator 項目次序已更新，冇讀取任何秘密。' };
       } catch {
         return mutationFailure('The authenticator entry could not be reordered safely.', '未能安全重新排列 authenticator 項目。');
@@ -571,6 +639,7 @@ export class AuthenticatorService {
         if (!before.some((entry) => entry.id === parsed.data.entryId)) return deleteFailure('That authenticator entry no longer exists.', '嗰個 authenticator 項目已經唔存在。');
         await this.vault.remove(parsed.data.entryId, { shouldCommit: () => this.capabilityIsLive(generation) });
         if (!this.capabilityIsLive(generation)) return { ok: false, deletedId: parsed.data.entryId, uncertain: true, message: 'The authenticator deletion completed as the shared restricted mode changed; refresh after leaving that mode.', messageYue: '共享限制模式改變時 authenticator 刪除已完成；離開限制模式後請重新整理。' };
+        await this.recordActivity('deleted', { entryId: parsed.data.entryId });
         return { ok: true, deletedId: parsed.data.entryId, message: 'Authenticator entry and its credential-vault ciphertext were deleted.', messageYue: 'Authenticator 項目同憑證庫密文已刪除。' };
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code === 'EINTEGRITY' && (error as NodeJS.ErrnoException & { committed?: boolean }).committed) {
@@ -612,6 +681,13 @@ export class AuthenticatorService {
         const ok = skippedIds.length === 0 && uncertainIds.length === 0 && this.capabilityIsLive(generation);
         const uniqueSkipped = [...new Set(skippedIds)];
         const uniqueUncertain = [...new Set(uncertainIds)];
+        const committedIds = [...new Set(deletedIds.filter((id) => !uniqueUncertain.includes(id)))];
+        if (committedIds.length) await this.recordActivity('bulk-deleted', {
+          ok,
+          committedCount: committedIds.length,
+          skippedCount: uniqueSkipped.length,
+          uncertainCount: uniqueUncertain.length,
+        });
         return {
           ok,
           deletedIds,

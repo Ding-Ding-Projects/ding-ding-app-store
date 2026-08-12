@@ -103,7 +103,7 @@ void app.whenReady().then(async () => {
   });
   const settings = new SettingsService(history);
   const schoolMode = new SchoolModeService();
-  const authenticator = new AuthenticatorService(new SafeStorageAuthenticatorVault());
+  const authenticator = new AuthenticatorService(new SafeStorageAuthenticatorVault(), history);
   const lockSupport = new LockSupportService(history);
   const unsubscribeSchoolMode = schoolMode.subscribe((snapshot) => {
     authenticator.setRestricted(snapshot.sync.status !== 'ready' || snapshot.state?.enabled === true);
