@@ -28,7 +28,8 @@ describe('deliberate authenticator secret export', () => {
       const destination = path.join(root, 'secrets.json');
       const activity: Array<{ message: string }> = [];
       const service = new AuthenticatorService(new Vault(), { record: async (value) => { activity.push(value); } });
-      const result = await service.secretExport({ entryIds: [ID], format: 'json', confirmed: true }, destination);
+      const authorization = await service.authorizeSecretExport({ entryIds: [ID], format: 'json' });
+      const result = await service.secretExport({ entryIds: [ID], format: 'json', authorizationToken: authorization.authorizationToken! }, destination);
       expect(result).toMatchObject({ ok: true, filename: 'authenticator-secrets.json', entryCount: 1 });
       expect(JSON.stringify(result)).not.toContain(SECRET);
       const content = await readFile(destination, 'utf8');
@@ -46,11 +47,15 @@ describe('deliberate authenticator secret export', () => {
     try {
       const vault = new Vault();
       const service = new AuthenticatorService(vault);
-      expect((await service.secretExport({ entryIds: ['22222222-2222-4222-8222-222222222222'], format: 'json', confirmed: true }, path.join(root, 'missing.json'))).reason).toBe('invalid');
+      expect((await service.secretExport({ entryIds: ['22222222-2222-4222-8222-222222222222'], format: 'json', authorizationToken: '22222222-2222-4222-8222-222222222222' }, path.join(root, 'missing.json'))).reason).toBe('invalid');
+      const unavailableAuth = await service.authorizeSecretExport({ entryIds: [ID], format: 'json' });
       vault.available = false;
-      expect((await service.secretExport({ entryIds: [ID], format: 'json', confirmed: true }, path.join(root, 'unavailable.json'))).reason).toBe('unavailable');
+      expect((await service.secretExport({ entryIds: [ID], format: 'json', authorizationToken: unavailableAuth.authorizationToken! }, path.join(root, 'unavailable.json'))).reason).toBe('unavailable');
       vault.available = true;
-      expect((await service.secretExport({ entryIds: [ID], format: 'json', confirmed: false as true }, path.join(root, 'unconfirmed.json'))).reason).toBe('invalid');
+      expect((await service.secretExport({ entryIds: [ID], format: 'json', authorizationToken: '44444444-4444-4444-8444-444444444444' }, path.join(root, 'unconfirmed.json'))).reason).toBe('invalid');
+      const auth = await service.authorizeSecretExport({ entryIds: [ID], format: 'json' });
+      expect((await service.secretExport({ entryIds: [ID], format: 'csv', authorizationToken: auth.authorizationToken! }, path.join(root, 'mismatch.csv'))).reason).toBe('invalid');
+      expect((await service.secretExport({ entryIds: [ID], format: 'json', authorizationToken: auth.authorizationToken! }, path.join(root, 'replay.json'))).reason).toBe('invalid');
     } finally { await rm(root, { recursive: true, force: true }); }
   });
 

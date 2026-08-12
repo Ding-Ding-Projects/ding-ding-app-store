@@ -1498,8 +1498,12 @@ export type AuthenticatorSecretExportFormat = 'json' | 'csv';
 export interface AuthenticatorSecretExportRequest {
   entryIds: string[];
   format: AuthenticatorSecretExportFormat;
-  /** Set only after the native two-key/full-slider confirmation completes. */
-  confirmed: true;
+  /** Main-process-issued, single-use authorization bound to this selection and format. */
+  authorizationToken: string;
+}
+export interface AuthenticatorSecretExportAuthorizationRequest {
+  entryIds: string[];
+  format: AuthenticatorSecretExportFormat;
 }
 export type AuthenticatorSecretExportReason = 'cancelled' | 'invalid' | 'restricted' | 'unavailable' | 'write-failed' | 'too-large';
 export interface AuthenticatorSecretExportResult {
@@ -1694,6 +1698,7 @@ export interface DingDingStoreApi {
     bulkRemove(request: AuthenticatorBulkDeleteRequest): Promise<AuthenticatorBulkDeleteResult>;
     export(request: AuthenticatorExportRequest): Promise<AuthenticatorExportResult>;
     secretExport(request: AuthenticatorSecretExportRequest): Promise<AuthenticatorSecretExportResult>;
+    authorizeSecretExport(request: AuthenticatorSecretExportAuthorizationRequest): Promise<{ ok: boolean; authorizationToken?: string; message: string; messageYue: string }>;
   };
   dimSum: {
     startup(): Promise<DimSumSurprise>;

@@ -90,7 +90,7 @@ const deleteRequestSchema = z.strictObject({ entryId: uuidSchema, confirmed: z.l
 const uniqueIds = (ids: string[]) => new Set(ids).size === ids.length;
 const bulkDeleteRequestSchema = z.strictObject({ entryIds: z.array(uuidSchema).min(1).max(AUTHENTICATOR_MAX_ENTRIES).refine(uniqueIds), confirmed: z.literal(true) });
 const exportRequestSchema = z.strictObject({ entryIds: z.array(uuidSchema).min(1).max(AUTHENTICATOR_MAX_ENTRIES).refine(uniqueIds), format: z.enum(['json', 'csv', 'markdown']) });
-const secretExportRequestSchema = z.strictObject({ entryIds: z.array(uuidSchema).min(1).max(AUTHENTICATOR_MAX_ENTRIES).refine(uniqueIds), format: z.enum(['json', 'csv']), confirmed: z.literal(true) });
+const secretExportRequestSchema = z.strictObject({ entryIds: z.array(uuidSchema).min(1).max(AUTHENTICATOR_MAX_ENTRIES).refine(uniqueIds), format: z.enum(['json', 'csv']), authorizationToken: z.string().uuid() });
 const groupCreateSchema = z.strictObject({ name: z.string().min(1).max(AUTHENTICATOR_MAX_GROUP_LENGTH), color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional() });
 const groupIdSchema = z.strictObject({ groupId: uuidSchema });
 const groupRenameSchema = z.strictObject({ groupId: uuidSchema, name: z.string().min(1).max(AUTHENTICATOR_MAX_GROUP_LENGTH) });
@@ -198,6 +198,7 @@ export class AuthenticatorService {
   private metadataMutationSerial: Promise<void> = Promise.resolve();
   private restricted = false;
   private restrictionGeneration = 0;
+  private readonly secretExportAuthorizations = new Map<string, { fingerprint: string; expiresAtMs: number }>();
 
   constructor(
     private readonly vault: AuthenticatorVault = new UnavailableAuthenticatorVault(),
@@ -893,6 +894,14 @@ export class AuthenticatorService {
     });
   }
 
+  async authorizeSecretExport(request: { entryIds: string[]; format: 'json' | 'csv' }): Promise<{ ok: boolean; authorizationToken?: string; message: string; messageYue: string }> {
+    const parsed = z.strictObject({ entryIds: z.array(uuidSchema).min(1).max(AUTHENTICATOR_MAX_ENTRIES).refine(uniqueIds), format: z.enum(['json', 'csv']) }).safeParse(request);
+    if (this.restricted || !parsed.success) return { ok: false, message: 'Secret export authorization was refused while unavailable or invalid.', messageYue: '秘密匯出授權喺不可用或者無效時已拒絕。' };
+    const authorizationToken = randomUUID();
+    this.secretExportAuthorizations.set(authorizationToken, { fingerprint: `${parsed.data.format}:${[...parsed.data.entryIds].sort().join(',')}`, expiresAtMs: Date.now() + 60_000 });
+    return { ok: true, authorizationToken, message: 'Secret export authorization is ready for one native save action.', messageYue: '秘密匯出授權已準備好畀一次原生儲存操作。' };
+  }
+
   /**
    * Deliberate secret export. This is intentionally a main-process-only
    * operation: vault plaintext is assembled and written here, and the bridge
@@ -906,6 +915,9 @@ export class AuthenticatorService {
     return this.withMetadataSerial(async () => {
       const generation = this.restrictionGeneration;
       try {
+        const authorization = this.secretExportAuthorizations.get(parsed.data.authorizationToken);
+        this.secretExportAuthorizations.delete(parsed.data.authorizationToken);
+        if (!authorization || Date.now() >= authorization.expiresAtMs || authorization.fingerprint !== `${parsed.data.format}:${[...parsed.data.entryIds].sort().join(',')}`) return secretExportFailure('invalid', 'Secret export authorization was missing, expired, replayed, or did not match the selected entries; no file was created.', '秘密匯出授權遺失、過期、重用，或者唔符合揀選項目；冇建立檔案。');
         if (await this.vault.status() === 'unavailable') return secretExportFailure('unavailable', 'The operating-system credential vault is unavailable; no file was created.', '作業系統憑證庫暫時用唔到；冇建立檔案。');
         const metadata = await this.readMutableMetadata(generation);
         if (!metadata) return secretExportFailure('restricted', 'Authenticator metadata is unavailable or restricted; no file was created.', 'Authenticator metadata 暫時用唔到或者受到限制；冇建立檔案。');
