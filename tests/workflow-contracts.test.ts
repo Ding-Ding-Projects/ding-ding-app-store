@@ -56,11 +56,13 @@ describe('GitHub-hosted workflow and bootstrap contract', () => {
     expect(release).toContain('npx electron-builder --win squirrel --publish never');
   });
 
-  it('runs releases for ordinary branch pushes and manual dispatch, never generated release tags', async () => {
+  it('runs releases only for main pushes and manual dispatch, with a fresh-main-tip assertion', async () => {
     const workflow = await read('.github/workflows/release.yml');
-    expect(workflow).toMatch(/^on:\s*\n\s+push:\s*\n\s+branches:\s*\n\s+- '\*\*'\s*$/m);
+    expect(workflow).toMatch(/^on:\s*\n\s+push:\s*\n\s+branches:\s*\n\s+- main\s*$/m);
     expect(workflow).toMatch(/^\s*workflow_dispatch:\s*\{\}\s*$/m);
     expect(workflow).not.toMatch(/^\s+tags(?:-ignore)?:/m);
+    expect(workflow.match(/\$mainTip = git rev-parse origin\/main/gm)).toHaveLength(2);
+    expect(workflow.match(/\$mainTip -ne \$env:GITHUB_SHA/gm)).toHaveLength(2);
   });
 
   it('bootstraps release tooling from a pinned canonical archive with SHA-256 verification', async () => {
@@ -85,6 +87,12 @@ describe('GitHub-hosted workflow and bootstrap contract', () => {
     expect(release).toContain('$dish.photoUrl');
     expect(release).not.toMatch(/gh release create[^\n]*\$dish\.(?:assetName|photoUrl)/);
     expect(release).toContain('gh release create $env:RELEASE_TAG $setup $releases $nupkg --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA');
+    expect(release).toContain('scripts/prepare-release-version.mjs');
+    expect(release).toContain('$tag = "v$version"');
+    expect(release).toContain('$expectedPackageName = "DingDingAppStore-$env:RELEASE_VERSION-full.nupkg"');
+    expect(release).toContain("Resolve-Path \"release-stage/DingDingAppStore-$env:RELEASE_VERSION-full.nupkg\"");
+    expect(release).toContain('Assert release source is the fresh origin/main tip');
+    expect(release).toContain('Assert transferred package version matches the release version');
     expect(release).not.toContain('$tagRef = gh api');
     expect(release).not.toContain('if ($tagSha -ne $env:GITHUB_SHA)');
     expect(release).toContain('if ($publishedSha -ne $env:GITHUB_SHA)');

@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     branches:
-      - '**'
+      - main
   workflow_dispatch: {}
 
 permissions:
@@ -29,6 +29,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Assert release source is the fresh origin/main tip
+        shell: pwsh
+        run: |
+          git fetch --no-tags origin main
+          $mainTip = git rev-parse origin/main
+          if ($LASTEXITCODE -ne 0 -or $mainTip -ne $env:GITHUB_SHA) { throw "Release source $env:GITHUB_SHA is not the fresh origin/main tip $mainTip." }
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -48,8 +54,9 @@ jobs:
         id: version
         shell: pwsh
         run: |
-          $version = (Get-Content -LiteralPath package.json -Raw | ConvertFrom-Json).version
-          $tag = "v$version-${{ github.run_number }}-${{ github.run_attempt }}"
+          $version = node scripts/prepare-release-version.mjs '${{ github.run_number }}' '${{ github.run_attempt }}'
+          if ($LASTEXITCODE -ne 0 -or -not $version) { throw 'Could not prepare a unique semantic package version.' }
+          $tag = "v$version"
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
       - name: Bootstrap pinned GitHub CLI in the job-local tool cache
@@ -83,6 +90,7 @@ jobs:
         with:
           name: release-metadata-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
+            package.json
             src/renderer/generated-changelog.ts
             site/assets/generated-changelog.mjs
             release-changelog.pending.json
@@ -120,24 +128,36 @@ jobs:
         with:
           name: release-metadata-${{ github.run_id }}-${{ github.run_attempt }}
           path: .
+      - name: Assert transferred package version matches the release version
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          $packageVersion = (Get-Content -LiteralPath package.json -Raw | ConvertFrom-Json).version
+          if ($packageVersion -ne $env:RELEASE_VERSION) { throw "Packaged version $packageVersion does not match release version $env:RELEASE_VERSION." }
       - name: Build renderer, main process, and preload
         run: npm run build
       - name: Package unsigned Squirrel.Windows installer
         run: npx electron-builder --win squirrel --publish never
       - name: Verify and stage unsigned Squirrel assets
         shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
         run: |
           $setup = Get-ChildItem -Path release -Recurse -Filter '*Setup.exe' | Select-Object -First 1
           if (-not $setup) { throw 'No Setup.exe was produced by electron-builder.' }
           $releases = Get-ChildItem -Path $setup.DirectoryName -Filter 'RELEASES' | Select-Object -First 1
           $nupkg = Get-ChildItem -Path $setup.DirectoryName -Filter '*-full.nupkg' | Select-Object -First 1
           if (-not $releases -or -not $nupkg) { throw 'Squirrel did not produce RELEASES and a full .nupkg beside Setup.exe.' }
+          $expectedPackageName = "DingDingAppStore-$env:RELEASE_VERSION-full.nupkg"
+          if ($nupkg.Name -ne $expectedPackageName) { throw "Squirrel produced $($nupkg.Name), expected $expectedPackageName." }
+          if (-not (Select-String -LiteralPath $releases.FullName -SimpleMatch $expectedPackageName -Quiet)) { throw "RELEASES does not advertise $expectedPackageName." }
           $signature = Get-AuthenticodeSignature -FilePath $setup.FullName
           if ($signature.Status -ne 'NotSigned') { throw "Code signing is prohibited, but Setup.exe reported $($signature.Status)." }
           New-Item -ItemType Directory -Path release-stage -Force | Out-Null
           Copy-Item -LiteralPath $setup.FullName -Destination 'release-stage/DingDingAppStore-Setup.exe'
           Copy-Item -LiteralPath $releases.FullName -Destination 'release-stage/RELEASES'
-          Copy-Item -LiteralPath $nupkg.FullName -Destination 'release-stage/DingDingAppStore-full.nupkg'
+          Copy-Item -LiteralPath $nupkg.FullName -Destination (Join-Path 'release-stage' $expectedPackageName)
           Copy-Item -LiteralPath 'release-changelog.pending.json' -Destination 'release-stage/release-changelog.pending.json'
           Copy-Item -LiteralPath 'release-dish.json' -Destination 'release-stage/release-dish.json'
       - name: Produce reproducible line-count table
@@ -158,6 +178,12 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+      - name: Assert release source is the fresh origin/main tip
+        shell: pwsh
+        run: |
+          git fetch --no-tags origin main
+          $mainTip = git rev-parse origin/main
+          if ($LASTEXITCODE -ne 0 -or $mainTip -ne $env:GITHUB_SHA) { throw "Release source $env:GITHUB_SHA is not the fresh origin/main tip $mainTip." }
       - uses: actions/download-artifact@v4
         with:
           name: windows-release-${{ github.run_id }}-${{ github.run_attempt }}
@@ -170,11 +196,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.ORG_TOKEN || secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ needs.windows-build.outputs.tag }}
+          RELEASE_VERSION: ${{ needs.windows-build.outputs.version }}
           WORKFLOW_STARTED: ${{ needs.prepare.outputs.started_at }}
         run: |
           $setup = Resolve-Path 'release-stage/DingDingAppStore-Setup.exe'
           $releases = Resolve-Path 'release-stage/RELEASES'
-          $nupkg = Resolve-Path 'release-stage/DingDingAppStore-full.nupkg'
+          $nupkg = Resolve-Path "release-stage/DingDingAppStore-$env:RELEASE_VERSION-full.nupkg"
           $lineCount = Resolve-Path 'release-stage/line-count.md'
           $dish = Get-Content -LiteralPath 'release-stage/release-dish.json' -Raw | ConvertFrom-Json
           $title = "Ding Ding App Store $env:RELEASE_TAG"
