@@ -48,7 +48,7 @@ describe('deliberate authenticator secret export', () => {
       const service = new AuthenticatorService(vault);
       expect((await service.secretExport({ entryIds: ['22222222-2222-4222-8222-222222222222'], format: 'json', confirmed: true }, path.join(root, 'missing.json'))).reason).toBe('invalid');
       vault.available = false;
-      expect((await service.secretExport({ entryIds: [ID], format: 'json', confirmed: true }, path.join(root, 'unavailable.json'))).reason).toBe('restricted');
+      expect((await service.secretExport({ entryIds: [ID], format: 'json', confirmed: true }, path.join(root, 'unavailable.json'))).reason).toBe('unavailable');
       vault.available = true;
       expect((await service.secretExport({ entryIds: [ID], format: 'json', confirmed: false as true }, path.join(root, 'unconfirmed.json'))).reason).toBe('invalid');
     } finally { await rm(root, { recursive: true, force: true }); }

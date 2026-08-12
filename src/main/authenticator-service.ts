@@ -1,5 +1,5 @@
 import { randomUUID, timingSafeEqual } from 'node:crypto';
-import { chmod, open, rename, unlink } from 'node:fs/promises';
+import { chmod, open, rename, stat, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
 import {
@@ -930,6 +930,12 @@ export class AuthenticatorService {
         }
         if (!this.capabilityIsLive(generation)) return secretExportFailure('restricted', 'Secret export was stopped because the shared restricted mode changed; no file was created.', '共享限制模式改變，所以秘密匯出已停止；冇建立檔案。');
         if (Buffer.byteLength(content, 'utf8') > AUTHENTICATOR_MAX_SECRET_EXPORT_LENGTH) return secretExportFailure('too-large', 'The secret export exceeded its bounded size; no file was created.', '秘密匯出超出大小上限；冇建立檔案。', records.length);
+        try {
+          await stat(destinationPath);
+          return secretExportFailure('write-failed', 'The selected destination already exists; no file was overwritten.', '揀選嘅目的地已經存在；冇覆寫檔案。', records.length);
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') return secretExportFailure('write-failed', 'The selected destination could not be checked safely; no file was created.', '未能安全檢查揀選嘅目的地；冇建立檔案。', records.length);
+        }
         const temporaryPath = path.join(path.dirname(destinationPath), `.${path.basename(destinationPath)}.${randomUUID()}.tmp`);
         let handle: Awaited<ReturnType<typeof open>> | null = null;
         try {
@@ -940,6 +946,10 @@ export class AuthenticatorService {
           handle = null;
           await rename(temporaryPath, destinationPath);
           await chmod(destinationPath, 0o600);
+          if (!this.capabilityIsLive(generation)) {
+            await unlink(destinationPath).catch(() => undefined);
+            return secretExportFailure('restricted', 'Secret export was stopped because the shared restricted mode changed; no file was kept.', '共享限制模式改變，所以秘密匯出已停止；冇保留檔案。', records.length);
+          }
         } catch {
           if (handle) await handle.close().catch(() => undefined);
           await unlink(temporaryPath).catch(() => undefined);
