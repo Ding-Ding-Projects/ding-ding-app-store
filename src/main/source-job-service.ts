@@ -35,6 +35,7 @@ interface ActiveJob {
   budget: TerminalEventBudget;
   lease?: IsolationCapabilityLease;
   teardown?: Promise<void>;
+  leasedTeardown?: Promise<void>;
 }
 
 interface CompletedJob {
@@ -184,12 +185,13 @@ export class SourceJobService {
   }
 
   private async teardown(job: ActiveJob, jobId: string): Promise<void> {
-    if (!job.teardown) {
-      job.teardown = job.lease
-        ? this.broker.dispose(jobId, job.lease)
-        : this.broker.abort(jobId);
+    if (job.lease) {
+      if (!job.leasedTeardown) job.leasedTeardown = this.broker.dispose(jobId, job.lease);
+      await job.leasedTeardown;
+      return;
     }
-    await job.teardown.catch(() => undefined);
+    if (!job.teardown) job.teardown = this.broker.abort(jobId);
+    await job.teardown;
   }
 
   private async execute(jobId: string, request: SourceJobRequest, recipe: SourceRecipe): Promise<void> {

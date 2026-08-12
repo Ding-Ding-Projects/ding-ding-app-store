@@ -297,7 +297,11 @@ export interface SourceExecutionPlan {
 }
 
 export interface IsolationBroker {
-  attest(challenge: Readonly<IsolationAttestationChallenge>): Promise<unknown>;
+  attest(challenge: Readonly<IsolationAttestationChallenge>, signal: AbortSignal): Promise<unknown>;
+  /** Implementations must reject before spawning work when the execute lease
+   * is expired or the signal is already aborted, and must stop the guest when
+   * the signal aborts. The main process validates the same boundary before
+   * dispatch; this broker-side rule closes the transport seam. */
   execute(plan: Readonly<SourceExecutionPlan>, emit: (event: RuntimeLine) => void, signal: AbortSignal, lease: Readonly<IsolationCapabilityLease>): Promise<void>;
   /** A validated lease is mandatory for an admitted guest teardown. The
    * broker must consume the lease at most once; repeated calls for the same
