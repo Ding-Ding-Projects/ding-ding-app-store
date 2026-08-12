@@ -27,4 +27,11 @@ describe('bounded 7z archive boundary', () => {
     expect(parseHistory7zExportResult(createHistory7zUnavailable(request))).toMatchObject({ ok: false, format: '7z' });
     expect(() => parseHistory7zExportResult({ ...createHistory7zUnavailable(request), extra: true })).toThrow();
   });
+  it('keeps the renderer wiring for bounded split volumes and unavailable AES controls', async () => {
+    const source = await import('node:fs/promises').then(({ readFile }) => readFile(new URL('../src/renderer/pages/ActivityPage.tsx', import.meta.url), 'utf8'));
+    expect(source).toContain('Split volume bytes');
+    expect(source).toContain('archive7zOptions.splitBytes');
+    expect(source).toContain('AES-256 content encryption (unavailable)');
+    expect(source).toContain('secure credential flow');
+  });
 });
