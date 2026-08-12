@@ -14,6 +14,19 @@ export interface AuthenticatorVaultSaveOptions {
   groups?: readonly AuthenticatorGroup[];
 }
 
+/** Opaque, vault-encrypted material used only by the protected local-history service. */
+export interface AuthenticatorVaultHistorySnapshot {
+  schemaVersion: 1;
+  metadata: AuthenticatorEntryMetadata[];
+  groups: AuthenticatorGroup[];
+  ciphertext: Array<{ entryId: string; base64: string }>;
+}
+
+export interface AuthenticatorVaultHistoryOptions {
+  shouldCommit?: () => boolean;
+  recovery?: boolean;
+}
+
 export interface AuthenticatorVault {
   status(): Promise<AuthenticatorVaultStatus>;
   listMetadata(): Promise<AuthenticatorEntryMetadata[]>;
@@ -22,6 +35,12 @@ export interface AuthenticatorVault {
   save(entry: AuthenticatorEntryMetadata, secret: string, options?: AuthenticatorVaultSaveOptions): Promise<void>;
   remove(entryId: string, options?: AuthenticatorVaultSaveOptions): Promise<void>;
   readSecret(entryId: string): Promise<string | null>;
+  /** True only when the platform offers atomic directory-handle no-follow operations. */
+  supportsAtomicNoFollow?(): boolean;
+  /** Optional so in-memory test vaults remain deliberately history-free. */
+  createHistorySnapshot?(): Promise<AuthenticatorVaultHistorySnapshot | null>;
+  restoreHistorySnapshot?(snapshot: AuthenticatorVaultHistorySnapshot, options?: AuthenticatorVaultHistoryOptions): Promise<void>;
+  recoverHistoryRestore?(): Promise<void>;
 }
 
 /** Explicit no-persistence boundary used by tests and unavailable vaults. */

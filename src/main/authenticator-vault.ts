@@ -1,13 +1,14 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, readdir, rename, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { app, safeStorage } from 'electron';
-import { AUTHENTICATOR_MAX_ENTRIES } from '../shared/contracts.js';
+import { AUTHENTICATOR_MAX_ENTRIES, AUTHENTICATOR_MAX_SECRET_LENGTH } from '../shared/contracts.js';
 import type { AuthenticatorEntryMetadata } from '../shared/contracts.js';
 import { writeJsonAtomic } from './json-store.js';
-import type { AuthenticatorVault, AuthenticatorVaultMetadataWriteOptions, AuthenticatorVaultSaveOptions, AuthenticatorVaultStatus } from './authenticator-vault-contract.js';
+import type { AuthenticatorVault, AuthenticatorVaultHistoryOptions, AuthenticatorVaultHistorySnapshot, AuthenticatorVaultMetadataWriteOptions, AuthenticatorVaultSaveOptions, AuthenticatorVaultStatus } from './authenticator-vault-contract.js';
 import { authenticatorGroupSchema, entryMetadataSchema, metadataDocumentSchema, normalizeAuthenticatorGroups } from './authenticator-metadata.js';
 import type { AuthenticatorGroup } from '../shared/contracts.js';
+import { normalizeBase32Secret } from './totp.js';
 
 export interface SafeStorageAuthenticatorVaultOptions {
   metadataPath?: string;
@@ -17,6 +18,51 @@ export interface SafeStorageAuthenticatorVaultOptions {
   decryptString?: (value: Buffer) => string;
   writeMetadata?: (filePath: string, value: unknown, options?: { shouldPublish?: () => boolean }) => Promise<void>;
   renameSecret?: (from: string, to: string) => Promise<void>;
+  supportsAtomicNoFollow?: () => boolean;
+}
+
+const MAX_HISTORY_CIPHERTEXT_BYTES = 2_000_000;
+const MAX_HISTORY_TOTAL_BYTES = 8_000_000;
+const UUID_FILE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.dpapi$/i;
+
+function canonicalLegacySecret(value: string): string | null {
+  try {
+    const normalized = normalizeBase32Secret(value);
+    const compact = value.replace(/[\s-]/g, '').toUpperCase().replace(/=+$/, '');
+    return normalized === compact ? normalized : null;
+  } catch { return null; }
+}
+
+function assertCanonicalSecret(value: unknown): asserts value is string {
+  if (typeof value !== 'string' || canonicalLegacySecret(value) === null) throw new Error('The authenticator secret was not canonical Base32.');
+}
+
+async function assertSafeSecretsDirectory(directory: string, allowMissing = true): Promise<void> {
+  const absolute = path.resolve(directory);
+  const ancestors: string[] = [];
+  let cursor = absolute;
+  while (true) {
+    ancestors.push(cursor);
+    const parent = path.dirname(cursor);
+    if (parent === cursor) break;
+    cursor = parent;
+  }
+  for (const ancestor of ancestors.reverse()) {
+    try {
+      const info = await lstat(ancestor);
+      if (info.isSymbolicLink() || !info.isDirectory() && ancestor !== path.parse(ancestor).root) throw new Error('The authenticator ciphertext path was not safe.');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
+      throw error;
+    }
+  }
+  try {
+    const info = await lstat(directory);
+    if (!info.isDirectory() || info.isSymbolicLink()) throw new Error('The authenticator ciphertext directory was not a safe directory.');
+  } catch (error) {
+    if (allowMissing && (error as NodeJS.ErrnoException).code === 'ENOENT') return;
+    throw error;
+  }
 }
 
 // Electron normally has one main process, but tests and embedders can create
@@ -50,6 +96,7 @@ export class SafeStorageAuthenticatorVault implements AuthenticatorVault {
   private readonly decryptString: (value: Buffer) => string;
   private readonly writeMetadataFile: (filePath: string, value: unknown, options?: { shouldPublish?: () => boolean }) => Promise<void>;
   private readonly renameSecret: (from: string, to: string) => Promise<void>;
+  private readonly atomicNoFollow: () => boolean;
   private groups: AuthenticatorGroup[] = [];
   constructor(options: SafeStorageAuthenticatorVaultOptions = {}) {
     const userData = options.metadataPath && options.secretsDirectory ? '' : app.getPath('userData');
@@ -60,6 +107,7 @@ export class SafeStorageAuthenticatorVault implements AuthenticatorVault {
     this.decryptString = options.decryptString ?? ((value) => safeStorage.decryptString(value));
     this.writeMetadataFile = options.writeMetadata ?? ((filePath, value, writeOptions) => writeJsonAtomic(filePath, value, { shouldPublish: writeOptions?.shouldPublish }));
     this.renameSecret = options.renameSecret ?? rename;
+    this.atomicNoFollow = options.supportsAtomicNoFollow ?? (() => false);
   }
 
   async status(): Promise<AuthenticatorVaultStatus> {
@@ -157,7 +205,8 @@ export class SafeStorageAuthenticatorVault implements AuthenticatorVault {
   private async saveUnlocked(entry: AuthenticatorEntryMetadata, secret: string, options: AuthenticatorVaultSaveOptions): Promise<void> {
     if (await this.status() === 'unavailable') throw new Error('The operating-system credential vault is unavailable.');
     const metadata = entryMetadataSchema.parse(entry) as AuthenticatorEntryMetadata;
-    const encrypted = this.encryptString(secret);
+    assertCanonicalSecret(secret);
+    const encrypted = this.encryptString(JSON.stringify({ schemaVersion: 1, entryId: metadata.id, secret: canonicalLegacySecret(secret) }));
     await mkdir(this.secretsDirectory, { recursive: true });
     const entriesBefore = (await this.listMetadata()).map((entry, index) => ({ ...entry, order: index }));
     const documentBefore = { schemaVersion: 3, entries: entriesBefore, groups: await this.listGroups() };
@@ -259,12 +308,182 @@ export class SafeStorageAuthenticatorVault implements AuthenticatorVault {
 
   async readSecret(entryId: string): Promise<string | null> {
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(entryId)) return null;
-    if (await this.status() === 'unavailable') return null;
-    try {
-      return this.decryptString(await readFile(this.secretPath(entryId)));
-    } catch {
-      return null;
-    }
+    return this.withSharedSerial(async () => {
+      if (await this.status() === 'unavailable') return null;
+      try {
+        await assertSafeSecretsDirectory(this.secretsDirectory);
+        const secretPath = this.secretPath(entryId);
+        const info = await lstat(secretPath);
+        if (!info.isFile() || info.isSymbolicLink()) return null;
+        const plaintext = this.decryptString(await readFile(secretPath));
+        let parsed: unknown;
+        try { parsed = JSON.parse(plaintext); } catch { parsed = undefined; }
+        if (parsed !== undefined) {
+          const envelope = parsed as { schemaVersion?: unknown; entryId?: unknown; secret?: unknown };
+          if (envelope.schemaVersion !== 1 || envelope.entryId !== entryId || typeof envelope.secret !== 'string' || !envelope.secret || envelope.secret.length > AUTHENTICATOR_MAX_SECRET_LENGTH) return null;
+          assertCanonicalSecret(envelope.secret);
+          return envelope.secret;
+        }
+        if (!plaintext || plaintext.length > AUTHENTICATOR_MAX_SECRET_LENGTH) return null;
+        const secret = canonicalLegacySecret(plaintext);
+        if (!secret) return null;
+        const migrated = this.encryptString(JSON.stringify({ schemaVersion: 1, entryId, secret }));
+        const temporary = `${secretPath}.${randomUUID()}.migration.tmp`;
+        try { await writeFile(temporary, migrated, { mode: 0o600, flag: 'wx' }); await assertSafeSecretsDirectory(this.secretsDirectory, false); await rename(temporary, secretPath); } finally { await unlink(temporary).catch(() => undefined); }
+        return plaintext;
+      } catch {
+        return null;
+      }
+    });
+  }
+
+  supportsAtomicNoFollow(): boolean { return this.atomicNoFollow(); }
+
+  async createHistorySnapshot(): Promise<AuthenticatorVaultHistorySnapshot | null> {
+    return this.withSharedSerial(async () => {
+      if (await this.status() === 'unavailable') return null;
+      if (!this.supportsAtomicNoFollow()) return null;
+      const metadata = await this.listMetadata();
+      const groups = await this.listGroups();
+      const metadataIds = new Set(metadata.map((entry) => entry.id));
+      await assertSafeSecretsDirectory(this.secretsDirectory);
+      let names: string[] = [];
+      try { names = await readdir(this.secretsDirectory); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw new Error('The authenticator ciphertext directory could not be read safely.'); }
+      for (const name of names) {
+        const info = await lstat(path.join(this.secretsDirectory, name));
+        if (!info.isFile() || info.isSymbolicLink() || !UUID_FILE.test(name) || !metadataIds.has(name.slice(0, -'.dpapi'.length))) throw new Error('The authenticator ciphertext directory contained an unexpected or unsafe file.');
+      }
+      let total = 0;
+      const ciphertext: Array<{ entryId: string; base64: string }> = [];
+      for (const entry of metadata) {
+        const bytes = await readFile(this.secretPath(entry.id));
+        if (bytes.length > MAX_HISTORY_CIPHERTEXT_BYTES || (total += bytes.length) > MAX_HISTORY_TOTAL_BYTES) throw new Error('The authenticator history snapshot exceeded its bounded ciphertext size.');
+        let plaintext: string;
+        try { plaintext = this.decryptString(bytes); } catch { throw new Error('The authenticator ciphertext could not be opened safely for history.'); }
+        let parsed: unknown;
+        try { parsed = JSON.parse(plaintext); } catch { parsed = undefined; }
+        if (parsed !== undefined) {
+          const envelope = parsed as { schemaVersion?: unknown; entryId?: unknown; secret?: unknown };
+          if (envelope.schemaVersion !== 1 || envelope.entryId !== entry.id || typeof envelope.secret !== 'string' || !envelope.secret || envelope.secret.length > AUTHENTICATOR_MAX_SECRET_LENGTH) throw new Error('The authenticator ciphertext envelope was invalid.');
+          assertCanonicalSecret(envelope.secret);
+          ciphertext.push({ entryId: entry.id, base64: bytes.toString('base64') });
+        } else {
+          if (!plaintext || plaintext.length > AUTHENTICATOR_MAX_SECRET_LENGTH) throw new Error('The legacy authenticator ciphertext was invalid.');
+          const secret = canonicalLegacySecret(plaintext);
+          if (!secret) throw new Error('The legacy authenticator ciphertext was invalid.');
+          ciphertext.push({ entryId: entry.id, base64: this.encryptString(JSON.stringify({ schemaVersion: 1, entryId: entry.id, secret })).toString('base64') });
+        }
+      }
+      return { schemaVersion: 1, metadata: metadata.map((entry) => ({ ...entry })), groups: groups.map((group) => ({ ...group })), ciphertext };
+    });
+  }
+
+  async restoreHistorySnapshot(snapshot: AuthenticatorVaultHistorySnapshot, options: AuthenticatorVaultHistoryOptions = {}): Promise<void> {
+    return this.withSharedSerial(async () => {
+      if (await this.status() === 'unavailable') throw new Error('The operating-system credential vault is unavailable.');
+      if (!this.supportsAtomicNoFollow()) {
+        const unsupported = new Error('Protected authenticator restore is unavailable because this platform cannot guarantee atomic no-follow vault operations.') as NodeJS.ErrnoException;
+        unsupported.code = 'EUNSUPPORTED';
+        throw unsupported;
+      }
+      if (!snapshot || snapshot.schemaVersion !== 1 || !Array.isArray(snapshot.metadata) || !Array.isArray(snapshot.groups) || !Array.isArray(snapshot.ciphertext)) throw new Error('The authenticator history snapshot was invalid.');
+      const metadata = snapshot.metadata.map((entry) => entryMetadataSchema.parse(entry) as AuthenticatorEntryMetadata);
+      assertMetadataInvariants(metadata);
+      const groups = normalizeAuthenticatorGroups(snapshot.groups);
+      const ids = new Set(metadata.map((entry) => entry.id));
+      if (snapshot.ciphertext.length !== ids.size || new Set(snapshot.ciphertext.map((item) => item.entryId)).size !== snapshot.ciphertext.length || snapshot.ciphertext.some((item) => !ids.has(item.entryId) || typeof item.base64 !== 'string' || item.base64.length === 0 || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)$/.test(item.base64))) throw new Error('The authenticator history snapshot ciphertext set was invalid.');
+      const decoded = snapshot.ciphertext.map((item) => ({ entryId: item.entryId, bytes: Buffer.from(item.base64, 'base64') }));
+      if (decoded.some((item) => item.bytes.length > MAX_HISTORY_CIPHERTEXT_BYTES) || decoded.reduce((sum, item) => sum + item.bytes.length, 0) > MAX_HISTORY_TOTAL_BYTES) throw new Error('The authenticator history snapshot exceeded its bounded ciphertext size.');
+      for (const item of decoded) {
+        let plaintext: string;
+        try { plaintext = this.decryptString(item.bytes); } catch { throw new Error('The authenticator history ciphertext could not be opened by this credential vault.'); }
+        let envelope: { schemaVersion?: unknown; entryId?: unknown; secret?: unknown };
+        try { envelope = JSON.parse(plaintext) as typeof envelope; }
+        catch {
+          // History created before the stable-ID envelope used raw vault
+          // ciphertext. Keep that migration bounded and immediately bind the
+          // recovered secret to the stable identifier before any write.
+          if (!plaintext || plaintext.length > AUTHENTICATOR_MAX_SECRET_LENGTH) throw new Error('The legacy authenticator history ciphertext was invalid.');
+          const secret = canonicalLegacySecret(plaintext);
+          if (!secret) throw new Error('The legacy authenticator history ciphertext was invalid.');
+          item.bytes = Buffer.from(this.encryptString(JSON.stringify({ schemaVersion: 1, entryId: item.entryId, secret })));
+          continue;
+        }
+        if (envelope.schemaVersion !== 1 || envelope.entryId !== item.entryId || typeof envelope.secret !== 'string' || !envelope.secret || envelope.secret.length > AUTHENTICATOR_MAX_SECRET_LENGTH) throw new Error('The authenticator history ciphertext envelope was invalid.');
+        assertCanonicalSecret(envelope.secret);
+      }
+      if (options.shouldCommit && !options.shouldCommit()) throw new Error('Authenticator history restore was cancelled.');
+      const currentMetadata = await this.listMetadata();
+      const currentGroups = await this.listGroups();
+      const currentFiles = new Map<string, Buffer>();
+      try {
+        await assertSafeSecretsDirectory(this.secretsDirectory);
+        let currentTotal = 0;
+        for (const file of await readdir(this.secretsDirectory)) if (UUID_FILE.test(file)) {
+          const filePath = path.join(this.secretsDirectory, file);
+          const info = await lstat(filePath);
+          if (!info.isFile() || info.isSymbolicLink()) throw new Error('The authenticator ciphertext file was not a safe regular file.');
+          const bytes = await readFile(filePath);
+          if (bytes.length > MAX_HISTORY_CIPHERTEXT_BYTES || (currentTotal += bytes.length) > MAX_HISTORY_TOTAL_BYTES) throw new Error('The current authenticator ciphertext exceeded its bounded rollback size.');
+          currentFiles.set(file.slice(0, -'.dpapi'.length), bytes);
+        }
+      } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw new Error('The authenticator ciphertext directory could not be read safely.'); }
+      const currentMetadataBytes = await this.readMetadataBytes();
+      const temporary = new Map<string, string>();
+      try {
+        await assertSafeSecretsDirectory(this.secretsDirectory);
+        await mkdir(this.secretsDirectory, { recursive: true });
+        for (const item of decoded) {
+          const temp = path.join(this.secretsDirectory, `.${item.entryId}.${randomUUID()}.restore.tmp`);
+          await writeFile(temp, item.bytes, { mode: 0o600, flag: 'wx' });
+          temporary.set(item.entryId, temp);
+        }
+        if (options.shouldCommit && !options.shouldCommit()) throw new Error('Authenticator history restore was cancelled.');
+        for (const [entryId, temp] of temporary) {
+          await assertSafeSecretsDirectory(this.secretsDirectory, false);
+          await rename(temp, this.secretPath(entryId));
+          await assertSafeSecretsDirectory(this.secretsDirectory, false);
+        }
+        const nextDocument = { schemaVersion: 3, entries: metadata, groups };
+        await this.writeMetadataFile(this.metadataPath, nextDocument);
+        await assertSafeSecretsDirectory(this.secretsDirectory, false);
+        for (const file of await readdir(this.secretsDirectory)) if (UUID_FILE.test(file) && !ids.has(file.slice(0, -'.dpapi'.length))) {
+          await assertSafeSecretsDirectory(this.secretsDirectory, false);
+          const filePath = path.join(this.secretsDirectory, file);
+          const info = await lstat(filePath);
+          if (!info.isFile() || info.isSymbolicLink()) throw new Error('The authenticator ciphertext file was not a safe regular file.');
+          await unlink(filePath);
+        }
+        this.groups = groups;
+        if (options.shouldCommit && !options.shouldCommit()) throw new Error('Authenticator history restore was cancelled.');
+      } catch (error) {
+        for (const temp of temporary.values()) await unlink(temp).catch(() => undefined);
+        try {
+          if (currentMetadataBytes === null) await unlink(this.metadataPath).catch(() => undefined);
+          else await this.writeMetadataFile(this.metadataPath, JSON.parse(currentMetadataBytes.toString('utf8')));
+          await mkdir(this.secretsDirectory, { recursive: true });
+          await assertSafeSecretsDirectory(this.secretsDirectory, false);
+          for (const [entryId, bytes] of currentFiles) {
+            await assertSafeSecretsDirectory(this.secretsDirectory, false);
+            await writeFile(this.secretPath(entryId), bytes, { mode: 0o600 });
+          }
+          await assertSafeSecretsDirectory(this.secretsDirectory, false);
+          for (const file of await readdir(this.secretsDirectory)) if (UUID_FILE.test(file) && !currentFiles.has(file.slice(0, -'.dpapi'.length))) {
+            await assertSafeSecretsDirectory(this.secretsDirectory, false);
+            const filePath = path.join(this.secretsDirectory, file);
+            const info = await lstat(filePath);
+            if (!info.isFile() || info.isSymbolicLink()) throw new Error('The authenticator ciphertext file was not a safe regular file.');
+            await unlink(filePath);
+          }
+          this.groups = currentGroups;
+        } catch {
+          const uncertain = new Error('Authenticator history restore failed and its rollback could not be verified.') as NodeJS.ErrnoException;
+          uncertain.code = 'EINTEGRITY';
+          throw uncertain;
+        }
+        throw error;
+      }
+    });
   }
 
   private secretPath(entryId: string): string {

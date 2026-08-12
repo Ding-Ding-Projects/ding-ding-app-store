@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -13,6 +13,7 @@ import { writeJsonAtomic } from '../src/main/json-store.js';
 import { moveAuthenticatorPickerFocus } from '../src/renderer/authenticator-picker-keyboard.js';
 import { authenticatorRegistrationFailureNotice, classifyAuthenticatorRegistrationFailure } from '../src/renderer/authenticator-registration-notifications.js';
 import { confirmAuthenticatorWithRefresh } from '../src/renderer/state/use-authenticator.js';
+import { AuthenticatorHistoryParticipant } from '../src/main/authenticator-history-participant.js';
 
 vi.mock('electron', () => ({
   app: { getPath: () => os.tmpdir() },
@@ -255,6 +256,7 @@ describe('safeStorage ciphertext rollback', () => {
       isEncryptionAvailable: () => true,
       encryptString: (value) => Buffer.from(`encrypted:${value}`, 'utf8'),
       decryptString: (value) => value.toString('utf8').replace(/^encrypted:/, ''),
+      supportsAtomicNoFollow: () => true,
       ...overrides,
     });
   }
@@ -264,6 +266,35 @@ describe('safeStorage ciphertext rollback', () => {
     await expect(vault.save(metadata(), SECRET)).rejects.toThrow('metadata write failure');
     expect(await vault.listMetadata()).toEqual([]);
     await expect(readdir(path.join(directory!, 'secrets'))).resolves.toHaveLength(0);
+  });
+
+  it('binds ciphertext to the stable entry identifier and round-trips a protected history snapshot', async () => {
+    const vault = await createVault();
+    await vault.save(metadata(), SECRET);
+    const snapshot = await vault.createHistorySnapshot();
+    expect(snapshot?.ciphertext).toHaveLength(1);
+    expect(JSON.stringify(snapshot)).not.toContain(SECRET);
+    await vault.remove(metadata().id);
+    await vault.restoreHistorySnapshot(snapshot!);
+    await expect(vault.readSecret(metadata().id)).resolves.toBe(SECRET);
+    const swapped = { ...snapshot!, ciphertext: [{ ...snapshot!.ciphertext[0], entryId: '22222222-2222-4222-8222-222222222222' }] };
+    await expect(vault.restoreHistorySnapshot(swapped)).rejects.toThrow();
+  });
+
+  it('rejects unexpected ciphertext files and unavailable vault restores', async () => {
+    const vault = await createVault();
+    await vault.save(metadata(), SECRET);
+    await writeFile(path.join(directory!, 'secrets', 'notes.txt'), 'not a credential');
+    await expect(vault.createHistorySnapshot()).rejects.toThrow('unexpected');
+    const unavailable = await createVault({ isEncryptionAvailable: () => false });
+    await expect(unavailable.restoreHistorySnapshot({ schemaVersion: 1, metadata: [], groups: [], ciphertext: [] })).rejects.toThrow('unavailable');
+  });
+
+  it('refuses protected restore when atomic no-follow operations are unavailable', async () => {
+    const vault = await createVault({ supportsAtomicNoFollow: () => false });
+    await vault.save(metadata(), SECRET);
+    await expect(vault.restoreHistorySnapshot({ schemaVersion: 1, metadata: [metadata()], groups: [], ciphertext: [] })).rejects.toMatchObject({ code: 'EUNSUPPORTED' });
+    await expect(vault.readSecret(metadata().id)).resolves.toBe(SECRET);
   });
 
   it('restores metadata when an injected writer publishes before rejecting', async () => {
@@ -345,6 +376,58 @@ describe('safeStorage ciphertext rollback', () => {
       '11111111-1111-4111-8111-111111111111',
       '22222222-2222-4222-8222-222222222222',
     ]);
+  });
+});
+
+describe('authenticator history participant lifecycle', () => {
+  let directory: string | undefined;
+  afterEach(async () => { if (directory) await rm(directory, { recursive: true, force: true }); directory = undefined; });
+
+  function snapshot() {
+    return { schemaVersion: 1 as const, metadata: [metadata()], groups: [], ciphertext: [{ entryId: metadata().id, base64: 'ZW5j' }] };
+  }
+
+  it('treats a missing journal as a clean first launch and removes a committed journal', async () => {
+    directory = await mkdtemp(path.join(os.tmpdir(), 'ding-auth-history-'));
+    const journal = path.join(directory, 'restore.json');
+    let restores = 0;
+    const vault: AuthenticatorVault = {
+      status: async () => 'os-credential-vault', listMetadata: async () => [metadata()], writeMetadata: async () => undefined,
+      save: async () => undefined, remove: async () => undefined, readSecret: async () => SECRET,
+      createHistorySnapshot: async () => snapshot(), restoreHistorySnapshot: async () => { restores += 1; },
+    };
+    const participant = new AuthenticatorHistoryParticipant(vault, journal);
+    await participant.recover();
+    await writeJsonAtomic(journal, { schemaVersion: 1, phase: 'committed', previous: snapshot(), target: snapshot() });
+    await participant.recover();
+    await expect(readFile(journal, 'utf8')).rejects.toThrow();
+    expect(restores).toBe(0);
+  });
+
+  it('retains malformed journals and blocks a retry after rollback integrity failure', async () => {
+    directory = await mkdtemp(path.join(os.tmpdir(), 'ding-auth-history-'));
+    const journal = path.join(directory, 'restore.json');
+    await writeFile(journal, '{"schemaVersion":1,"phase":"applying"');
+    const vault: AuthenticatorVault = {
+      status: async () => 'os-credential-vault', listMetadata: async () => [metadata()], writeMetadata: async () => undefined,
+      save: async () => undefined, remove: async () => undefined, readSecret: async () => SECRET,
+      createHistorySnapshot: async () => snapshot(), restoreHistorySnapshot: async () => { throw new Error('restore failure'); },
+    };
+    const participant = new AuthenticatorHistoryParticipant(vault, journal);
+    await expect(participant.recover()).rejects.toThrow('retained');
+    await expect(readFile(journal, 'utf8')).resolves.toContain('phase');
+    await expect(participant.restore(JSON.stringify(snapshot()))).rejects.toThrow('recovery is pending');
+    await expect(readFile(journal, 'utf8')).resolves.toContain('phase');
+  });
+
+  it('refuses participant restore without a current rollback snapshot', async () => {
+    const vault: AuthenticatorVault = {
+      status: async () => 'os-credential-vault', listMetadata: async () => [], writeMetadata: async () => undefined,
+      save: async () => undefined, remove: async () => undefined, readSecret: async () => null,
+      createHistorySnapshot: async () => null, restoreHistorySnapshot: async () => undefined,
+    };
+    const participant = new AuthenticatorHistoryParticipant(vault);
+    await expect(participant.restore(JSON.stringify(snapshot()))).rejects.toMatchObject({ code: 'EUNSUPPORTED' });
   });
 });
 
