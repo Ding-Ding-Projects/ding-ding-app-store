@@ -14,6 +14,7 @@ import {
   personalizeOwnedText,
   saveCachedVocabulary,
 } from './personal-vocabulary.mjs';
+import { readDialogEmojiPreference, shouldShowDialogEmoji, writeDialogEmojiPreference } from './dialog-emoji.mjs';
 
 (() => {
   'use strict';
@@ -49,6 +50,7 @@ import {
     accent: localStorage.getItem(storage + 'accent') || '#4f378b',
     settingsTab: localStorage.getItem(storage + 'settingsTab') || 'general',
     siteRestricted: localStorage.getItem(storage + 'siteRestricted') === 'true',
+    showEmojisInDialogs: readDialogEmojiPreference(),
   };
   let vocabulary = loadCachedVocabulary();
   const search = { docs: readStoredSearch('docs'), settings: readStoredSearch('settings'), palette: readStoredSearch('palette') };
@@ -120,7 +122,7 @@ import {
     document.documentElement.lang = effectiveMode() === 'yue' ? 'yue-Hant-HK' : 'en';
     document.querySelectorAll('[data-site-copy]').forEach((node) => {
       const source = node.dataset.siteCopy;
-      const labels = { 'restricted-label': 'Restricted presentation (site-only)', 'restricted-help': "This site-only restricted switch is separate from the desktop app's shared School mode. It forces English and suppresses personal vocabulary on this browser only; it is not a security boundary.", 'vocabulary-title': 'Personal vocabulary', 'vocabulary-file-label': 'Choose a local JSON file', 'vocabulary-replace': 'Replace vocabulary', 'vocabulary-clear': 'Clear vocabulary', 'vocabulary-help': 'The file is parsed and cached in this browser only. Its path, metadata, and private values are never sent over the network or included in exports.' };
+      const labels = { 'restricted-label': 'Restricted presentation (site-only)', 'restricted-help': "This site-only restricted switch is separate from the desktop app's shared School mode. It forces English and suppresses personal vocabulary on this browser only; it is not a security boundary.", 'dialog-emoji-label': 'Show emojis in dialogs and message boxes', 'dialog-emoji-help': 'Adds a non-semantic emoji to the command palette dialog title while leaving controls and accessible names unchanged.', 'vocabulary-title': 'Personal vocabulary', 'vocabulary-file-label': 'Choose a local JSON file', 'vocabulary-replace': 'Replace vocabulary', 'vocabulary-clear': 'Clear vocabulary', 'vocabulary-help': 'The file is parsed and cached in this browser only. Its path, metadata, and private values are never sent over the network or included in exports.' };
       if (labels[source]) node.textContent = restricted() ? labels[source] : copy(labels[source]);
     });
     const restrictedInput = $('site-restricted');
@@ -128,6 +130,10 @@ import {
     const card = $('personal-vocabulary-card');
     if (card) card.hidden = restricted();
     document.querySelectorAll('[data-restricted-hide]').forEach((node) => { node.hidden = restricted(); });
+    const emoji = $('palette-title-emoji');
+    if (emoji) emoji.hidden = !shouldShowDialogEmoji(state.showEmojisInDialogs, restricted());
+    const emojiInput = $('show-emojis-in-dialogs');
+    if (emojiInput) emojiInput.checked = state.showEmojisInDialogs;
   }
 
   function vocabularyStatus(message, messageYue = message) {
@@ -368,9 +374,9 @@ import {
     const value = $('palette-search').value.trim(); const match = matcher('palette', value);
     if (!search.palette.regex) search.palette.query = value;
     saveSearch('palette');
-    const rows = [{ id: 'home', label: 'Home', type: 'Destination' }, ...articles.map((article) => ({ id: article.id, label: title(article), type: `${article.category} · ${article.status}` })), ...['general', 'appearance', 'about'].map((id) => ({ id: `setting-${id}`, label: `${id[0].toUpperCase()}${id.slice(1)} settings`, type: 'Setting destination' })), ...(restricted() ? [] : [{ id: 'setting-personal-vocabulary-import', label: localized('Import personal vocabulary JSON', '匯入本機個人詞彙 JSON'), type: localized('Settings control · local upload', '設定控制 · 本機上載') }, { id: 'setting-personal-vocabulary-clear', label: localized('Clear personal vocabulary', '清除本機個人詞彙'), type: localized('Settings control · local reset', '設定控制 · 本機重設') }]), { id: 'setting-site-restricted', label: localized('Restricted presentation (site-only)', '受限顯示（只限網站）'), type: localized('Settings control · local mode', '設定控制 · 本機模式') }].filter((row) => match(`${row.label} ${row.type}`));
+    const rows = [{ id: 'home', label: 'Home', type: 'Destination' }, ...articles.map((article) => ({ id: article.id, label: title(article), type: `${article.category} · ${article.status}` })), ...['general', 'appearance', 'about'].map((id) => ({ id: `setting-${id}`, label: `${id[0].toUpperCase()}${id.slice(1)} settings`, type: 'Setting destination' })), ...(restricted() ? [] : [{ id: 'setting-show-emojis-in-dialogs', label: localized('Show emojis in dialogs and message boxes', '喺對話框同訊息框顯示 emoji'), type: localized('Settings control · dialog decoration', '設定控制 · 對話框裝飾') }, { id: 'setting-personal-vocabulary-import', label: localized('Import personal vocabulary JSON', '匯入本機個人詞彙 JSON'), type: localized('Settings control · local upload', '設定控制 · 本機上載') }, { id: 'setting-personal-vocabulary-clear', label: localized('Clear personal vocabulary', '清除本機個人詞彙'), type: localized('Settings control · local reset', '設定控制 · 本機重設') }]), { id: 'setting-site-restricted', label: localized('Restricted presentation (site-only)', '受限顯示（只限網站）'), type: localized('Settings control · local mode', '設定控制 · 本機模式') }].filter((row) => match(`${row.label} ${row.type}`));
     $('palette-results').innerHTML = rows.length ? rows.map((row) => `<button class="palette-row" data-command="${row.id}" role="option"><strong>${escapeHtml(row.label)}</strong><br><small>${escapeHtml(row.type)}</small></button>`).join('') : '<p class="empty">No command or destination matches.</p>';
-    document.querySelectorAll('[data-command]').forEach((button) => button.addEventListener('click', () => { $('palette').close(); const id = button.dataset.command; if (id === 'setting-personal-vocabulary-import') { openSettingsTab('general'); $('personal-vocabulary-file').focus(); $('settings-title').scrollIntoView(); } else if (id === 'setting-personal-vocabulary-clear') { openSettingsTab('general'); $('personal-vocabulary-clear').focus(); $('settings-title').scrollIntoView(); } else if (id === 'setting-site-restricted') { openSettingsTab('general'); $('site-restricted').focus(); $('settings-title').scrollIntoView(); } else if (id.startsWith('setting-')) { openSettingsTab(id.slice(8)); $('settings-title').scrollIntoView(); } else openArticle(id); }));
+    document.querySelectorAll('[data-command]').forEach((button) => button.addEventListener('click', () => { $('palette').close(); const id = button.dataset.command; if (id === 'setting-show-emojis-in-dialogs') { openSettingsTab('general'); $('show-emojis-in-dialogs').focus(); $('settings-title').scrollIntoView(); } else if (id === 'setting-personal-vocabulary-import') { openSettingsTab('general'); $('personal-vocabulary-file').focus(); $('settings-title').scrollIntoView(); } else if (id === 'setting-personal-vocabulary-clear') { openSettingsTab('general'); $('personal-vocabulary-clear').focus(); $('settings-title').scrollIntoView(); } else if (id === 'setting-site-restricted') { openSettingsTab('general'); $('site-restricted').focus(); $('settings-title').scrollIntoView(); } else if (id.startsWith('setting-')) { openSettingsTab(id.slice(8)); $('settings-title').scrollIntoView(); } else openArticle(id); }));
   }
 
   ['docs', 'settings', 'palette'].forEach((kind) => {
@@ -390,6 +396,8 @@ import {
   $('language').value = state.mode; $('funny-en').value = state.funnyEn; $('funny-yue').value = state.funnyYue; $('funny-en-value').textContent = state.funnyEn; $('funny-yue-value').textContent = state.funnyYue;
   $('theme').value = state.theme; $('density').value = state.density; $('accent').value = state.accent;
   $('site-restricted').checked = state.siteRestricted;
+  $('show-emojis-in-dialogs').checked = state.showEmojisInDialogs;
+  $('show-emojis-in-dialogs').addEventListener('change', (event) => { state.showEmojisInDialogs = Boolean(event.target.checked); writeDialogEmojiPreference(state.showEmojisInDialogs); applyAppearance(); });
   $('site-restricted').addEventListener('change', (event) => { state.siteRestricted = Boolean(event.target.checked); saveControls(); applyAppearance(); openSettingsTab('general'); openArticle(state.article, false, { addTab: false, route: 'none' }); });
   $('personal-vocabulary-replace').addEventListener('click', () => void replaceVocabulary());
   $('personal-vocabulary-clear').addEventListener('click', clearVocabulary);

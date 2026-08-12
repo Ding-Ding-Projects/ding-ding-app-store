@@ -28,6 +28,8 @@ The Schedule sub-tab can optionally resolve scheduled language, funny levels, th
 
 ## Configuration
 
+The static documentation site carries a bounded local equivalent in Settings → General. Its checkbox is stored only in this browser, fails closed to enabled when browser storage is unavailable, and decorates the command-palette dialog title with an `aria-hidden` emoji span. The site-only Restricted presentation switch suppresses that decoration and hides the checkbox; this is an explicit site boundary, not the desktop app's shared School-mode record. The site does not claim parity for other desktop dialogs without a packaged browser capture.
+
 `settings.v1.json` is validated in the main process. Defaults are bilingual, English funny level 2, Cantonese funny level 4, narrator disabled with English-then-Cantonese selected for a later opt-in, reduced sound disabled, dialog emojis enabled, system theme, comfortable density, accent `#6750A4`, `Ding Ding App Store`, and automatic repair consent `false`. The same compiled object is the provenance fallback contract used by the renderer; no opaque “default” label is shown. Language mode changes shared labels where translations exist; this revision still contains some English-only operational copy, so localization is broad but not complete.
 
 ## Failure modes
