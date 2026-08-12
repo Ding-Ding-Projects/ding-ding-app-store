@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { HistoryEntry, HistoryExportFormat, HistoryRevision, OperationKind, UserSettings } from '../../shared/contracts';
+import type { HistoryAccessResult, HistoryAccessStatus, HistoryEntry, HistoryExportFormat, HistoryRevision, OperationKind, UserSettings } from '../../shared/contracts';
 import { SearchBox } from '../components/SearchBox';
 import { el } from '../el';
 import { downloadBase64, downloadText } from '../files';
@@ -36,8 +36,8 @@ function revisionFailure(settings: UserSettings, fallbackEnglish: string, fallba
   return raw ? `${fallbackEnglish} · ${fallbackCantonese} (${raw})` : `${fallbackEnglish} · ${fallbackCantonese}`;
 }
 
-export function ActivityPage({ entries, revisions, loading, settings, openRegex, onRegexHandled, notify, onHistoryChanged }: {
-  entries: HistoryEntry[]; revisions: HistoryRevision[]; loading: boolean; settings: UserSettings; openRegex: boolean; onRegexHandled(): void; notify: Notify; onHistoryChanged(): Promise<void>;
+export function ActivityPage({ entries, revisions, loading, settings, openRegex, onRegexHandled, notify, onHistoryChanged, schoolRestricted = false }: {
+  entries: HistoryEntry[]; revisions: HistoryRevision[]; loading: boolean; settings: UserSettings; openRegex: boolean; onRegexHandled(): void; notify: Notify; onHistoryChanged(): Promise<void>; schoolRestricted?: boolean;
 }) {
   const search = useSurfaceSearch('activity');
   const [kinds, setKinds] = useState<Set<OperationKind>>(() => new Set());
@@ -59,9 +59,18 @@ export function ActivityPage({ entries, revisions, loading, settings, openRegex,
   const [revisionExportBusy, setRevisionExportBusy] = useState<HistoryRevisionExportFormat | null>(null);
   const [revisionEditorBusy, setRevisionEditorBusy] = useState(false);
   const [revisionExportFormat, setRevisionExportFormat] = useState<HistoryRevisionExportFormat>('json');
+  const [historyAccess, setHistoryAccess] = useState<HistoryAccessStatus | null>(null);
+  const [historyCredential, setHistoryCredential] = useState('');
+  const [historyAccessBusy, setHistoryAccessBusy] = useState(false);
   const lastSelected = useRef<number | null>(null);
   const lastSelectedRevision = useRef<string | null>(null);
   const matcher = useMemo(() => makeMatcher(search.state), [search.state]);
+  useEffect(() => {
+    if (schoolRestricted) { setHistoryAccess({ available: false, configured: false, unlocked: false, reason: 'unavailable' }); setHistoryCredential(''); return; }
+    let cancelled = false;
+    void window.dingDingStore.history.protectedStatus().then((status) => { if (!cancelled) setHistoryAccess(status); }).catch(() => { if (!cancelled) setHistoryAccess({ available: false, configured: false, unlocked: false, reason: 'unavailable' }); });
+    return () => { cancelled = true; };
+  }, [schoolRestricted]);
   const dateRange = useMemo(() => resolveHistoryDateRange(dateStart, dateEnd, settings.language), [dateStart, dateEnd, settings.language]);
   const calendarDays = useMemo(() => {
     const [year, month] = calendarMonth.split('-').map(Number);
@@ -246,7 +255,42 @@ export function ActivityPage({ entries, revisions, loading, settings, openRegex,
     finally { setRevisionBusy(null); setRestoreRevision(null); }
   };
 
+  const unlockHistory = async () => {
+    setHistoryAccessBusy(true);
+    try {
+      const result: HistoryAccessResult = await window.dingDingStore.history.protectedUnlock({ credential: historyCredential, create: historyAccess?.configured !== true });
+      setHistoryAccess(result.status);
+      if (result.ok) { setHistoryCredential(''); await onHistoryChanged(); }
+      else notify({ ok: false, message: result.message });
+    } catch (error) { notify({ ok: false, message: error instanceof Error ? error.message : 'Protected local history could not be unlocked.' }); }
+    finally { setHistoryAccessBusy(false); }
+  };
+
+  const lockHistory = async () => {
+    setHistoryAccessBusy(true);
+    try { const result = await window.dingDingStore.history.protectedLockAgain(); setHistoryAccess(result.status); await onHistoryChanged(); }
+    catch (error) { notify({ ok: false, message: error instanceof Error ? error.message : 'Protected local history could not be locked.' }); }
+    finally { setHistoryAccessBusy(false); }
+  };
+
   if (loading) return <div className="loading-grid" aria-label={label(settings, 'Loading activity', '讀緊操作記錄')}><div className="skeleton" /><div className="skeleton" /></div>;
+  if (historyAccess && !historyAccess.unlocked) {
+    return <section className="history-panel" aria-labelledby="protected-history-heading">
+      <div className="empty-state" {...el('empty-state')}>
+        <Icon>lock</Icon>
+        <h2 id="protected-history-heading">{label(settings, 'Protected local history is locked', '受保護本機歷史已鎖上')}</h2>
+        <p>{historyAccess.reason === 'unavailable'
+          ? label(settings, 'The operating-system credential vault is unavailable. No history state was opened.', '作業系統憑證庫未能使用；冇開啟任何歷史狀態。')
+          : historyAccess.configured
+            ? label(settings, 'Enter the protected-history credential to view Activity and local versions. The credential never leaves the main process.', '輸入受保護歷史憑證先可以查看操作記錄同本機版本；憑證唔會離開主程序。')
+            : label(settings, 'Create a protected-history credential before viewing Activity and local versions. This is a local UX gate, not encryption.', '查看操作記錄同本機版本之前，先建立受保護歷史憑證。呢個係本機 UX 閘口，唔係加密。')}</p>
+        {historyAccess.available && <form className="revision-label-form" onSubmit={(event) => { event.preventDefault(); void unlockHistory(); }}>
+          <label>{label(settings, historyAccess.configured ? 'Protected-history credential' : 'Create protected-history credential', historyAccess.configured ? '受保護歷史憑證' : '建立受保護歷史憑證')}<input type="password" autoComplete={historyAccess.configured ? 'current-password' : 'new-password'} minLength={4} maxLength={512} value={historyCredential} onChange={(event) => setHistoryCredential(event.target.value)} /></label>
+          <button className="filled-button" type="submit" disabled={historyAccessBusy || historyCredential.length < 4}>{historyAccessBusy ? label(settings, 'Unlocking…', '解鎖緊…') : label(settings, historyAccess.configured ? 'Unlock local history' : 'Create and unlock', historyAccess.configured ? '解鎖本機歷史' : '建立並解鎖')}</button>
+        </form>}
+      </div>
+    </section>;
+  }
   if (!entries.length && !revisions.length) {
     return <div className="empty-state" {...el('empty-state')}><Icon>history</Icon><h2>{label(settings, 'No operations yet', '仲未有操作')}</h2><p>{label(settings, 'Installs, builds, updates, uninstalls, failures, and recoveries will appear here with exact results and export controls.', '安裝、建置、更新、解除安裝、失敗同復原會連同準確結果同匯出控制喺呢度出現。')}</p></div>;
   }
@@ -266,6 +310,10 @@ export function ActivityPage({ entries, revisions, loading, settings, openRegex,
 
   return <>
     <SearchBox surface="activity" settings={settings} placeholder={label(settings, 'Search activity and local versions', '搜尋操作記錄同本機版本')} openBuilder={openRegex} onBuilderHandled={onRegexHandled} />
+    <div className="card-actions" aria-label={label(settings, 'Protected local history controls', '受保護本機歷史控制')}>
+      <span className="supporting">{label(settings, 'Protected history is unlocked for this app session. Credentials and secrets are excluded from history exports.', '受保護歷史已喺呢個 app 工作階段解鎖；匯出歷史唔包括憑證同秘密。')}</span>
+      <button className="text-button" type="button" onClick={() => void lockHistory()} disabled={historyAccessBusy}>{label(settings, 'Lock protected history', '鎖上受保護歷史')}</button>
+    </div>
     <section className="history-panel">
         <div className="chip-row" role="group" aria-label={label(settings, 'Filter by action; choose one or more', '按動作篩選；可以揀一個或多個')}>
           <button aria-pressed={!kinds.size} onClick={() => setKinds(new Set())}>{label(settings, 'All actions', '全部動作')} ({entries.length})</button>

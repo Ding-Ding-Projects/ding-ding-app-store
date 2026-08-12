@@ -29,6 +29,7 @@ import { SafeStorageAuthenticatorVault } from './authenticator-vault.js';
 import { LockSupportService } from './lock-support-service.js';
 import { StateMutationQueue } from './state-mutation-queue.js';
 import { PersonalVocabularyService } from './personal-vocabulary-service.js';
+import { HistoryAccessService, type HistoryAccessUnlockRequest } from './history-access-service.js';
 
 const scheduleTaskSchema = z.enum(['self-update', 'catalog-refresh']);
 const PRODUCT_NAME = 'Ding Ding App Store';
@@ -118,6 +119,7 @@ void app.whenReady().then(async () => {
 
   const catalog = new CatalogService();
   const history = new HistoryService();
+  const historyAccess = new HistoryAccessService();
   // Recover a restore interrupted between per-file replacements before any
   // state service can read the application-data files.
   await history.recoverPendingRestore();
@@ -134,6 +136,7 @@ void app.whenReady().then(async () => {
   const authenticator = new AuthenticatorService(new SafeStorageAuthenticatorVault(), history);
   const lockSupport = new LockSupportService(history);
   const unsubscribeSchoolMode = schoolMode.subscribe((snapshot) => {
+    if (snapshot.sync.status !== 'ready' || snapshot.state?.enabled === true) historyAccess.invalidate();
     authenticator.setRestricted(snapshot.sync.status !== 'ready' || snapshot.state?.enabled === true);
     const contents = mainWindow?.webContents;
     if (!contents || contents.isDestroyed()) return;
@@ -197,6 +200,12 @@ void app.whenReady().then(async () => {
       return !restricted;
     }
     catch { authenticator.setRestricted(true); return false; }
+  };
+  const historyToken = async (): Promise<number | null> => {
+    try {
+      if (await schoolMode.isRestricted()) { historyAccess.invalidate(); return null; }
+      return historyAccess.sessionToken();
+    } catch { historyAccess.invalidate(); return null; }
   };
   app.once('will-quit', () => {
     unsubscribeSchoolMode();
@@ -422,27 +431,67 @@ void app.whenReady().then(async () => {
   ipcMain.handle('support:create', (event, request: SupportTicketCreateRequest) => event.sender === mainWindow?.webContents ? lockSupport.createTicket(request) : Promise.reject(new Error('Blocked Support Tickets request from an unknown renderer.')));
   ipcMain.handle('support:advance', (event, ticketId: unknown) => event.sender === mainWindow?.webContents && typeof ticketId === 'string' ? lockSupport.advanceTicket(ticketId) : Promise.reject(new Error('Blocked Support Tickets request from an unknown renderer.')));
   ipcMain.handle('support:open-recovery-folder', (event) => event.sender === mainWindow?.webContents ? lockSupport.openRecoveryFolder() : Promise.reject(new Error('Blocked Support Tickets request from an unknown renderer.')));
-  ipcMain.handle('history:list', () => history.list());
-  ipcMain.handle('history:export', (_event, format: HistoryExportFormat) => history.export(format));
-  ipcMain.handle('history:archive', (event, request: unknown) => event.sender === mainWindow?.webContents
-    ? history.archive(request as Parameters<HistoryService['archive']>[0])
-    : Promise.reject(new Error('Blocked history archive request from an unknown renderer.')));
-  ipcMain.handle('history:revisions', (event) => event.sender === mainWindow?.webContents ? history.revisions() : []);
-  ipcMain.handle('history:diff', (event, revisionId: unknown) => event.sender === mainWindow?.webContents && typeof revisionId === 'string' ? history.diff(revisionId) : '');
+  ipcMain.handle('history:protected-status', async (event) => event.sender === mainWindow?.webContents ? historyAccess.status() : { available: false, configured: false, unlocked: false, reason: 'unavailable' as const });
+  const inaccessibleHistoryStatus = { available: false, configured: false, unlocked: false, reason: 'unavailable' as const };
+  ipcMain.handle('history:protected-unlock', async (event, request: unknown) => {
+    if (event.sender !== mainWindow?.webContents) return { ok: false, status: inaccessibleHistoryStatus, message: 'Blocked protected history request from an unknown renderer.' };
+    if (await schoolMode.isRestricted()) return { ok: false, status: inaccessibleHistoryStatus, message: 'Protected local history is unavailable while the shared restricted mode is enabled or unavailable.' };
+    return historyAccess.unlock(request as HistoryAccessUnlockRequest);
+  });
+  ipcMain.handle('history:protected-lock-again', (event) => event.sender === mainWindow?.webContents ? historyAccess.lock() : { ok: false, status: { available: false, configured: false, unlocked: false, reason: 'unavailable' as const }, message: 'Blocked protected history request from an unknown renderer.' });
+  ipcMain.handle('history:list', async (event) => {
+    if (event.sender !== mainWindow?.webContents) return [];
+    const token = await historyToken();
+    if (token === null) return [];
+    const result = await history.list();
+    return historyAccess.isSessionCurrent(token) ? result : [];
+  });
+  ipcMain.handle('history:export', async (event, format: HistoryExportFormat) => {
+    if (event.sender !== mainWindow?.webContents) return '';
+    const token = await historyToken();
+    if (token === null) return '';
+    const result = await history.export(format);
+    return historyAccess.isSessionCurrent(token) ? result : '';
+  });
+  ipcMain.handle('history:archive', async (event, request: unknown) => {
+    if (event.sender !== mainWindow?.webContents) return Promise.reject(new Error('Blocked history archive request from an unknown renderer.'));
+    const token = await historyToken();
+    if (token === null) return Promise.reject(new Error('Protected local history is locked or unavailable.'));
+    const result = await history.archive(request as Parameters<HistoryService['archive']>[0]);
+    if (!historyAccess.isSessionCurrent(token)) throw new Error('Protected local history became unavailable before the archive was returned.');
+    return result;
+  });
+  ipcMain.handle('history:revisions', async (event) => {
+    if (event.sender !== mainWindow?.webContents) return [];
+    const token = await historyToken();
+    if (token === null) return [];
+    const result = await history.revisions();
+    return historyAccess.isSessionCurrent(token) ? result : [];
+  });
+  ipcMain.handle('history:diff', async (event, revisionId: unknown) => {
+    if (event.sender !== mainWindow?.webContents || typeof revisionId !== 'string') return '';
+    const token = await historyToken();
+    if (token === null) return '';
+    const result = await history.diff(revisionId);
+    return historyAccess.isSessionCurrent(token) ? result : '';
+  });
   ipcMain.handle('history:label', (event, revisionId: unknown, requestedLabel: unknown) => event.sender === mainWindow?.webContents && typeof revisionId === 'string' && typeof requestedLabel === 'string'
-    ? stateMutationQueue.run(() => history.label(revisionId, requestedLabel))
+    ? stateMutationQueue.run(async () => { const token = await historyToken(); if (token === null) return { ok: false, message: 'Protected local history is locked or unavailable.' }; const result = await history.label(revisionId, requestedLabel); return historyAccess.isSessionCurrent(token) ? result : { ok: false, message: 'Protected local history became unavailable before the label was returned.' }; })
     : { ok: false, message: 'Blocked local history label request from an unknown renderer.' });
   ipcMain.handle('history:restore', async (event, revisionId: unknown) => {
     if (event.sender !== mainWindow?.webContents || typeof revisionId !== 'string') {
       return { ok: false, message: 'Blocked local history restore request from an unknown renderer.' };
     }
+    const historySession = await historyToken();
+    if (historySession === null) return { ok: false, message: 'Protected local history is locked or unavailable.' };
     if (await lockSupport.hasLockedAppearanceProperties()) {
       return { ok: false, message: 'History restore is paused while an appearance property lock is active. Unlock the affected property before restoring a revision.' };
     }
     const barrier = stateMutationQueue.beginBarrier();
     return stateMutationQueue.runBarrier(async () => {
       try {
-        const result = await history.restore(revisionId);
+        const result = historyAccess.isSessionCurrent(historySession) ? await history.restore(revisionId) : { ok: false, message: 'Protected local history became unavailable before restore started.' };
+        if (result.ok && !historyAccess.isSessionCurrent(historySession)) return { ok: false, message: 'Protected local history became unavailable while restore was running; refresh the view before retrying.' };
         if (result.ok) await scheduler.reloadFromDisk();
         return result;
       } finally {
