@@ -55,7 +55,7 @@ function SettingExplanation({ settings, field, provenance }: { settings: UserSet
   );
 }
 
-export function SettingsPage({ settings, settingsProvenance, sourceIsolationStatus, sourceIsolationLoading, onRefreshSourceIsolation, onSave, workspace, appearance, schedule, schoolMode, locks, support, lockTargetRequest, notify, subTab, onSubTab, regexRequest, onRegexHandled }: {
+export function SettingsPage({ settings, settingsProvenance, sourceIsolationStatus, sourceIsolationLoading, onRefreshSourceIsolation, onSave, workspace, appearance, schedule, schoolMode, locks, support, lockTargetRequest, notify, subTab, onSubTab, regexRequest, onRegexHandled, onManageLock }: {
   settings: UserSettings;
   settingsProvenance: SettingsProvenance;
   sourceIsolationStatus: SourceIsolationStatus | null;
@@ -74,6 +74,7 @@ export function SettingsPage({ settings, settingsProvenance, sourceIsolationStat
   onSubTab(id: SettingsSubTabId): void;
   regexRequest: SurfaceId | null;
   onRegexHandled(): void;
+  onManageLock?(target: LockTarget, returnFocus: HTMLElement | null): void;
 }) {
   const schoolEnabled = schoolMode.state.enabled;
   const schoolRestricted = schoolMode.restricted;
@@ -343,7 +344,7 @@ export function SettingsPage({ settings, settingsProvenance, sourceIsolationStat
                 <button className="filled-button" onClick={() => onSave(draft)}>Save settings</button>
               </div>
             </section>
-            <AppearanceEditor settings={viewSettings} workspace={workspace} appearance={appearance} notify={notify} matcher={matcher} />
+              <AppearanceEditor settings={viewSettings} workspace={workspace} appearance={appearance} notify={notify} matcher={matcher} locks={locks} schoolModeEnabled={schoolRestricted} onManageLock={onManageLock} />
           </>
         )}
         {subTab === 'settings.schedule' && counts[subTab] > 0 && <ScheduleEditor settings={viewSettings} schedule={schedule} restricted={schoolRestricted} />}

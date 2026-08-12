@@ -1091,7 +1091,7 @@ export function App() {
               notify={notify}
               openRegex={regexRequest === activeTab}
               onRegexHandled={() => setRegexRequest(null)}
-            />
+              />
           )}
           {activeTab === 'authenticator' && !schoolMode.restricted && <AuthenticatorPage settings={settings} authenticator={authenticator} notify={notify} openRegex={regexRequest === 'authenticator'} onRegexHandled={() => setRegexRequest(null)} />}
           {activeTab === 'docs' && <DocsPage settings={settings} schoolModeEnabled={schoolMode.restricted} schoolModeName={schoolMode.state.displayName} notify={notify} openRegex={regexRequest === 'docs'} onRegexHandled={() => setRegexRequest(null)} articleRequest={docRequest} onArticleHandled={() => setDocRequest(null)} onOpenSupport={() => openLockSupport({ targetKind: 'tab', targetId: workspace.workspace.activeTabId })} />}
@@ -1117,6 +1117,7 @@ export function App() {
               onSubTab={setSubTab}
               regexRequest={regexRequest}
               onRegexHandled={() => setRegexRequest(null)}
+              onManageLock={(target, returnFocus) => { appearanceReturnFocusRef.current = returnFocus; setSubTab('settings.support'); setLockTargetRequest(target); focusLater('lock-target'); }}
             />
           )}
         </main>
