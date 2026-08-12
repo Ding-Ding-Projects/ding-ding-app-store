@@ -54,3 +54,7 @@
 ## Completion boundary
 
 The project is not complete until every supported catalog application can truthfully report install/build/update/uninstall capability, the full documentation corpus is bundled and searchable offline, all universal user-surface requirements are implemented, the packaged app passes runtime checks, and the exact default-branch release is verified.
+## Protected local history access
+
+- ✅ Added a dedicated safeStorage-backed credential gate for Activity and Local versions, with sender-checked preload IPC, live School-mode invalidation, malformed-record fail-closed handling, bounded failed-attempts, and localized lock/unlock UI.
+- ⏳ Authenticator metadata/ciphertext snapshot and vault-native restore remain deferred until a transactional rehydration design is verified; raw secrets and DPAPI bytes must never enter plaintext Git history.

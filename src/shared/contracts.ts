@@ -322,6 +322,24 @@ export interface HistoryMutationResult {
   message: string;
 }
 
+export interface HistoryAccessStatus {
+  available: boolean;
+  configured: boolean;
+  unlocked: boolean;
+  reason: 'unavailable' | 'not-configured' | 'locked' | 'ready';
+}
+
+export interface HistoryAccessUnlockRequest {
+  credential: string;
+  create?: boolean;
+}
+
+export interface HistoryAccessResult {
+  ok: boolean;
+  status: HistoryAccessStatus;
+  message: string;
+}
+
 export interface UpdatePackageMetadata {
   /** The exact Squirrel full-package filename named by RELEASES. */
   fileName: string;
@@ -1541,6 +1559,9 @@ export interface DingDingStoreApi {
     openRecoveryFolder(): Promise<SupportOpenRecoveryResult>;
   };
   history: {
+    protectedStatus(): Promise<HistoryAccessStatus>;
+    protectedUnlock(request: HistoryAccessUnlockRequest): Promise<HistoryAccessResult>;
+    protectedLockAgain(): Promise<HistoryAccessResult>;
     list(): Promise<HistoryEntry[]>;
     export(format: HistoryExportFormat): Promise<string>;
     archive(request: HistoryArchiveRequest): Promise<HistoryArchiveExport>;

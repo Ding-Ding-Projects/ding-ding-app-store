@@ -1091,7 +1091,7 @@ export function App() {
           )}
           {activeTab === 'authenticator' && !schoolMode.restricted && <AuthenticatorPage settings={settings} authenticator={authenticator} notify={notify} openRegex={regexRequest === 'authenticator'} onRegexHandled={() => setRegexRequest(null)} />}
           {activeTab === 'docs' && <DocsPage settings={settings} schoolModeEnabled={schoolMode.restricted} schoolModeName={schoolMode.state.displayName} notify={notify} openRegex={regexRequest === 'docs'} onRegexHandled={() => setRegexRequest(null)} articleRequest={docRequest} onArticleHandled={() => setDocRequest(null)} onOpenSupport={() => openLockSupport({ targetKind: 'tab', targetId: workspace.workspace.activeTabId })} />}
-          {activeTab === 'activity' && <ActivityPage entries={visibleHistory} revisions={visibleHistoryRevisions} loading={historyLoading} settings={settings} openRegex={regexRequest === 'activity'} onRegexHandled={() => setRegexRequest(null)} notify={notify} onHistoryChanged={reloadHistoryAndSettings} />}
+          {activeTab === 'activity' && <ActivityPage entries={visibleHistory} revisions={visibleHistoryRevisions} loading={historyLoading} settings={settings} openRegex={regexRequest === 'activity'} onRegexHandled={() => setRegexRequest(null)} notify={notify} onHistoryChanged={reloadHistoryAndSettings} schoolRestricted={schoolMode.restricted} />}
           {activeTab === 'settings' && (
             <SettingsPage
               key={settingsReloadKey}

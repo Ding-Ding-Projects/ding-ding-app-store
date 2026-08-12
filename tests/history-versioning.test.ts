@@ -100,8 +100,8 @@ describe('local history/version browser contract', () => {
     expect(main).toContain('scheduler.reloadFromDisk()');
     expect(main).toContain("ipcMain.handle('schedule:load', () => stateMutationQueue.run(() => scheduler.reloadFromDisk()))");
     expect(main).toContain("externalEditor.addValidated()) : null");
-    expect(main).toContain("ipcMain.handle('appearance:load', () => stateMutationQueue.run(() => appearance.load()))");
-    expect(main).toContain("ipcMain.handle('appearance:export', () => stateMutationQueue.run(() => appearance.export()))");
+    expect(main).toContain("ipcMain.handle('appearance:load', (event) => event.sender === mainWindow?.webContents ? stateMutationQueue.run(() => appearance.load())");
+    expect(main).toContain("ipcMain.handle('appearance:export', (event) => event.sender === mainWindow?.webContents ? stateMutationQueue.run(() => appearance.export())");
     expect(main).toContain('await history.recoverPendingRestore();');
     expect(main).toContain("ipcMain.handle('operations:installed', (_event, discover: unknown = true) => stateMutationQueue.run(() => operations.listInstalled(discover !== false)))");
     expect(main).toContain("ipcMain.handle('operations:cancel-install', (_event, request: InstallCancelRequest) => operations.cancelInstall(request))");

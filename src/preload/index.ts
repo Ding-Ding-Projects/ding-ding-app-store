@@ -28,6 +28,9 @@ import type {
   ExternalEditorPreference,
   HistoryArchiveExport,
   HistoryArchiveRequest,
+  HistoryAccessUnlockRequest,
+  HistoryAccessResult,
+  HistoryAccessStatus,
   HistoryExportFormat,
   HistoryMutationResult,
   HistoryRevision,
@@ -68,6 +71,7 @@ import {
   parseSchoolModeSnapshot,
   parseSchoolModeVerifyResult,
 } from './school-mode-parser.js';
+import { parseHistoryAccessResult, parseHistoryAccessStatus } from './history-access-parser.js';
 const SOURCE_STATES = new Set(['queued', 'preparing', 'running', 'repairing', 'cancelling', 'succeeded', 'failed', 'cancelled']);
 const SOURCE_STREAMS = new Set(['system', 'progress', 'stdout', 'stderr']);
 const SOURCE_EVENT_KEYS = new Set(['jobId', 'appId', 'sequence', 'at', 'stream', 'state', 'text', 'progress', 'final']);
@@ -417,6 +421,9 @@ const api: DingDingStoreApi = {
     openRecoveryFolder: () => ipcRenderer.invoke('support:open-recovery-folder'),
   },
   history: {
+    protectedStatus: async () => parseHistoryAccessStatus(await ipcRenderer.invoke('history:protected-status')),
+    protectedUnlock: async (request: HistoryAccessUnlockRequest) => parseHistoryAccessResult(await ipcRenderer.invoke('history:protected-unlock', request)),
+    protectedLockAgain: async () => parseHistoryAccessResult(await ipcRenderer.invoke('history:protected-lock-again')),
     list: () => ipcRenderer.invoke('history:list'),
     export: (format: HistoryExportFormat) => ipcRenderer.invoke('history:export', format),
     archive: (request: HistoryArchiveRequest) => ipcRenderer.invoke('history:archive', request) as Promise<HistoryArchiveExport>,
