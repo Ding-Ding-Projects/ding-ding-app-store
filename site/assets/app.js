@@ -397,7 +397,7 @@ import { readDialogEmojiPreference, shouldShowDialogEmoji, writeDialogEmojiPrefe
   $('theme').value = state.theme; $('density').value = state.density; $('accent').value = state.accent;
   $('site-restricted').checked = state.siteRestricted;
   $('show-emojis-in-dialogs').checked = state.showEmojisInDialogs;
-  $('show-emojis-in-dialogs').addEventListener('change', (event) => { state.showEmojisInDialogs = Boolean(event.target.checked); writeDialogEmojiPreference(state.showEmojisInDialogs); applyAppearance(); });
+  $('show-emojis-in-dialogs').addEventListener('change', (event) => { const enabled = Boolean(event.target.checked); if (!writeDialogEmojiPreference(enabled)) { state.showEmojisInDialogs = true; event.target.checked = true; setStatus('Browser storage is unavailable; dialog emojis remain enabled for this session.'); } else state.showEmojisInDialogs = enabled; applyAppearance(); });
   $('site-restricted').addEventListener('change', (event) => { state.siteRestricted = Boolean(event.target.checked); saveControls(); applyAppearance(); openSettingsTab('general'); openArticle(state.article, false, { addTab: false, route: 'none' }); });
   $('personal-vocabulary-replace').addEventListener('click', () => void replaceVocabulary());
   $('personal-vocabulary-clear').addEventListener('click', clearVocabulary);
