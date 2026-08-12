@@ -37,6 +37,10 @@ describe('bounded local authenticator camera scanning', () => {
     expect(main).toContain("ipcMain.handle('authenticator:camera-start'");
     expect(main).toContain("ipcMain.handle('authenticator:camera-stop'");
     expect(main).toContain("type === 'video'");
+    expect(main).toContain('details.isMainFrame');
+    expect(main).toContain("expectedUrl?.startsWith('file://')");
+    expect(main).toContain('requestUrl !== expectedUrl');
+    expect(main).toContain('AUTHENTICATOR_CAMERA_SESSION_MS');
     expect(main).toContain('authenticatorCameraLease = null');
     expect(preload).toContain('parseAuthenticatorCameraSessionStart');
     expect(preload).not.toMatch(/camera-(?:start|stop)[\s\S]{0,400}(?:frame|pixels|secret|uri)/i);
@@ -45,5 +49,8 @@ describe('bounded local authenticator camera scanning', () => {
     expect(page).toContain("audio: false");
     expect(page).toContain("getTracks().forEach((track) => track.stop())");
     expect(page).toContain("document.visibilityState !== 'visible'");
+    expect(page).toContain('generation !== cameraGenerationRef.current');
+    expect(page).toContain('stream.getTracks().forEach((track) => track.stop())');
+    expect(page).toContain('cameraTriggerRef.current?.focus()');
   });
 });

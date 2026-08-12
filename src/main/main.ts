@@ -6,6 +6,7 @@ import { app, BrowserWindow, clipboard, dialog, ipcMain, nativeImage, session, s
 import squirrelStartup from 'electron-squirrel-startup';
 import { z } from 'zod';
 import { AUTHENTICATOR_MAX_IMAGE_BYTES, AUTHENTICATOR_MAX_URI_LENGTH, type AuthenticatorBulkDeleteRequest, type AuthenticatorBulkDeleteResult, type AuthenticatorDeleteRequest, type AuthenticatorDeleteResult, type AuthenticatorExportRequest, type AuthenticatorExportResult, type AuthenticatorGroupRequest, type AuthenticatorGroupCreateRequest, type AuthenticatorGroupRenameRequest, type AuthenticatorGroupReorderRequest, type AuthenticatorGroupCollapseRequest, type AuthenticatorGroupDeleteRequest, type AuthenticatorGroupBulkMoveRequest, type AuthenticatorListResult, type AuthenticatorMutationResult, type AuthenticatorPreviewRequest, type AuthenticatorPreviewResult, type AuthenticatorQrImageImportResult, type AuthenticatorRegistrationConfirmRequest, type AuthenticatorRegistrationPreviewResult, type AuthenticatorRegistrationRequest, type AuthenticatorRenameRequest, type AuthenticatorReorderRequest, type AuthenticatorStatus, type ElementKey, type ElementOverride, type ExternalEditorOpenRequest, type ExternalEditorPreference, type HistoryExportFormat, type InstallCancelRequest, type LockCredentialRequest, type LockSetRequest, type LockTarget, type OperationRequest, type SchoolModeConfigureRequest, type SchoolModeCredentialChangeRequest, type SchoolModeRenameRequest, type SchoolModeToggleRequest, type SchoolModeVerifyRequest, type SourceJobCancelRequest, type SourceJobRequest, type SupportTicketCreateRequest, type TabWorkspace, type UserSettings } from '../shared/contracts.js';
+import { AUTHENTICATOR_CAMERA_SESSION_MS } from '../shared/contracts.js';
 import { AppearanceService } from './appearance-service.js';
 import { CatalogService } from './catalog-service.js';
 import { HistoryService } from './history-service.js';
@@ -35,15 +36,16 @@ import { HistoryAccessService, type HistoryAccessUnlockRequest } from './history
 const scheduleTaskSchema = z.enum(['self-update', 'catalog-refresh']);
 const PRODUCT_NAME = 'Ding Ding App Store';
 const PRODUCT_APP_ID = 'org.dingdingprojects.appstore';
-const AUTHENTICATOR_CAMERA_PERMISSION_MS = 45_000;
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 let mainWindow: BrowserWindow | null = null;
 let authenticatorCameraLease: { sessionId: string; webContentsId: number; expiresAtMs: number } | null = null;
 
-function cameraPermissionAllowed(webContents: Electron.WebContents | null, permission: string, mediaTypes?: string[]): boolean {
+export function cameraPermissionAllowed(webContents: Electron.WebContents | null, permission: string, mediaTypes: string[] | undefined, details: { isMainFrame: boolean; requestingUrl?: string; securityOrigin?: string }): boolean {
   const lease = authenticatorCameraLease;
-  if (permission !== 'media' || !lease || !webContents || webContents !== mainWindow?.webContents || webContents.id !== lease.webContentsId || Date.now() >= lease.expiresAtMs || !mainWindow?.isFocused()) return false;
+  const expectedUrl = mainWindow?.webContents.getURL();
+  const requestUrl = details.requestingUrl ?? details.securityOrigin;
+  if (permission !== 'media' || !lease || !webContents || webContents !== mainWindow?.webContents || webContents.id !== lease.webContentsId || Date.now() >= lease.expiresAtMs || !mainWindow?.isFocused() || !details.isMainFrame || !expectedUrl?.startsWith('file://') || requestUrl !== expectedUrl) return false;
   return Array.isArray(mediaTypes) && mediaTypes.length > 0 && mediaTypes.every((type) => type === 'video');
 }
 
@@ -118,8 +120,8 @@ function createWindow(): BrowserWindow {
 
 void app.whenReady().then(async () => {
   if (!hasSingleInstanceLock) return;
-  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback, details) => callback(cameraPermissionAllowed(webContents, permission, permission === 'media' && 'mediaTypes' in details ? details.mediaTypes : undefined)));
-  session.defaultSession.setPermissionCheckHandler((webContents, permission, _origin, details) => cameraPermissionAllowed(webContents, permission, details.mediaType ? [details.mediaType] : undefined));
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback, details) => callback(cameraPermissionAllowed(webContents, permission, permission === 'media' && 'mediaTypes' in details ? details.mediaTypes : undefined, details)));
+  session.defaultSession.setPermissionCheckHandler((webContents, permission, _origin, details) => cameraPermissionAllowed(webContents, permission, details.mediaType ? [details.mediaType] : undefined, details));
 
   // Paint the branded shell before any recover/migration work. A malformed
   // local record must never make a launch look like a silent Electron exit.
@@ -315,7 +317,7 @@ void app.whenReady().then(async () => {
     if (!mainWindow?.isFocused()) return { ok: false as const, reason: 'focus-required' as const, message: 'Focus the App Store before starting its camera.', messageYue: '開始相機前，請先將 App Store 設為目前視窗。' };
     if (authenticatorCameraLease && Date.now() < authenticatorCameraLease.expiresAtMs) return { ok: false as const, reason: 'busy' as const, message: 'Another camera scan is already active.', messageYue: '另一個相機掃描已經進行中。' };
     const sessionId = randomUUID();
-    const expiresAtMs = Date.now() + AUTHENTICATOR_CAMERA_PERMISSION_MS;
+    const expiresAtMs = Date.now() + AUTHENTICATOR_CAMERA_SESSION_MS;
     authenticatorCameraLease = { sessionId, webContentsId: event.sender.id, expiresAtMs };
     return { ok: true as const, sessionId, expiresAt: new Date(expiresAtMs).toISOString(), message: 'Camera permission is available for this one local scan.', messageYue: '今次本機掃描已獲短暫相機權限。' };
   });
