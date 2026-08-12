@@ -1118,6 +1118,7 @@ export function App() {
               regexRequest={regexRequest}
               onRegexHandled={() => setRegexRequest(null)}
               onManageLock={(target, returnFocus) => { appearanceReturnFocusRef.current = returnFocus; setSubTab('settings.support'); setLockTargetRequest(target); focusLater('lock-target'); }}
+              onReturnToAppearance={() => { setSubTab('settings.appearance'); window.setTimeout(() => { appearanceReturnFocusRef.current?.focus(); appearanceReturnFocusRef.current = null; }, 0); }}
             />
           )}
         </main>

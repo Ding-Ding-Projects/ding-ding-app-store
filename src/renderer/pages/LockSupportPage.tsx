@@ -48,7 +48,7 @@ function LockTotpQr({ secret, algorithm, digits, period, settings }: { secret: s
   return <div className="authenticator-qr-wrap"><div className="authenticator-qr" role="img" aria-label={label(settings, 'Local TOTP pairing QR code for this lock', '呢個鎖嘅本機 TOTP 配對 QR code')} style={{ gridTemplateColumns: `repeat(${matrix.length}, 1fr)` }}>{matrix.flatMap((row, rowIndex) => [...row].map((module, columnIndex) => <span aria-hidden="true" key={`${rowIndex}-${columnIndex}`} className={module === '1' ? 'authenticator-qr-module on' : 'authenticator-qr-module'} />))}</div></div>;
 }
 
-export function LockSupportPage({ settings, workspace, locks, support, notify, matcher, initialTarget }: {
+export function LockSupportPage({ settings, workspace, locks, support, notify, matcher, initialTarget, onReturnToOrigin }: {
   settings: UserSettings;
   workspace: TabWorkspace;
   locks: LocksApi;
@@ -56,6 +56,7 @@ export function LockSupportPage({ settings, workspace, locks, support, notify, m
   notify: Notify;
   matcher(haystack: string): boolean;
   initialTarget?: LockTarget | null;
+  onReturnToOrigin?(): void;
 }) {
   const [target, setTarget] = useState<LockTarget>({ targetKind: 'tab', targetId: workspace.tabs[0]?.id ?? 'catalog' });
   const [credential, setCredential] = useState('');
@@ -164,6 +165,7 @@ export function LockSupportPage({ settings, workspace, locks, support, notify, m
     <div className="lock-support-grid">
       <section className="settings-card" {...el('settings-card')} aria-labelledby="tab-locks-title">
         <h2 id="tab-locks-title"><Icon>lock</Icon>{label(settings, 'Tab and group locks', '分頁同分組鎖')}</h2>
+        {initialTarget?.targetKind === 'appearance-property' && onReturnToOrigin && <button className="text-button" type="button" onClick={onReturnToOrigin}><Icon>arrow_back</Icon>{label(settings, 'Return to appearance editor', '返回外觀編輯器')}</button>}
         <p className="supporting">{label(settings, 'These are local UX speed bumps, not security, encryption, or protection from another person using this computer. Each lock has its own password or TOTP credential.', '呢啲係本機 UX 減速帶，唔係安全、加密，亦唔係防止其他人用呢部機。每個鎖都有自己嘅密碼或者 TOTP 憑證。')}</p>
         {!locks.state.vaultAvailable && <p className="notice warning" role="status"><Icon>warning</Icon>{label(settings, 'The operating-system credential vault is unavailable. Lock creation, unlock, and removal are disabled until the vault is available; no pretend security is offered.', '作業系統憑證庫用唔到。憑證庫恢復之前，設定、解鎖同移除都會停用；唔會扮有安全保護。')}</p>}
         <SearchablePicker id="lock-target" labelText={label(settings, 'Lock target', '鎖定目標')} settings={settings} value={targetKey(target)} onChange={(value) => {
