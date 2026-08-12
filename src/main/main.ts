@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { app, BrowserWindow, ipcMain, session, shell } from 'electron';
+import { app, BrowserWindow, clipboard, ipcMain, session, shell } from 'electron';
 import squirrelStartup from 'electron-squirrel-startup';
 import { z } from 'zod';
 import type { AuthenticatorBulkDeleteRequest, AuthenticatorBulkDeleteResult, AuthenticatorDeleteRequest, AuthenticatorDeleteResult, AuthenticatorExportRequest, AuthenticatorExportResult, AuthenticatorGroupRequest, AuthenticatorListResult, AuthenticatorMutationResult, AuthenticatorPreviewRequest, AuthenticatorPreviewResult, AuthenticatorRegistrationConfirmRequest, AuthenticatorRegistrationPreviewResult, AuthenticatorRegistrationRequest, AuthenticatorRenameRequest, AuthenticatorReorderRequest, AuthenticatorStatus, ElementKey, ElementOverride, ExternalEditorOpenRequest, ExternalEditorPreference, HistoryExportFormat, InstallCancelRequest, LockCredentialRequest, LockSetRequest, LockTarget, OperationRequest, SchoolModeConfigureRequest, SchoolModeCredentialChangeRequest, SchoolModeRenameRequest, SchoolModeToggleRequest, SchoolModeVerifyRequest, SourceJobCancelRequest, SourceJobRequest, SupportTicketCreateRequest, TabWorkspace, UserSettings } from '../shared/contracts.js';
@@ -280,6 +280,12 @@ void app.whenReady().then(async () => {
     if (event.sender !== mainWindow?.webContents) return Promise.reject(new Error('Blocked authenticator status request from an unknown renderer.'));
     if (!(await authenticatorAllowed())) return authenticatorRestrictedStatus();
     return authenticator.status();
+  });
+  ipcMain.handle('authenticator:clipboard-read', async (event) => {
+    if (event.sender !== mainWindow?.webContents) return Promise.reject(new Error('Blocked authenticator clipboard request from an unknown renderer.'));
+    if (!(await authenticatorAllowed())) return '';
+    const value = clipboard.readText();
+    return Buffer.byteLength(value, 'utf8') <= 2_048 ? value : '';
   });
   ipcMain.handle('authenticator:preview', (event, request: unknown) => {
     if (event.sender !== mainWindow?.webContents) return Promise.reject(new Error('Blocked authenticator preview request from an unknown renderer.'));

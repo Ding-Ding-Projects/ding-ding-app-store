@@ -16,6 +16,7 @@ import { moveAuthenticatorPickerFocus } from '../authenticator-picker-keyboard';
 import { selectAuthenticatorRange, toggleAuthenticatorSelection } from '../authenticator-selection';
 import { isExternalEditorBridgeAvailable, openExportInVsCode } from '../external-editor';
 import { authenticatorRegistrationFailureNotice } from '../authenticator-registration-notifications';
+import { normalizeAuthenticatorImportText } from '../authenticator-import';
 
 const ALGORITHMS: readonly { value: AuthenticatorAlgorithm; en: string; yue: string }[] = [
   { value: 'sha1', en: 'SHA-1', yue: 'SHA-1' },
@@ -198,6 +199,8 @@ export function AuthenticatorPage({ settings, authenticator, notify, openRegex, 
   const [digits, setDigits] = useState<AuthenticatorDigits>(6);
   const [periodSeconds, setPeriodSeconds] = useState(30);
   const [showSecret, setShowSecret] = useState(false);
+  const [importingClipboard, setImportingClipboard] = useState(false);
+  const uriInputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<AuthenticatorRegistrationPreviewResult | null>(null);
   const [confirmationCode, setConfirmationCode] = useState('');
   const [preparingRegistration, setPreparingRegistration] = useState(false);
@@ -345,6 +348,19 @@ export function AuthenticatorPage({ settings, authenticator, notify, openRegex, 
       notify({ ok: false, message: label(viewSettings, 'The otpauth URI could not be copied by the local clipboard.', '本機剪貼簿未能複製 otpauth URI。') });
     }
   };
+  const importUriFromClipboard = async () => {
+    if (importingClipboard || preparingRegistration || preview?.ok) return;
+    setImportingClipboard(true);
+    try {
+      const imported = normalizeAuthenticatorImportText(await window.dingDingStore.authenticator.readClipboardText());
+      prepareGeneration.current += 1;
+      setSource('otpauth-uri'); setUri(imported); setPreview(null); setConfirmationCode(''); setShowSecret(false); setUncertainRegistrationId(null);
+      window.setTimeout(() => uriInputRef.current?.focus(), 0);
+      notify({ ok: true, message: label(viewSettings, 'An otpauth URI was imported from the local clipboard. Reveal or prepare it when ready.', '已由本機剪貼簿匯入 otpauth URI。準備好後可以顯示或者準備配對。') });
+    } catch (error) {
+      notify({ ok: false, category: 'error', title: label(viewSettings, 'Clipboard import needs attention', '剪貼簿匯入要留意'), message: label(viewSettings, error instanceof Error ? error.message : 'The local clipboard could not be read.', '未能讀取本機剪貼簿。') });
+    } finally { setImportingClipboard(false); }
+  };
 
   const mutationNotice = (result: { ok: boolean; message: string; messageYue: string }) => notify({ ok: result.ok, message: label(viewSettings, result.message, result.messageYue) });
   const renameEntry = async (entryId: string) => {
@@ -460,6 +476,7 @@ export function AuthenticatorPage({ settings, authenticator, notify, openRegex, 
       </section>
       <section className="settings-card" {...el('settings-card')}>
         <h2>{label(viewSettings, 'Register an authenticator entry', '註冊 authenticator 項目')}</h2>
+        <div className="button-row" aria-live="polite"><button className="text-button" type="button" onClick={() => void importUriFromClipboard()} disabled={importingClipboard || preparingRegistration || Boolean(preview?.ok)} aria-busy={importingClipboard}>{importingClipboard ? label(viewSettings, 'Reading local clipboard…', '讀取緊本機剪貼簿…') : label(viewSettings, 'Import otpauth URI from clipboard', '由剪貼簿匯入 otpauth URI')}</button></div>
         {preview?.ok && <p className="supporting">{label(viewSettings, 'Registration fields are locked while this pairing preview is active, so the QR, code, and metadata cannot drift apart.', '配對預覽進行中會鎖住註冊欄位，避免 QR、驗證碼同 metadata 對唔上。')}</p>}
         <form onSubmit={(event) => void submitRegistration(event)}>
           <AuthenticatorPicker
@@ -472,7 +489,7 @@ export function AuthenticatorPage({ settings, authenticator, notify, openRegex, 
             onChange={(value) => { prepareGeneration.current += 1; setSource(value as typeof source); setPreview(null); setSecret(''); setUri(''); setShowSecret(false); setUncertainRegistrationId(null); }}
           />
           {source === 'otpauth-uri' ? <>
-            <label htmlFor="authenticator-uri">{label(viewSettings, 'otpauth://totp/ URI (hidden until reveal)', 'otpauth://totp/ URI（顯示前會收埋）')}<input id="authenticator-uri" disabled={Boolean(preview?.ok) || preparingRegistration} type={showSecret ? 'text' : 'password'} autoComplete="off" maxLength={2_048} value={uri} onChange={(event) => setUri(event.target.value)} required /></label>
+            <label htmlFor="authenticator-uri">{label(viewSettings, 'otpauth://totp/ URI (hidden until reveal)', 'otpauth://totp/ URI（顯示前會收埋）')}<input ref={uriInputRef} id="authenticator-uri" disabled={Boolean(preview?.ok) || preparingRegistration} type={showSecret ? 'text' : 'password'} autoComplete="off" maxLength={2_048} value={uri} onChange={(event) => setUri(event.target.value)} required /></label>
             <div className="button-row">
               <button className="text-button" type="button" disabled={preparingRegistration} onClick={() => setShowSecret((value) => !value)}>{showSecret ? label(viewSettings, 'Hide otpauth URI', '收埋 otpauth URI') : label(viewSettings, 'Reveal otpauth URI', '顯示 otpauth URI')}</button>
               <button className="text-button" type="button" disabled={preparingRegistration || !showSecret || !uri} onClick={() => void copyRegistrationUri()}>{label(viewSettings, 'Copy otpauth URI', '複製 otpauth URI')}</button>
