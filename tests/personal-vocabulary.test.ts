@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { parsePersonalVocabularyJson, PERSONAL_VOCABULARY_MAX_BYTES } from '../src/shared/personal-vocabulary';
 import { personalizeText, setPersonalVocabulary } from '../src/renderer/i18n';
+import { buildRegistry } from '../src/renderer/registry';
+import { DEFAULT_SCHEDULE, DEFAULT_TAB_WORKSPACE, DEFAULT_USER_SETTINGS } from '../src/shared/contracts';
 import { PersonalVocabularyService } from '../src/main/personal-vocabulary-service';
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -38,11 +40,21 @@ describe('personal vocabulary parser', () => {
     expect((await new PersonalVocabularyService(cache).clear()).loaded).toBe(false);
   });
   it('personalizes app-owned labels while preserving technical tokens and restricted mode', () => {
-    setPersonalVocabulary([{ source: 'Install', replacement: '啟動' }]);
+    setPersonalVocabulary([{ source: 'Install', replacement: '啟動' }, { source: 'foo', replacement: 'BAR' }]);
     expect(personalizeText('Install this app')).toBe('啟動 this app');
     expect(personalizeText('Open https://example.test/Install')).toBe('Open https://example.test/Install');
+    expect(personalizeText('Open C:\\data\\Install.exe')).toBe('Open C:\\data\\Install.exe');
+    expect(personalizeText('Open C:\\data\\foo.exe')).toBe('Open C:\\data\\foo.exe');
+    expect(personalizeText('Open \\\\server\\share\\foo.exe')).toBe('Open \\\\server\\share\\foo.exe');
+    expect(personalizeText('Run foo.exe then Install')).toBe('Run foo.exe then 啟動');
     setPersonalVocabulary([{ source: 'Install', replacement: '啟動' }], true);
     expect(personalizeText('Install this app')).toBe('Install this app');
     setPersonalVocabulary([]);
+  });
+  it('emits vocabulary palette commands in normal mode and suppresses them in School mode', () => {
+    const context = { settings: DEFAULT_USER_SETTINGS, workspace: DEFAULT_TAB_WORKSPACE, appearance: {}, schedule: DEFAULT_SCHEDULE, apps: [] } as never;
+    const normal = buildRegistry(context).filter((entry) => entry.id.includes('personal-vocabulary'));
+    expect(normal.map((entry) => entry.id)).toEqual(['cmd:personal-vocabulary-import', 'cmd:personal-vocabulary-clear']);
+    expect(buildRegistry({ ...context, schoolModeEnabled: true }).some((entry) => entry.id.includes('personal-vocabulary'))).toBe(false);
   });
 });
