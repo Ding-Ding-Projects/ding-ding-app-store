@@ -55,7 +55,7 @@ function SettingExplanation({ settings, field, provenance }: { settings: UserSet
   );
 }
 
-export function SettingsPage({ settings, settingsProvenance, sourceIsolationStatus, sourceIsolationLoading, onRefreshSourceIsolation, onSave, workspace, appearance, schedule, schoolMode, locks, support, lockTargetRequest, notify, subTab, onSubTab, regexRequest, onRegexHandled, onManageLock }: {
+export function SettingsPage({ settings, settingsProvenance, sourceIsolationStatus, sourceIsolationLoading, onRefreshSourceIsolation, onSave, workspace, appearance, schedule, schoolMode, locks, support, lockTargetRequest, notify, subTab, onSubTab, regexRequest, onRegexHandled, onManageLock, onReturnToAppearance }: {
   settings: UserSettings;
   settingsProvenance: SettingsProvenance;
   sourceIsolationStatus: SourceIsolationStatus | null;
@@ -75,6 +75,7 @@ export function SettingsPage({ settings, settingsProvenance, sourceIsolationStat
   regexRequest: SurfaceId | null;
   onRegexHandled(): void;
   onManageLock?(target: LockTarget, returnFocus: HTMLElement | null): void;
+  onReturnToAppearance?(): void;
 }) {
   const schoolEnabled = schoolMode.state.enabled;
   const schoolRestricted = schoolMode.restricted;
@@ -363,7 +364,7 @@ export function SettingsPage({ settings, settingsProvenance, sourceIsolationStat
           </>
         )}
         {subTab === 'settings.support' && counts[subTab] > 0 && (
-          <LockSupportPage settings={viewSettings} workspace={workspace.workspace} locks={locks} support={support} notify={notify} matcher={matcher} initialTarget={lockTargetRequest} />
+          <LockSupportPage settings={viewSettings} workspace={workspace.workspace} locks={locks} support={support} notify={notify} matcher={matcher} initialTarget={lockTargetRequest} onReturnToOrigin={onReturnToAppearance} />
         )}
       </div>
     </>

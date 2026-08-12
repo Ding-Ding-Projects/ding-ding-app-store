@@ -175,6 +175,8 @@ describe('tab/group UX locks and local Support Tickets', () => {
     expect(app).toContain('locks={locks} schoolModeEnabled={schoolMode.restricted}');
     expect(app).toContain('appearanceReturnFocusRef.current = returnFocus');
     expect(app).toContain('setPanelOpen(false); openLockSupport(target)');
+    expect(app).toContain('onReturnToAppearance={() =>');
+    expect(app).toContain('appearanceReturnFocusRef.current?.focus()');
     const editor = await read('src/renderer/pages/AppearanceEditor.tsx');
     const settings = await read('src/renderer/pages/SettingsPage.tsx');
     expect(editor).toContain('targetId: `${entry.key}:${token}`');
@@ -183,5 +185,6 @@ describe('tab/group UX locks and local Support Tickets', () => {
     expect(editor).toContain('Appearance locks are unavailable in restricted mode.');
     expect(settings).toContain('onManageLock={onManageLock}');
     expect(settings).toContain('schoolModeEnabled={schoolRestricted}');
+    expect((await read('src/renderer/pages/LockSupportPage.tsx'))).toContain('Return to appearance editor');
   });
 });
