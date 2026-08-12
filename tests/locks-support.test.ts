@@ -102,6 +102,8 @@ describe('tab/group UX locks and local Support Tickets', () => {
     expect(service).toContain('[-1, 0, 1].some');
     expect(service).toContain('totpAlgorithm');
     expect(service).toContain('periodSeconds: number');
+    expect(service).toContain("entry.algorithm ?? 'sha1'");
+    expect(service).toContain("entry.periodSeconds ?? 30");
     expect(service).toContain('private readonly attempts');
     expect(service).toContain("const unlockDurationSchema = z.enum(['session', '15m', '60m']);");
     expect(service).toContain("duration === 'session' ? null : Date.now()");
@@ -118,6 +120,7 @@ describe('tab/group UX locks and local Support Tickets', () => {
     expect(page).toContain('lock-totp-algorithm');
     expect(page).toContain('lock-totp-digits');
     expect(page).toContain('lock-totp-period');
+    expect(page).toContain('setTotpAlgorithm(selectedRecord.totpAlgorithm ?? \'sha1\')');
     expect(page).toContain('confirmationCode: credentialKind === \'totp\' ? confirmationCode');
     expect(rail).toContain("lock.credentialKind === 'totp' ? 'Current TOTP code'");
     expect(rail).toContain("autoComplete={lock.credentialKind === 'totp' ? 'one-time-code'");
