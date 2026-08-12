@@ -11,6 +11,8 @@ import {
 } from '../shared/contracts.js';
 import { writeJsonAtomic } from './json-store.js';
 
+export type AppearanceMutationGuard = (key: ElementKey, next: ElementOverride, current: ElementOverride) => Promise<void>;
+
 const EMPTY: AppearanceDocument = { schemaVersion: 1, elements: {} };
 const MAX_ISSUES = 10;
 const MAX_ISSUE_LENGTH = 160;
@@ -23,6 +25,7 @@ export class AppearanceService {
   private readonly filePath = path.join(app.getPath('userData'), 'appearance.v1.json');
   private readonly invalidPath = path.join(app.getPath('userData'), 'appearance.v1.invalid.json');
   private quarantined = false;
+  constructor(private readonly mutationGuard?: AppearanceMutationGuard) {}
 
   async load(): Promise<AppearanceDocument> {
     let raw: string;
@@ -51,6 +54,7 @@ export class AppearanceService {
     const elements: AppearanceElements = { ...current.elements };
     if (Object.keys(value).length === 0) delete elements[elementKey];
     else elements[elementKey] = value;
+    await this.mutationGuard?.(elementKey, elements[elementKey] ?? {}, current.elements[elementKey] ?? {});
     return this.persist(elements);
   }
 
@@ -59,10 +63,13 @@ export class AppearanceService {
     const current = await this.load();
     const elements: AppearanceElements = { ...current.elements };
     delete elements[elementKey];
+    await this.mutationGuard?.(elementKey, {}, current.elements[elementKey] ?? {});
     return this.persist(elements);
   }
 
   async resetAll(): Promise<AppearanceDocument> {
+    const current = await this.load();
+    for (const key of Object.keys(current.elements) as ElementKey[]) await this.mutationGuard?.(key, {}, current.elements[key] ?? {});
     return this.persist({});
   }
 
@@ -96,6 +103,12 @@ export class AppearanceService {
       });
       return { ok: false, message: 'Appearance file does not match the supported appearance format.', issues };
     }
+    const current = await this.load();
+    const keys = new Set<ElementKey>([
+      ...(Object.keys(current.elements) as ElementKey[]),
+      ...(Object.keys(parsed.data.elements) as ElementKey[]),
+    ]);
+    for (const key of keys) await this.mutationGuard?.(key, parsed.data.elements[key] ?? {}, current.elements[key] ?? {});
     const document = await this.persist(parsed.data.elements);
     return { ok: true, document, applied: Object.keys(document.elements).length };
   }

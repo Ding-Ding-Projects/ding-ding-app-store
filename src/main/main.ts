@@ -210,7 +210,7 @@ void app.whenReady().then(async () => {
   const updates = new UpdateService(() => mainWindow);
   const managedUpdates = new ManagedUpdateService(catalog, installed, history, () => mainWindow);
   const workspace = new WorkspaceService();
-  const appearance = new AppearanceService();
+  const appearance = new AppearanceService((key, next, current) => lockSupport.assertAppearanceMutation(key, next, current));
   const schedule = new ScheduleService();
   const externalScheduledSettings = new ExternalScheduledSettingsService({ tokenStore: new HomeAssistantVault() });
   const dimSum = new DimSumService();
@@ -381,12 +381,12 @@ void app.whenReady().then(async () => {
   ipcMain.handle('workspace:reset', () => stateMutationQueue.run(() => workspace.reset()));
   ipcMain.handle('workspace:export', () => workspace.export());
   ipcMain.handle('workspace:import', (_event, document: string) => stateMutationQueue.run(() => workspace.import(document)));
-  ipcMain.handle('appearance:load', () => stateMutationQueue.run(() => appearance.load()));
-  ipcMain.handle('appearance:set-element', (_event, key: ElementKey, override: ElementOverride) => stateMutationQueue.run(() => appearance.setElement(key, override)));
-  ipcMain.handle('appearance:reset-element', (_event, key: ElementKey) => stateMutationQueue.run(() => appearance.resetElement(key)));
-  ipcMain.handle('appearance:reset-all', () => stateMutationQueue.run(() => appearance.resetAll()));
-  ipcMain.handle('appearance:export', () => stateMutationQueue.run(() => appearance.export()));
-  ipcMain.handle('appearance:import', (_event, payload: string) => stateMutationQueue.run(() => appearance.import(payload)));
+  ipcMain.handle('appearance:load', (event) => event.sender === mainWindow?.webContents ? stateMutationQueue.run(() => appearance.load()) : Promise.reject(new Error('Blocked appearance request from an unknown renderer.')));
+  ipcMain.handle('appearance:set-element', (event, key: ElementKey, override: ElementOverride) => event.sender === mainWindow?.webContents ? stateMutationQueue.run(() => appearance.setElement(key, override)) : Promise.reject(new Error('Blocked appearance request from an unknown renderer.')));
+  ipcMain.handle('appearance:reset-element', (event, key: ElementKey) => event.sender === mainWindow?.webContents ? stateMutationQueue.run(() => appearance.resetElement(key)) : Promise.reject(new Error('Blocked appearance request from an unknown renderer.')));
+  ipcMain.handle('appearance:reset-all', (event) => event.sender === mainWindow?.webContents ? stateMutationQueue.run(() => appearance.resetAll()) : Promise.reject(new Error('Blocked appearance request from an unknown renderer.')));
+  ipcMain.handle('appearance:export', (event) => event.sender === mainWindow?.webContents ? stateMutationQueue.run(() => appearance.export()) : Promise.reject(new Error('Blocked appearance request from an unknown renderer.')));
+  ipcMain.handle('appearance:import', (event, payload: string) => event.sender === mainWindow?.webContents ? stateMutationQueue.run(() => appearance.import(payload)) : Promise.reject(new Error('Blocked appearance request from an unknown renderer.')));
   ipcMain.handle('schedule:load', () => stateMutationQueue.run(() => scheduler.reloadFromDisk()));
   ipcMain.handle('schedule:save', (_event, config: unknown) => stateMutationQueue.run(() => scheduler.save(config)));
   ipcMain.handle('schedule:run-now', (_event, task: unknown) => scheduler.runNow(scheduleTaskSchema.parse(task)));

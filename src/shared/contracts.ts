@@ -472,13 +472,14 @@ export interface SchoolModeMutationResult {
  * The credential verifier stays in the main process; the renderer receives
  * only this projection and never receives a password, salt, or verifier.
  */
-export type LockTargetKind = 'tab' | 'group';
+export type LockTargetKind = 'tab' | 'group' | 'appearance-property';
 export interface LockTarget {
   targetKind: LockTargetKind;
   targetId: string;
 }
 export interface LockRecord extends LockTarget {
-  credentialKind: 'password';
+  /** The credential method is metadata only; the credential itself never crosses this boundary. */
+  credentialKind: 'password' | 'totp';
   locked: boolean;
   createdAt: string;
   updatedAt: string;
@@ -491,8 +492,12 @@ export interface LockState {
   recoveryPath: string;
 }
 export interface LockSetRequest extends LockTarget {
+  /** Legacy callers may omit this and keep the password path. */
+  credentialKind?: 'password' | 'totp';
   credential: string;
   currentCredential?: string;
+  /** Required only for a new TOTP lock: one current code confirms pairing. */
+  confirmationCode?: string;
 }
 export interface LockCredentialRequest extends LockTarget {
   credential: string;
@@ -501,7 +506,7 @@ export interface LockMutationResult {
   ok: boolean;
   state: LockState;
   message: string;
-  reason?: 'credential-store-unavailable' | 'credential-store-read-failed' | 'credential-mismatch' | 'not-found' | 'invalid';
+  reason?: 'credential-store-unavailable' | 'credential-store-read-failed' | 'credential-mismatch' | 'invalid-otp' | 'rate-limited' | 'not-found' | 'appearance-locked' | 'invalid';
 }
 
 export type SupportTicketCategory = 'unlock' | 'lock' | 'other';
