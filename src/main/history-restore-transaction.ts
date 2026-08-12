@@ -36,7 +36,11 @@ export interface RestoreTransactionParticipant {
 }
 
 function assertParticipantAvailable(participant: RestoreTransactionParticipant): void {
-  if (!participant.restoreAvailable) return;
+  if (!participant.restoreAvailable) {
+    const unsupported = new Error('Protected authenticator restore is unavailable because atomic no-follow vault capability was not provided.') as NodeJS.ErrnoException;
+    unsupported.code = 'EUNSUPPORTED';
+    throw unsupported;
+  }
   try {
     if (participant.restoreAvailable() === true) return;
   } catch { /* fail closed below */ }
