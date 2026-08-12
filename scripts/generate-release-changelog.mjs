@@ -299,6 +299,7 @@ export function renderGeneratedModule(manifest) {
 
 export function renderGeneratedSiteModule(manifest) {
   validateManifest(manifest);
+  if (manifest.entries.some((entry) => !/^v\d+\.\d+\.\d+(?:-\d+)+$/.test(entry.version))) throw new Error('The site release manifest contains a tag outside the static-site version contract.');
   const siteManifest = {
     schemaVersion: manifest.schemaVersion,
     repository: manifest.repository,
