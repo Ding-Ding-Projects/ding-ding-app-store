@@ -581,6 +581,16 @@ export interface SupportTicketMutationResult {
   message: string;
   reason?: 'invalid' | 'storage-failed' | 'not-found';
 }
+export interface SupportTicketBulkAdvanceRequest { ticketIds: string[]; }
+export interface SupportTicketBulkAdvanceResult {
+  ok: boolean;
+  state: SupportState;
+  message: string;
+  committed: string[];
+  skipped: string[];
+  uncertain: string[];
+  reason?: 'invalid' | 'storage-failed' | 'busy';
+}
 export interface SupportOpenRecoveryResult {
   ok: boolean;
   path: string;
@@ -1661,6 +1671,7 @@ export interface DingDingStoreApi {
     load(): Promise<SupportState>;
     create(request: SupportTicketCreateRequest): Promise<SupportTicketMutationResult>;
     advance(ticketId: string): Promise<SupportTicketMutationResult>;
+    bulkAdvance(request: SupportTicketBulkAdvanceRequest): Promise<SupportTicketBulkAdvanceResult>;
     openRecoveryFolder(): Promise<SupportOpenRecoveryResult>;
   };
   history: {

@@ -16,6 +16,8 @@ import type {
   SupportState,
   SupportTicket,
   SupportTicketCreateRequest,
+  SupportTicketBulkAdvanceRequest,
+  SupportTicketBulkAdvanceResult,
   SupportTicketMutationResult,
   SupportTicketStatus,
 } from '../shared/contracts.js';
@@ -78,6 +80,7 @@ const supportTicketSchema = z.strictObject({
 });
 const supportFileSchema = z.strictObject({ schemaVersion: z.literal(1), tickets: z.array(supportTicketSchema).max(MAX_TICKETS) });
 const supportCreateSchema = z.strictObject({ category: z.enum(['unlock', 'lock', 'other']), description: z.string().trim().min(1).max(MAX_DESCRIPTION), severity: z.enum(['low', 'normal', 'high']) });
+const supportBulkAdvanceSchema = z.strictObject({ ticketIds: z.array(z.string().uuid()).min(1).max(MAX_TICKETS) }).superRefine((value, context) => { if (new Set(value.ticketIds).size !== value.ticketIds.length) context.addIssue({ code: 'custom', message: 'Ticket identifiers must be unique.' }); });
 
 type StoredLock = z.infer<typeof lockRecordSchema>;
 type VaultEntry = z.infer<typeof passwordVaultEntrySchema> | z.infer<typeof totpVaultEntrySchema>;
@@ -109,6 +112,7 @@ export class LockSupportService {
   private vaultReadFailed = false;
   private locksReadFailed = false;
   private readonly attempts = new Map<string, { count: number; windowStartedAt: number }>();
+  private supportMutation: Promise<void> = Promise.resolve();
 
   constructor(private readonly history?: Pick<HistoryService, 'record'>) {}
 
@@ -227,51 +231,72 @@ export class LockSupportService {
 
   async createTicket(input: SupportTicketCreateRequest): Promise<SupportTicketMutationResult> {
     await this.ensureTicketsLoaded();
-    const parsed = supportCreateSchema.safeParse(input);
-    if (!parsed.success) return { ok: false, state: this.supportState(), message: 'Choose a category, severity, and a description up to 2,000 characters.', reason: 'invalid' };
-    const now = new Date().toISOString();
-    const ticket: SupportTicket = {
-      id: randomUUID(),
-      number: `DDAS-${new Date().getUTCFullYear()}-${randomBytes(4).toString('hex').toUpperCase()}`,
-      category: parsed.data.category,
-      description: parsed.data.description,
-      severity: parsed.data.severity,
-      status: 'created',
-      firstResponse: 'First response: the desk has read the manual once. Nothing was sent anywhere; delete the application-data folder yourself to reset a forgotten lock.',
-      createdAt: now,
-      updatedAt: now,
-    };
-    const previousTickets = this.tickets;
-    try {
-      const nextTickets = [...this.tickets, ticket].slice(-MAX_TICKETS);
-      this.tickets = nextTickets;
-      await writeJsonAtomic(this.ticketPath, { schemaVersion: 1, tickets: this.tickets });
-      await this.recordHistory(`Support ticket ${ticket.number} created locally.`);
-      return { ok: true, state: this.supportState(), message: `${ticket.number} was created on this device. No network request was made.` };
-    } catch {
-      this.tickets = previousTickets;
-      return { ok: false, state: this.supportState(), message: 'The local ticket could not be saved. Nothing was sent anywhere.', reason: 'storage-failed' };
-    }
+    return this.enqueueSupportMutation(async () => {
+      const parsed = supportCreateSchema.safeParse(input);
+      if (!parsed.success) return { ok: false, state: this.supportState(), message: 'Choose a category, severity, and a description up to 2,000 characters.', reason: 'invalid' };
+      const now = new Date().toISOString();
+      const ticket: SupportTicket = { id: randomUUID(), number: `DDAS-${new Date().getUTCFullYear()}-${randomBytes(4).toString('hex').toUpperCase()}`, category: parsed.data.category, description: parsed.data.description, severity: parsed.data.severity, status: 'created', firstResponse: 'First response: the desk has read the manual once. Nothing was sent anywhere; delete the application-data folder yourself to reset a forgotten lock.', createdAt: now, updatedAt: now };
+      const previousTickets = this.tickets;
+      try { this.tickets = [...this.tickets, ticket].slice(-MAX_TICKETS); await writeJsonAtomic(this.ticketPath, { schemaVersion: 1, tickets: this.tickets }); await this.recordHistory(`Support ticket ${ticket.number} created locally.`); return { ok: true, state: this.supportState(), message: `${ticket.number} was created on this device. No network request was made.` }; }
+      catch { this.tickets = previousTickets; return { ok: false, state: this.supportState(), message: 'The local ticket could not be saved. Nothing was sent anywhere.', reason: 'storage-failed' }; }
+    });
   }
 
   async advanceTicket(ticketId: string): Promise<SupportTicketMutationResult> {
     await this.ensureTicketsLoaded();
-    const index = this.tickets.findIndex((ticket) => ticket.id === ticketId);
-    if (index < 0) return { ok: false, state: this.supportState(), message: 'That local ticket no longer exists.', reason: 'not-found' };
-    const current = this.tickets[index];
-    const nextStatus: SupportTicketStatus = current.status === 'created' ? 'reviewed' : current.status === 'reviewed' ? 'resolved' : 'resolved';
-    if (nextStatus === current.status) return { ok: true, state: this.supportState(), message: `${current.number} is already marked resolved.` };
-    const next = { ...current, status: nextStatus, updatedAt: new Date().toISOString() };
-    const previousTickets = this.tickets;
-    this.tickets = this.tickets.map((ticket) => ticket.id === ticketId ? next : ticket);
-    try {
-      await writeJsonAtomic(this.ticketPath, { schemaVersion: 1, tickets: this.tickets });
-      await this.recordHistory(`Support ticket ${current.number} advanced to ${nextStatus} locally.`);
-      return { ok: true, state: this.supportState(), message: `${current.number} is now ${nextStatus}.` };
-    } catch {
-      this.tickets = previousTickets;
-      return { ok: false, state: this.supportState(), message: 'The local ticket status could not be saved.', reason: 'storage-failed' };
-    }
+    return this.enqueueSupportMutation(async () => {
+      const index = this.tickets.findIndex((ticket) => ticket.id === ticketId);
+      if (index < 0) return { ok: false, state: this.supportState(), message: 'That local ticket no longer exists.', reason: 'not-found' };
+      const current = this.tickets[index];
+      const nextStatus: SupportTicketStatus = current.status === 'created' ? 'reviewed' : current.status === 'reviewed' ? 'resolved' : 'resolved';
+      if (nextStatus === current.status) return { ok: true, state: this.supportState(), message: `${current.number} is already marked resolved.` };
+      const previousTickets = this.tickets;
+      this.tickets = this.tickets.map((ticket) => ticket.id === ticketId ? { ...ticket, status: nextStatus, updatedAt: new Date().toISOString() } : ticket);
+      try { await writeJsonAtomic(this.ticketPath, { schemaVersion: 1, tickets: this.tickets }); await this.recordHistory(`Support ticket ${current.number} advanced to ${nextStatus} locally.`); return { ok: true, state: this.supportState(), message: `${current.number} is now ${nextStatus}.` }; }
+      catch { this.tickets = previousTickets; return { ok: false, state: this.supportState(), message: 'The local ticket status could not be saved.', reason: 'storage-failed' }; }
+    });
+  }
+
+  async bulkAdvanceTickets(input: SupportTicketBulkAdvanceRequest): Promise<SupportTicketBulkAdvanceResult> {
+    await this.ensureTicketsLoaded();
+    const parsed = supportBulkAdvanceSchema.safeParse(input);
+    const empty = { committed: [], skipped: [], uncertain: [] };
+    if (!parsed.success) return { ok: false, state: this.supportState(), message: 'Select one or more valid local tickets without duplicates.', ...empty, reason: 'invalid' };
+    return this.enqueueSupportMutation(async () => {
+      const requested = parsed.data.ticketIds;
+      const committed: string[] = [];
+      const skipped: string[] = [];
+      const uncertain: string[] = [];
+      const previousTickets = this.tickets;
+      const now = new Date().toISOString();
+      const requestedSet = new Set(requested);
+      const next = this.tickets.map((ticket) => {
+        if (!requestedSet.has(ticket.id) || ticket.status === 'resolved') { if (requestedSet.has(ticket.id)) skipped.push(ticket.id); return ticket; }
+        const status: SupportTicketStatus = ticket.status === 'created' ? 'reviewed' : 'resolved';
+        committed.push(ticket.id);
+        return { ...ticket, status, updatedAt: now };
+      });
+      const missing = requested.filter((id) => !this.tickets.some((ticket) => ticket.id === id));
+      skipped.push(...missing);
+      this.tickets = next;
+      try {
+        await writeJsonAtomic(this.ticketPath, { schemaVersion: 1, tickets: next });
+        await this.recordHistory(`Advanced ${committed.length} local Support Tickets in one atomic batch; skipped ${skipped.length}.`);
+        return { ok: true, state: this.supportState(), message: `Advanced ${committed.length} local tickets; skipped ${skipped.length}.`, committed, skipped, uncertain };
+      } catch {
+        this.tickets = previousTickets;
+        uncertain.push(...committed);
+        return { ok: false, state: this.supportState(), message: 'The local ticket batch could not be saved; no status change was committed.', committed: [], skipped, uncertain, reason: 'storage-failed' };
+      }
+    });
+  }
+
+  private async enqueueSupportMutation<T>(work: () => Promise<T>): Promise<T> {
+    const previous = this.supportMutation;
+    let release!: () => void;
+    this.supportMutation = new Promise<void>((resolve) => { release = resolve; });
+    await previous;
+    try { return await work(); } finally { release(); }
   }
 
   async openRecoveryFolder(): Promise<SupportOpenRecoveryResult> {
