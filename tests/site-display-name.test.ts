@@ -17,7 +17,7 @@ describe('static site display name', () => {
     expect(saveDisplayName('My docs', local)).toEqual({ ok: true, value: 'My docs' });
     expect(local.getItem(SITE_DISPLAY_NAME_STORAGE_KEY)).toBe('My docs');
     expect(loadDisplayName(local)).toBe('My docs');
-    expect(resetDisplayName(local)).toBe(DEFAULT_DISPLAY_NAME);
+    expect(resetDisplayName(local)).toEqual({ ok: true, value: DEFAULT_DISPLAY_NAME });
     expect(loadDisplayName(local)).toBe(DEFAULT_DISPLAY_NAME);
   });
   it('keeps the previous label on invalid or unavailable writes and keeps restricted presentation honest', () => {
@@ -27,6 +27,8 @@ describe('static site display name', () => {
     expect(displayNameForPresentation('My docs', true)).toBe('My docs');
     expect(displayNameForPresentation(null, true)).toBe(DEFAULT_DISPLAY_NAME);
     expect(saveDisplayName('Another', { getItem: local.getItem, setItem: () => { throw new Error('blocked'); }, removeItem: local.removeItem })).toMatchObject({ ok: false, value: 'My docs' });
+    const blockedReset = { getItem: local.getItem, setItem: local.setItem, removeItem: () => { throw new Error('blocked'); } };
+    expect(resetDisplayName(blockedReset)).toMatchObject({ ok: false, value: 'My docs' });
   });
   it('wires the visible bounded control, title, brand, home, status, palette, and no URL mutation', async () => {
     const html = await readFile(new URL('../site/index.html', import.meta.url), 'utf8');
