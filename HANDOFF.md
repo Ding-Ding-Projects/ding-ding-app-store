@@ -1,5 +1,12 @@
 # Handoff
 
+## 2026-08-12 Static-site schedule accessibility, localization, and discovery
+
+- The documentation site's schedule help now owns the stable `schedule-help` id, every generated control references real description targets, and each weekday field also points to its own unique weekday-convention help.
+- Schedule tab, status/help, reset/add/save, local-only source boundary, and empty-state copy now render in English, Hong Kong Cantonese, or bilingual mode without dropping the local-timezone/daylight-saving explanation.
+- Every generated rule control (label, priority, enabled, date/time bounds, weekdays, override field/value, and delete) has a unique settings-search row and command-palette destination that clears a stale settings filter, opens Schedule, scrolls to the control, and focuses that exact element.
+- Focused schedule tests render two rules and prove unique ids plus fully resolved descriptions; source contracts cover localization and exact discovery routing. No browser runtime, capture, deployment, or release proof is claimed by this bounded correction.
+
 ## 2026-08-12 static-site personal vocabulary boundary
 
 - Added `site/assets/personal-vocabulary.mjs` with fatal UTF-8 decoding, schema-v1 strict fields, duplicate-key/unknown-field/unsafe-key rejection, iterative depth and byte/entry/string/control bounds, localStorage-only validated caching, replacement, clear, corrupt-cache fail-closed behavior, and technical-token preservation. No network, source path, metadata, private default, or private mapping is included.
