@@ -48,6 +48,11 @@ export function validateChangelogManifest(manifest) {
 export const SITE_CHANGELOG_MANIFEST = validateChangelogManifest(generatedManifest ?? { schemaVersion: CHANGELOG_SCHEMA_VERSION, repository: CHANGELOG_REPOSITORY, generatedAt: fallbackEntries[0].releasedAt, entries: fallbackEntries });
 export const SITE_CHANGELOG_ENTRIES = SITE_CHANGELOG_MANIFEST.entries;
 
+export function changelogCommitUrl(validatedSha) {
+  if (typeof validatedSha !== 'string' || !SHA.test(validatedSha)) throw new Error('A full commit SHA is required.');
+  return `https://github.com/${CHANGELOG_REPOSITORY}/commit/${validatedSha}`;
+}
+
 export function changelogMarkdown(entries = SITE_CHANGELOG_ENTRIES, displayName = 'Ding Ding App Store') {
   if (!Array.isArray(entries)) throw new Error('Changelog export entries must be an array.');
   for (const entry of entries) validateChangelogManifest({ schemaVersion: 1, repository: CHANGELOG_REPOSITORY, generatedAt: entry.releasedAt, entries: [entry] });

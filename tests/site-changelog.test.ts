@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { SITE_CHANGELOG_MANIFEST, SITE_CHANGELOG_ENTRIES, changelogMarkdown, validateChangelogManifest } from '../site/assets/changelog.mjs';
+import { SITE_CHANGELOG_MANIFEST, SITE_CHANGELOG_ENTRIES, changelogCommitUrl, changelogMarkdown, validateChangelogManifest } from '../site/assets/changelog.mjs';
 
 describe('static site changelog boundary', () => {
   it('keeps the checked-in manifest local, published, bounded, and newest-first', () => {
     expect(validateChangelogManifest(SITE_CHANGELOG_MANIFEST)).toStrictEqual(SITE_CHANGELOG_MANIFEST);
     expect(SITE_CHANGELOG_ENTRIES.every((entry) => entry.commit.length === 40 && entry.releaseUrl.startsWith('https://github.com/Ding-Ding-Projects/ding-ding-app-store/releases/tag/'))).toBe(true);
+    expect(changelogCommitUrl(SITE_CHANGELOG_ENTRIES[0].commit)).toBe(`https://github.com/Ding-Ding-Projects/ding-ding-app-store/commit/${SITE_CHANGELOG_ENTRIES[0].commit}`);
+    expect(() => changelogCommitUrl('b4a94f3')).toThrow();
   });
 
   it('rejects unknown fields, inherited records, and impossible timestamps', () => {

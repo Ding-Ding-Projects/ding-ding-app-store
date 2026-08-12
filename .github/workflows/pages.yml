@@ -26,6 +26,18 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Generate and validate the complete static-site release manifest
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.ORG_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/releases?per_page=100" > release-inventory.raw.json
+          node scripts/compact-release-inventory.mjs --input release-inventory.raw.json --output release-inventory.json
+          node scripts/generate-release-changelog.mjs --fallback --inventory release-inventory.json --repository "$GITHUB_REPOSITORY" --output-ts /tmp/generated-changelog.ts --output-site site/assets/generated-changelog.mjs --output-json /tmp/release-changelog.json
+          test -s site/assets/generated-changelog.mjs
+          grep -q 'GENERATED_SITE_RELEASE_MANIFEST' site/assets/generated-changelog.mjs
       - name: Verify the GitHub-hosted runner inventory
         shell: bash
         run: |
