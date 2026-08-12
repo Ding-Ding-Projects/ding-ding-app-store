@@ -314,7 +314,7 @@ function parseAuthenticatorSecretExport(value: unknown): AuthenticatorSecretExpo
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('The authenticator secret export response was invalid.');
   const result = value as Record<string, unknown>;
   const keys = new Set(['ok', 'reason', 'filename', 'entryCount', 'message', 'messageYue']);
-  const reasons = new Set(['cancelled', 'invalid', 'restricted', 'unavailable', 'write-failed', 'too-large']);
+  const reasons = new Set(['cancelled', 'invalid', 'restricted', 'unavailable', 'write-failed', 'too-large', 'busy']);
   if (Object.keys(result).some((key) => !keys.has(key)) || typeof result.ok !== 'boolean' || (result.reason !== undefined && (typeof result.reason !== 'string' || !reasons.has(result.reason))) || (result.filename !== undefined && (typeof result.filename !== 'string' || !/^authenticator-secrets\.(json|csv)$/.test(result.filename))) || typeof result.entryCount !== 'number' || !Number.isInteger(result.entryCount) || result.entryCount < 0 || result.entryCount > AUTHENTICATOR_MAX_ENTRIES || typeof result.message !== 'string' || result.message.length > 512 || typeof result.messageYue !== 'string' || result.messageYue.length > 512 || (result.ok && (typeof result.filename !== 'string' || result.reason !== undefined))) throw new Error('The authenticator secret export response was invalid.');
   return Object.freeze({ ok: result.ok, reason: result.reason as AuthenticatorSecretExportResult['reason'], filename: result.filename as string | undefined, entryCount: result.entryCount, message: result.message, messageYue: result.messageYue });
 }
