@@ -214,7 +214,7 @@ export function installationManagementState(record: InstalledAppRecord | undefin
 }
 
 export type OperationKind = 'install' | 'build' | 'uninstall' | 'update' | 'settings';
-export type HistoryExportFormat = 'json' | 'jsonl' | 'yaml' | 'toml' | 'xml' | 'csv' | 'tsv' | 'markdown' | 'html' | 'sql' | 'typescript' | 'javascript' | 'python' | 'go' | 'rust' | 'json-schema' | 'protobuf' | 'zip';
+export type HistoryExportFormat = 'json' | 'jsonl' | 'yaml' | 'toml' | 'xml' | 'csv' | 'tsv' | 'markdown' | 'html' | 'sql' | 'typescript' | 'javascript' | 'python' | 'go' | 'rust' | 'json-schema' | 'protobuf' | 'zip' | '7z';
 
 export const HISTORY_ARCHIVE_MAX_ENTRIES = 10_000;
 export const historyArchiveRequestSchema = z.strictObject({
@@ -223,6 +223,51 @@ export const historyArchiveRequestSchema = z.strictObject({
   if (new Set(value.entryIds).size !== value.entryIds.length) context.addIssue({ code: 'custom', path: ['entryIds'], message: 'History archive entry IDs must be unique.' });
 });
 export type HistoryArchiveRequest = z.infer<typeof historyArchiveRequestSchema>;
+
+export const HISTORY_7Z_METHODS = ['LZMA2', 'LZMA', 'PPMd', 'BZip2', 'Deflate'] as const;
+export type History7zMethod = (typeof HISTORY_7Z_METHODS)[number];
+export const HISTORY_7Z_LEVELS = ['store', 'fastest', 'fast', 'normal', 'maximum', 'ultra'] as const;
+export type History7zLevel = (typeof HISTORY_7Z_LEVELS)[number];
+export const HISTORY_7Z_MIN_DICTIONARY_BYTES = 4 * 1024;
+export const HISTORY_7Z_MAX_DICTIONARY_BYTES = 8 * 1024 * 1024;
+export const HISTORY_7Z_MIN_WORD_BYTES = 8;
+export const HISTORY_7Z_MAX_WORD_BYTES = 273;
+export const HISTORY_7Z_MAX_THREADS = 16;
+export const HISTORY_7Z_MIN_SPLIT_BYTES = 1 * 1024 * 1024;
+export const HISTORY_7Z_MAX_SPLIT_BYTES = 16 * 1024 * 1024;
+export const history7zOptionsSchema = z.strictObject({
+  method: z.enum(HISTORY_7Z_METHODS),
+  level: z.enum(HISTORY_7Z_LEVELS),
+  dictionaryBytes: z.number().int().min(HISTORY_7Z_MIN_DICTIONARY_BYTES).max(HISTORY_7Z_MAX_DICTIONARY_BYTES),
+  wordBytes: z.number().int().min(HISTORY_7Z_MIN_WORD_BYTES).max(HISTORY_7Z_MAX_WORD_BYTES),
+  solid: z.boolean(),
+  threads: z.number().int().min(1).max(HISTORY_7Z_MAX_THREADS),
+  splitBytes: z.number().int().min(HISTORY_7Z_MIN_SPLIT_BYTES).max(HISTORY_7Z_MAX_SPLIT_BYTES).nullable(),
+  encryptContent: z.boolean(),
+  encryptHeaders: z.boolean(),
+}).superRefine((value, context) => {
+  if (value.encryptHeaders && !value.encryptContent) context.addIssue({ code: 'custom', path: ['encryptHeaders'], message: 'Encrypted headers require AES-256 content encryption.' });
+});
+export type History7zOptions = z.infer<typeof history7zOptionsSchema>;
+export const history7zRequestSchema = z.strictObject({
+  entryIds: z.array(z.string().uuid()).min(1).max(HISTORY_ARCHIVE_MAX_ENTRIES),
+  options: history7zOptionsSchema,
+}).superRefine((value, context) => {
+  if (new Set(value.entryIds).size !== value.entryIds.length) context.addIssue({ code: 'custom', path: ['entryIds'], message: 'History archive entry IDs must be unique.' });
+});
+export type History7zRequest = z.infer<typeof history7zRequestSchema>;
+
+export type History7zUnavailableReason = 'dependency-unavailable' | 'secret-entry-required';
+export interface History7zExportUnavailable {
+  ok: false;
+  format: '7z';
+  filename: 'ding-ding-app-store-history.7z';
+  mime: 'application/x-7z-compressed';
+  reason: History7zUnavailableReason;
+  message: string;
+  messageYue: string;
+}
+export type History7zExportResult = History7zExportUnavailable;
 
 export interface HistoryArchiveExport {
   filename: 'ding-ding-app-store-history.zip';
@@ -1680,7 +1725,8 @@ export interface DingDingStoreApi {
     protectedLockAgain(): Promise<HistoryAccessResult>;
     list(): Promise<HistoryEntry[]>;
     export(format: HistoryExportFormat): Promise<string>;
-    archive(request: HistoryArchiveRequest): Promise<HistoryArchiveExport>;
+  archive(request: HistoryArchiveRequest): Promise<HistoryArchiveExport>;
+    archive7z(request: History7zRequest): Promise<History7zExportResult>;
     revisions(): Promise<HistoryRevision[]>;
     diff(revisionId: string): Promise<string>;
     label(revisionId: string, label: string): Promise<HistoryMutationResult>;

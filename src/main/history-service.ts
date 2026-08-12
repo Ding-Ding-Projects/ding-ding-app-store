@@ -3,9 +3,10 @@ import { spawn } from 'node:child_process';
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { app } from 'electron';
-import { historyArchiveRequestSchema, type HistoryArchiveExport, type HistoryArchiveRequest, type HistoryEntry, type HistoryExportFormat, type HistoryMutationResult, type HistoryRevision, type OperationKind } from '../shared/contracts.js';
+import { history7zRequestSchema, historyArchiveRequestSchema, type History7zExportResult, type History7zRequest, type HistoryArchiveExport, type HistoryArchiveRequest, type HistoryEntry, type HistoryExportFormat, type HistoryMutationResult, type HistoryRevision, type OperationKind } from '../shared/contracts.js';
 import { serializeHistoryEntries } from '../shared/export-registry.js';
 import { createHistoryArchive } from './history-archive.js';
+import { createHistory7zUnavailable } from './history-7z.js';
 import { applyRestoreTransaction, cleanupRestoreTransaction, markRestoreTransactionRecorded, markRestoreTransactionRecording, prepareRestoreTransaction, recoverRestoreTransaction, rollbackRestoreTransaction, type RestoreTransactionManifest } from './history-restore-transaction.js';
 
 const MAX_HISTORY_BYTES = 10_000_000;
@@ -174,6 +175,7 @@ export class HistoryService {
   }
 
   async export(format: HistoryExportFormat): Promise<string> {
+    if (format === '7z') throw new Error('7z history export requires the typed archive7z request with bounded options.');
     return serializeHistoryEntries(await this.list(), format);
   }
 
@@ -189,6 +191,14 @@ export class HistoryService {
     const selected = available.filter((entry) => wanted.has(entry.id));
     if (selected.length !== wanted.size) throw new Error('One or more selected Activity records are no longer available for archive export.');
     return createHistoryArchive(selected);
+  }
+
+  async archive7z(request: History7zRequest): Promise<History7zExportResult> {
+    const parsed = history7zRequestSchema.parse(request);
+    const available = await this.list();
+    const wanted = new Set(parsed.entryIds);
+    if (available.filter((entry) => wanted.has(entry.id)).length !== wanted.size) throw new Error('One or more selected Activity records are no longer available for 7z export.');
+    return createHistory7zUnavailable(parsed);
   }
 
   /**
