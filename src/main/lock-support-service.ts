@@ -10,6 +10,7 @@ import type {
   LockSetRequest,
   LockState,
   LockTarget,
+  LockUnlockDuration,
   SupportOpenRecoveryResult,
   SupportState,
   SupportTicket,
@@ -26,6 +27,8 @@ const MAX_LOCKS = 64;
 const MAX_TICKETS = 1_000;
 const MAX_CREDENTIAL = 512;
 const MAX_DESCRIPTION = 2_000;
+const DEFAULT_UNLOCK_DURATION: LockUnlockDuration = 'session';
+const unlockDurationSchema = z.enum(['session', '15m', '60m']);
 const lockTargetSchema = z.strictObject({
   targetKind: z.enum(['tab', 'group', 'appearance-property']),
   targetId: z.string().min(1).max(128),
@@ -38,10 +41,11 @@ const lockTargetSchema = z.strictObject({
   }
 });
 const credentialSchema = z.string().min(4).max(MAX_CREDENTIAL);
-const lockSetSchema = lockTargetSchema.extend({ credentialKind: z.enum(['password', 'totp']).optional(), credential: credentialSchema, currentCredential: credentialSchema.optional(), confirmationCode: z.string().regex(/^\d{6,8}$/).optional() }).strict();
-const lockCredentialSchema = lockTargetSchema.extend({ credential: credentialSchema }).strict();
+const lockSetSchema = lockTargetSchema.extend({ credentialKind: z.enum(['password', 'totp']).optional(), credential: credentialSchema, currentCredential: credentialSchema.optional(), confirmationCode: z.string().regex(/^\d{6,8}$/).optional(), unlockDuration: unlockDurationSchema.optional() }).strict();
+const lockCredentialSchema = lockTargetSchema.extend({ credential: credentialSchema, unlockDuration: unlockDurationSchema.optional() }).strict();
 const lockRecordSchema = lockTargetSchema.extend({
   credentialKind: z.enum(['password', 'totp']).optional(),
+  unlockDuration: unlockDurationSchema.optional(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 }).strict();
@@ -84,10 +88,13 @@ export class LockSupportService {
   private readonly vaultPath = path.join(app.getPath('userData'), 'credential-vault', 'tab-locks.dpapi');
   private readonly ticketPath = path.join(app.getPath('userData'), 'support-tickets.v1.json');
   private readonly recoveryPath = path.resolve(app.getPath('userData'));
-  private readonly unlocked = new Set<string>();
+  private readonly unlocked = new Map<string, number | null>();
+  /** Per-target mutation fence prevents a slower credential read from undoing Lock again. */
+  private readonly unlockGenerations = new Map<string, number>();
   private locks: StoredLock[] = [];
   private tickets: SupportTicket[] = [];
   private locksLoaded = false;
+  private locksLoadPromise: Promise<void> | null = null;
   private ticketsLoaded = false;
   private vaultReadFailed = false;
   private locksReadFailed = false;
@@ -107,6 +114,8 @@ export class LockSupportService {
     if (!this.vaultAvailable()) return this.lockFailure('The operating-system credential vault is unavailable; this local UX lock was not created.', this.vaultReadFailed ? 'credential-store-read-failed' : 'credential-store-unavailable');
     const target = { targetKind: parsed.data.targetKind, targetId: parsed.data.targetId } as const;
     const existing = this.locks.find((record) => keyOf(record) === keyOf(target));
+    const targetKey = keyOf(target);
+    this.unlockGenerations.set(targetKey, (this.unlockGenerations.get(targetKey) ?? 0) + 1);
     const credentialKind = parsed.data.credentialKind ?? existing?.credentialKind ?? 'password';
     const vault = await this.readVault();
     if (!vault) return this.lockFailure('The operating-system credential vault could not be read; no lock change was made.', 'credential-store-read-failed');
@@ -121,7 +130,8 @@ export class LockSupportService {
       vaultEntry = { kind: 'password', ...this.makeVerifier(parsed.data.credential) };
     }
     const now = new Date().toISOString();
-    const record: StoredLock = existing ? { ...existing, credentialKind, updatedAt: now } : { ...target, credentialKind, createdAt: now, updatedAt: now };
+    const unlockDuration = parsed.data.unlockDuration ?? existing?.unlockDuration ?? DEFAULT_UNLOCK_DURATION;
+    const record: StoredLock = existing ? { ...existing, credentialKind, unlockDuration, updatedAt: now } : { ...target, credentialKind, unlockDuration, createdAt: now, updatedAt: now };
     const nextLocks = existing ? this.locks.map((candidate) => keyOf(candidate) === keyOf(target) ? record : candidate) : [...this.locks, record];
     const nextVault = { ...vault, [keyOf(target)]: vaultEntry };
     const previousLocks = this.locks;
@@ -131,7 +141,7 @@ export class LockSupportService {
       await writeJsonAtomic(this.lockPath, { schemaVersion: 1, records: nextLocks });
       await this.writeVault(nextVault);
       this.locks = nextLocks;
-      this.unlocked.delete(keyOf(target));
+      this.unlocked.delete(targetKey);
       const targetLabel = target.targetKind === 'appearance-property' ? `Appearance property ${target.targetId}` : target.targetKind === 'tab' ? 'Tab' : 'Group';
       return { ok: true, state: this.lockState(), message: `${targetLabel} lock saved. This is a local UX lock, not security or encryption.` };
     } catch {
@@ -145,12 +155,18 @@ export class LockSupportService {
     const parsed = lockCredentialSchema.safeParse(input);
     if (!parsed.success) return this.lockFailure('Unlock details are invalid.', 'invalid');
     const target = { targetKind: parsed.data.targetKind, targetId: parsed.data.targetId } as const;
-    if (!this.locks.some((record) => keyOf(record) === keyOf(target))) return this.lockFailure('That lock does not exist.', 'not-found');
+    const key = keyOf(target);
+    const generation = this.unlockGenerations.get(key) ?? 0;
+    if (!this.locks.some((record) => keyOf(record) === key)) return this.lockFailure('That lock does not exist.', 'not-found');
     if (!this.vaultAvailable()) return this.lockFailure('The operating-system credential vault is unavailable; the lock remains honest and unavailable.', this.vaultReadFailed ? 'credential-store-read-failed' : 'credential-store-unavailable');
     const vault = await this.readVault();
-    if (!vault || !this.verifyCredential(keyOf(target), parsed.data.credential, this.normalizeVaultEntry(vault[keyOf(target)]))) return this.lockFailure('The credential did not match. If it is forgotten, use Support Tickets and delete the application-data folder yourself.', this.isRateLimited(keyOf(target)) ? 'rate-limited' : 'credential-mismatch');
-    this.unlocked.add(keyOf(target));
-    return { ok: true, state: this.lockState(), message: 'Unlocked for this app session. Use Lock again when you want the UX speed bump back.' };
+    if (!vault || !this.verifyCredential(key, parsed.data.credential, this.normalizeVaultEntry(vault[key]))) return this.lockFailure('The credential did not match. If it is forgotten, use Support Tickets and delete the application-data folder yourself.', this.isRateLimited(key) ? 'rate-limited' : 'credential-mismatch');
+    if ((this.unlockGenerations.get(key) ?? 0) !== generation) return this.lockFailure('The lock changed while the credential was being checked; unlock was discarded.', 'invalid');
+    const record = this.locks.find((candidate) => keyOf(candidate) === keyOf(target));
+    const duration = parsed.data.unlockDuration ?? record?.unlockDuration ?? DEFAULT_UNLOCK_DURATION;
+    const unlockedUntil = duration === 'session' ? null : Date.now() + (duration === '15m' ? 15 : 60) * 60_000;
+    this.unlocked.set(key, unlockedUntil);
+    return { ok: true, state: this.lockState(), message: duration === 'session' ? 'Unlocked until this app closes. Use Lock again when you want the UX speed bump back.' : `Unlocked for ${duration === '15m' ? '15 minutes' : '60 minutes'}. It will lock again automatically.` };
   }
 
   async lockAgain(input: LockTarget): Promise<LockMutationResult> {
@@ -159,6 +175,7 @@ export class LockSupportService {
     if (!parsed.success) return this.lockFailure('Lock target is invalid.', 'invalid');
     const key = keyOf(parsed.data);
     if (!this.locks.some((record) => keyOf(record) === key)) return this.lockFailure('That lock does not exist.', 'not-found');
+    this.unlockGenerations.set(key, (this.unlockGenerations.get(key) ?? 0) + 1);
     this.unlocked.delete(key);
     return { ok: true, state: this.lockState(), message: 'Lock restored for this app session.' };
   }
@@ -170,6 +187,7 @@ export class LockSupportService {
     const target = { targetKind: parsed.data.targetKind, targetId: parsed.data.targetId } as const;
     const key = keyOf(target);
     if (!this.locks.some((record) => keyOf(record) === key)) return this.lockFailure('That lock does not exist.', 'not-found');
+    this.unlockGenerations.set(key, (this.unlockGenerations.get(key) ?? 0) + 1);
     if (!this.vaultAvailable()) return this.lockFailure('The operating-system credential vault is unavailable; the lock was not removed.', this.vaultReadFailed ? 'credential-store-read-failed' : 'credential-store-unavailable');
     const vault = await this.readVault();
     if (!vault || !this.verifyCredential(key, parsed.data.credential, this.normalizeVaultEntry(vault[key]))) return this.lockFailure('The credential did not match; the lock was not removed.', 'credential-mismatch');
@@ -252,12 +270,15 @@ export class LockSupportService {
 
   private async ensureLocksLoaded(): Promise<void> {
     if (this.locksLoaded) return;
-    this.locksLoaded = true;
-    try {
-      const parsed = lockFileSchema.safeParse(JSON.parse(await readFile(this.lockPath, 'utf8')) as unknown);
-      if (!parsed.success) { this.locksReadFailed = true; this.locks = []; }
-      else this.locks = parsed.data.records;
-    } catch { this.locksReadFailed = true; this.locks = []; }
+    if (!this.locksLoadPromise) this.locksLoadPromise = (async () => {
+      try {
+        const parsed = lockFileSchema.safeParse(JSON.parse(await readFile(this.lockPath, 'utf8')) as unknown);
+        if (!parsed.success) { this.locksReadFailed = true; this.locks = []; }
+        else this.locks = parsed.data.records.map((record) => ({ ...record, credentialKind: record.credentialKind ?? 'password', unlockDuration: record.unlockDuration ?? DEFAULT_UNLOCK_DURATION }));
+      } catch { this.locksReadFailed = true; this.locks = []; }
+      finally { this.locksLoaded = true; }
+    })();
+    await this.locksLoadPromise;
   }
 
   private async ensureTicketsLoaded(): Promise<void> {
@@ -340,7 +361,14 @@ export class LockSupportService {
     }
   }
 
-  isLocked(target: LockTarget): boolean { return this.locks.some((record) => keyOf(record) === keyOf(target) && !this.unlocked.has(keyOf(target))); }
+  isLocked(target: LockTarget): boolean {
+    const key = keyOf(target);
+    if (!this.locks.some((record) => keyOf(record) === key)) return false;
+    const expiry = this.unlocked.get(key);
+    if (expiry === undefined) return true;
+    if (expiry !== null && expiry <= Date.now()) { this.unlocked.delete(key); return true; }
+    return false;
+  }
 
   private matches(secret: string, entry: VaultEntry | undefined): boolean {
     if (!entry || entry.kind === 'totp') return false;
@@ -357,14 +385,21 @@ export class LockSupportService {
       schemaVersion: 1,
       vaultAvailable,
       unavailableReason: vaultAvailable ? null : (this.vaultReadFailed || this.locksReadFailed) ? 'credential-store-read-failed' : 'credential-store-unavailable',
-      records: this.locks.map((record) => ({ ...record, credentialKind: record.credentialKind ?? 'password', locked: !this.unlocked.has(keyOf(record)) })),
+      records: this.locks.map((record) => {
+        const key = keyOf(record);
+        const expiry = this.unlocked.get(key);
+        const expired = expiry !== undefined && expiry !== null && expiry <= Date.now();
+        if (expired) this.unlocked.delete(key);
+        const currentExpiry = expired ? undefined : expiry;
+        return { ...record, credentialKind: record.credentialKind ?? 'password', unlockDuration: record.unlockDuration ?? DEFAULT_UNLOCK_DURATION, locked: currentExpiry === undefined, unlockedUntil: currentExpiry === undefined || currentExpiry === null ? null : new Date(currentExpiry).toISOString() };
+      }),
       recoveryPath: this.recoveryPath,
     };
   }
 
   async hasLockedAppearanceProperties(): Promise<boolean> {
     await this.ensureLocksLoaded();
-    return this.locks.some((record) => record.targetKind === 'appearance-property' && !this.unlocked.has(keyOf(record)));
+    return this.locks.some((record) => record.targetKind === 'appearance-property' && this.isLocked(record));
   }
 
   private lockFailure(message: string, reason: LockMutationResult['reason']): LockMutationResult {

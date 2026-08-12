@@ -491,6 +491,8 @@ export interface SchoolModeMutationResult {
  * only this projection and never receives a password, salt, or verifier.
  */
 export type LockTargetKind = 'tab' | 'group' | 'appearance-property';
+/** How long an individual UX lock stays unlocked after a credential match. */
+export type LockUnlockDuration = 'session' | '15m' | '60m';
 export interface LockTarget {
   targetKind: LockTargetKind;
   targetId: string;
@@ -498,7 +500,10 @@ export interface LockTarget {
 export interface LockRecord extends LockTarget {
   /** The credential method is metadata only; the credential itself never crosses this boundary. */
   credentialKind: 'password' | 'totp';
+  unlockDuration: LockUnlockDuration;
   locked: boolean;
+  /** Null means unlocked until this app process closes; timed values are ISO timestamps. */
+  unlockedUntil: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -516,9 +521,13 @@ export interface LockSetRequest extends LockTarget {
   currentCredential?: string;
   /** Required only for a new TOTP lock: one current code confirms pairing. */
   confirmationCode?: string;
+  /** Stored as the default lifetime and used for the next unlock. */
+  unlockDuration?: LockUnlockDuration;
 }
 export interface LockCredentialRequest extends LockTarget {
   credential: string;
+  /** Optional one-off lifetime override; the configured lock lifetime is used when omitted. */
+  unlockDuration?: LockUnlockDuration;
 }
 export interface LockMutationResult {
   ok: boolean;

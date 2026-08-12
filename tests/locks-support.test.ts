@@ -1,13 +1,23 @@
 import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
+import { parseLockState } from '../src/preload/lock-parser.js';
 
 const root = new URL('../', import.meta.url);
 const read = (relative: string) => readFile(new URL(relative, root), 'utf8');
 
 describe('tab/group UX locks and local Support Tickets', () => {
+  it('rejects contradictory unlock projections at the preload boundary', () => {
+    const base = { schemaVersion: 1, vaultAvailable: true, unavailableReason: null, recoveryPath: 'C:\\app-data', records: [{ targetKind: 'tab', targetId: 'catalog', credentialKind: 'password', unlockDuration: '15m', locked: false, unlockedUntil: null, createdAt: '2026-08-12T00:00:00.000Z', updatedAt: '2026-08-12T00:00:00.000Z' }] };
+    expect(() => parseLockState(base)).toThrow();
+    expect(() => parseLockState({ ...base, records: [{ ...base.records[0], locked: true, unlockedUntil: '2026-08-12T00:15:00.000Z' }] })).toThrow();
+    expect(parseLockState({ ...base, records: [{ ...base.records[0], locked: false, unlockedUntil: '2026-08-12T00:15:00.000Z' }] }).records[0].unlockDuration).toBe('15m');
+  });
   it('publishes typed password, TOTP, and appearance-property lock contracts', async () => {
     const contracts = await read('src/shared/contracts.ts');
     expect(contracts).toContain("export type LockTargetKind = 'tab' | 'group' | 'appearance-property';");
+    expect(contracts).toContain("export type LockUnlockDuration = 'session' | '15m' | '60m';");
+    expect(contracts).toContain('unlockDuration: LockUnlockDuration;');
+    expect(contracts).toContain('unlockedUntil: string | null;');
     expect(contracts).toContain("credentialKind: 'password' | 'totp';");
     expect(contracts).toContain('confirmationCode?: string;');
     expect(contracts).toContain('vaultAvailable: boolean;');
@@ -88,6 +98,12 @@ describe('tab/group UX locks and local Support Tickets', () => {
     const appearance = await read('src/main/appearance-service.ts');
     expect(service).toContain("generateTotp({ secret, algorithm: 'sha1', digits: 6, periodSeconds: 30 })");
     expect(service).toContain('private readonly attempts');
+    expect(service).toContain("const unlockDurationSchema = z.enum(['session', '15m', '60m']);");
+    expect(service).toContain("duration === 'session' ? null : Date.now()");
+    expect(service).toContain('automatically');
+    expect(service).toContain('const expired');
+    expect(service).toContain('unlockGenerations');
+    expect(service).toContain('unlock was discarded');
     expect(service).toContain('async assertAppearanceMutation');
     expect(appearance).toContain('mutationGuard?.(elementKey');
     expect(appearance).toContain('await this.mutationGuard?.(key, {}, current.elements[key] ?? {})');
