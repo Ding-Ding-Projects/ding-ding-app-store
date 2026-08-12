@@ -90,6 +90,7 @@ export class LockSupportService {
   private locksLoaded = false;
   private ticketsLoaded = false;
   private vaultReadFailed = false;
+  private locksReadFailed = false;
   private readonly attempts = new Map<string, { count: number; windowStartedAt: number }>();
 
   constructor(private readonly history?: Pick<HistoryService, 'record'>) {}
@@ -131,7 +132,8 @@ export class LockSupportService {
       await this.writeVault(nextVault);
       this.locks = nextLocks;
       this.unlocked.delete(keyOf(target));
-      return { ok: true, state: this.lockState(), message: `${target.targetKind === 'tab' ? 'Tab' : 'Group'} lock saved. This is a local UX lock, not security or encryption.` };
+      const targetLabel = target.targetKind === 'appearance-property' ? `Appearance property ${target.targetId}` : target.targetKind === 'tab' ? 'Tab' : 'Group';
+      return { ok: true, state: this.lockState(), message: `${targetLabel} lock saved. This is a local UX lock, not security or encryption.` };
     } catch {
       try { await writeJsonAtomic(this.lockPath, { schemaVersion: 1, records: previousLocks }); } catch { /* preserve the honest failure state */ }
       return this.lockFailure('The lock could not be saved; no credential was exposed and the previous state remains.', 'credential-store-read-failed');
@@ -253,8 +255,9 @@ export class LockSupportService {
     this.locksLoaded = true;
     try {
       const parsed = lockFileSchema.safeParse(JSON.parse(await readFile(this.lockPath, 'utf8')) as unknown);
-      this.locks = parsed.success ? parsed.data.records : [];
-    } catch { this.locks = []; }
+      if (!parsed.success) { this.locksReadFailed = true; this.locks = []; }
+      else this.locks = parsed.data.records;
+    } catch { this.locksReadFailed = true; this.locks = []; }
   }
 
   private async ensureTicketsLoaded(): Promise<void> {
@@ -267,7 +270,7 @@ export class LockSupportService {
   }
 
   private vaultAvailable(): boolean {
-    try { return safeStorage.isEncryptionAvailable() && !this.vaultReadFailed; } catch { return false; }
+    try { return safeStorage.isEncryptionAvailable() && !this.vaultReadFailed && !this.locksReadFailed; } catch { return false; }
   }
 
   private async readVault(): Promise<Record<string, VaultEntry> | null> {
@@ -353,10 +356,15 @@ export class LockSupportService {
     return {
       schemaVersion: 1,
       vaultAvailable,
-      unavailableReason: vaultAvailable ? null : this.vaultReadFailed ? 'credential-store-read-failed' : 'credential-store-unavailable',
+      unavailableReason: vaultAvailable ? null : (this.vaultReadFailed || this.locksReadFailed) ? 'credential-store-read-failed' : 'credential-store-unavailable',
       records: this.locks.map((record) => ({ ...record, credentialKind: record.credentialKind ?? 'password', locked: !this.unlocked.has(keyOf(record)) })),
       recoveryPath: this.recoveryPath,
     };
+  }
+
+  async hasLockedAppearanceProperties(): Promise<boolean> {
+    await this.ensureLocksLoaded();
+    return this.locks.some((record) => record.targetKind === 'appearance-property' && !this.unlocked.has(keyOf(record)));
   }
 
   private lockFailure(message: string, reason: LockMutationResult['reason']): LockMutationResult {
