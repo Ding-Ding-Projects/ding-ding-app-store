@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import { COLOR_ROLES, ELEMENT_BY_KEY, ELEVATIONS, RADII } from '../../shared/contracts';
-import type { ColorRole, ColorValue, ElementKey, TokenId, UserSettings } from '../../shared/contracts';
+import type { ColorRole, ColorValue, ElementKey, LockTarget, TokenId, UserSettings } from '../../shared/contracts';
 import { Icon } from '../icons';
 import { label } from '../i18n';
 import { downloadText, pickTextFile } from '../files';
@@ -10,6 +11,7 @@ import { TOKEN_META, TOKEN_SECTIONS } from '../registry';
 import type { TokenSection } from '../registry';
 import { makeMatcher, useSurfaceSearch } from '../search';
 import type { AppearanceApi } from '../state/use-appearance';
+import type { LocksApi } from '../state/use-locks';
 import { SearchBox } from './SearchBox';
 import { ColorTranslatorControl } from './ColorTranslatorControl';
 import { SearchablePicker } from './SearchablePicker';
@@ -139,11 +141,42 @@ function SettingExplanation({ settings, explanation, persisted, fallback }: { se
   );
 }
 
+type AppearanceLockContextValue = { selected: ElementKey; settings: UserSettings; locks?: LocksApi; schoolModeEnabled?: boolean; onManageLock?(target: LockTarget, returnFocus: HTMLElement | null): void };
+const AppearanceLockContext = createContext<AppearanceLockContextValue | null>(null);
+
+function TokenLockAffordance({ token, selected, settings, locks, schoolModeEnabled, onManageLock }: { token: TokenId; selected: ElementKey; settings: UserSettings; locks?: LocksApi; schoolModeEnabled?: boolean; onManageLock?(target: LockTarget, returnFocus: HTMLElement | null): void }) {
+  const target = { targetKind: 'appearance-property' as const, targetId: `${selected}:${token}` };
+  const record = locks?.state.records.find((candidate) => candidate.targetKind === target.targetKind && candidate.targetId === target.targetId);
+  const locked = locks?.isLocked(target) ?? false;
+  const unavailable = Boolean(schoolModeEnabled) || locks?.state.vaultAvailable === false;
+  const labelText = locked ? label(settings, 'Property locked', '屬性已鎖') : label(settings, 'Property unlocked', '屬性未鎖');
+  return <div className="appearance-token-lock" aria-live="polite">
+    {locked && <span className="token-lock-indicator" role="status"><Icon>lock</Icon>{labelText}</span>}
+    <button
+      type="button"
+      className="text-button"
+      disabled={unavailable || !onManageLock}
+      title={unavailable ? label(settings, schoolModeEnabled ? 'Appearance locks are unavailable in restricted mode.' : 'Credential vault unavailable; appearance locks are disabled.', schoolModeEnabled ? '限制模式唔支援外觀鎖。' : '憑證庫用唔到；外觀鎖已停用。') : undefined}
+      aria-label={label(settings, locked ? `Manage lock for ${TOKEN_META[token].en}` : `Lock ${TOKEN_META[token].en} property`, locked ? `管理${TOKEN_META[token].yue}鎖` : `鎖定${TOKEN_META[token].yue}屬性`)}
+      onClick={(event) => onManageLock?.(target, event.currentTarget)}
+    >
+      <Icon>{locked ? 'lock' : 'lock_open'}</Icon>{label(settings, locked ? 'Manage property lock' : 'Lock this property', locked ? '管理屬性鎖' : '鎖定呢個屬性')}
+    </button>
+    {record && !locked && <span className="supporting">{label(settings, 'Temporarily unlocked; select Manage property lock to change it.', '暫時解鎖；撳管理屬性鎖先可以改。')}</span>}
+  </div>;
+}
+
+function TokenHeading({ token }: { token: TokenId }) {
+  const context = useContext(AppearanceLockContext);
+  if (!context) return <span className="token-name">{TOKEN_META[token].en}</span>;
+  return <div className="appearance-token-heading"><span className="token-name">{label(context.settings, TOKEN_META[token].en, TOKEN_META[token].yue)}</span><TokenLockAffordance token={token} {...context} /></div>;
+}
+
 function ColorField({ token, value, settings, onChange }: { token: TokenId; value: ColorValue | undefined; settings: UserSettings; onChange(next: ColorValue | undefined): void }) {
   const hex = value?.kind === 'hex' ? value.hex : '#6750a4';
   return (
     <div className="appearance-token-row">
-      <span className="token-name">{label(settings, TOKEN_META[token].en, TOKEN_META[token].yue)}</span>
+      <TokenHeading token={token} />
       <SettingExplanation settings={settings} explanation={TOKEN_META[token].explanation} persisted={value !== undefined} fallback={TOKEN_META[token].defaultValue} />
       <SearchablePicker
         labelText={label(settings, 'Role', '角色')}
@@ -172,7 +205,7 @@ function FontFamilyField({ token, value, settings, onChange }: { token: TokenId;
   useEffect(() => setQuery(value ?? ''), [value]);
   return (
     <div className="appearance-token-row">
-      <span className="token-name">{label(settings, TOKEN_META[token].en, TOKEN_META[token].yue)}</span>
+      <TokenHeading token={token} />
       <SettingExplanation settings={settings} explanation={TOKEN_META[token].explanation} persisted={value !== undefined} fallback={TOKEN_META[token].defaultValue} />
       <label>{label(settings, 'Search installed and bundled fonts', '搜尋已安裝同內置字型')}
         <input value={query} list="appearance-font-families" onChange={(event) => { const next = event.target.value; setQuery(next); if (FONT_FAMILIES.includes(next as (typeof FONT_FAMILIES)[number])) onChange(next); }} />
@@ -190,7 +223,7 @@ function NumberField({ token, value, min, max, step, unit, settings, onChange }:
   const current = value ?? (token === 'lineHeight' ? 140 : 0);
   return (
     <div className="appearance-token-row">
-      <span className="token-name">{label(settings, TOKEN_META[token].en, TOKEN_META[token].yue)}</span>
+      <TokenHeading token={token} />
       <SettingExplanation settings={settings} explanation={TOKEN_META[token].explanation} persisted={value !== undefined} fallback={TOKEN_META[token].defaultValue} />
       <label><input type="range" min={min} max={max} step={step} value={current} aria-valuetext={`${current}${unit}`} onChange={(event) => onChange(Number(event.target.value))} /><span>{current}{unit}</span></label>
       <button className="text-button" type="button" onClick={() => onChange(undefined)}>{label(settings, 'Use default', '用預設')}</button>
@@ -203,7 +236,7 @@ function ChipField<T extends string>({ token, options, value, settings, onChange
 }) {
   return (
     <div className="appearance-token-row">
-      <span className="token-name">{label(settings, TOKEN_META[token].en, TOKEN_META[token].yue)}</span>
+      <TokenHeading token={token} />
       <SettingExplanation settings={settings} explanation={TOKEN_META[token].explanation} persisted={value !== undefined} fallback={TOKEN_META[token].defaultValue} />
       <div className="chip-row" role="group" aria-label={label(settings, TOKEN_META[token].en, TOKEN_META[token].yue)}>
         <button aria-pressed={value === undefined} onClick={() => onChange(undefined)}>{label(settings, 'Default', '預設')}</button>
@@ -219,7 +252,7 @@ function ScaleField({ token, value, min, max, settings, onChange, onCommit }: {
   const current = value ?? 100;
   return (
     <div className="appearance-token-row">
-      <span className="token-name">{label(settings, TOKEN_META[token].en, TOKEN_META[token].yue)}</span>
+      <TokenHeading token={token} />
       <SettingExplanation settings={settings} explanation={TOKEN_META[token].explanation} persisted={value !== undefined} fallback={TOKEN_META[token].defaultValue} />
       <label>
         <input
@@ -256,17 +289,17 @@ function VariationAxesField({ value, settings, onChange }: { value: Record<strin
     }
     if (Object.keys(axes).length <= 8) { setInvalid(false); onChange(axes); } else setInvalid(true);
   };
-  return <div className="appearance-token-row"><span className="token-name">{label(settings, TOKEN_META.fontVariationAxes.en, TOKEN_META.fontVariationAxes.yue)}</span><SettingExplanation settings={settings} explanation={TOKEN_META.fontVariationAxes.explanation} persisted={value !== undefined} fallback={TOKEN_META.fontVariationAxes.defaultValue} /><label>{label(settings, 'Axes (four letters=value)', '變體軸（四個字母=數值）')}<input value={text} maxLength={96} placeholder="wght=650,wdth=90" aria-invalid={invalid} aria-describedby="appearance-axes-error" onChange={(event) => apply(event.target.value)} /></label>{invalid && <p id="appearance-axes-error" className="notice warning" role="alert">{label(settings, 'Use up to eight four-letter axes with values from -1000 to 2000.', '最多八個四字母變體軸，數值由 -1000 至 2000。')}</p>}<p className="supporting">{label(settings, 'Up to eight axes; values are bounded before CSS output.', '最多八個軸；輸出 CSS 前會限制數值。')}</p></div>;
+  return <div className="appearance-token-row"><TokenHeading token="fontVariationAxes" /><SettingExplanation settings={settings} explanation={TOKEN_META.fontVariationAxes.explanation} persisted={value !== undefined} fallback={TOKEN_META.fontVariationAxes.defaultValue} /><label>{label(settings, 'Axes (four letters=value)', '變體軸（四個字母=數值）')}<input value={text} maxLength={96} placeholder="wght=650,wdth=90" aria-invalid={invalid} aria-describedby="appearance-axes-error" onChange={(event) => apply(event.target.value)} /></label>{invalid && <p id="appearance-axes-error" className="notice warning" role="alert">{label(settings, 'Use up to eight four-letter axes with values from -1000 to 2000.', '最多八個四字母變體軸，數值由 -1000 至 2000。')}</p>}<p className="supporting">{label(settings, 'Up to eight axes; values are bounded before CSS output.', '最多八個軸；輸出 CSS 前會限制數值。')}</p></div>;
 }
 
 function TextShadowField({ value, settings, onChange }: { value: { x: number; y: number; blur: number; color: ColorValue } | undefined; settings: UserSettings; onChange(next: { x: number; y: number; blur: number; color: ColorValue } | undefined): void }) {
   const current = value ?? { x: 0, y: 0, blur: 0, color: { kind: 'hex' as const, hex: '#00000080' } };
   const shadowHex = current.color.kind === 'hex' ? current.color.hex : '#000000';
-  return <div className="appearance-token-row"><span className="token-name">{label(settings, TOKEN_META.textShadow.en, TOKEN_META.textShadow.yue)}</span><SettingExplanation settings={settings} explanation={TOKEN_META.textShadow.explanation} persisted={value !== undefined} fallback={TOKEN_META.textShadow.defaultValue} /><div className="chip-row"><label>{label(settings, 'X', 'X')}<input type="number" min={-20} max={20} value={current.x} onChange={(event) => onChange({ ...current, x: Number(event.target.value) })} /></label><label>{label(settings, 'Y', 'Y')}<input type="number" min={-20} max={20} value={current.y} onChange={(event) => onChange({ ...current, y: Number(event.target.value) })} /></label><label>{label(settings, 'Blur', '模糊')}<input type="number" min={0} max={40} value={current.blur} onChange={(event) => onChange({ ...current, blur: Number(event.target.value) })} /></label></div><ColorTranslatorControl settings={settings} value={shadowHex} labelText={label(settings, 'Shadow colour', '陰影顏色')} onChange={(next) => onChange({ ...current, color: { kind: 'hex', hex: next } })} /><button className="text-button" type="button" onClick={() => onChange(undefined)}>{label(settings, 'Use default', '用預設')}</button></div>;
+  return <div className="appearance-token-row"><TokenHeading token="textShadow" /><SettingExplanation settings={settings} explanation={TOKEN_META.textShadow.explanation} persisted={value !== undefined} fallback={TOKEN_META.textShadow.defaultValue} /><div className="chip-row"><label>{label(settings, 'X', 'X')}<input type="number" min={-20} max={20} value={current.x} onChange={(event) => onChange({ ...current, x: Number(event.target.value) })} /></label><label>{label(settings, 'Y', 'Y')}<input type="number" min={-20} max={20} value={current.y} onChange={(event) => onChange({ ...current, y: Number(event.target.value) })} /></label><label>{label(settings, 'Blur', '模糊')}<input type="number" min={0} max={40} value={current.blur} onChange={(event) => onChange({ ...current, blur: Number(event.target.value) })} /></label></div><ColorTranslatorControl settings={settings} value={shadowHex} labelText={label(settings, 'Shadow colour', '陰影顏色')} onChange={(next) => onChange({ ...current, color: { kind: 'hex', hex: next } })} /><button className="text-button" type="button" onClick={() => onChange(undefined)}>{label(settings, 'Use default', '用預設')}</button></div>;
 }
 
-export function AppearancePanel({ appearance, settings, notify, onClose }: {
-  appearance: AppearanceApi; settings: UserSettings; notify: Notify; onClose(): void;
+export function AppearancePanel({ appearance, settings, notify, onClose, locks, schoolModeEnabled, onManageLock }: {
+  appearance: AppearanceApi; settings: UserSettings; notify: Notify; onClose(): void; locks?: LocksApi; schoolModeEnabled?: boolean; onManageLock?(target: LockTarget, returnFocus: HTMLElement | null): void;
 }) {
   const search = useSurfaceSearch('appearance.elements');
   const [section, setSection] = useState<TokenSection>('colour');
@@ -334,6 +367,7 @@ export function AppearancePanel({ appearance, settings, notify, onClose }: {
           </button>
         ))}
       </div>
+      <AppearanceLockContext.Provider value={{ selected, settings, locks, schoolModeEnabled, onManageLock }}>
       <div className="appearance-tokens">
         {tokens.length ? tokens.map((token) => {
           if (token === 'background' || token === 'foreground') {
@@ -376,6 +410,7 @@ export function AppearancePanel({ appearance, settings, notify, onClose }: {
           return <ScaleField key={token} token={token} settings={settings} value={token === 'fontScale' ? override.fontScale : override.paddingScale} min={bounds.min} max={bounds.max} onChange={(next) => appearance.setToken(token, next)} onCommit={appearance.commit} />;
         }) : <p className="supporting">{label(settings, 'No control in this section matches the search.', '呢個分類冇設定配到搜尋。')}</p>}
       </div>
+      </AppearanceLockContext.Provider>
       {ratio !== null && <p className={ratio < threshold ? 'notice warning' : 'supporting'} role="status">
         <Icon>contrast</Icon>
         {label(settings, `Contrast readout: ${ratio.toFixed(2)}:1${ratio < threshold ? ` (below ${threshold}:1 guideline)` : ''}.`, `對比度讀數：${ratio.toFixed(2)}:1${ratio < threshold ? `（低過 ${threshold}:1 建議值）` : ''}。`)}

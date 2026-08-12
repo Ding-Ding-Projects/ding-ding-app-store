@@ -1121,7 +1121,7 @@ export function App() {
           )}
         </main>
 
-        {panelOpen && appearance.editMode && <AppearancePanel appearance={appearance} settings={settings} notify={notify} onClose={closeAppearancePanel} />}
+        {panelOpen && appearance.editMode && <AppearancePanel appearance={appearance} settings={settings} notify={notify} locks={locks} schoolModeEnabled={schoolMode.state.enabled} onManageLock={(target, returnFocus) => { appearanceReturnFocusRef.current = returnFocus; setPanelOpen(false); openLockSupport(target); }} onClose={closeAppearancePanel} />}
 
         {action && !schoolMode.restricted && <ActionDialog action={action} settings={settings} onClose={closeAction} onResult={reportOperation} />}
 
