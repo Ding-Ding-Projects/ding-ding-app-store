@@ -55,7 +55,7 @@ describe('tab/group UX locks and local Support Tickets', () => {
   it('validates every lock/support sender at the main/preload boundary', async () => {
     const main = await read('src/main/main.ts');
     const preload = await read('src/preload/index.ts');
-    for (const channel of ['locks:load', 'locks:set', 'locks:unlock', 'locks:lock-again', 'locks:remove', 'support:load', 'support:create', 'support:advance', 'support:open-recovery-folder']) {
+    for (const channel of ['locks:load', 'locks:set', 'locks:unlock', 'locks:lock-again', 'locks:remove', 'support:load', 'support:create', 'support:advance', 'support:bulk-advance', 'support:open-recovery-folder']) {
       expect(main).toContain(`ipcMain.handle('${channel}'`);
       expect(preload).toContain(`ipcRenderer.invoke('${channel}'`);
     }
@@ -63,6 +63,32 @@ describe('tab/group UX locks and local Support Tickets', () => {
     expect(main.match(/Blocked Support Tickets request from an unknown renderer/g)?.length).toBeGreaterThanOrEqual(4);
     expect(main).toContain("ipcMain.handle('appearance:set-element', (event");
     expect(main).toContain('Blocked appearance request from an unknown renderer.');
+  });
+
+  it('covers bounded Support Tickets bulk selection, transitions, rollback truth, and export scope', async () => {
+    const contracts = await read('src/shared/contracts.ts');
+    const service = await read('src/main/lock-support-service.ts');
+    const parser = await read('src/preload/support-parser.ts');
+    const hook = await read('src/renderer/state/use-support.ts');
+    const page = await read('src/renderer/pages/LockSupportPage.tsx');
+    expect(contracts).toContain('SupportTicketBulkAdvanceRequest');
+    expect(contracts).toContain('committed: string[]');
+    expect(contracts).toContain("reason?: 'invalid' | 'storage-failed' | 'busy'");
+    expect(service).toContain('supportBulkAdvanceSchema');
+    expect(service).toContain('new Set(value.ticketIds)');
+    expect(service).toContain('supportMutation');
+    expect(service).toContain('uncertain.push(...committed)');
+    expect(service).toContain('writeJsonAtomic(this.ticketPath, { schemaVersion: 1, tickets: previousTickets })');
+    expect(service).not.toMatch(/shell\.(?:trashItem|rm|delete)/i);
+    expect(parser).toContain('Object.keys(input).some((key) => !allowed.has(key))');
+    expect(parser).toContain('skipped.has(id) || uncertain.has(id)');
+    expect(hook).toContain('bulkAdvance(request');
+    expect(page).toContain('event.shiftKey');
+    expect(page).toContain('tabIndex={0} role="group"');
+    expect(page).toContain('visibleTickets.some');
+    expect(page).toContain('bulkBusy');
+    expect(page).toContain("exportTickets('markdown')");
+    expect(page).toContain('openExportInVsCode');
   });
 
   it('guards visible activation, Settings, Help, and accessible recovery copy', async () => {

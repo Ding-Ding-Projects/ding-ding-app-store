@@ -353,3 +353,9 @@ Implement the hard-disposable broker without host mounts or secrets, add reviewe
 - Added typed `history:protected-status`, `history:protected-unlock`, and `history:protected-lock-again` IPC/preload methods. All history reads, exports, archives, diffs, labels, and restores now require a live unlocked session, sender validation, and a School-mode session fence.
 - Activity shows a localized locked/unavailable surface, credential creation/unlock, lock-again action, and clears credential input when School mode is active. Camera scanning, deliberate secret export, stable group entities, and vault-native authenticator snapshot/restore remain deferred.
 - Verification: `npm ci --ignore-scripts`; focused history/authenticator/lock tests 25/25; main and renderer TypeScript checks; `npm run docs:generate`; `npm run docs:check`; `git diff --check`. Packaged hidden-desktop runtime proof is not claimed.
+# Support Tickets bulk management — 2026-08-12
+
+- Implemented on `codex/support-ticket-bulk-management` in commits `a5a370527c7470a9dc9bc9aac929dd7d07fa787b` and `56a5a1ca3d6c642880d35c3b725f8ebed78a3a30`.
+- Added typed bulk IPC, serialized native mutation queue, visible-scope selection, keyboard focus and Shift-range intent, select/invert/clear counts, non-destructive Advance selected action, bounded JSON/Markdown export, and Visual Studio Code handoff.
+- Atomic write rollback is attempted after audit failure; if rollback cannot be proven, the result explicitly reports uncertain IDs. No delete path or network request exists.
+- Verification: `tests/locks-support.test.ts` 8/8, renderer/main TypeScript checks green, `npm run docs:check` green, generated offline/site/wiki docs synchronized. Packaged hidden-desktop runtime HuiShot remains pending.
