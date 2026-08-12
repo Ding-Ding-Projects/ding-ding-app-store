@@ -744,7 +744,7 @@ export function App() {
       case 'personal-vocabulary-import': openSurface('settings.general'); focusLater('personal-vocabulary-import'); return;
       case 'personal-vocabulary-clear': openSurface('settings.general'); focusLater('personal-vocabulary-clear'); return;
       case 'authenticator-rename': case 'authenticator-group': case 'authenticator-reorder': case 'authenticator-select':
-      case 'authenticator-export': case 'authenticator-delete': case 'authenticator-bulk-delete':
+      case 'authenticator-export': case 'authenticator-secret-export': case 'authenticator-delete': case 'authenticator-bulk-delete':
         openSurface('authenticator'); focusLater('authenticator-entry-management'); return;
       case 'clear-all-searches': search.dispatch({ type: 'clear-all' }); announce('All searches cleared'); return;
       case 'focus-tab-search': focusLater('search-tabs'); return;

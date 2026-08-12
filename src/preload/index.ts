@@ -9,6 +9,8 @@ import type {
   AuthenticatorDeleteResult,
   AuthenticatorExportRequest,
   AuthenticatorExportResult,
+  AuthenticatorSecretExportRequest,
+  AuthenticatorSecretExportResult,
   AuthenticatorGroupRequest,
   AuthenticatorGroupCreateRequest,
   AuthenticatorGroupRenameRequest,
@@ -307,6 +309,15 @@ function parseAuthenticatorExport(value: unknown): AuthenticatorExportResult {
   return Object.freeze({ ok: result.ok, format: result.format as AuthenticatorExportResult['format'], filename: result.filename as string | undefined, content: result.content as string | undefined, omittedFields: [...AUTHENTICATOR_EXPORT_OMITTED_FIELDS], message: result.message, messageYue: result.messageYue });
 }
 
+function parseAuthenticatorSecretExport(value: unknown): AuthenticatorSecretExportResult {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('The authenticator secret export response was invalid.');
+  const result = value as Record<string, unknown>;
+  const keys = new Set(['ok', 'reason', 'filename', 'entryCount', 'message', 'messageYue']);
+  const reasons = new Set(['cancelled', 'invalid', 'restricted', 'unavailable', 'write-failed', 'too-large']);
+  if (Object.keys(result).some((key) => !keys.has(key)) || typeof result.ok !== 'boolean' || (result.reason !== undefined && (typeof result.reason !== 'string' || !reasons.has(result.reason))) || (result.filename !== undefined && (typeof result.filename !== 'string' || !/^authenticator-secrets\.(json|csv)$/.test(result.filename))) || typeof result.entryCount !== 'number' || !Number.isInteger(result.entryCount) || result.entryCount < 0 || result.entryCount > AUTHENTICATOR_MAX_ENTRIES || typeof result.message !== 'string' || result.message.length > 512 || typeof result.messageYue !== 'string' || result.messageYue.length > 512 || (result.ok && (typeof result.filename !== 'string' || result.reason !== undefined))) throw new Error('The authenticator secret export response was invalid.');
+  return Object.freeze({ ok: result.ok, reason: result.reason as AuthenticatorSecretExportResult['reason'], filename: result.filename as string | undefined, entryCount: result.entryCount, message: result.message, messageYue: result.messageYue });
+}
+
 function parseAuthenticatorList(value: unknown): AuthenticatorListResult {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('The authenticator list response was invalid.');
   const result = value as Record<string, unknown>;
@@ -552,6 +563,7 @@ const api: DingDingStoreApi = {
     remove: async (request: AuthenticatorDeleteRequest) => parseAuthenticatorDelete(await ipcRenderer.invoke('authenticator:delete', request)),
     bulkRemove: async (request: AuthenticatorBulkDeleteRequest) => parseAuthenticatorBulkDelete(await ipcRenderer.invoke('authenticator:bulk-delete', request)),
     export: async (request: AuthenticatorExportRequest) => parseAuthenticatorExport(await ipcRenderer.invoke('authenticator:export', request)),
+    secretExport: async (request: AuthenticatorSecretExportRequest) => parseAuthenticatorSecretExport(await ipcRenderer.invoke('authenticator:secret-export', request)),
   },
   dimSum: {
     startup: (): Promise<DimSumSurprise> => ipcRenderer.invoke('dim-sum:startup'),
@@ -587,5 +599,6 @@ export {
   parseAuthenticatorDelete,
   parseAuthenticatorBulkDelete,
   parseAuthenticatorExport,
+  parseAuthenticatorSecretExport,
   parseAuthenticatorGroupMutation,
 };

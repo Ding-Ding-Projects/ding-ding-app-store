@@ -1290,6 +1290,7 @@ export const AUTHENTICATOR_MAX_LABEL_LENGTH = 512;
 export const AUTHENTICATOR_MAX_GROUP_LENGTH = 64;
 export const AUTHENTICATOR_MAX_GROUPS = 64;
 export const AUTHENTICATOR_MAX_EXPORT_LENGTH = 512_000;
+export const AUTHENTICATOR_MAX_SECRET_EXPORT_LENGTH = 512_000;
 
 export interface AuthenticatorEntryMetadata {
   id: string;
@@ -1490,6 +1491,26 @@ export interface AuthenticatorExportResult {
   messageYue: string;
 }
 
+/** Deliberate, user-authorized export of credential-vault secrets. The
+ * response contains status only; secret bytes never cross the main/preload
+ * boundary. */
+export type AuthenticatorSecretExportFormat = 'json' | 'csv';
+export interface AuthenticatorSecretExportRequest {
+  entryIds: string[];
+  format: AuthenticatorSecretExportFormat;
+  /** Set only after the native two-key/full-slider confirmation completes. */
+  confirmed: true;
+}
+export type AuthenticatorSecretExportReason = 'cancelled' | 'invalid' | 'restricted' | 'unavailable' | 'write-failed' | 'too-large';
+export interface AuthenticatorSecretExportResult {
+  ok: boolean;
+  reason?: AuthenticatorSecretExportReason;
+  filename?: string;
+  entryCount: number;
+  message: string;
+  messageYue: string;
+}
+
 export type AuthenticatorExportOmittedField = 'secret' | 'uri' | 'code' | 'nextCode' | 'remainingSeconds' | 'expiresAt';
 
 export interface AuthenticatorListResult {
@@ -1672,6 +1693,7 @@ export interface DingDingStoreApi {
     remove(request: AuthenticatorDeleteRequest): Promise<AuthenticatorDeleteResult>;
     bulkRemove(request: AuthenticatorBulkDeleteRequest): Promise<AuthenticatorBulkDeleteResult>;
     export(request: AuthenticatorExportRequest): Promise<AuthenticatorExportResult>;
+    secretExport(request: AuthenticatorSecretExportRequest): Promise<AuthenticatorSecretExportResult>;
   };
   dimSum: {
     startup(): Promise<DimSumSurprise>;

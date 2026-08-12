@@ -5,7 +5,7 @@ import { open } from 'node:fs/promises';
 import { app, BrowserWindow, clipboard, dialog, ipcMain, nativeImage, session, shell } from 'electron';
 import squirrelStartup from 'electron-squirrel-startup';
 import { z } from 'zod';
-import { AUTHENTICATOR_MAX_IMAGE_BYTES, AUTHENTICATOR_MAX_URI_LENGTH, type AuthenticatorBulkDeleteRequest, type AuthenticatorBulkDeleteResult, type AuthenticatorDeleteRequest, type AuthenticatorDeleteResult, type AuthenticatorExportRequest, type AuthenticatorExportResult, type AuthenticatorGroupRequest, type AuthenticatorGroupCreateRequest, type AuthenticatorGroupRenameRequest, type AuthenticatorGroupReorderRequest, type AuthenticatorGroupCollapseRequest, type AuthenticatorGroupDeleteRequest, type AuthenticatorGroupBulkMoveRequest, type AuthenticatorListResult, type AuthenticatorMutationResult, type AuthenticatorPreviewRequest, type AuthenticatorPreviewResult, type AuthenticatorQrImageImportResult, type AuthenticatorRegistrationConfirmRequest, type AuthenticatorRegistrationPreviewResult, type AuthenticatorRegistrationRequest, type AuthenticatorRenameRequest, type AuthenticatorReorderRequest, type AuthenticatorStatus, type ElementKey, type ElementOverride, type ExternalEditorOpenRequest, type ExternalEditorPreference, type HistoryExportFormat, type InstallCancelRequest, type LockCredentialRequest, type LockSetRequest, type LockTarget, type OperationRequest, type SchoolModeConfigureRequest, type SchoolModeCredentialChangeRequest, type SchoolModeRenameRequest, type SchoolModeToggleRequest, type SchoolModeVerifyRequest, type SourceJobCancelRequest, type SourceJobRequest, type SupportTicketCreateRequest, type TabWorkspace, type UserSettings } from '../shared/contracts.js';
+import { AUTHENTICATOR_MAX_IMAGE_BYTES, AUTHENTICATOR_MAX_URI_LENGTH, type AuthenticatorBulkDeleteRequest, type AuthenticatorBulkDeleteResult, type AuthenticatorDeleteRequest, type AuthenticatorDeleteResult, type AuthenticatorExportRequest, type AuthenticatorExportResult, type AuthenticatorSecretExportRequest, type AuthenticatorSecretExportResult, type AuthenticatorGroupRequest, type AuthenticatorGroupCreateRequest, type AuthenticatorGroupRenameRequest, type AuthenticatorGroupReorderRequest, type AuthenticatorGroupCollapseRequest, type AuthenticatorGroupDeleteRequest, type AuthenticatorGroupBulkMoveRequest, type AuthenticatorListResult, type AuthenticatorMutationResult, type AuthenticatorPreviewRequest, type AuthenticatorPreviewResult, type AuthenticatorQrImageImportResult, type AuthenticatorRegistrationConfirmRequest, type AuthenticatorRegistrationPreviewResult, type AuthenticatorRegistrationRequest, type AuthenticatorRenameRequest, type AuthenticatorReorderRequest, type AuthenticatorStatus, type ElementKey, type ElementOverride, type ExternalEditorOpenRequest, type ExternalEditorPreference, type HistoryExportFormat, type InstallCancelRequest, type LockCredentialRequest, type LockSetRequest, type LockTarget, type OperationRequest, type SchoolModeConfigureRequest, type SchoolModeCredentialChangeRequest, type SchoolModeRenameRequest, type SchoolModeToggleRequest, type SchoolModeVerifyRequest, type SourceJobCancelRequest, type SourceJobRequest, type SupportTicketCreateRequest, type TabWorkspace, type UserSettings } from '../shared/contracts.js';
 import { AUTHENTICATOR_CAMERA_SESSION_MS } from '../shared/contracts.js';
 import { AppearanceService } from './appearance-service.js';
 import { CatalogService } from './catalog-service.js';
@@ -205,6 +205,13 @@ void app.whenReady().then(async () => {
     omittedFields: ['secret', 'uri', 'code', 'nextCode', 'remainingSeconds', 'expiresAt'],
     message: 'Authenticator metadata export is unavailable while the shared restricted mode is enabled or unavailable.',
     messageYue: '共享限制模式開啟或不可用時，驗證器 metadata 匯出暫時唔可用。',
+  });
+  const authenticatorRestrictedSecretExport = (): AuthenticatorSecretExportResult => ({
+    ok: false,
+    reason: 'restricted',
+    entryCount: 0,
+    message: 'Authenticator secret export is unavailable while the shared restricted mode is enabled or unavailable.',
+    messageYue: '共享限制模式開啟或不可用時，驗證器秘密匯出暫時用唔到。',
   });
   const authenticatorAllowed = async (): Promise<boolean> => {
     try {
@@ -460,6 +467,20 @@ void app.whenReady().then(async () => {
   ipcMain.handle('authenticator:export', (event, request: unknown) => {
     if (event.sender !== mainWindow?.webContents) return Promise.reject(new Error('Blocked authenticator export request from an unknown renderer.'));
     return authenticatorAllowed().then((allowed) => allowed ? authenticator.export(request as AuthenticatorExportRequest) : authenticatorRestrictedExport());
+  });
+  ipcMain.handle('authenticator:secret-export', async (event, request: unknown): Promise<AuthenticatorSecretExportResult> => {
+    if (event.sender !== mainWindow?.webContents) return Promise.reject(new Error('Blocked authenticator secret export request from an unknown renderer.'));
+    if (!(await authenticatorAllowed())) return authenticatorRestrictedSecretExport();
+    const parsed = request as AuthenticatorSecretExportRequest;
+    if (!parsed || !Array.isArray(parsed.entryIds) || (parsed.format !== 'json' && parsed.format !== 'csv') || parsed.confirmed !== true) return { ok: false, reason: 'invalid', entryCount: 0, message: 'Secret export requires the native destructive confirmation.', messageYue: '秘密匯出需要原生破壞性確認。' };
+    const picked = await dialog.showSaveDialog(mainWindow!, {
+      title: 'Export authenticator secrets',
+      defaultPath: parsed.format === 'json' ? 'authenticator-secrets.json' : 'authenticator-secrets.csv',
+      filters: [{ name: parsed.format.toUpperCase(), extensions: [parsed.format] }],
+    });
+    if (picked.canceled || !picked.filePath) return { ok: false, reason: 'cancelled', entryCount: 0, message: 'Secret export was cancelled; no file was created.', messageYue: '秘密匯出已取消；冇建立檔案。' };
+    if (!(await authenticatorAllowed())) return authenticatorRestrictedSecretExport();
+    return authenticator.secretExport(parsed, picked.filePath);
   });
   ipcMain.handle('locks:load', (event) => event.sender === mainWindow?.webContents ? lockSupport.loadLocks() : Promise.reject(new Error('Blocked lock request from an unknown renderer.')));
   ipcMain.handle('locks:set', (event, request: LockSetRequest) => event.sender === mainWindow?.webContents ? lockSupport.setLock(request) : Promise.reject(new Error('Blocked lock request from an unknown renderer.')));

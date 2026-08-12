@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { AuthenticatorBulkDeleteRequest, AuthenticatorBulkDeleteResult, AuthenticatorDeleteRequest, AuthenticatorDeleteResult, AuthenticatorExportRequest, AuthenticatorExportResult, AuthenticatorGroupBulkMoveRequest, AuthenticatorGroupCollapseRequest, AuthenticatorGroupCreateRequest, AuthenticatorGroupDeleteRequest, AuthenticatorGroupMutationResult, AuthenticatorGroupRenameRequest, AuthenticatorGroupReorderRequest, AuthenticatorGroupRequest, AuthenticatorListResult, AuthenticatorMutationResult, AuthenticatorPreviewRequest, AuthenticatorPreviewResult, AuthenticatorRegistrationConfirmRequest, AuthenticatorRegistrationPreviewResult, AuthenticatorRegistrationRequest, AuthenticatorRenameRequest, AuthenticatorReorderRequest, AuthenticatorStatus } from '../../shared/contracts';
+import type { AuthenticatorBulkDeleteRequest, AuthenticatorBulkDeleteResult, AuthenticatorDeleteRequest, AuthenticatorDeleteResult, AuthenticatorExportRequest, AuthenticatorExportResult, AuthenticatorSecretExportRequest, AuthenticatorSecretExportResult, AuthenticatorGroupBulkMoveRequest, AuthenticatorGroupCollapseRequest, AuthenticatorGroupCreateRequest, AuthenticatorGroupDeleteRequest, AuthenticatorGroupMutationResult, AuthenticatorGroupRenameRequest, AuthenticatorGroupReorderRequest, AuthenticatorGroupRequest, AuthenticatorListResult, AuthenticatorMutationResult, AuthenticatorPreviewRequest, AuthenticatorPreviewResult, AuthenticatorRegistrationConfirmRequest, AuthenticatorRegistrationPreviewResult, AuthenticatorRegistrationRequest, AuthenticatorRenameRequest, AuthenticatorReorderRequest, AuthenticatorStatus } from '../../shared/contracts';
 
 export interface AuthenticatorApi {
   status: AuthenticatorStatus | null;
@@ -19,6 +19,7 @@ export interface AuthenticatorApi {
   remove(request: AuthenticatorDeleteRequest): Promise<AuthenticatorDeleteResult>;
   bulkRemove(request: AuthenticatorBulkDeleteRequest): Promise<AuthenticatorBulkDeleteResult>;
   export(request: AuthenticatorExportRequest): Promise<AuthenticatorExportResult>;
+  secretExport(request: AuthenticatorSecretExportRequest): Promise<AuthenticatorSecretExportResult>;
   createGroup(request: AuthenticatorGroupCreateRequest): Promise<AuthenticatorGroupMutationResult>;
   renameGroup(request: AuthenticatorGroupRenameRequest): Promise<AuthenticatorGroupMutationResult>;
   reorderGroup(request: AuthenticatorGroupReorderRequest): Promise<AuthenticatorGroupMutationResult>;
@@ -117,11 +118,12 @@ export function useAuthenticator(enabled = true): AuthenticatorApi {
   const remove = useCallback(async (request: AuthenticatorDeleteRequest) => { const value = await window.dingDingStore.authenticator.remove(request); if (value.ok || value.deletedId || value.uncertain) await refresh(); return value; }, [refresh]);
   const bulkRemove = useCallback(async (request: AuthenticatorBulkDeleteRequest) => { const value = await window.dingDingStore.authenticator.bulkRemove(request); if (value.deletedIds.length || value.uncertainIds.length) await refresh(); return value; }, [refresh]);
   const exportMetadata = useCallback((request: AuthenticatorExportRequest) => window.dingDingStore.authenticator.export(request), []);
+  const secretExport = useCallback((request: AuthenticatorSecretExportRequest) => window.dingDingStore.authenticator.secretExport(request), []);
   const createGroup = useCallback((request: AuthenticatorGroupCreateRequest) => window.dingDingStore.authenticator.createGroup(request).then(async (value) => { if (value.ok) await refresh(); return value; }), [refresh]);
   const renameGroup = useCallback((request: AuthenticatorGroupRenameRequest) => window.dingDingStore.authenticator.renameGroup(request).then(async (value) => { if (value.ok) await refresh(); return value; }), [refresh]);
   const reorderGroup = useCallback((request: AuthenticatorGroupReorderRequest) => window.dingDingStore.authenticator.reorderGroup(request).then(async (value) => { if (value.ok) await refresh(); return value; }), [refresh]);
   const collapseGroup = useCallback((request: AuthenticatorGroupCollapseRequest) => window.dingDingStore.authenticator.collapseGroup(request).then(async (value) => { if (value.ok) await refresh(); return value; }), [refresh]);
   const deleteGroup = useCallback((request: AuthenticatorGroupDeleteRequest) => window.dingDingStore.authenticator.deleteGroup(request).then(async (value) => { if (value.ok) await refresh(); return value; }), [refresh]);
   const moveToGroup = useCallback((request: AuthenticatorGroupBulkMoveRequest) => window.dingDingStore.authenticator.moveToGroup(request).then(async (value) => { if (value.movedIds.length) await refresh(); return value; }), [refresh]);
-  return { status, loading, preview, entries, groups, listLoading, refresh, prepare, cancelAttempt, confirm, cancel, rename, setGroup, reorder, remove, bulkRemove, export: exportMetadata, createGroup, renameGroup, reorderGroup, collapseGroup, deleteGroup, moveToGroup };
+  return { status, loading, preview, entries, groups, listLoading, refresh, prepare, cancelAttempt, confirm, cancel, rename, setGroup, reorder, remove, bulkRemove, export: exportMetadata, secretExport, createGroup, renameGroup, reorderGroup, collapseGroup, deleteGroup, moveToGroup };
 }
