@@ -29,5 +29,6 @@ export function parseSupportTicketBulkAdvanceResult(value: unknown): SupportTick
   const skipped = new Set(input.skipped as string[]);
   const uncertain = new Set(input.uncertain as string[]);
   if (committed.size !== (input.committed as string[]).length || skipped.size !== (input.skipped as string[]).length || uncertain.size !== (input.uncertain as string[]).length || [...committed].some((id) => skipped.has(id) || uncertain.has(id)) || [...skipped].some((id) => uncertain.has(id))) throw new Error('Support ticket batch response was invalid.');
+  if (input.ok === true && uncertain.size > 0 || input.ok === false && committed.size > 0) throw new Error('Support ticket batch response was invalid.');
   return Object.freeze({ ok: input.ok as boolean, state: parseSupportState(input.state), message: input.message as string, committed: input.committed as string[], skipped: input.skipped as string[], uncertain: input.uncertain as string[], reason: input.reason as SupportTicketBulkAdvanceResult['reason'] });
 }
