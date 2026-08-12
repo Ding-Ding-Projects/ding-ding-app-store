@@ -8,6 +8,7 @@ import {
   generateReleaseManifest,
   reconcilePublishedManifest,
   renderGeneratedModule,
+  renderGeneratedSiteModule,
   validateManifest,
 } from '../scripts/generate-release-changelog.mjs';
 
@@ -16,11 +17,11 @@ const publishedSha = '1111111111111111111111111111111111111111';
 const currentSha = '2222222222222222222222222222222222222222';
 
 const publishedRelease = {
-  tag_name: 'v0.1.0-1',
+  tag_name: 'v0.1.0',
   draft: false,
   prerelease: false,
   published_at: '2026-08-07T16:35:52Z',
-  html_url: `https://github.com/${repository}/releases/tag/v0.1.0-1`,
+  html_url: `https://github.com/${repository}/releases/tag/v0.1.0`,
   body: `Unsigned release.\n\n- Source commit: \`${publishedSha}\``,
 };
 
@@ -32,7 +33,7 @@ const metadata = {
 const input = (overrides = {}) => ({
   repository,
   inventory: [[publishedRelease]],
-  prospective: { version: 'v0.1.0-2', commit: currentSha, releasedAt: '2026-08-08T01:12:15Z' },
+  prospective: { version: 'v0.1.42', commit: currentSha, releasedAt: '2026-08-08T01:12:15Z' },
   commitMetadata: metadata,
   dish: null,
   ...overrides,
@@ -48,11 +49,11 @@ describe('release changelog generator', () => {
 
   it('adds the prospective entry first with an explicit pending state and exact UI rows', () => {
     const manifest = generateReleaseManifest(input());
-    expect(manifest.entries.map((entry) => entry.version)).toEqual(['v0.1.0-2', 'v0.1.0-1']);
+    expect(manifest.entries.map((entry) => entry.version)).toEqual(['v0.1.42', 'v0.1.0']);
     expect(manifest.entries[0]).toMatchObject({
       commit: currentSha,
       publicationState: 'pending',
-      releaseUrl: `https://github.com/${repository}/releases/tag/v0.1.0-2`,
+      releaseUrl: `https://github.com/${repository}/releases/tag/v0.1.42`,
       changes: ['Delivery: Generate bounded release metadata'],
       dimSum: null,
     });
@@ -64,7 +65,41 @@ describe('release changelog generator', () => {
 
   it('rejects duplicate published or prospective tags', () => {
     expect(() => generateReleaseManifest(input({ inventory: [[publishedRelease, { ...publishedRelease }]] }))).toThrow(/Duplicate release tag/);
-    expect(() => generateReleaseManifest(input({ prospective: { version: 'v0.1.0-1', commit: currentSha, releasedAt: '2026-08-08T01:12:15Z' } }))).toThrow(/duplicates published tag/);
+    expect(() => generateReleaseManifest(input({ prospective: { version: 'v0.1.0', commit: currentSha, releasedAt: '2026-08-08T01:12:15Z' } }))).toThrow(/duplicates published tag/);
+  });
+
+  it('retains exact historical release tags and URLs while requiring a new exact tag', () => {
+    const legacy = {
+      ...publishedRelease,
+      tag_name: 'v0.1.0-1002-1',
+      html_url: `https://github.com/${repository}/releases/tag/v0.1.0-1002-1`,
+    };
+    const manifest = generateReleaseManifest(input({
+      inventory: [[legacy]],
+      prospective: { version: 'v0.1.42', commit: currentSha, releasedAt: '2026-08-08T01:12:15Z' },
+    }));
+    expect(manifest.entries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ version: 'v0.1.0-1002-1', releaseUrl: legacy.html_url, commit: publishedSha }),
+      expect.objectContaining({ version: 'v0.1.42', releaseUrl: `https://github.com/${repository}/releases/tag/v0.1.42`, commit: currentSha }),
+    ]));
+    expect(renderGeneratedSiteModule(manifest)).toContain('v0.1.0-1002-1');
+    expect(() => generateReleaseManifest(input({ prospective: { version: 'v0.1.42-1', commit: currentSha, releasedAt: '2026-08-08T01:12:15Z' } }))).toThrow(/exactly equal v<effective-version>/i);
+  });
+
+  it('rejects malformed or misaddressed historical tags and retains their identity through fallback and reconciliation', () => {
+    const legacy = {
+      ...publishedRelease,
+      tag_name: 'v0.1.0-1002-1',
+      html_url: `https://github.com/${repository}/releases/tag/v0.1.0-1002-1`,
+    };
+    for (const tag_name of ['v0.1.0-1002-x', 'v0.1.0-', 'v0.1.0-alpha']) {
+      expect(() => generateReleaseManifest(input({ inventory: [[{ ...legacy, tag_name }]], prospective: { version: 'v0.1.42', commit: currentSha, releasedAt: '2026-08-08T01:12:15Z' } }))).toThrow(/historical release-tag contract/i);
+    }
+    expect(() => generateReleaseManifest(input({ inventory: [[{ ...legacy, html_url: `https://github.com/${repository}/releases/tag/v0.1.0-1002-2` }]], prospective: { version: 'v0.1.42', commit: currentSha, releasedAt: '2026-08-08T01:12:15Z' } }))).toThrow(/untrusted release URL/i);
+    const fallback = generateFallbackManifest({ repository, inventory: [[legacy]], commitMetadata: metadata });
+    expect(fallback.entries[0]).toMatchObject({ version: legacy.tag_name, releaseUrl: legacy.html_url, commit: publishedSha });
+    const reconciled = reconcilePublishedManifest(generateReleaseManifest(input({ inventory: [[legacy]], prospective: { version: 'v0.1.42', commit: currentSha, releasedAt: '2026-08-08T01:12:15Z' } })), '2026-08-08T01:15:09Z');
+    expect(reconciled.entries.find((entry) => entry.version === legacy.tag_name)).toMatchObject({ releaseUrl: legacy.html_url, commit: publishedSha });
   });
 
   it('rejects malformed and untrusted release metadata', () => {
@@ -110,13 +145,13 @@ describe('release changelog generator', () => {
     const manifest = generateFallbackManifest({ repository, inventory: [[publishedRelease]], commitMetadata: metadata });
     expect(manifest.generatedAt).toBe('2026-08-07T16:35:52.000Z');
     expect(manifest.entries).toHaveLength(1);
-    expect(manifest.entries[0]).toMatchObject({ version: 'v0.1.0-1', publicationState: 'published' });
+    expect(manifest.entries[0]).toMatchObject({ version: 'v0.1.0', publicationState: 'published' });
   });
 
   it('sorts newest first and reconciles the prospective entry without a source change', () => {
     const pending = generateReleaseManifest(input());
     const published = reconcilePublishedManifest(pending, '2026-08-08T01:15:09Z');
-    expect(published.entries[0]).toMatchObject({ version: 'v0.1.0-2', releasedAt: '2026-08-08T01:15:09.000Z', publicationState: 'published' });
+    expect(published.entries[0]).toMatchObject({ version: 'v0.1.42', releasedAt: '2026-08-08T01:15:09.000Z', publicationState: 'published' });
     expect(published.entries.every((entry) => entry.publicationState === 'published')).toBe(true);
     expect(() => validateManifest(published, { allowPending: false })).not.toThrow();
   });
@@ -128,8 +163,8 @@ describe('release changelog generator', () => {
       ...pending,
       entries: pending.entries.map((entry, index) => index === 0 ? { ...entry, unexpected: true } : entry),
     }, '2026-08-08T01:15:09Z')).toThrow(/unknown fields/);
-    const first = { ...pending.entries[0], version: 'v0.1.0-2', releasedAt: '2026-08-08T01:12:15.000Z' };
-    const second = { ...pending.entries[1], version: 'v0.1.0-9', releasedAt: '2026-08-08T01:12:15.000Z' };
+    const first = { ...pending.entries[0], version: 'v0.1.42', releasedAt: '2026-08-08T01:12:15.000Z' };
+    const second = { ...pending.entries[1], version: 'v0.1.99', releasedAt: '2026-08-08T01:12:15.000Z' };
     expect(() => validateManifest({ ...pending, entries: [first, second] })).toThrow(/equal-time tag ordering/);
   });
 

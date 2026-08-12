@@ -13,6 +13,8 @@ export const MAX_CHANGE_LENGTH = 240;
 
 const REPOSITORY_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const TAG_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/;
+const EXACT_RELEASE_TAG_PATTERN = /^v\d+\.\d+\.\d+$/;
+const LEGACY_RELEASE_TAG_PATTERN = /^v\d+\.\d+\.\d+(?:-\d+)+$/;
 const SHA_PATTERN = /^[0-9a-f]{40}$/;
 const SENSITIVE_PATTERNS = [
   /\bgh[oprsu]_[A-Za-z0-9]{20,}\b/i,
@@ -64,6 +66,20 @@ function requireSha(value, label) {
 function requireTag(value, label = 'Release tag') {
   const tag = String(value ?? '');
   if (!TAG_PATTERN.test(tag)) throw new Error(`${label} is malformed or exceeds 80 characters.`);
+  return tag;
+}
+
+function requirePublishedTag(value, label = 'Published release tag') {
+  const tag = requireTag(value, label);
+  if (!EXACT_RELEASE_TAG_PATTERN.test(tag) && !LEGACY_RELEASE_TAG_PATTERN.test(tag)) {
+    throw new Error(`${label} is outside the exact or historical release-tag contract.`);
+  }
+  return tag;
+}
+
+function requireProspectiveTag(value, label = 'Prospective release tag') {
+  const tag = requireTag(value, label);
+  if (!EXACT_RELEASE_TAG_PATTERN.test(tag)) throw new Error(`${label} must exactly equal v<effective-version>.`);
   return tag;
 }
 
@@ -180,7 +196,7 @@ function publishedReleaseDetails(repository, inventory, commitMetadata) {
   const details = [];
   for (const release of releases) {
     if (typeof release !== 'object') throw new Error('A release inventory row was malformed.');
-    const version = requireTag(release.tag_name);
+    const version = requirePublishedTag(release.tag_name);
     if (seenTags.has(version)) throw new Error(`Duplicate release tag: ${version}.`);
     seenTags.add(version);
     const expectedUrl = releaseUrl(repository, version);
@@ -215,7 +231,7 @@ export function generateFallbackManifest({ repository, inventory, commitMetadata
 
 export function generateReleaseManifest({ repository, inventory, prospective, commitMetadata, dish = null }) {
   const { details, seenTags } = publishedReleaseDetails(repository, inventory, commitMetadata);
-  const version = requireTag(prospective?.version, 'Prospective release tag');
+  const version = requireProspectiveTag(prospective?.version, 'Prospective release tag');
   if (seenTags.has(version)) throw new Error(`Prospective release tag duplicates published tag ${version}.`);
   const commit = requireSha(prospective?.commit, 'Prospective release commit');
   details.push({
@@ -265,7 +281,7 @@ export function validateManifest(manifest, { allowPending = true } = {}) {
   let previousVersion = null;
   for (const entry of manifest.entries) {
     assertExactKeys(entry, ['version', 'releasedAt', 'commit', 'changes', 'releaseUrl', 'publicationState', 'dimSum'], 'Release manifest entry');
-    const tag = requireTag(entry.version);
+    const tag = requirePublishedTag(entry.version, 'Release manifest tag');
     if (tags.has(tag)) throw new Error(`Duplicate manifest tag: ${tag}.`);
     tags.add(tag);
     const timestamp = requireIsoTimestamp(entry.releasedAt, `Release ${tag} timestamp`);
@@ -299,7 +315,7 @@ export function renderGeneratedModule(manifest) {
 
 export function renderGeneratedSiteModule(manifest) {
   validateManifest(manifest);
-  if (manifest.entries.some((entry) => !/^v\d+\.\d+\.\d+(?:-\d+)+$/.test(entry.version))) throw new Error('The site release manifest contains a tag outside the static-site version contract.');
+  if (manifest.entries.some((entry) => !EXACT_RELEASE_TAG_PATTERN.test(entry.version) && !LEGACY_RELEASE_TAG_PATTERN.test(entry.version))) throw new Error('The site release manifest contains a tag outside the exact or historical static-site version contract.');
   const siteManifest = {
     schemaVersion: manifest.schemaVersion,
     repository: manifest.repository,
