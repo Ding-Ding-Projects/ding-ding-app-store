@@ -37,7 +37,7 @@ describe('release inventory compactor', () => {
     const manifest = generateReleaseManifest({
       repository: 'Ding-Ding-Projects/ding-ding-app-store',
       inventory: compacted,
-      prospective: { version: 'v0.1.0-2', commit: '2222222222222222222222222222222222222222', releasedAt: '2026-08-08T01:12:15Z' },
+      prospective: { version: 'v0.1.42', commit: '2222222222222222222222222222222222222222', releasedAt: '2026-08-08T01:12:15Z' },
       commitMetadata: {
         [sha]: { subject: 'Ship the initial application', files: ['src/main/main.ts'] },
         '2222222222222222222222222222222222222222': { subject: 'Generate bounded release metadata', files: ['scripts/compact-release-inventory.mjs'] },
