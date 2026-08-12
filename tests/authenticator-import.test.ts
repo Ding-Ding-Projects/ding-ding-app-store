@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { normalizeAuthenticatorImportText } from '../src/renderer/authenticator-import';
 
 describe('local authenticator clipboard import', () => {
@@ -17,5 +19,16 @@ describe('local authenticator clipboard import', () => {
 
   it('does not interpret arbitrary text as a URI or perform any network operation', () => {
     expect(() => normalizeAuthenticatorImportText('https://example.com/otpauth')).toThrow(/otpauth/);
+  });
+
+  it('keeps the privileged clipboard route narrow and fail-closed', async () => {
+    const main = readFileSync(path.join(process.cwd(), 'src/main/main.ts'), 'utf8');
+    const preload = readFileSync(path.join(process.cwd(), 'src/preload/index.ts'), 'utf8');
+    const source = `${main} ${preload}`;
+    expect(source).toContain('authenticator:clipboard-prepare');
+    expect(source).toContain('event.sender !== mainWindow?.webContents');
+    expect(source).toContain('AUTHENTICATOR_MAX_URI_LENGTH');
+    expect(source).not.toContain('authenticator:clipboard-read');
+    expect(source).not.toContain('readClipboardText');
   });
 });

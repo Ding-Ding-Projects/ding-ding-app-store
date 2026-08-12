@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, clipboard, ipcMain, session, shell } from 'electron';
 import squirrelStartup from 'electron-squirrel-startup';
 import { z } from 'zod';
-import type { AuthenticatorBulkDeleteRequest, AuthenticatorBulkDeleteResult, AuthenticatorDeleteRequest, AuthenticatorDeleteResult, AuthenticatorExportRequest, AuthenticatorExportResult, AuthenticatorGroupRequest, AuthenticatorListResult, AuthenticatorMutationResult, AuthenticatorPreviewRequest, AuthenticatorPreviewResult, AuthenticatorRegistrationConfirmRequest, AuthenticatorRegistrationPreviewResult, AuthenticatorRegistrationRequest, AuthenticatorRenameRequest, AuthenticatorReorderRequest, AuthenticatorStatus, ElementKey, ElementOverride, ExternalEditorOpenRequest, ExternalEditorPreference, HistoryExportFormat, InstallCancelRequest, LockCredentialRequest, LockSetRequest, LockTarget, OperationRequest, SchoolModeConfigureRequest, SchoolModeCredentialChangeRequest, SchoolModeRenameRequest, SchoolModeToggleRequest, SchoolModeVerifyRequest, SourceJobCancelRequest, SourceJobRequest, SupportTicketCreateRequest, TabWorkspace, UserSettings } from '../shared/contracts.js';
+import { AUTHENTICATOR_MAX_URI_LENGTH, type AuthenticatorBulkDeleteRequest, type AuthenticatorBulkDeleteResult, type AuthenticatorDeleteRequest, type AuthenticatorDeleteResult, type AuthenticatorExportRequest, type AuthenticatorExportResult, type AuthenticatorGroupRequest, type AuthenticatorListResult, type AuthenticatorMutationResult, type AuthenticatorPreviewRequest, type AuthenticatorPreviewResult, type AuthenticatorRegistrationConfirmRequest, type AuthenticatorRegistrationPreviewResult, type AuthenticatorRegistrationRequest, type AuthenticatorRenameRequest, type AuthenticatorReorderRequest, type AuthenticatorStatus, type ElementKey, type ElementOverride, type ExternalEditorOpenRequest, type ExternalEditorPreference, type HistoryExportFormat, type InstallCancelRequest, type LockCredentialRequest, type LockSetRequest, type LockTarget, type OperationRequest, type SchoolModeConfigureRequest, type SchoolModeCredentialChangeRequest, type SchoolModeRenameRequest, type SchoolModeToggleRequest, type SchoolModeVerifyRequest, type SourceJobCancelRequest, type SourceJobRequest, type SupportTicketCreateRequest, type TabWorkspace, type UserSettings } from '../shared/contracts.js';
 import { AppearanceService } from './appearance-service.js';
 import { CatalogService } from './catalog-service.js';
 import { HistoryService } from './history-service.js';
@@ -281,11 +281,24 @@ void app.whenReady().then(async () => {
     if (!(await authenticatorAllowed())) return authenticatorRestrictedStatus();
     return authenticator.status();
   });
-  ipcMain.handle('authenticator:clipboard-read', async (event) => {
+  ipcMain.handle('authenticator:clipboard-prepare', async (event, attemptId: unknown) => {
     if (event.sender !== mainWindow?.webContents) return Promise.reject(new Error('Blocked authenticator clipboard request from an unknown renderer.'));
-    if (!(await authenticatorAllowed())) return '';
+    if (!(await authenticatorAllowed())) return authenticatorRestrictedRegistration();
+    const normalizedAttemptId = typeof attemptId === 'string' ? attemptId : undefined;
     const value = clipboard.readText();
-    return Buffer.byteLength(value, 'utf8') <= 2_048 ? value : '';
+    if (!value.trim()) return {
+      ok: false,
+      storage: 'memory-only' as const,
+      message: 'The local clipboard does not contain an authenticator URI.',
+      messageYue: '本機剪貼簿冇 authenticator URI。',
+    };
+    if (Buffer.byteLength(value, 'utf8') > AUTHENTICATOR_MAX_URI_LENGTH) return {
+      ok: false,
+      storage: 'memory-only' as const,
+      message: 'The clipboard URI is too large; nothing was imported.',
+      messageYue: '剪貼簿 URI 太大；冇匯入任何內容。',
+    };
+    return authenticator.prepare({ source: 'otpauth-uri', uri: value, attemptId: normalizedAttemptId });
   });
   ipcMain.handle('authenticator:preview', (event, request: unknown) => {
     if (event.sender !== mainWindow?.webContents) return Promise.reject(new Error('Blocked authenticator preview request from an unknown renderer.'));
