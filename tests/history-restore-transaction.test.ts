@@ -140,8 +140,9 @@ describe('history restore transaction recovery', () => {
         throw unsupported;
       },
     };
-    await expect(applyRestoreTransaction(transactionRoot, targetRoot, prepared, unavailableParticipant)).rejects.toMatchObject({ code: 'EUNSUPPORTED' });
-    await expect(readFile(path.join(transactionRoot, 'manifest.json'), 'utf8')).resolves.toContain('prepared');
+    await writeJsonAtomic(path.join(transactionRoot, 'manifest.json'), { ...prepared, phase: 'applying' });
+    await expect(recoverRestoreTransaction(transactionRoot, targetRoot, undefined, unavailableParticipant)).rejects.toMatchObject({ code: 'EUNSUPPORTED' });
+    await expect(readFile(path.join(transactionRoot, 'manifest.json'), 'utf8')).resolves.toContain('applying');
     await expect(readFile(innerJournal, 'utf8')).resolves.toContain('applying');
     await expect(readFile(path.join(targetRoot, 'settings.v1.json'), 'utf8')).resolves.toBe('{"old":"settings.v1.json"}\n');
   });
