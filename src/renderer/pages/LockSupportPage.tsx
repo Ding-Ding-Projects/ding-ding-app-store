@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { downloadText } from '../files';
+import { openExportInVsCode, isExternalEditorBridgeAvailable } from '../external-editor';
 import { ELEMENTS, TOKEN_IDS } from '../../shared/contracts';
 import type { LockTarget, LockUnlockDuration, SupportTicketCategory, SupportTicketSeverity, TabId, TabWorkspace, UserSettings } from '../../shared/contracts';
 import { el } from '../el';
@@ -68,6 +70,9 @@ export function LockSupportPage({ settings, workspace, locks, support, notify, m
   const [category, setCategory] = useState<SupportTicketCategory>('unlock');
   const [severity, setSeverity] = useState<SupportTicketSeverity>('normal');
   const [description, setDescription] = useState('');
+  const [selectedTickets, setSelectedTickets] = useState<string[]>([]);
+  const [lastTicketIndex, setLastTicketIndex] = useState<number | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const targets = useMemo<LockTarget[]>(() => [
     ...workspace.tabs.map((tab) => ({ targetKind: 'tab' as const, targetId: tab.id })),
@@ -134,6 +139,26 @@ export function LockSupportPage({ settings, workspace, locks, support, notify, m
       notify({ ok: true, message: 'The application-data path was copied.' });
     } catch { notify({ ok: false, message: 'The path could not be copied; select it manually.' }); }
   };
+  const visibleTickets = support.state.tickets.filter((ticket) => matcher(`${ticket.number}\n${ticket.category}\n${ticket.description}\n${ticket.status}`));
+  const toggleTicket = (id: string, index: number, range: boolean) => {
+    const ids = range && lastTicketIndex !== null ? visibleTickets.slice(Math.min(lastTicketIndex, index), Math.max(lastTicketIndex, index) + 1).map((ticket) => ticket.id) : [id];
+    setSelectedTickets((current) => { const next = new Set(current); const select = range ? !ids.every((candidate) => next.has(candidate)) : !next.has(id); ids.forEach((candidate) => select ? next.add(candidate) : next.delete(candidate)); return [...next]; });
+    setLastTicketIndex(index);
+  };
+  const exportTickets = async (format: 'json' | 'markdown', openInCode = false) => {
+    const tickets = visibleTickets.filter((ticket) => selectedTickets.length ? selectedTickets.includes(ticket.id) : true);
+    const content = format === 'json' ? `${JSON.stringify({ schemaVersion: 1, exported: 'visible Support Tickets', tickets }, null, 2)}\n` : `# Support Tickets\n\nVisible records exported from the local desk.\n\n${tickets.map((ticket) => `## ${ticket.number}\n- Status: ${ticket.status}\n- Severity: ${ticket.severity}\n- Created: ${ticket.createdAt}\n\n${ticket.description}\n`).join('\n')}`;
+    if (openInCode) { const result = await openExportInVsCode({ recordKind: 'support-tickets', suggestedName: `support-tickets.${format === 'json' ? 'json' : 'md'}`, mime: format === 'json' ? 'application/json' : 'text/markdown', content }); notify({ ok: result.ok, message: result.ok ? 'Support Tickets export opened in Visual Studio Code.' : result.message }); }
+    else { downloadText(`support-tickets.${format === 'json' ? 'json' : 'md'}`, content, format === 'json' ? 'application/json' : 'text/markdown'); notify({ ok: true, message: `Exported ${tickets.length} Support Tickets.` }); }
+  };
+  useEffect(() => { setSelectedTickets((current) => current.filter((id) => visibleTickets.some((ticket) => ticket.id === id))); }, [support.state.tickets, matcher]);
+  const bulkAdvance = async () => {
+    const ids = selectedTickets.filter((id) => visibleTickets.some((ticket) => ticket.id === id));
+    if (!ids.length || bulkBusy) return;
+    setBulkBusy(true);
+    try { const result = await support.bulkAdvance({ ticketIds: ids }); if (result.ok) setSelectedTickets([]); }
+    finally { setBulkBusy(false); }
+  };
 
   return (
     <div className="lock-support-grid">
@@ -189,11 +214,12 @@ export function LockSupportPage({ settings, workspace, locks, support, notify, m
           <code>{support.state.recoveryPath || label(settings, 'Loading path…', '載入緊路徑…')}</code>
           <div className="settings-actions"><button className="text-button" disabled={!support.state.recoveryPath} onClick={() => void copyPath()}>{label(settings, 'Copy path', '複製路徑')}</button><button className="tonal-button" disabled={!support.state.recoveryPath} onClick={() => void support.openRecoveryFolder()}><Icon>folder_open</Icon>{label(settings, 'Open folder', '開資料夾')}</button></div>
         </div>
-        <div className="ticket-list" aria-label={label(settings, 'Local ticket list', '本機支援票清單')}>
-          {support.state.tickets.filter((ticket) => matcher(`${ticket.number}\n${ticket.category}\n${ticket.description}\n${ticket.status}`)).map((ticket) => <article className="ticket-row" key={ticket.id}><div><strong>{ticket.number}</strong><small>{label(settings, CATEGORY_LABELS[ticket.category].en, CATEGORY_LABELS[ticket.category].yue)} · {label(settings, SEVERITY_LABELS[ticket.severity].en, SEVERITY_LABELS[ticket.severity].yue)} · {label(settings, ticket.status, ticket.status === 'created' ? '已建立' : ticket.status === 'reviewed' ? '已閱' : '已解決')}</small><p>{ticket.description}</p><p className="supporting">{label(settings, ticket.firstResponse, '第一個回覆：服務台睇過一次說明書。乜都冇傳出去；唔記得鎖就自己刪除應用程式資料夾重設。')}</p></div><button className="text-button" disabled={ticket.status === 'resolved'} onClick={() => void support.advance(ticket.id)}>{ticket.status === 'created' ? label(settings, 'Mark reviewed', '標記已閱') : label(settings, 'Mark resolved', '標記已解決')}</button></article>)}
+        <div className="ticket-list" aria-label={label(settings, 'Local ticket list', '本機支援票清單')}><div className="settings-actions"><span role="status">{label(settings, `${selectedTickets.length} selected · ${visibleTickets.length} shown`, `已揀 ${selectedTickets.length} · 顯示 ${visibleTickets.length}`)}</span><button className="text-button" onClick={() => setSelectedTickets(visibleTickets.map((ticket) => ticket.id))}>{label(settings, 'Select shown', '揀顯示項目')}</button><button className="text-button" onClick={() => setSelectedTickets((current) => visibleTickets.filter((ticket) => !current.includes(ticket.id)).map((ticket) => ticket.id))}>{label(settings, 'Invert', '反轉')}</button><button className="text-button" onClick={() => setSelectedTickets([])}>{label(settings, 'Clear', '清除')}</button><button className="filled-button" disabled={!selectedTickets.length || bulkBusy} onClick={() => void bulkAdvance()}>{bulkBusy ? label(settings, 'Advancing…', '推進緊…') : label(settings, 'Advance selected', '推進已揀')}</button><button className="text-button" disabled={!visibleTickets.length} onClick={() => void exportTickets('json')}>{label(settings, 'Export JSON', '匯出 JSON')}</button><button className="text-button" disabled={!visibleTickets.length} onClick={() => void exportTickets('markdown')}>{label(settings, 'Export Markdown', '匯出 Markdown')}</button><button className="text-button" disabled={!visibleTickets.length || !isExternalEditorBridgeAvailable()} onClick={() => void exportTickets('json', true)}>{label(settings, 'Open JSON in VS Code', '喺 VS Code 開 JSON')}</button></div>
+          {visibleTickets.map((ticket, index) => <article className="ticket-row" tabIndex={0} role="group" key={ticket.id} onKeyDown={(event) => { if (event.key === ' ' || event.key === 'Enter') { event.preventDefault(); toggleTicket(ticket.id, index, event.shiftKey); } }}><input type="checkbox" aria-label={`${ticket.number} ${ticket.status}`} checked={selectedTickets.includes(ticket.id)} onChange={(event) => toggleTicket(ticket.id, index, false)} /><div><strong>{ticket.number}</strong><small>{label(settings, CATEGORY_LABELS[ticket.category].en, CATEGORY_LABELS[ticket.category].yue)} · {label(settings, SEVERITY_LABELS[ticket.severity].en, SEVERITY_LABELS[ticket.severity].yue)} · {label(settings, ticket.status, ticket.status === 'created' ? '已建立' : ticket.status === 'reviewed' ? '已閱' : '已解決')}</small><p>{ticket.description}</p><p className="supporting">{label(settings, ticket.firstResponse, '第一個回覆：服務台睇過一次說明書。乜都冇傳出去；唔記得鎖就自己刪除應用程式資料夾重設。')}</p></div><button className="text-button" disabled={ticket.status === 'resolved'} onClick={() => void support.advance(ticket.id)}>{ticket.status === 'created' ? label(settings, 'Mark reviewed', '標記已閱') : label(settings, 'Mark resolved', '標記已解決')}</button></article>)}
           {!support.state.tickets.length && <p className="supporting">{label(settings, 'No local tickets yet.', '暫時冇本機支援票。')}</p>}
         </div>
       </section>
     </div>
   );
 }
+

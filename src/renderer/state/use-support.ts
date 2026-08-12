@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { SupportState, SupportTicketCreateRequest, SupportTicketMutationResult } from '../../shared/contracts';
+import type { SupportState, SupportTicketCreateRequest, SupportTicketBulkAdvanceRequest, SupportTicketBulkAdvanceResult, SupportTicketMutationResult } from '../../shared/contracts';
 import type { Notify } from '../notify';
 
 export const EMPTY_SUPPORT_STATE: SupportState = {
@@ -15,6 +15,7 @@ export interface SupportApi {
   reload(): Promise<void>;
   create(request: SupportTicketCreateRequest): Promise<SupportTicketMutationResult>;
   advance(ticketId: string): Promise<SupportTicketMutationResult>;
+  bulkAdvance(request: SupportTicketBulkAdvanceRequest): Promise<SupportTicketBulkAdvanceResult>;
   openRecoveryFolder(): Promise<{ ok: boolean; path: string; message: string }>;
 }
 export function useSupport(notify: Notify): SupportApi {
@@ -41,6 +42,10 @@ export function useSupport(notify: Notify): SupportApi {
   }, [notify, state]);
   const create = useCallback((request: SupportTicketCreateRequest) => apply(() => window.dingDingStore.support.create(request)), [apply]);
   const advance = useCallback((ticketId: string) => apply(() => window.dingDingStore.support.advance(ticketId)), [apply]);
+  const bulkAdvance = useCallback(async (request: SupportTicketBulkAdvanceRequest) => {
+    try { const result = await window.dingDingStore.support.bulkAdvance(request); setState(result.state); notify({ ok: result.ok, message: result.message }); return result; }
+    catch (error) { const message = (error as Error).message; notify({ ok: false, message }); return { ok: false, state, message, committed: [], skipped: [], uncertain: [], reason: 'storage-failed' as const }; }
+  }, [notify, state]);
   const openRecoveryFolder = useCallback(() => window.dingDingStore.support.openRecoveryFolder().then((result) => {
     notify({ ok: result.ok, message: result.message });
     return result;
@@ -49,5 +54,5 @@ export function useSupport(notify: Notify): SupportApi {
     notify({ ok: false, message });
     return { ok: false, path: state.recoveryPath, message };
   }), [notify, state.recoveryPath]);
-  return { state, loading, reload, create, advance, openRecoveryFolder };
+  return { state, loading, reload, create, advance, bulkAdvance, openRecoveryFolder };
 }

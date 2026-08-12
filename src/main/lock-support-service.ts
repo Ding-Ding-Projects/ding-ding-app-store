@@ -284,8 +284,10 @@ export class LockSupportService {
         await this.recordHistory(`Advanced ${committed.length} local Support Tickets in one atomic batch; skipped ${skipped.length}.`);
         return { ok: true, state: this.supportState(), message: `Advanced ${committed.length} local tickets; skipped ${skipped.length}.`, committed, skipped, uncertain };
       } catch {
+        const persisted = this.tickets;
         this.tickets = previousTickets;
-        uncertain.push(...committed);
+        try { await writeJsonAtomic(this.ticketPath, { schemaVersion: 1, tickets: previousTickets }); }
+        catch { this.tickets = persisted; uncertain.push(...committed); return { ok: false, state: this.supportState(), message: 'The local ticket batch outcome is uncertain because rollback failed; review the shown statuses before retrying.', committed: [], skipped, uncertain, reason: 'storage-failed' }; }
         return { ok: false, state: this.supportState(), message: 'The local ticket batch could not be saved; no status change was committed.', committed: [], skipped, uncertain, reason: 'storage-failed' };
       }
     });
