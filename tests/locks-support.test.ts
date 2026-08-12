@@ -34,6 +34,8 @@ describe('tab/group UX locks and local Support Tickets', () => {
     expect(service).toContain('generateTotp');
     expect(service).toContain("targetKind: 'appearance-property'");
     expect(service).toContain('rate-limited');
+    expect(service).toContain('Appearance property ${target.targetId}');
+    expect(service).toContain('locksReadFailed');
     expect(service).not.toContain('safeStorage.decryptString(entry.secret)');
   });
 
@@ -89,5 +91,14 @@ describe('tab/group UX locks and local Support Tickets', () => {
     expect(service).toContain('async assertAppearanceMutation');
     expect(appearance).toContain('mutationGuard?.(elementKey');
     expect(appearance).toContain('await this.mutationGuard?.(key, {}, current.elements[key] ?? {})');
+    const page = await read('src/renderer/pages/LockSupportPage.tsx');
+    const rail = await read('src/renderer/components/TabRail.tsx');
+    expect(page).toContain('Current TOTP code (pairing confirmation)');
+    expect(page).toContain('confirmationCode: credentialKind === \'totp\' ? confirmationCode');
+    expect(rail).toContain("lock.credentialKind === 'totp' ? 'Current TOTP code'");
+    expect(rail).toContain("autoComplete={lock.credentialKind === 'totp' ? 'one-time-code'");
+    const main = await read('src/main/main.ts');
+    expect(main).toContain('hasLockedAppearanceProperties');
+    expect(main).toContain('History restore is paused while an appearance property lock is active');
   });
 });

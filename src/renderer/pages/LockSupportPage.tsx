@@ -35,6 +35,7 @@ export function LockSupportPage({ settings, workspace, locks, support, notify, m
   const [target, setTarget] = useState<LockTarget>({ targetKind: 'tab', targetId: workspace.tabs[0]?.id ?? 'catalog' });
   const [credential, setCredential] = useState('');
   const [currentCredential, setCurrentCredential] = useState('');
+  const [confirmationCode, setConfirmationCode] = useState('');
   const [credentialKind, setCredentialKind] = useState<'password' | 'totp'>('password');
   const [category, setCategory] = useState<SupportTicketCategory>('unlock');
   const [severity, setSeverity] = useState<SupportTicketSeverity>('normal');
@@ -51,6 +52,7 @@ export function LockSupportPage({ settings, workspace, locks, support, notify, m
       setTarget(initialTarget);
       setCredential('');
       setCurrentCredential('');
+      setConfirmationCode('');
     }
   }, [initialTarget, targets]);
   const targetLabel = (value: LockTarget): string => {
@@ -72,8 +74,8 @@ export function LockSupportPage({ settings, workspace, locks, support, notify, m
   const visibleTargets = targets.filter((candidate) => matcher(`${targetLabel(candidate)}\n${targetYue(candidate)}\n${candidate.targetKind}\nlock`));
   const selectedRecord = locks.state.records.find((record) => targetKey(record) === targetKey(target));
   const saveLock = async () => {
-    const result = await locks.set({ ...target, credentialKind, credential, confirmationCode: credentialKind === 'totp' ? currentCredential : undefined, currentCredential: selectedRecord && credentialKind === 'password' ? currentCredential : undefined });
-    if (result.ok) { setCredential(''); setCurrentCredential(''); }
+    const result = await locks.set({ ...target, credentialKind, credential, confirmationCode: credentialKind === 'totp' ? confirmationCode : undefined, currentCredential: selectedRecord ? currentCredential : undefined });
+    if (result.ok) { setCredential(''); setCurrentCredential(''); setConfirmationCode(''); }
   };
   const unlock = async () => {
     const result = await locks.unlock({ ...target, credential });
@@ -105,10 +107,13 @@ export function LockSupportPage({ settings, workspace, locks, support, notify, m
             if (next) { setTarget(next); setCredential(''); setCurrentCredential(''); }
           }} options={visibleTargets.map((candidate) => ({ value: targetKey(candidate), en: candidate.targetKind === 'tab' ? targetLabel(candidate) : `${label(settings, 'Group', '分組')} · ${targetLabel(candidate)}`, yue: candidate.targetKind === 'tab' ? targetYue(candidate) : `${label(settings, 'Group', '分組')} · ${targetYue(candidate)}` }))} />
         <SearchablePicker id="lock-credential-kind" labelText={label(settings, 'Credential method', '憑證方式')} settings={settings} value={credentialKind} onChange={(value) => setCredentialKind(value as 'password' | 'totp')} options={[{ value: 'password', en: 'Password', yue: '密碼' }, { value: 'totp', en: 'TOTP secret', yue: 'TOTP 秘密' }]} />
-        <label htmlFor="lock-current-credential">{label(settings, credentialKind === 'totp' ? 'TOTP secret or current code' : selectedRecord ? 'Current password (required to change or remove)' : 'Password', credentialKind === 'totp' ? 'TOTP 秘密或者目前驗證碼' : selectedRecord ? '目前密碼（修改或者移除時必須）' : '密碼')}
-          <input id="lock-current-credential" type="password" autoComplete="current-password" value={selectedRecord ? currentCredential : credential} onChange={(event) => selectedRecord ? setCurrentCredential(event.target.value) : setCredential(event.target.value)} maxLength={512} />
+        {selectedRecord && <label htmlFor="lock-current-credential">{label(settings, credentialKind === 'totp' ? 'Current TOTP code (required to change or remove)' : 'Current password (required to change or remove)', credentialKind === 'totp' ? '目前 TOTP 驗證碼（修改或者移除時必須）' : '目前密碼（修改或者移除時必須）')}
+          <input id="lock-current-credential" type="password" inputMode={credentialKind === 'totp' ? 'numeric' : undefined} autoComplete={credentialKind === 'totp' ? 'one-time-code' : 'current-password'} value={currentCredential} onChange={(event) => setCurrentCredential(event.target.value)} maxLength={512} />
+        </label>}
+        <label htmlFor="lock-new-credential">{label(settings, selectedRecord ? (credentialKind === 'totp' ? 'New TOTP secret' : 'New password') : (credentialKind === 'totp' ? 'TOTP secret' : 'Password'), selectedRecord ? (credentialKind === 'totp' ? '新 TOTP 秘密' : '新密碼') : (credentialKind === 'totp' ? 'TOTP 秘密' : '密碼'))}
+          <input id="lock-new-credential" type="password" autoComplete={credentialKind === 'totp' ? 'off' : 'new-password'} value={credential} onChange={(event) => setCredential(event.target.value)} maxLength={512} />
         </label>
-        {!selectedRecord && credentialKind === 'totp' && <label htmlFor="lock-totp-confirmation">{label(settings, 'Current TOTP code (pairing confirmation)', '目前 TOTP 驗證碼（配對確認）')}<input id="lock-totp-confirmation" inputMode="numeric" autoComplete="one-time-code" value={currentCredential} onChange={(event) => setCurrentCredential(event.target.value)} maxLength={8} /></label>}
+        {credentialKind === 'totp' && <label htmlFor="lock-totp-confirmation">{label(settings, 'Current TOTP code (pairing confirmation)', '目前 TOTP 驗證碼（配對確認）')}<input id="lock-totp-confirmation" inputMode="numeric" autoComplete="one-time-code" value={confirmationCode} onChange={(event) => setConfirmationCode(event.target.value)} maxLength={8} /></label>}
         {selectedRecord && <label htmlFor="lock-new-credential">{label(settings, 'New password', '新密碼')}<input id="lock-new-credential" type="password" autoComplete="new-password" value={credential} onChange={(event) => setCredential(event.target.value)} maxLength={512} /></label>}
         <div className="settings-actions">
           {!selectedRecord && <button className="filled-button" disabled={!locks.state.vaultAvailable || credential.length < 4} onClick={() => void saveLock()}><Icon>lock</Icon>{label(settings, 'Set lock', '設定鎖')}</button>}
@@ -118,7 +123,7 @@ export function LockSupportPage({ settings, workspace, locks, support, notify, m
         </div>
         <p className="supporting" role="status">{selectedRecord ? (selectedRecord.locked ? label(settings, 'This target is locked. Activation should ask for its own password before proceeding.', '呢個目標已鎖定；啟用前應該要求自己嗰個密碼。') : label(settings, 'This target is unlocked for this app session.', '呢個目標喺今次程式工作階段已解鎖。')) : label(settings, 'No lock is configured for this target.', '呢個目標未設定鎖。')}</p>
         <div className="ticket-list" aria-label={label(settings, 'Configured locks', '已設定嘅鎖')}>
-          {locks.state.records.filter((record) => matcher(`${targetLabel(record)}\n${targetYue(record)}\n${record.targetKind}\nlock`)).map((record) => <div className="ticket-row" key={targetKey(record)}><span><strong>{label(settings, targetLabel(record), targetYue(record))}</strong><small>{record.targetKind === 'tab' ? label(settings, 'Tab', '分頁') : record.targetKind === 'group' ? label(settings, 'Group', '分組') : label(settings, 'Appearance property', '外觀屬性')} · {label(settings, record.credentialKind === 'totp' ? 'TOTP' : 'Password', record.credentialKind === 'totp' ? 'TOTP' : '密碼')} · {record.locked ? label(settings, 'Locked', '已鎖定') : label(settings, 'Unlocked this session', '今次工作階段已解鎖')}</small></span><button className="text-button" onClick={() => { const next = { targetKind: record.targetKind, targetId: record.targetId } as LockTarget; setTarget(next); setCredential(''); setCurrentCredential(''); setCredentialKind(record.credentialKind); }}>{label(settings, 'Select', '選擇')}</button></div>)}
+          {locks.state.records.filter((record) => matcher(`${targetLabel(record)}\n${targetYue(record)}\n${record.targetKind}\nlock`)).map((record) => <div className="ticket-row" key={targetKey(record)}><span><strong>{label(settings, targetLabel(record), targetYue(record))}</strong><small>{record.targetKind === 'tab' ? label(settings, 'Tab', '分頁') : record.targetKind === 'group' ? label(settings, 'Group', '分組') : label(settings, 'Appearance property', '外觀屬性')} · {label(settings, record.credentialKind === 'totp' ? 'TOTP' : 'Password', record.credentialKind === 'totp' ? 'TOTP' : '密碼')} · {record.locked ? label(settings, 'Locked', '已鎖定') : label(settings, 'Unlocked this session', '今次工作階段已解鎖')}</small></span><button className="text-button" onClick={() => { const next = { targetKind: record.targetKind, targetId: record.targetId } as LockTarget; setTarget(next); setCredential(''); setCurrentCredential(''); setConfirmationCode(''); setCredentialKind(record.credentialKind); }}>{label(settings, 'Select', '選擇')}</button></div>)}
           {!locks.state.records.length && <p className="supporting">{label(settings, 'No locks configured yet.', '暫時未設定鎖。')}</p>}
         </div>
         <p className="supporting">{label(settings, 'Forgotten credentials are recovered only by deleting the application-data folder yourself. This is a UX reset, not a security recovery service.', '唔記得憑證只可以由你自己刪除應用程式資料夾重設。呢個係 UX 重設，唔係安全恢復服務。')}</p>

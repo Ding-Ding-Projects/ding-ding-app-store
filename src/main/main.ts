@@ -361,9 +361,12 @@ void app.whenReady().then(async () => {
   ipcMain.handle('history:label', (event, revisionId: unknown, requestedLabel: unknown) => event.sender === mainWindow?.webContents && typeof revisionId === 'string' && typeof requestedLabel === 'string'
     ? stateMutationQueue.run(() => history.label(revisionId, requestedLabel))
     : { ok: false, message: 'Blocked local history label request from an unknown renderer.' });
-  ipcMain.handle('history:restore', (event, revisionId: unknown) => {
+  ipcMain.handle('history:restore', async (event, revisionId: unknown) => {
     if (event.sender !== mainWindow?.webContents || typeof revisionId !== 'string') {
       return { ok: false, message: 'Blocked local history restore request from an unknown renderer.' };
+    }
+    if (await lockSupport.hasLockedAppearanceProperties()) {
+      return { ok: false, message: 'History restore is paused while an appearance property lock is active. Unlock the affected property before restoring a revision.' };
     }
     const barrier = stateMutationQueue.beginBarrier();
     return stateMutationQueue.runBarrier(async () => {
