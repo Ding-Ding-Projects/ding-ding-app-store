@@ -12,6 +12,7 @@ import { makeMatcher, useSurfaceSearch } from '../search';
 import type { AppearanceApi } from '../state/use-appearance';
 import { SearchBox } from './SearchBox';
 import { ColorTranslatorControl } from './ColorTranslatorControl';
+import { SearchablePicker } from './SearchablePicker';
 import { dialogCopy } from '../dialog-emoji';
 
 const ON_LIGHT = '#1d1b20';
@@ -144,22 +145,17 @@ function ColorField({ token, value, settings, onChange }: { token: TokenId; valu
     <div className="appearance-token-row">
       <span className="token-name">{label(settings, TOKEN_META[token].en, TOKEN_META[token].yue)}</span>
       <SettingExplanation settings={settings} explanation={TOKEN_META[token].explanation} persisted={value !== undefined} fallback={TOKEN_META[token].defaultValue} />
-      <label>
-        {label(settings, 'Role', '角色')}
-        <select
-          value={value ? (value.kind === 'role' ? value.role : 'custom') : 'default'}
-          onChange={(event) => {
-            const next = event.target.value;
+      <SearchablePicker
+        labelText={label(settings, 'Role', '角色')}
+        settings={settings}
+        value={value ? (value.kind === 'role' ? value.role : 'custom') : 'default'}
+        options={[{ value: 'default', en: 'Theme default', yue: '主題預設' }, ...COLOR_ROLES.map((role) => ({ value: role, en: role, yue: role })), { value: 'custom', en: 'Fixed colour', yue: '固定顏色' }]}
+        onChange={(next) => {
             if (next === 'default') onChange(undefined);
             else if (next === 'custom') onChange({ kind: 'hex', hex });
             else onChange({ kind: 'role', role: next as ColorRole });
           }}
-        >
-          <option value="default">{label(settings, 'Theme default', '主題預設')}</option>
-          {COLOR_ROLES.map((role) => <option key={role} value={role}>{role}</option>)}
-          <option value="custom">{label(settings, 'Fixed colour', '固定顏色')}</option>
-        </select>
-      </label>
+      />
       {value?.kind === 'hex' && <ColorTranslatorControl settings={settings} value={hex} labelText={label(settings, TOKEN_META[token].en, TOKEN_META[token].yue)} onChange={(next) => onChange({ kind: 'hex', hex: next })} />}
     </div>
   );

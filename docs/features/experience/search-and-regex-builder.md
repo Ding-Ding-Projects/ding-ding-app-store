@@ -12,6 +12,8 @@ summary: Gives every current collection/settings surface independent plain-text-
 
 Discover, Installed, Updates, Documentation, Activity, every Settings sub-tab, the command palette, tab rail, and appearance-element list each own an independent search state. Plain text is the default. The adjacent `.*` action opens the shared guided builder anchored to that field, with literals, character classes, anchors, groups, alternation, quantifiers, raw pattern, `i/m/s/u` flags, sample text, syntax feedback, live match text, capture-group computation, copy, and apply.
 
+Every bounded dropdown that the app exposes uses the same `SearchablePicker` contract: its trigger keeps the current typed value, opens a viewport-bounded listbox with a per-instance filter field and regex builder, supports Arrow/Home/End/Enter/Escape keyboard navigation, reports a truthful no-match state, and returns focus to the trigger after selection or cancellation. Settings selectors, Activity export formats, and Schedule rule selectors use this picker without changing their stored values; bilingual labels are applied at render time.
+
 Applying a pattern synchronizes the originating query, pattern, flags, and visible filter. Clearing one field clears only that surface. The command palette can open the builder for any named search surface.
 
 ## Configuration
@@ -28,7 +30,7 @@ Patterns and samples remain local and are not written to settings, catalog reque
 
 ## Verification
 
-Shared contract tests enumerate persisted surfaces and the command registry checks a builder command for every search. Type checks exercise the one shared component. Focused regex cases cover valid, invalid, unsupported flags, adversarial, plain-text, Unicode, multiline, capture, zero-width, bounded result text, and cancellation contracts; runtime keyboard focus across every anchored popover remains a separate visual/interaction gate. A packaged capture of each search surface remains runtime evidence rather than a claim from static tests.
+Shared contract tests enumerate persisted surfaces and the command registry checks a builder command for every search. `tests/searchable-picker.test.tsx` covers plain-text and regex filtering, invalid-pattern no-match behavior, localized labels, independent picker IDs, listbox semantics, and replacement of native selects on the migrated surfaces. Type checks exercise the one shared component. Focused regex cases cover valid, invalid, unsupported flags, adversarial, plain-text, Unicode, multiline, capture, zero-width, bounded result text, and cancellation contracts; runtime keyboard focus across every anchored popover remains a separate visual/interaction gate. A packaged capture of each search surface remains runtime evidence rather than a claim from static tests.
 
 ## Suggested articles
 

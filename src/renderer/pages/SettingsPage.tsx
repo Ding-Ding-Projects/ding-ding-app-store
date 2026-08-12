@@ -26,6 +26,7 @@ import { isExternalEditorBridgeAvailable, openExportInVsCode } from '../external
 import { ColorTranslatorControl } from '../components/ColorTranslatorControl';
 import { SourceIsolationStatusCard } from '../components/SourceIsolationStatusCard';
 import { LockSupportPage } from './LockSupportPage';
+import { SearchablePicker } from '../components/SearchablePicker';
 
 const ABOUT_ROWS = [
   { en: 'Version', yue: '版本', body: 'Ding Ding App Store preview 0.1.0.' },
@@ -140,7 +141,7 @@ export function SettingsPage({ settings, settingsProvenance, sourceIsolationStat
     const text = label(viewSettings, field.en, field.yue);
     const explanation = <SettingExplanation settings={viewSettings} field={field} provenance={settingsProvenance} />;
     if (field.kind === 'select') {
-      return <div className="setting-field" key={field.key}><label htmlFor={id}>{text}<select id={id} value={String(draft[field.key])} onChange={(event) => set(field.key, event.target.value as UserSettings[typeof field.key])}>{(field.options ?? []).map((option) => <option key={option.value} value={option.value}>{label(viewSettings, option.en, option.yue)}</option>)}</select></label>{explanation}</div>;
+      return <div className="setting-field" key={field.key}><SearchablePicker id={id} labelText={text} settings={viewSettings} value={String(draft[field.key])} onChange={(next) => set(field.key, next as UserSettings[typeof field.key])} options={(field.options ?? []).map((option) => ({ value: option.value, en: option.en, yue: option.yue }))} />{explanation}</div>;
     }
     if (field.kind === 'range') {
       return <div className="setting-field" key={field.key}><label htmlFor={id}>{text} <span>{String(draft[field.key])}</span><input id={id} type="range" min={field.min} max={field.max} value={Number(draft[field.key])} onChange={(event) => set(field.key, Number(event.target.value) as UserSettings[typeof field.key])} /></label>{explanation}</div>;
@@ -267,7 +268,7 @@ export function SettingsPage({ settings, settingsProvenance, sourceIsolationStat
               <p className="supporting" role={schoolAvailable ? 'status' : 'alert'}>{schoolSyncMessage}</p>
               {!schoolAvailable && <button className="text-button" disabled={schoolBusy} onClick={() => void schoolMode.reload()}>{label(viewSettings, 'Reload shared state', '重新載入共用狀態')}</button>}
               <label htmlFor="school-mode-name">{label(viewSettings, `${schoolLabel} name`, `${schoolLabel} 名稱`)}<input id="school-mode-name" value={schoolName} maxLength={64} disabled={schoolActionDisabled} title={schoolActionTitle} onChange={(event) => setSchoolName(event.target.value)} /></label>
-              <label htmlFor="school-mode-unlock-kind">{schoolMode.state.unlockKind ? label(viewSettings, 'New unlock choice', '新解鎖方式') : label(viewSettings, 'Unlock choice', '解鎖方式')}<select id="school-mode-unlock-kind" value={schoolUnlockKind} disabled={schoolActionDisabled} title={schoolActionTitle} onChange={(event) => setSchoolUnlockKind(event.target.value as SchoolSupportedUnlockKind)}><option value="pin">{label(viewSettings, 'PIN', 'PIN 碼')}</option><option value="password">{label(viewSettings, 'Password', '密碼')}</option></select></label>
+              <SearchablePicker id="school-mode-unlock-kind" labelText={schoolMode.state.unlockKind ? label(viewSettings, 'New unlock choice', '新解鎖方式') : label(viewSettings, 'Unlock choice', '解鎖方式')} settings={viewSettings} value={schoolUnlockKind} disabled={schoolActionDisabled} title={schoolActionTitle} onChange={(next) => setSchoolUnlockKind(next as SchoolSupportedUnlockKind)} options={[{ value: 'pin', en: 'PIN', yue: 'PIN 碼' }, { value: 'password', en: 'Password', yue: '密碼' }]} />
               <label htmlFor="school-mode-credential">{schoolMode.state.unlockKind ? label(viewSettings, 'Current local unlock credential', '目前本機解鎖憑證') : label(viewSettings, 'Local unlock credential', '本機解鎖憑證')}<input id="school-mode-credential" type="password" autoComplete={schoolMode.state.unlockKind ? 'current-password' : 'new-password'} value={schoolCredential} disabled={schoolActionDisabled} title={schoolActionTitle} onChange={(event) => setSchoolCredential(event.target.value)} /></label>
               {!schoolMode.state.unlockKind && <label htmlFor="school-mode-credential-confirm">{label(viewSettings, 'Confirm local unlock credential', '確認本機解鎖憑證')}<input id="school-mode-credential-confirm" type="password" autoComplete="new-password" value={schoolCredentialConfirm} disabled={schoolActionDisabled} title={schoolActionTitle} onChange={(event) => setSchoolCredentialConfirm(event.target.value)} /></label>}
               {schoolMode.state.unlockKind && <>

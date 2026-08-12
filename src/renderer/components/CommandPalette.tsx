@@ -9,6 +9,7 @@ import type { Action, Entry, EntryControl, EntryGroup, TokenValue } from '../reg
 import { highlight, makeMatcher, useSurfaceSearch } from '../search';
 import { SearchBox } from './SearchBox';
 import { ColorTranslatorControl } from './ColorTranslatorControl';
+import { SearchablePicker } from './SearchablePicker';
 
 const GROUP_ORDER: EntryGroup[] = ['Pages', 'Tabs', 'Appearance', 'Schedule', 'Search', 'Settings', 'Apps'];
 const GROUP_LABELS: Record<EntryGroup, { en: string; yue: string }> = {
@@ -82,9 +83,9 @@ export function CommandPalette({ settings, entries, onAction, onClose, openRegex
     const labelText = label(settings, entry.en, entry.yue);
     const stop = (event: ReactKeyboardEvent<HTMLElement> | React.MouseEvent<HTMLElement>) => event.stopPropagation();
     if (control.kind === 'select') return (
-      <select className="command-inline-control" aria-label={`${labelText} control`} value={control.value} onClick={stop} onChange={(event) => applyControl(entry, control, event.target.value)}>
-        {control.options.map((option) => <option key={option.value} value={option.value}>{label(settings, option.en, option.yue)}</option>)}
-      </select>
+      <div className="command-inline-control" onClick={stop} onKeyDown={stop}>
+        <SearchablePicker labelText={`${labelText} control`} settings={settings} value={control.value} options={control.options} onChange={(value) => applyControl(entry, control, value)} />
+      </div>
     );
     if (control.kind === 'range') return (
       <input className="command-inline-control command-inline-range" aria-label={`${labelText} control`} type="range" min={control.min} max={control.max} step={control.step ?? 1} value={control.value} onClick={stop} onChange={(event) => applyControl(entry, control, Number(event.target.value))} />
@@ -108,7 +109,7 @@ export function CommandPalette({ settings, entries, onAction, onClose, openRegex
 
   const trap = (event: ReactKeyboardEvent<HTMLElement>) => {
     if (event.key !== 'Tab') return;
-    const focusable = dialogRef.current?.querySelectorAll<HTMLElement>('button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])');
+    const focusable = dialogRef.current?.querySelectorAll<HTMLElement>('button:not([disabled]), input, textarea, [tabindex]:not([tabindex="-1"])');
     if (!focusable?.length) return;
     const first = focusable[0];
     const last = focusable[focusable.length - 1];

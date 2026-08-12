@@ -7,6 +7,7 @@ import type { Notify } from '../notify';
 import type { LocksApi } from '../state/use-locks';
 import type { SupportApi } from '../state/use-support';
 import { TAB_META } from '../registry';
+import { SearchablePicker } from '../components/SearchablePicker';
 
 const CATEGORY_LABELS: Record<SupportTicketCategory, { en: string; yue: string }> = {
   unlock: { en: 'Forgotten lock credential', yue: '唔記得鎖定憑證' },
@@ -88,14 +89,10 @@ export function LockSupportPage({ settings, workspace, locks, support, notify, m
         <h2 id="tab-locks-title"><Icon>lock</Icon>{label(settings, 'Tab and group locks', '分頁同分組鎖')}</h2>
         <p className="supporting">{label(settings, 'These are local UX speed bumps, not security, encryption, or protection from another person using this computer. Each lock uses its own password verifier.', '呢啲係本機 UX 減速帶，唔係安全、加密，亦唔係防止其他人用呢部機。每個鎖都有自己嘅密碼驗證器。')}</p>
         {!locks.state.vaultAvailable && <p className="notice warning" role="status"><Icon>warning</Icon>{label(settings, 'The operating-system credential vault is unavailable. Lock creation, unlock, and removal are disabled until the vault is available; no pretend security is offered.', '作業系統憑證庫用唔到。憑證庫恢復之前，設定、解鎖同移除都會停用；唔會扮有安全保護。')}</p>}
-        <label htmlFor="lock-target">{label(settings, 'Lock target', '鎖定目標')}
-          <select id="lock-target" value={targetKey(target)} onChange={(event) => {
-            const next = targets.find((candidate) => targetKey(candidate) === event.target.value);
+        <SearchablePicker id="lock-target" labelText={label(settings, 'Lock target', '鎖定目標')} settings={settings} value={targetKey(target)} onChange={(value) => {
+            const next = targets.find((candidate) => targetKey(candidate) === value);
             if (next) { setTarget(next); setCredential(''); setCurrentCredential(''); }
-          }}>
-            {visibleTargets.map((candidate) => <option key={targetKey(candidate)} value={targetKey(candidate)}>{candidate.targetKind === 'tab' ? label(settings, targetLabel(candidate), targetYue(candidate)) : `${label(settings, 'Group', '分組')} · ${targetLabel(candidate)}`}</option>)}
-          </select>
-        </label>
+          }} options={visibleTargets.map((candidate) => ({ value: targetKey(candidate), en: candidate.targetKind === 'tab' ? targetLabel(candidate) : `${label(settings, 'Group', '分組')} · ${targetLabel(candidate)}`, yue: candidate.targetKind === 'tab' ? targetYue(candidate) : `${label(settings, 'Group', '分組')} · ${targetYue(candidate)}` }))} />
         <label htmlFor="lock-current-credential">{label(settings, selectedRecord ? 'Current password (required to change or remove)' : 'Current password', selectedRecord ? '目前密碼（修改或者移除時必須）' : '目前密碼')}
           <input id="lock-current-credential" type="password" autoComplete="current-password" value={selectedRecord ? currentCredential : credential} onChange={(event) => selectedRecord ? setCurrentCredential(event.target.value) : setCredential(event.target.value)} maxLength={512} />
         </label>
@@ -118,8 +115,8 @@ export function LockSupportPage({ settings, workspace, locks, support, notify, m
         <h2 id="support-tickets-title"><Icon>support_agent</Icon>{label(settings, 'Support Tickets', '支援票')}</h2>
         <p className="support-disclosure" role="note">{label(settings, support.state.disclosure, '呢度乜都唔會傳出去。支援票只會留喺呢部機，唔會發出網絡請求，唔會收集資料，亦冇人睇緊。')}</p>
         <p className="supporting">{label(settings, 'This fictional desk opens the app-data folder for you; it never deletes anything and never contacts a real support team.', '呢個虛構服務台只會幫你開應用程式資料夾；永遠唔會代你刪嘢，亦唔會聯絡真正支援團隊。')}</p>
-        <label htmlFor="support-category">{label(settings, 'Category', '類別')}<select id="support-category" value={category} onChange={(event) => setCategory(event.target.value as SupportTicketCategory)}>{Object.entries(CATEGORY_LABELS).map(([value, copy]) => <option key={value} value={value}>{label(settings, copy.en, copy.yue)}</option>)}</select></label>
-        <label htmlFor="support-severity">{label(settings, 'Severity nobody will honour', '冇人會理嘅嚴重程度')}<select id="support-severity" value={severity} onChange={(event) => setSeverity(event.target.value as SupportTicketSeverity)}>{Object.entries(SEVERITY_LABELS).map(([value, copy]) => <option key={value} value={value}>{label(settings, copy.en, copy.yue)}</option>)}</select></label>
+        <SearchablePicker id="support-category" labelText={label(settings, 'Category', '類別')} settings={settings} value={category} onChange={(value) => setCategory(value as SupportTicketCategory)} options={Object.entries(CATEGORY_LABELS).map(([value, copy]) => ({ value, en: copy.en, yue: copy.yue }))} />
+        <SearchablePicker id="support-severity" labelText={label(settings, 'Severity nobody will honour', '冇人會理嘅嚴重程度')} settings={settings} value={severity} onChange={(value) => setSeverity(value as SupportTicketSeverity)} options={Object.entries(SEVERITY_LABELS).map(([value, copy]) => ({ value, en: copy.en, yue: copy.yue }))} />
         <label htmlFor="support-description">{label(settings, 'Description', '描述')}<textarea id="support-description" value={description} maxLength={2_000} rows={4} onChange={(event) => setDescription(event.target.value)} placeholder={label(settings, 'Explain what happened on this device.', '講下呢部機發生咩事。')} /></label>
         <div className="settings-actions"><button className="filled-button" disabled={!description.trim()} onClick={() => void createTicket()}><Icon>confirmation_number</Icon>{label(settings, 'Create local ticket', '建立本機支援票')}</button></div>
         <div className="support-recovery" aria-label={label(settings, 'Recovery folder', '恢復資料夾')}>
