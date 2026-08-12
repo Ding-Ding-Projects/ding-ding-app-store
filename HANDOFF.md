@@ -359,3 +359,10 @@ Implement the hard-disposable broker without host mounts or secrets, add reviewe
 - Added typed bulk IPC, serialized native mutation queue, visible-scope selection, keyboard focus and Shift-range intent, select/invert/clear counts, non-destructive Advance selected action, bounded JSON/Markdown export, and Visual Studio Code handoff.
 - Atomic write rollback is attempted after audit failure; if rollback cannot be proven, the result explicitly reports uncertain IDs. No delete path or network request exists.
 - Verification: `tests/locks-support.test.ts` 8/8, renderer/main TypeScript checks green, `npm run docs:check` green, generated offline/site/wiki docs synchronized. Packaged hidden-desktop runtime HuiShot remains pending.
+
+# Appearance property lock affordances — 2026-08-12
+
+- Implemented on `codex/appearance-property-lock-ui` in `fea48ffcba1a146f4261a550a3d75ebf28ad7dfb` and `ba82f1b99617b136d8d8d858a074a82dc07939f2`.
+- Added per-token **Lock this property** / **Manage property lock** actions to both the edit-mode AppearancePanel and Settings → Appearance override list. Each action uses the typed `appearance-property` target with the canonical `element:token` key and routes to Settings → Locks & Support with originating focus retained.
+- School mode and unavailable credential vault states disable the affordances with explicit localized explanations. Renderer code contains no stored credential, verifier, salt, or ciphertext path.
+- Verification: `tests/locks-support.test.ts` 9/9, renderer/main TypeScript checks, docs generation/check, and `git diff --check` green. Packaged hidden-desktop runtime HuiShot remains pending.
