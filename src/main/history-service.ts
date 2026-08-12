@@ -207,7 +207,7 @@ export class HistoryService {
       const changed = await gitText(this.repositoryPath, ['diff-tree', '--no-commit-id', '--name-only', '-r', id, '--', 'state'], 32_000);
       const changedFiles = (changed ?? '').split(/\r?\n/).filter((file): file is string => SNAPSHOT_FILES.includes(file) || file === 'state/labels.v1.json');
       const hasAuthenticatorSnapshot = await gitText(this.repositoryPath, ['cat-file', '-e', `${id}:state/authenticator-history.json`], 100) === '';
-      const protectedRestoreAvailable = !hasAuthenticatorSnapshot || this.authenticatorHistory?.restoreAvailable?.() === true;
+      const protectedRestoreAvailable = !hasAuthenticatorSnapshot || this.authenticatorRestoreAvailable();
       rows.push({ id: id.toLowerCase(), occurredAt, subject, label: labels[id.toLowerCase()] ?? subject, changedFiles, restorable: protectedRestoreAvailable && await this.revisionHasSnapshots(id) });
     }
     return rows;
@@ -251,7 +251,7 @@ export class HistoryService {
     const restored: Array<[string, string]> = [];
     const previous: Array<[string, string | null]> = [];
     const authenticatorTarget = this.authenticatorHistory ? await gitText(this.repositoryPath, ['show', `${id}:state/authenticator-history.json`], MAX_REVISION_BYTES) : null;
-    if (authenticatorTarget !== null && this.authenticatorHistory?.restoreAvailable?.() !== true) return { ok: false, message: 'Protected authenticator restore is unavailable until native atomic no-follow vault operations are available; no files were changed.' };
+    if (authenticatorTarget !== null && !this.authenticatorRestoreAvailable()) return { ok: false, message: 'Protected authenticator restore is unavailable until native atomic no-follow vault operations are available; no files were changed.' };
     const authenticatorPrevious = authenticatorTarget !== null && this.authenticatorHistory ? await this.authenticatorHistory.snapshot() : null;
     if (authenticatorTarget !== null && authenticatorPrevious === null) return { ok: false, message: 'The current authenticator state could not be preserved safely; no files were changed.' };
     for (const definition of SNAPSHOT_DEFINITIONS) {
@@ -350,6 +350,11 @@ export class HistoryService {
 
   private async snapshot(label: string, force = false): Promise<boolean> {
     return this.enqueueState(() => this.snapshotUnlocked(label, force));
+  }
+
+  private authenticatorRestoreAvailable(): boolean {
+    if (!this.authenticatorHistory?.restoreAvailable) return false;
+    try { return this.authenticatorHistory.restoreAvailable() === true; } catch { return false; }
   }
 
   private enqueueState<T>(task: () => Promise<T>): Promise<T> {

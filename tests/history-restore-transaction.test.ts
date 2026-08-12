@@ -123,4 +123,26 @@ describe('history restore transaction recovery', () => {
 
     await expect(recoverRestoreTransaction(transactionRoot, targetRoot)).rejects.toThrow('manifest was invalid');
   });
+
+  it('retains outer and inner journals when protected authenticator rollback is unavailable', async () => {
+    const { transactionRoot, targetRoot } = await fixture();
+    const innerJournal = path.join(path.dirname(transactionRoot), 'authenticator-history-journal.json');
+    await writeFile(innerJournal, '{"schemaVersion":1,"phase":"applying"}\n', 'utf8');
+    const prepared = await prepareRestoreTransaction(transactionRoot, [
+      ...TARGETS.map((target) => ({ targetName: target, content: `{"new":"${target}"}\n`, previous: `{"old":"${target}"}\n` })),
+      { targetName: 'authenticator-history.v1.json', content: '{"target":true}\n', previous: '{"previous":true}\n' },
+    ]);
+    const unavailableParticipant = {
+      restoreAvailable: () => false,
+      async restore() {
+        const unsupported = new Error('native no-follow unavailable') as NodeJS.ErrnoException;
+        unsupported.code = 'EUNSUPPORTED';
+        throw unsupported;
+      },
+    };
+    await expect(applyRestoreTransaction(transactionRoot, targetRoot, prepared, unavailableParticipant)).rejects.toMatchObject({ code: 'EUNSUPPORTED' });
+    await expect(readFile(path.join(transactionRoot, 'manifest.json'), 'utf8')).resolves.toContain('prepared');
+    await expect(readFile(innerJournal, 'utf8')).resolves.toContain('applying');
+    await expect(readFile(path.join(targetRoot, 'settings.v1.json'), 'utf8')).resolves.toBe('{"old":"settings.v1.json"}\n');
+  });
 });
