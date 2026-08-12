@@ -157,4 +157,23 @@ describe('tab/group UX locks and local Support Tickets', () => {
     expect(main).toContain('hasLockedAppearanceProperties');
     expect(main).toContain('History restore is paused while an appearance property lock is active');
   });
+
+  it('exposes every appearance token lock affordance through the existing support route', async () => {
+    const panel = await read('src/renderer/components/AppearancePanel.tsx');
+    const app = await read('src/renderer/App.tsx');
+    expect(panel).toContain('AppearanceLockContext.Provider');
+    expect(panel).toContain("targetKind: 'appearance-property'");
+    expect(panel).toContain('targetId: `${selected}:${token}`');
+    expect(panel).toContain('Lock this property');
+    expect(panel).toContain('Manage property lock');
+    expect(panel).toContain('Property locked');
+    expect(panel).toContain('schoolModeEnabled ?');
+    expect(panel).toContain('Credential vault unavailable; appearance locks are disabled.');
+    expect(panel).toContain('onManageLock?.(target, event.currentTarget)');
+    expect(panel).not.toContain('currentCredential');
+    expect(panel).not.toContain('confirmationCode');
+    expect(app).toContain('locks={locks} schoolModeEnabled={schoolMode.state.enabled}');
+    expect(app).toContain('appearanceReturnFocusRef.current = returnFocus');
+    expect(app).toContain('setPanelOpen(false); openLockSupport(target)');
+  });
 });
