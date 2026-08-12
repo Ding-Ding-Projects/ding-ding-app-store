@@ -1505,7 +1505,7 @@ export interface AuthenticatorSecretExportAuthorizationRequest {
   entryIds: string[];
   format: AuthenticatorSecretExportFormat;
 }
-export type AuthenticatorSecretExportReason = 'cancelled' | 'invalid' | 'restricted' | 'unavailable' | 'write-failed' | 'too-large';
+export type AuthenticatorSecretExportReason = 'cancelled' | 'invalid' | 'restricted' | 'unavailable' | 'write-failed' | 'too-large' | 'busy';
 export interface AuthenticatorSecretExportResult {
   ok: boolean;
   reason?: AuthenticatorSecretExportReason;

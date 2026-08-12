@@ -40,6 +40,7 @@ const PRODUCT_APP_ID = 'org.dingdingprojects.appstore';
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 let mainWindow: BrowserWindow | null = null;
 let authenticatorCameraLease: { sessionId: string; webContentsId: number; expiresAtMs: number } | null = null;
+let authenticatorSecretExportInFlight = false;
 
 export function cameraPermissionAllowed(webContents: Electron.WebContents | null, permission: string, mediaTypes: string[] | undefined, details: { isMainFrame: boolean; requestingUrl?: string; securityOrigin?: string }): boolean {
   const lease = authenticatorCameraLease;
@@ -473,14 +474,19 @@ void app.whenReady().then(async () => {
     if (!(await authenticatorAllowed())) return authenticatorRestrictedSecretExport();
     const parsed = request as AuthenticatorSecretExportRequest;
     if (!parsed || !Array.isArray(parsed.entryIds) || (parsed.format !== 'json' && parsed.format !== 'csv') || typeof parsed.authorizationToken !== 'string') return { ok: false, reason: 'invalid', entryCount: 0, message: 'Secret export requires the native destructive confirmation.', messageYue: '秘密匯出需要原生破壞性確認。' };
+    if (authenticatorSecretExportInFlight) return { ok: false, reason: 'busy', entryCount: 0, message: 'Another secret export is already in progress; wait for its truthful result.', messageYue: '另一個秘密匯出已經進行緊；請等候真實結果。' } as AuthenticatorSecretExportResult;
+    authenticatorSecretExportInFlight = true;
+    try {
     const picked = await dialog.showSaveDialog(mainWindow!, {
       title: 'Export authenticator secrets',
       defaultPath: parsed.format === 'json' ? 'authenticator-secrets.json' : 'authenticator-secrets.csv',
       filters: [{ name: parsed.format.toUpperCase(), extensions: [parsed.format] }],
     });
-    if (picked.canceled || !picked.filePath) return { ok: false, reason: 'cancelled', entryCount: 0, message: 'Secret export was cancelled; no file was created.', messageYue: '秘密匯出已取消；冇建立檔案。' };
-    if (!(await authenticatorAllowed())) return authenticatorRestrictedSecretExport();
-    return authenticator.secretExport(parsed, picked.filePath);
+    if (picked.canceled || !picked.filePath) { authenticator.revokeSecretExportAuthorization(parsed.authorizationToken); return { ok: false, reason: 'cancelled', entryCount: 0, message: 'Secret export was cancelled; no file was created.', messageYue: '秘密匯出已取消；冇建立檔案。' }; }
+    if (!(await authenticatorAllowed())) { authenticator.revokeSecretExportAuthorization(parsed.authorizationToken); return authenticatorRestrictedSecretExport(); }
+    return await authenticator.secretExport(parsed, picked.filePath);
+    } catch { authenticator.revokeSecretExportAuthorization(parsed.authorizationToken); return { ok: false, reason: 'write-failed', entryCount: 0, message: 'The native save dialog or local export failed; no success was claimed.', messageYue: '原生儲存對話框或者本機匯出失敗；冇聲稱成功。' }; }
+    finally { authenticatorSecretExportInFlight = false; }
   });
   ipcMain.handle('authenticator:secret-export-authorize', async (event, request: unknown) => {
     if (event.sender !== mainWindow?.webContents) return Promise.reject(new Error('Blocked authenticator secret export authorization from an unknown renderer.'));

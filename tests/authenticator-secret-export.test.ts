@@ -56,6 +56,8 @@ describe('deliberate authenticator secret export', () => {
       const auth = await service.authorizeSecretExport({ entryIds: [ID], format: 'json' });
       expect((await service.secretExport({ entryIds: [ID], format: 'csv', authorizationToken: auth.authorizationToken! }, path.join(root, 'mismatch.csv'))).reason).toBe('invalid');
       expect((await service.secretExport({ entryIds: [ID], format: 'json', authorizationToken: auth.authorizationToken! }, path.join(root, 'replay.json'))).reason).toBe('invalid');
+      expect((await service.authorizeSecretExport({ entryIds: [ID], format: 'json' })).ok).toBe(true);
+      service.revokeSecretExportAuthorization((await service.authorizeSecretExport({ entryIds: [ID], format: 'json' })).authorizationToken!);
     } finally { await rm(root, { recursive: true, force: true }); }
   });
 

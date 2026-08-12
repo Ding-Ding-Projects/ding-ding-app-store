@@ -901,6 +901,9 @@ export class AuthenticatorService {
     this.secretExportAuthorizations.set(authorizationToken, { fingerprint: `${parsed.data.format}:${[...parsed.data.entryIds].sort().join(',')}`, expiresAtMs: Date.now() + 60_000 });
     return { ok: true, authorizationToken, message: 'Secret export authorization is ready for one native save action.', messageYue: '秘密匯出授權已準備好畀一次原生儲存操作。' };
   }
+  revokeSecretExportAuthorization(authorizationToken: string): void {
+    this.secretExportAuthorizations.delete(authorizationToken);
+  }
 
   /**
    * Deliberate secret export. This is intentionally a main-process-only

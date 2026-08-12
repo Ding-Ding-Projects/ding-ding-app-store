@@ -16,11 +16,12 @@ export function DestructiveConfirmDialog({ title, description, actionLabel, sett
   const [firstKey, setFirstKey] = useState(false);
   const [secondKey, setSecondKey] = useState(false);
   const [slider, setSlider] = useState(0);
+  const [busy, setBusy] = useState(false);
   const ready = firstKey && secondKey && slider === 100;
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') { event.preventDefault(); event.stopImmediatePropagation(); onClose(); return; }
+      if (event.key === 'Escape') { event.preventDefault(); event.stopImmediatePropagation(); if (!busy) onClose(); return; }
       if (event.key !== 'Tab') return;
       const focusable = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled])') ?? []);
       if (!focusable.length) return;
@@ -31,7 +32,7 @@ export function DestructiveConfirmDialog({ title, description, actionLabel, sett
     };
     window.addEventListener('keydown', onKeyDown, true);
     return () => window.removeEventListener('keydown', onKeyDown, true);
-  }, [onClose]);
+  }, [busy, onClose]);
 
   return (
     <div className="scrim" role="presentation">
@@ -39,7 +40,7 @@ export function DestructiveConfirmDialog({ title, description, actionLabel, sett
         <header><div><span className="eyebrow">DESTRUCTIVE ACTION</span><h2 id="destructive-title">{dialogCopy(settings, title, '⚠️')}</h2></div><button className="icon-button" onClick={onClose} aria-label="Emergency exit"><Icon>close</Icon></button></header>
         <p id="destructive-description">{dialogCopy(settings, description, '⚠️')}</p>
         <SuperConfirm firstKey={firstKey} secondKey={secondKey} slider={slider} onFirstKey={setFirstKey} onSecondKey={setSecondKey} onSlider={setSlider} />
-        <footer><button className="text-button" onClick={onClose}>Emergency exit · 緊急離開</button><button className="filled-button danger-fill" disabled={!ready} onClick={() => { const result = onConfirm(); if (result && typeof (result as Promise<void>).then === 'function') void (result as Promise<void>).then(onClose, () => undefined); else onClose(); }}>{actionLabel}</button></footer>
+        <footer><button className="text-button" disabled={busy} onClick={onClose}>Emergency exit · 緊急離開</button><button className="filled-button danger-fill" disabled={!ready || busy} onClick={() => { setBusy(true); const result = onConfirm(); if (result && typeof (result as Promise<void>).then === 'function') void (result as Promise<void>).then(() => { setBusy(false); onClose(); }, () => setBusy(false)); else { setBusy(false); onClose(); } }}>{busy ? 'Working…' : actionLabel}</button></footer>
       </section>
     </div>
   );
