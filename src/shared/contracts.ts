@@ -1373,6 +1373,21 @@ export interface AuthenticatorQrImageImportResult {
   messageYue: string;
 }
 
+export const AUTHENTICATOR_CAMERA_SESSION_MS = 45_000;
+export const AUTHENTICATOR_CAMERA_SCAN_MS = 30_000;
+export const AUTHENTICATOR_CAMERA_MAX_DIMENSION = 1_024;
+export const AUTHENTICATOR_CAMERA_MAX_PIXELS = 1_048_576;
+
+export type AuthenticatorCameraSessionFailureReason = 'restricted' | 'busy' | 'focus-required' | 'unavailable';
+
+/** A short-lived video-permission lease; camera frames and decoded values never use this bridge. */
+export type AuthenticatorCameraSessionStartResult =
+  | { ok: true; sessionId: string; expiresAt: string; message: string; messageYue: string }
+  | { ok: false; reason: AuthenticatorCameraSessionFailureReason; message: string; messageYue: string };
+
+export interface AuthenticatorCameraSessionStopRequest { sessionId: string; }
+export interface AuthenticatorCameraSessionStopResult { ok: boolean; message: string; messageYue: string; }
+
 export interface AuthenticatorEntryIdRequest {
   entryId: string;
 }
@@ -1636,6 +1651,8 @@ export interface DingDingStoreApi {
   authenticator: {
     prepareFromClipboard(attemptId?: string): Promise<AuthenticatorRegistrationPreviewResult>;
     importQrImage(): Promise<AuthenticatorQrImageImportResult>;
+    startCameraSession(): Promise<AuthenticatorCameraSessionStartResult>;
+    stopCameraSession(request: AuthenticatorCameraSessionStopRequest): Promise<AuthenticatorCameraSessionStopResult>;
     status(): Promise<AuthenticatorStatus>;
     preview(request: AuthenticatorPreviewRequest): Promise<AuthenticatorPreviewResult>;
     prepare(request: AuthenticatorRegistrationRequest): Promise<AuthenticatorRegistrationPreviewResult>;

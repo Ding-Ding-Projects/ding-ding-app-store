@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { FormEvent } from 'react';
-import type { AuthenticatorAlgorithm, AuthenticatorDigits, AuthenticatorExportFormat, AuthenticatorRegistrationPreviewResult, UserSettings } from '../../shared/contracts';
+import { AUTHENTICATOR_CAMERA_SCAN_MS, type AuthenticatorAlgorithm, type AuthenticatorDigits, type AuthenticatorExportFormat, type AuthenticatorRegistrationPreviewResult, type UserSettings } from '../../shared/contracts';
 import { SearchBox } from '../components/SearchBox';
 import { RegexBuilder } from '../components/RegexBuilder';
 import { DestructiveConfirmDialog } from '../components/DestructiveConfirmDialog';
@@ -16,6 +16,7 @@ import { moveAuthenticatorPickerFocus } from '../authenticator-picker-keyboard';
 import { selectAuthenticatorRange, toggleAuthenticatorSelection } from '../authenticator-selection';
 import { isExternalEditorBridgeAvailable, openExportInVsCode } from '../external-editor';
 import { authenticatorRegistrationFailureNotice } from '../authenticator-registration-notifications';
+import { classifyAuthenticatorCameraError, decodeAuthenticatorCameraFrame, type AuthenticatorCameraFailureReason } from '../authenticator-camera';
 
 const ALGORITHMS: readonly { value: AuthenticatorAlgorithm; en: string; yue: string }[] = [
   { value: 'sha1', en: 'SHA-1', yue: 'SHA-1' },
@@ -200,6 +201,13 @@ export function AuthenticatorPage({ settings, authenticator, notify, openRegex, 
   const [showSecret, setShowSecret] = useState(false);
   const [importingClipboard, setImportingClipboard] = useState(false);
   const [importingQrImage, setImportingQrImage] = useState(false);
+  const [cameraState, setCameraState] = useState<'idle' | 'requesting' | 'scanning' | 'decoded' | AuthenticatorCameraFailureReason>('idle');
+  const [cameraMessage, setCameraMessage] = useState('');
+  const cameraVideoRef = useRef<HTMLVideoElement>(null);
+  const cameraStreamRef = useRef<MediaStream | null>(null);
+  const cameraSessionIdRef = useRef<string | null>(null);
+  const cameraTimerRef = useRef<number | null>(null);
+  const cameraGenerationRef = useRef(0);
   const uriInputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<AuthenticatorRegistrationPreviewResult | null>(null);
   const [confirmationCode, setConfirmationCode] = useState('');
@@ -399,6 +407,70 @@ export function AuthenticatorPage({ settings, authenticator, notify, openRegex, 
     }
   };
 
+  const stopCamera = async (next: 'idle' | 'decoded' | AuthenticatorCameraFailureReason = 'cancelled', message = '') => {
+    cameraGenerationRef.current += 1;
+    if (cameraTimerRef.current !== null) window.clearTimeout(cameraTimerRef.current);
+    cameraTimerRef.current = null;
+    cameraStreamRef.current?.getTracks().forEach((track) => track.stop());
+    cameraStreamRef.current = null;
+    if (cameraVideoRef.current) cameraVideoRef.current.srcObject = null;
+    const sessionId = cameraSessionIdRef.current;
+    cameraSessionIdRef.current = null;
+    if (sessionId) try { await window.dingDingStore.authenticator.stopCameraSession({ sessionId }); } catch { /* local tracks already stopped */ }
+    setCameraState(next); setCameraMessage(message);
+  };
+
+  const startCameraScan = async () => {
+    if (cameraState === 'requesting' || cameraState === 'scanning' || importingClipboard || importingQrImage || preparingRegistration || preview?.ok) return;
+    if (!document.hasFocus()) { setCameraState('focus-required'); setCameraMessage(label(viewSettings, 'Focus the App Store, then try the camera again.', '將 App Store 設為目前視窗，然後再試相機。')); return; }
+    setCameraState('requesting'); setCameraMessage(label(viewSettings, 'Requesting one local video stream…', '要求緊一個本機視訊串流…'));
+    const generation = ++cameraGenerationRef.current;
+    try {
+      const lease = await window.dingDingStore.authenticator.startCameraSession();
+      if (generation !== cameraGenerationRef.current) { if (lease.ok) try { await window.dingDingStore.authenticator.stopCameraSession({ sessionId: lease.sessionId }); } catch { /* cancellation already won */ } return; }
+      if (!lease.ok) { setCameraState(lease.reason === 'focus-required' ? 'focus-required' : lease.reason === 'restricted' ? 'cancelled' : 'no-camera'); setCameraMessage(label(viewSettings, lease.message, lease.messageYue)); return; }
+      cameraSessionIdRef.current = lease.sessionId;
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: 'environment' }, width: { ideal: 1024, max: 1024 }, height: { ideal: 1024, max: 1024 } } });
+      if (generation !== cameraGenerationRef.current) { stream.getTracks().forEach((track) => track.stop()); try { await window.dingDingStore.authenticator.stopCameraSession({ sessionId: lease.sessionId }); } catch { /* cancellation already won */ } return; }
+      cameraStreamRef.current = stream;
+      const video = cameraVideoRef.current;
+      if (!video) { await stopCamera('no-camera', label(viewSettings, 'The camera preview was unavailable.', '相機預覽暫時用唔到。')); return; }
+      video.srcObject = stream; await video.play();
+      setCameraState('scanning'); setCameraMessage(label(viewSettings, 'Scanning locally. Hold an otpauth QR code inside the frame.', '喺本機掃描緊。將 otpauth QR code 放入框內。'));
+      const startedAt = Date.now();
+      const sample = () => {
+        if (generation !== cameraGenerationRef.current) return;
+        const currentVideo = cameraVideoRef.current;
+        if (!cameraStreamRef.current || !currentVideo) return;
+        if (!document.hasFocus() || document.visibilityState !== 'visible') { void stopCamera('focus-required', label(viewSettings, 'Camera scanning stopped when the app lost focus.', 'App Store 失去焦點，相機掃描已停止。')); return; }
+        if (Date.now() - startedAt >= AUTHENTICATOR_CAMERA_SCAN_MS) { void stopCamera('timeout', label(viewSettings, 'No QR code was found within 30 seconds. Try again or use an image file.', '30 秒內搵唔到 QR code。請重試或者用圖片檔案。')); return; }
+        if (currentVideo.videoWidth > 0 && currentVideo.videoHeight > 0) {
+          const scale = Math.min(1, 1024 / Math.max(currentVideo.videoWidth, currentVideo.videoHeight));
+          const width = Math.max(1, Math.floor(currentVideo.videoWidth * scale)); const height = Math.max(1, Math.floor(currentVideo.videoHeight * scale));
+          const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height;
+          const context = canvas.getContext('2d');
+          let decoded: string | null = null;
+          try { context?.drawImage(currentVideo, 0, 0, width, height); decoded = context ? decodeAuthenticatorCameraFrame(context.getImageData(0, 0, width, height).data, width, height) : null; }
+          catch { canvas.width = 0; canvas.height = 0; void stopCamera('decode-failed', label(viewSettings, 'The local camera frame could not be decoded. Try again or use an image file.', '本機相機畫面未能解碼。請重試或者用圖片檔案。')); return; }
+          canvas.width = 0; canvas.height = 0;
+          if (decoded) {
+            prepareGeneration.current += 1; setSource('otpauth-uri'); setUri(decoded); setPreview(null); setConfirmationCode(''); setShowSecret(false); setUncertainRegistrationId(null);
+            void stopCamera('decoded', label(viewSettings, 'The QR code was decoded locally. Review the hidden URI before pairing.', 'QR code 已喺本機解碼。配對前請檢查收埋咗嘅 URI。'));
+            window.setTimeout(() => uriInputRef.current?.focus(), 0); return;
+          }
+        }
+        cameraTimerRef.current = window.setTimeout(sample, 150);
+      };
+      sample();
+    } catch (error) {
+      const reason = classifyAuthenticatorCameraError(error);
+      await stopCamera(reason, reason === 'permission-denied' ? label(viewSettings, 'Camera permission was denied. No image or secret was retained.', '相機權限被拒絕。冇保留圖片或者秘密。') : label(viewSettings, 'No usable camera was available. You can still import an image file.', '冇可用相機。你仍然可以匯入圖片檔案。'));
+    }
+  };
+
+  useEffect(() => () => { cameraGenerationRef.current += 1; if (cameraTimerRef.current !== null) window.clearTimeout(cameraTimerRef.current); cameraStreamRef.current?.getTracks().forEach((track) => track.stop()); const sessionId = cameraSessionIdRef.current; if (sessionId) void window.dingDingStore.authenticator.stopCameraSession({ sessionId }); }, []);
+  useEffect(() => { const onHidden = () => { if (document.visibilityState !== 'visible' && cameraStreamRef.current) void stopCamera('focus-required', label(viewSettings, 'Camera scanning stopped when the app was hidden.', 'App Store 收埋時，相機掃描已停止。')); }; document.addEventListener('visibilitychange', onHidden); return () => document.removeEventListener('visibilitychange', onHidden); }, [viewSettings]);
+
   const mutationNotice = (result: { ok: boolean; message: string; messageYue: string }) => notify({ ok: result.ok, message: label(viewSettings, result.message, result.messageYue) });
   const renameEntry = async (entryId: string) => {
     try {
@@ -509,11 +581,16 @@ export function AuthenticatorPage({ settings, authenticator, notify, openRegex, 
             : authenticator.status ? label(viewSettings, authenticator.status.message, authenticator.status.messageYue) : label(viewSettings, 'Authenticator storage status is unavailable.', '驗證器儲存狀態暫時用唔到。')}
         </p>
         <p>{label(viewSettings, 'Secrets are accepted once for pairing, encrypted by the operating-system credential vault, and never returned in list metadata. QR generation is local and has no network path.', '秘密只喺配對時接收一次，由作業系統憑證庫加密；項目清單 metadata 唔會返回秘密。QR 喺本機產生，冇網絡路徑。')}</p>
-         <p className="supporting">{label(viewSettings, 'This bounded slice supports local QR image import, metadata-only rename/reorder, stable groups with searchable bulk movement and protected deletion, selection, export, and a local next-code peek. Camera scanning, secret export, and authenticator history/restore remain deferred.', '呢個有限功能支援本機 QR 圖片匯入、淨 metadata 改名／排序、可搜尋批量移動同受保護刪除嘅穩定分組、揀選、匯出同本機下一碼預覽。相機掃描、秘密匯出同 authenticator 歷史／還原仍然押後。')}</p>
+         <p className="supporting">{label(viewSettings, 'This bounded slice supports local camera and QR image import, metadata-only management, groups, selection, export, and a next-code peek. Secret export and authenticator history/restore remain deferred.', '呢個有限功能支援本機相機同 QR 圖片匯入、淨 metadata 管理、分組、揀選、匯出同下一碼預覽。秘密匯出同 authenticator 歷史／還原仍然押後。')}</p>
       </section>
       <section className="settings-card" {...el('settings-card')}>
         <h2>{label(viewSettings, 'Register an authenticator entry', '註冊 authenticator 項目')}</h2>
-        <div className="button-row" aria-live="polite"><button className="text-button" type="button" onClick={() => void importUriFromClipboard()} disabled={importingClipboard || importingQrImage || preparingRegistration || Boolean(preview?.ok)} aria-busy={importingClipboard}>{importingClipboard ? label(viewSettings, 'Reading local clipboard…', '讀取緊本機剪貼簿…') : label(viewSettings, 'Import otpauth URI from clipboard', '由剪貼簿匯入 otpauth URI')}</button><button className="text-button" type="button" onClick={() => void importUriFromQrImage()} disabled={importingQrImage || importingClipboard || preparingRegistration || Boolean(preview?.ok)} aria-busy={importingQrImage}>{importingQrImage ? label(viewSettings, 'Reading local QR image…', '讀取緊本機 QR 圖片…') : label(viewSettings, 'Import otpauth URI from QR image file', '由 QR 圖片檔案匯入 otpauth URI')}</button></div>
+        <div className="button-row" aria-live="polite"><button className="text-button" type="button" onClick={() => void importUriFromClipboard()} disabled={importingClipboard || importingQrImage || cameraState === 'requesting' || cameraState === 'scanning' || preparingRegistration || Boolean(preview?.ok)} aria-busy={importingClipboard}>{importingClipboard ? label(viewSettings, 'Reading local clipboard…', '讀取緊本機剪貼簿…') : label(viewSettings, 'Import otpauth URI from clipboard', '由剪貼簿匯入 otpauth URI')}</button><button className="text-button" type="button" onClick={() => void importUriFromQrImage()} disabled={importingQrImage || importingClipboard || cameraState === 'requesting' || cameraState === 'scanning' || preparingRegistration || Boolean(preview?.ok)} aria-busy={importingQrImage}>{importingQrImage ? label(viewSettings, 'Reading local QR image…', '讀取緊本機 QR 圖片…') : label(viewSettings, 'Import otpauth URI from QR image file', '由 QR 圖片檔案匯入 otpauth URI')}</button><button className="text-button" type="button" onClick={() => void startCameraScan()} disabled={cameraState === 'requesting' || cameraState === 'scanning' || importingQrImage || importingClipboard || preparingRegistration || Boolean(preview?.ok)} aria-busy={cameraState === 'requesting'}>{cameraState === 'requesting' ? label(viewSettings, 'Requesting camera…', '要求緊相機…') : label(viewSettings, 'Scan QR with camera', '用相機掃描 QR')}</button></div>
+        <div className={`authenticator-camera ${cameraState === 'scanning' ? 'active' : ''}`} role="region" aria-label={label(viewSettings, 'Local authenticator camera scanner', '本機 authenticator 相機掃描器')}>
+          <video ref={cameraVideoRef} muted playsInline aria-label={label(viewSettings, 'Live local camera preview for QR scanning', 'QR 掃描本機即時相機預覽')} />
+          <p className="supporting" role={cameraState === 'permission-denied' || cameraState === 'no-camera' || cameraState === 'timeout' || cameraState === 'focus-required' ? 'alert' : 'status'}>{cameraMessage || label(viewSettings, 'Camera stays off until you choose Scan QR with camera. Frames are decoded locally and are never sent through the bridge or network.', '你揀「用相機掃描 QR」之前，相機會保持關閉。畫面只喺本機解碼，唔會經橋接或者網絡傳送。')}</p>
+          {(cameraState === 'requesting' || cameraState === 'scanning') && <button className="text-button" type="button" onClick={() => void stopCamera('cancelled', label(viewSettings, 'Camera scanning was cancelled. No frame was retained.', '相機掃描已取消。冇保留畫面。'))}>{label(viewSettings, 'Cancel camera scan', '取消相機掃描')}</button>}
+        </div>
         {preview?.ok && <p className="supporting">{label(viewSettings, 'Registration fields are locked while this pairing preview is active, so the QR, code, and metadata cannot drift apart.', '配對預覽進行中會鎖住註冊欄位，避免 QR、驗證碼同 metadata 對唔上。')}</p>}
         <form onSubmit={(event) => void submitRegistration(event)}>
           <AuthenticatorPicker

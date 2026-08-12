@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { randomUUID } from 'node:crypto';
 import { open } from 'node:fs/promises';
 import { app, BrowserWindow, clipboard, dialog, ipcMain, nativeImage, session, shell } from 'electron';
 import squirrelStartup from 'electron-squirrel-startup';
@@ -34,9 +35,17 @@ import { HistoryAccessService, type HistoryAccessUnlockRequest } from './history
 const scheduleTaskSchema = z.enum(['self-update', 'catalog-refresh']);
 const PRODUCT_NAME = 'Ding Ding App Store';
 const PRODUCT_APP_ID = 'org.dingdingprojects.appstore';
+const AUTHENTICATOR_CAMERA_PERMISSION_MS = 45_000;
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 let mainWindow: BrowserWindow | null = null;
+let authenticatorCameraLease: { sessionId: string; webContentsId: number; expiresAtMs: number } | null = null;
+
+function cameraPermissionAllowed(webContents: Electron.WebContents | null, permission: string, mediaTypes?: string[]): boolean {
+  const lease = authenticatorCameraLease;
+  if (permission !== 'media' || !lease || !webContents || webContents !== mainWindow?.webContents || webContents.id !== lease.webContentsId || Date.now() >= lease.expiresAtMs || !mainWindow?.isFocused()) return false;
+  return Array.isArray(mediaTypes) && mediaTypes.length > 0 && mediaTypes.every((type) => type === 'video');
+}
 
 app.setName(PRODUCT_NAME);
 app.setAppUserModelId(PRODUCT_APP_ID);
@@ -109,8 +118,8 @@ function createWindow(): BrowserWindow {
 
 void app.whenReady().then(async () => {
   if (!hasSingleInstanceLock) return;
-  session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
-  session.defaultSession.setPermissionCheckHandler(() => false);
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback, details) => callback(cameraPermissionAllowed(webContents, permission, permission === 'media' && 'mediaTypes' in details ? details.mediaTypes : undefined)));
+  session.defaultSession.setPermissionCheckHandler((webContents, permission, _origin, details) => cameraPermissionAllowed(webContents, permission, details.mediaType ? [details.mediaType] : undefined));
 
   // Paint the branded shell before any recover/migration work. A malformed
   // local record must never make a launch look like a silent Electron exit.
@@ -138,6 +147,7 @@ void app.whenReady().then(async () => {
   const unsubscribeSchoolMode = schoolMode.subscribe((snapshot) => {
     if (snapshot.sync.status !== 'ready' || snapshot.state?.enabled === true) historyAccess.invalidate();
     authenticator.setRestricted(snapshot.sync.status !== 'ready' || snapshot.state?.enabled === true);
+    if (snapshot.sync.status !== 'ready' || snapshot.state?.enabled === true) authenticatorCameraLease = null;
     const contents = mainWindow?.webContents;
     if (!contents || contents.isDestroyed()) return;
     try { contents.send('school-mode:changed', snapshot); } catch { /* Renderer teardown must not stop shared-state observation. */ }
@@ -209,6 +219,7 @@ void app.whenReady().then(async () => {
     } catch { historyAccess.invalidate(); return null; }
   };
   app.once('will-quit', () => {
+    authenticatorCameraLease = null;
     unsubscribeSchoolMode();
     schoolMode.dispose();
   });
@@ -297,6 +308,25 @@ void app.whenReady().then(async () => {
     if (event.sender !== mainWindow?.webContents) return Promise.reject(new Error('Blocked authenticator status request from an unknown renderer.'));
     if (!(await authenticatorAllowed())) return authenticatorRestrictedStatus();
     return authenticator.status();
+  });
+  ipcMain.handle('authenticator:camera-start', async (event) => {
+    if (event.sender !== mainWindow?.webContents) return Promise.reject(new Error('Blocked authenticator camera request from an unknown renderer.'));
+    if (!(await authenticatorAllowed())) return { ok: false as const, reason: 'restricted' as const, message: 'Camera scanning is unavailable in School mode.', messageYue: 'School mode 開啟時，相機掃描暫時用唔到。' };
+    if (!mainWindow?.isFocused()) return { ok: false as const, reason: 'focus-required' as const, message: 'Focus the App Store before starting its camera.', messageYue: '開始相機前，請先將 App Store 設為目前視窗。' };
+    if (authenticatorCameraLease && Date.now() < authenticatorCameraLease.expiresAtMs) return { ok: false as const, reason: 'busy' as const, message: 'Another camera scan is already active.', messageYue: '另一個相機掃描已經進行中。' };
+    const sessionId = randomUUID();
+    const expiresAtMs = Date.now() + AUTHENTICATOR_CAMERA_PERMISSION_MS;
+    authenticatorCameraLease = { sessionId, webContentsId: event.sender.id, expiresAtMs };
+    return { ok: true as const, sessionId, expiresAt: new Date(expiresAtMs).toISOString(), message: 'Camera permission is available for this one local scan.', messageYue: '今次本機掃描已獲短暫相機權限。' };
+  });
+  ipcMain.handle('authenticator:camera-stop', (event, request: unknown) => {
+    if (event.sender !== mainWindow?.webContents) return Promise.reject(new Error('Blocked authenticator camera request from an unknown renderer.'));
+    const sessionId = request && typeof request === 'object' && !Array.isArray(request) && Object.keys(request).length === 1 ? (request as { sessionId?: unknown }).sessionId : undefined;
+    const matched = typeof sessionId === 'string' && authenticatorCameraLease?.sessionId === sessionId && authenticatorCameraLease.webContentsId === event.sender.id;
+    if (matched) authenticatorCameraLease = null;
+    return matched
+      ? { ok: true, message: 'The local camera session ended.', messageYue: '本機相機工作階段已結束。' }
+      : { ok: false, message: 'The camera session was already closed or invalid.', messageYue: '相機工作階段已關閉或者無效。' };
   });
   ipcMain.handle('authenticator:clipboard-prepare', async (event, attemptId: unknown) => {
     if (event.sender !== mainWindow?.webContents) return Promise.reject(new Error('Blocked authenticator clipboard request from an unknown renderer.'));

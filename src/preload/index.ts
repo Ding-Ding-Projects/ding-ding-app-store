@@ -26,6 +26,9 @@ import type {
   AuthenticatorRegistrationRequest,
   AuthenticatorStatus,
   AuthenticatorQrImageImportResult,
+  AuthenticatorCameraSessionStartResult,
+  AuthenticatorCameraSessionStopRequest,
+  AuthenticatorCameraSessionStopResult,
   DingDingStoreApi,
   DimSumSurprise,
   ElementKey,
@@ -128,6 +131,25 @@ function parseAuthenticatorQrImageImport(value: unknown): AuthenticatorQrImageIm
   if (result.ok && result.reason !== undefined) throw new Error('The authenticator QR image response was invalid.');
   if (!result.ok && result.uri !== undefined) throw new Error('The authenticator QR image response was invalid.');
   return Object.freeze({ ok: result.ok, uri: result.uri as string | undefined, reason: result.reason as AuthenticatorQrImageImportResult['reason'], message: result.message, messageYue: result.messageYue });
+}
+
+function parseAuthenticatorCameraSessionStart(value: unknown): AuthenticatorCameraSessionStartResult {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('The authenticator camera-session response was invalid.');
+  const result = value as Record<string, unknown>;
+  if (Object.keys(result).some((key) => !['ok', 'sessionId', 'expiresAt', 'reason', 'message', 'messageYue'].includes(key)) || typeof result.ok !== 'boolean' || typeof result.message !== 'string' || result.message.length > 512 || typeof result.messageYue !== 'string' || result.messageYue.length > 512) throw new Error('The authenticator camera-session response was invalid.');
+  if (result.ok) {
+    if (typeof result.sessionId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(result.sessionId) || typeof result.expiresAt !== 'string' || !Number.isFinite(Date.parse(result.expiresAt)) || result.reason !== undefined) throw new Error('The authenticator camera-session response was invalid.');
+    return Object.freeze({ ok: true, sessionId: result.sessionId, expiresAt: result.expiresAt, message: result.message, messageYue: result.messageYue });
+  }
+  if (!['restricted', 'busy', 'focus-required', 'unavailable'].includes(String(result.reason)) || result.sessionId !== undefined || result.expiresAt !== undefined) throw new Error('The authenticator camera-session response was invalid.');
+  return Object.freeze({ ok: false, reason: result.reason as 'restricted' | 'busy' | 'focus-required' | 'unavailable', message: result.message, messageYue: result.messageYue });
+}
+
+function parseAuthenticatorCameraSessionStop(value: unknown): AuthenticatorCameraSessionStopResult {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('The authenticator camera-stop response was invalid.');
+  const result = value as Record<string, unknown>;
+  if (Object.keys(result).some((key) => !['ok', 'message', 'messageYue'].includes(key)) || typeof result.ok !== 'boolean' || typeof result.message !== 'string' || result.message.length > 512 || typeof result.messageYue !== 'string' || result.messageYue.length > 512) throw new Error('The authenticator camera-stop response was invalid.');
+  return Object.freeze({ ok: result.ok, message: result.message, messageYue: result.messageYue });
 }
 
 function parseAuthenticatorStatus(value: unknown): AuthenticatorStatus {
@@ -495,6 +517,11 @@ const api: DingDingStoreApi = {
       return parseAuthenticatorRegistrationPreview(await ipcRenderer.invoke('authenticator:clipboard-prepare', attemptId));
     },
     importQrImage: async () => parseAuthenticatorQrImageImport(await ipcRenderer.invoke('authenticator:qr-image-import')),
+    startCameraSession: async () => parseAuthenticatorCameraSessionStart(await ipcRenderer.invoke('authenticator:camera-start')),
+    stopCameraSession: async (request: AuthenticatorCameraSessionStopRequest) => {
+      if (!request || typeof request !== 'object' || Object.keys(request).some((key) => key !== 'sessionId') || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(request.sessionId)) throw new Error('The authenticator camera-session identifier was invalid.');
+      return parseAuthenticatorCameraSessionStop(await ipcRenderer.invoke('authenticator:camera-stop', request));
+    },
     status: async () => parseAuthenticatorStatus(await ipcRenderer.invoke('authenticator:status')),
     preview: async (request: AuthenticatorPreviewRequest) => parseAuthenticatorPreviewResult(await ipcRenderer.invoke('authenticator:preview', request)),
     prepare: async (request: AuthenticatorRegistrationRequest) => parseAuthenticatorRegistrationPreview(await ipcRenderer.invoke('authenticator:prepare', request)),

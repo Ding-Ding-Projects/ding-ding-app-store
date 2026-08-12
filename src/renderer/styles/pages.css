@@ -153,6 +153,9 @@
   .authenticator-qr { display: grid; width: min(320px, 100%); aspect-ratio: 1; padding: 12px; border: 10px solid #fff; background: #fff; box-shadow: 0 1px 4px rgb(0 0 0 / 28%); image-rendering: pixelated; }
   .authenticator-qr-module { display: block; min-width: 0; min-height: 0; background: #fff; }
   .authenticator-qr-module.on { background: #000; }
+  .authenticator-camera { display: grid; gap: 10px; margin: 12px 0; padding: 12px; border: 1px solid var(--outline-variant); border-radius: 16px; background: var(--surface-high); }
+  .authenticator-camera video { display: none; width: min(520px, 100%); aspect-ratio: 4 / 3; border-radius: 12px; background: #000; object-fit: cover; }
+  .authenticator-camera.active video { display: block; }
   .authenticator-manual-secret { display: grid; gap: 8px; margin: 12px 0; padding: 12px; border: 1px solid var(--outline-variant); border-radius: 12px; background: var(--surface-high); }
   .authenticator-manual-secret code { min-height: 32px; overflow-wrap: anywhere; font: 600 1rem/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; letter-spacing: 0.08em; user-select: text; }
   .button-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
