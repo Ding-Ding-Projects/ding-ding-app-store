@@ -15,6 +15,7 @@ import {
   saveCachedVocabulary,
 } from './personal-vocabulary.mjs';
 import { readDialogEmojiPreference, shouldShowDialogEmoji, writeDialogEmojiPreference } from './dialog-emoji.mjs';
+import { DEFAULT_DISPLAY_NAME, displayNameForPresentation, loadDisplayName, resetDisplayName, saveDisplayName } from './display-name.mjs';
 
 (() => {
   'use strict';
@@ -50,6 +51,7 @@ import { readDialogEmojiPreference, shouldShowDialogEmoji, writeDialogEmojiPrefe
     accent: localStorage.getItem(storage + 'accent') || '#4f378b',
     settingsTab: localStorage.getItem(storage + 'settingsTab') || 'general',
     siteRestricted: localStorage.getItem(storage + 'siteRestricted') === 'true',
+    displayName: loadDisplayName(),
     showEmojisInDialogs: readDialogEmojiPreference(),
   };
   let vocabulary = loadCachedVocabulary();
@@ -93,6 +95,7 @@ import { readDialogEmojiPreference, shouldShowDialogEmoji, writeDialogEmojiPrefe
   function copy(value) { return personalizeOwnedText(value, vocabulary.entries, restricted()); }
   function localized(en, yue) { const mode = effectiveMode(); return mode === 'yue' ? yue : mode === 'both' ? `${en} · ${yue}` : en; }
   function title(article) { const mode = effectiveMode(); const raw = mode === 'en' ? article.title : mode === 'yue' ? article.titleYue : `${article.title} · ${article.titleYue}`; return article.source === 'canonical' ? copy(raw) : raw; }
+  function displayName() { return displayNameForPresentation(state.displayName, restricted()); }
   function setStatus(message) { $('status').textContent = message; }
   function saveControls() {
     for (const key of ['mode', 'funnyEn', 'funnyYue', 'theme', 'density', 'accent', 'settingsTab', 'siteRestricted']) localStorage.setItem(storage + key, state[key]);
@@ -120,6 +123,10 @@ import { readDialogEmojiPreference, shouldShowDialogEmoji, writeDialogEmojiPrefe
     document.documentElement.dataset.density = state.density;
     document.documentElement.style.setProperty('--primary', state.accent);
     document.documentElement.lang = effectiveMode() === 'yue' ? 'yue-Hant-HK' : 'en';
+    const name = displayName();
+    const brand = $('site-brand-name'); if (brand) brand.textContent = name;
+    const title = $('document-title'); if (title) title.textContent = `${name} — complete documentation`;
+    const displayInput = $('site-display-name'); if (displayInput) { displayInput.value = state.displayName; displayInput.disabled = restricted(); }
     document.querySelectorAll('[data-site-copy]').forEach((node) => {
       const source = node.dataset.siteCopy;
       const labels = { 'restricted-label': 'Restricted presentation (site-only)', 'restricted-help': "This site-only restricted switch is separate from the desktop app's shared School mode. It forces English and suppresses personal vocabulary on this browser only; it is not a security boundary.", 'dialog-emoji-label': 'Show emojis in dialogs and message boxes', 'dialog-emoji-help': 'Adds a non-semantic emoji to the command palette dialog title while leaving controls and accessible names unchanged.', 'vocabulary-title': 'Personal vocabulary', 'vocabulary-file-label': 'Choose a local JSON file', 'vocabulary-replace': 'Replace vocabulary', 'vocabulary-clear': 'Clear vocabulary', 'vocabulary-help': 'The file is parsed and cached in this browser only. Its path, metadata, and private values are never sent over the network or included in exports.' };
@@ -171,7 +178,7 @@ import { readDialogEmojiPreference, shouldShowDialogEmoji, writeDialogEmojiPrefe
 
   function bindOpen() { document.querySelectorAll('[data-open]').forEach((button) => button.addEventListener('click', () => openArticle(button.dataset.open))); }
   function homeContent() {
-    return `<h1>${escapeHtml(copy('Ding Ding App Store complete documentation'))}</h1><p class="lede">${escapeHtml(copy('Every implemented feature and every explicit limit is documented from one canonical categorized source. Pending work is labelled pending and never presented as shipped.'))}</p>${categories.map((category) => { const rows = articles.filter((article) => article.category === category.id); return `<section class="feature-category"><h2>${escapeHtml(copy(category.title))}</h2><p>${escapeHtml(copy(category.summary))}</p><div class="suggestion-list">${rows.map((article) => `<button class="result-card" data-open="${article.id}"><strong>${escapeHtml(title(article))}</strong><span class="tag ${article.status}">${article.status}</span><br>${escapeHtml(copy(article.summary))}</button>`).join('')}</div></section>`; }).join('')}`;
+    return `<h1>${escapeHtml(copy(`${displayName()} complete documentation`))}</h1><p class="lede">${escapeHtml(copy('Every implemented feature and every explicit limit is documented from one canonical categorized source. Pending work is labelled pending and never presented as shipped.'))}</p>${categories.map((category) => { const rows = articles.filter((article) => article.category === category.id); return `<section class="feature-category"><h2>${escapeHtml(copy(category.title))}</h2><p>${escapeHtml(copy(category.summary))}</p><div class="suggestion-list">${rows.map((article) => `<button class="result-card" data-open="${article.id}"><strong>${escapeHtml(title(article))}</strong><span class="tag ${article.status}">${article.status}</span><br>${escapeHtml(copy(article.summary))}</button>`).join('')}</div></section>`; }).join('')}`;
   }
   function articleContent(article) {
     if (!article) return homeContent();
@@ -299,7 +306,7 @@ import { readDialogEmojiPreference, shouldShowDialogEmoji, writeDialogEmojiPrefe
     $('home-tab').setAttribute('aria-selected', String(state.article === 'home'));
     $('home-tab').tabIndex = state.article === 'home' ? 0 : -1;
     if (focus) $('article').focus({ preventScroll: true });
-    setStatus(article ? `Opened ${title(article)}. Status: ${article.status}.` : `Ready. ${articles.length} complete feature articles are available.`);
+    setStatus(article ? `Opened ${title(article)} in ${displayName()}. Status: ${article.status}.` : `Ready. ${articles.length} complete feature articles are available for ${displayName()}.`);
   }
 
   function matcher(kind, query) {
@@ -374,9 +381,9 @@ import { readDialogEmojiPreference, shouldShowDialogEmoji, writeDialogEmojiPrefe
     const value = $('palette-search').value.trim(); const match = matcher('palette', value);
     if (!search.palette.regex) search.palette.query = value;
     saveSearch('palette');
-    const rows = [{ id: 'home', label: 'Home', type: 'Destination' }, ...articles.map((article) => ({ id: article.id, label: title(article), type: `${article.category} · ${article.status}` })), ...['general', 'appearance', 'about'].map((id) => ({ id: `setting-${id}`, label: `${id[0].toUpperCase()}${id.slice(1)} settings`, type: 'Setting destination' })), ...(restricted() ? [] : [{ id: 'setting-show-emojis-in-dialogs', label: localized('Show emojis in dialogs and message boxes', '喺對話框同訊息框顯示 emoji'), type: localized('Settings control · dialog decoration', '設定控制 · 對話框裝飾') }, { id: 'setting-personal-vocabulary-import', label: localized('Import personal vocabulary JSON', '匯入本機個人詞彙 JSON'), type: localized('Settings control · local upload', '設定控制 · 本機上載') }, { id: 'setting-personal-vocabulary-clear', label: localized('Clear personal vocabulary', '清除本機個人詞彙'), type: localized('Settings control · local reset', '設定控制 · 本機重設') }]), { id: 'setting-site-restricted', label: localized('Restricted presentation (site-only)', '受限顯示（只限網站）'), type: localized('Settings control · local mode', '設定控制 · 本機模式') }].filter((row) => match(`${row.label} ${row.type}`));
+    const rows = [{ id: 'home', label: displayName(), type: 'Destination' }, ...articles.map((article) => ({ id: article.id, label: title(article), type: `${article.category} · ${article.status}` })), ...['general', 'appearance', 'about'].map((id) => ({ id: `setting-${id}`, label: `${id[0].toUpperCase()}${id.slice(1)} settings`, type: 'Setting destination' })), ...(restricted() ? [] : [{ id: 'setting-display-name', label: localized('Display name', '顯示名稱'), type: localized('Settings control · local label', '設定控制 · 本機標籤') }, { id: 'setting-show-emojis-in-dialogs', label: localized('Show emojis in dialogs and message boxes', '喺對話框同訊息框顯示 emoji'), type: localized('Settings control · dialog decoration', '設定控制 · 對話框裝飾') }, { id: 'setting-personal-vocabulary-import', label: localized('Import personal vocabulary JSON', '匯入本機個人詞彙 JSON'), type: localized('Settings control · local upload', '設定控制 · 本機上載') }, { id: 'setting-personal-vocabulary-clear', label: localized('Clear personal vocabulary', '清除本機個人詞彙'), type: localized('Settings control · local reset', '設定控制 · 本機重設') }]), { id: 'setting-site-restricted', label: localized('Restricted presentation (site-only)', '受限顯示（只限網站）'), type: localized('Settings control · local mode', '設定控制 · 本機模式') }].filter((row) => match(`${row.label} ${row.type}`));
     $('palette-results').innerHTML = rows.length ? rows.map((row) => `<button class="palette-row" data-command="${row.id}" role="option"><strong>${escapeHtml(row.label)}</strong><br><small>${escapeHtml(row.type)}</small></button>`).join('') : '<p class="empty">No command or destination matches.</p>';
-    document.querySelectorAll('[data-command]').forEach((button) => button.addEventListener('click', () => { $('palette').close(); const id = button.dataset.command; if (id === 'setting-show-emojis-in-dialogs') { openSettingsTab('general'); $('show-emojis-in-dialogs').focus(); $('settings-title').scrollIntoView(); } else if (id === 'setting-personal-vocabulary-import') { openSettingsTab('general'); $('personal-vocabulary-file').focus(); $('settings-title').scrollIntoView(); } else if (id === 'setting-personal-vocabulary-clear') { openSettingsTab('general'); $('personal-vocabulary-clear').focus(); $('settings-title').scrollIntoView(); } else if (id === 'setting-site-restricted') { openSettingsTab('general'); $('site-restricted').focus(); $('settings-title').scrollIntoView(); } else if (id.startsWith('setting-')) { openSettingsTab(id.slice(8)); $('settings-title').scrollIntoView(); } else openArticle(id); }));
+    document.querySelectorAll('[data-command]').forEach((button) => button.addEventListener('click', () => { $('palette').close(); const id = button.dataset.command; if (id === 'setting-display-name') { openSettingsTab('general'); $('site-display-name').focus(); $('settings-title').scrollIntoView(); } else if (id === 'setting-show-emojis-in-dialogs') { openSettingsTab('general'); $('show-emojis-in-dialogs').focus(); $('settings-title').scrollIntoView(); } else if (id === 'setting-personal-vocabulary-import') { openSettingsTab('general'); $('personal-vocabulary-file').focus(); $('settings-title').scrollIntoView(); } else if (id === 'setting-personal-vocabulary-clear') { openSettingsTab('general'); $('personal-vocabulary-clear').focus(); $('settings-title').scrollIntoView(); } else if (id === 'setting-site-restricted') { openSettingsTab('general'); $('site-restricted').focus(); $('settings-title').scrollIntoView(); } else if (id.startsWith('setting-')) { openSettingsTab(id.slice(8)); $('settings-title').scrollIntoView(); } else openArticle(id); }));
   }
 
   ['docs', 'settings', 'palette'].forEach((kind) => {
@@ -399,6 +406,18 @@ import { readDialogEmojiPreference, shouldShowDialogEmoji, writeDialogEmojiPrefe
   $('show-emojis-in-dialogs').checked = state.showEmojisInDialogs;
   $('show-emojis-in-dialogs').addEventListener('change', (event) => { const enabled = Boolean(event.target.checked); if (!writeDialogEmojiPreference(enabled)) { state.showEmojisInDialogs = true; event.target.checked = true; setStatus('Browser storage is unavailable; dialog emojis remain enabled for this session.'); } else state.showEmojisInDialogs = enabled; applyAppearance(); });
   $('site-restricted').addEventListener('change', (event) => { state.siteRestricted = Boolean(event.target.checked); saveControls(); applyAppearance(); openSettingsTab('general'); openArticle(state.article, false, { addTab: false, route: 'none' }); });
+  function commitDisplayName(value) {
+    if (restricted()) return;
+    const result = saveDisplayName(value);
+    if (!result.ok) { setStatus('Display name must be 1–64 characters with no control characters; the previous label remains active.'); applyAppearance(); return; }
+    state.displayName = result.value;
+    applyAppearance();
+    openArticle(state.article, false, { addTab: false, route: 'none' });
+    setStatus(`Display name saved as ${state.displayName}. Routes and URLs are unchanged.`);
+    paletteResults();
+  }
+  $('site-display-name-save').addEventListener('click', () => commitDisplayName($('site-display-name').value));
+  $('site-display-name-reset').addEventListener('click', () => { if (restricted()) return; state.displayName = resetDisplayName(); applyAppearance(); openArticle(state.article, false, { addTab: false, route: 'none' }); setStatus(`Display name reset to ${DEFAULT_DISPLAY_NAME}. Routes and URLs are unchanged.`); paletteResults(); });
   $('personal-vocabulary-replace').addEventListener('click', () => void replaceVocabulary());
   $('personal-vocabulary-clear').addEventListener('click', clearVocabulary);
   refreshVocabularyStatus();
