@@ -14,13 +14,14 @@ const archiveHistoryEntrySchema = z.strictObject({
   id: z.string().uuid(),
   appId: z.string().min(1).max(200).refine((value) => value.trim().length > 0, 'Application identifier cannot be blank.'),
   displayName: z.string().min(1).max(200).refine((value) => value.trim().length > 0, 'Display name cannot be blank.'),
-  kind: z.enum(['install', 'build', 'uninstall', 'update']),
+  kind: z.enum(['install', 'build', 'uninstall', 'update', 'settings']),
   ok: z.boolean(),
   message: z.string().max(MAX_HISTORY_ENTRY_MESSAGE),
+  messageYue: z.string().max(MAX_HISTORY_ENTRY_MESSAGE).optional(),
   occurredAt: z.iso.datetime(),
 });
 
-const ARCHIVE_FIELDS = ['id', 'appId', 'displayName', 'kind', 'ok', 'message', 'occurredAt'] as const;
+const ARCHIVE_FIELDS = ['id', 'appId', 'displayName', 'kind', 'ok', 'message', 'messageYue', 'occurredAt'] as const;
 
 interface ArchiveFile {
   path: 'manifest.json' | 'history.jsonl' | 'history.json' | 'README.txt';

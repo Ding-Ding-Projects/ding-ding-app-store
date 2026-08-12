@@ -88,6 +88,8 @@ export interface HistoryRecordInput {
   kind: OperationKind;
   ok: boolean;
   message: string;
+  /** Optional Cantonese projection for records whose action copy is localized. */
+  messageYue?: string;
 }
 
 /** Parses one append-only log line without allowing malformed records to poison the whole Activity list. */
@@ -96,6 +98,7 @@ export function parseHistoryEntry(value: unknown): HistoryEntry | null {
   const entry = value as Record<string, unknown>;
   const textFields = ['id', 'appId', 'displayName', 'message', 'occurredAt'] as const;
   if (textFields.some((field) => typeof entry[field] !== 'string' || !String(entry[field]).trim() || String(entry[field]).length > MAX_HISTORY_FIELD_LENGTH)) return null;
+  if ('messageYue' in entry && (typeof entry.messageYue !== 'string' || !entry.messageYue.trim() || entry.messageYue.length > MAX_HISTORY_FIELD_LENGTH)) return null;
   if (typeof entry.kind !== 'string' || !(['install', 'build', 'uninstall', 'update', 'settings'] as const).includes(entry.kind as OperationKind)) return null;
   if (typeof entry.ok !== 'boolean' || !Number.isFinite(Date.parse(entry.occurredAt as string))) return null;
   return {
@@ -105,6 +108,7 @@ export function parseHistoryEntry(value: unknown): HistoryEntry | null {
     kind: entry.kind as OperationKind,
     ok: entry.ok,
     message: entry.message as string,
+    ...(typeof entry.messageYue === 'string' ? { messageYue: entry.messageYue } : {}),
     occurredAt: entry.occurredAt as string,
   };
 }

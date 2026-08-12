@@ -71,6 +71,30 @@ describe('re-importable activity ZIP archive', () => {
     await expect(createHistoryArchive([entry(), entry()])).rejects.toThrow(/duplicate/i);
   });
 
+  it('archives localized authenticator settings Activity records with the optional Cantonese projection', async () => {
+    const authenticator = entry({
+      appId: 'authenticator',
+      displayName: 'Authenticator',
+      kind: 'settings',
+      message: 'Renamed an authenticator entry (opaque entry ID f6a5dd12-70f1-4f4a-9f1b-1d9c8a7d6e5c).',
+      messageYue: '已改名驗證器項目（不透明項目 ID f6a5dd12-70f1-4f4a-9f1b-1d9c8a7d6e5c。）',
+    });
+    const archive = await createHistoryArchive([authenticator]);
+    const root = await mkdtemp(path.join(os.tmpdir(), 'ding-ding-history-archive-settings-'));
+    try {
+      const zipPath = path.join(root, 'history.zip');
+      const destination = path.join(root, 'expanded');
+      await writeFile(zipPath, Buffer.from(archive.base64, 'base64'));
+      await extractZipSafe(zipPath, destination);
+      const jsonl = JSON.parse(await readFile(path.join(destination, 'history.jsonl'), 'utf8')) as HistoryEntry;
+      expect(jsonl).toEqual(authenticator);
+      const manifest = JSON.parse(await readFile(path.join(destination, 'manifest.json'), 'utf8')) as { fields: string[] };
+      expect(manifest.fields).toContain('messageYue');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('preserves meaningful leading and trailing whitespace in complete fields', async () => {
     const archive = await createHistoryArchive([entry({ appId: ' app-with-space ', displayName: ' Display name ' })]);
     const root = await mkdtemp(path.join(os.tmpdir(), 'ding-ding-history-archive-space-'));

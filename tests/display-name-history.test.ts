@@ -23,7 +23,8 @@ describe('shared display-name history boundary', () => {
   it('keeps the stricter protected-secret contract visibly limited and palette-reachable', async () => {
     const article = GENERATED_DOCS.find((item) => item.id === 'secret-and-display-name-history');
     expect(article).toMatchObject({ id: 'secret-and-display-name-history', category: 'memory-sync', status: 'limited' });
-    expect(article?.body).toContain('not yet Activity events');
+    expect(article?.body).toContain('Successful authenticator confirmation and metadata mutations append localized redacted');
+    expect(article?.body).toContain('remain outside the history snapshot allowlist');
     expect(article?.body).toContain('authenticator');
 
     const registry = buildRegistry({

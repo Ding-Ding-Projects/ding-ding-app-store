@@ -92,9 +92,9 @@ function codeDocument(records: readonly FlatExportRecord[], format: HistoryExpor
 const HISTORY_ENTRY_SCHEMA = Object.freeze({
   $schema: 'https://json-schema.org/draft/2020-12/schema', $id: 'https://ding-ding-projects.github.io/ding-ding-app-store/schemas/history-entry.v1.json', title: 'Ding Ding App Store HistoryEntry', type: 'object', additionalProperties: false,
   required: ['id', 'appId', 'displayName', 'kind', 'ok', 'message', 'occurredAt'],
-  properties: { id: { type: 'string' }, appId: { type: 'string' }, displayName: { type: 'string' }, kind: { enum: ['install', 'build', 'uninstall', 'update'] }, ok: { type: 'boolean' }, message: { type: 'string' }, occurredAt: { type: 'string', format: 'date-time' } },
+  properties: { id: { type: 'string' }, appId: { type: 'string' }, displayName: { type: 'string' }, kind: { enum: ['install', 'build', 'uninstall', 'update', 'settings'] }, ok: { type: 'boolean' }, message: { type: 'string' }, messageYue: { type: 'string' }, occurredAt: { type: 'string', format: 'date-time' } },
 });
-const HISTORY_ENTRY_PROTO = '// ding-ding-app-store.history.v1; UTF-8; LF\nsyntax = "proto3";\npackage dingding.appstore.history.v1;\n\nmessage HistoryEntry {\n  string id = 1;\n  string app_id = 2;\n  string display_name = 3;\n  string kind = 4;\n  bool ok = 5;\n  string message = 6;\n  string occurred_at = 7;\n}\n';
+const HISTORY_ENTRY_PROTO = '// ding-ding-app-store.history.v1; UTF-8; LF\nsyntax = "proto3";\npackage dingding.appstore.history.v1;\n\nmessage HistoryEntry {\n  string id = 1;\n  string app_id = 2;\n  string display_name = 3;\n  string kind = 4;\n  bool ok = 5;\n  string message = 6;\n  string occurred_at = 7;\n  string message_yue = 8;\n}\n';
 
 export function serializeFlatRecords(records: readonly FlatExportRecord[], format: HistoryExportFormat): string {
   switch (format) {

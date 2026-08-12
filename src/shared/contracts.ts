@@ -302,6 +302,8 @@ export interface HistoryEntry {
   kind: OperationKind;
   ok: boolean;
   message: string;
+  /** Optional Cantonese projection; legacy records remain English-only. */
+  messageYue?: string;
   occurredAt: string;
 }
 

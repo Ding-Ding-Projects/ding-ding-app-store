@@ -17,6 +17,10 @@ import { clearRevisionSelection, filterHistoryRevisions, historyMutationMessage,
 
 type HistoryResult = 'all' | 'ok' | 'failed';
 
+function activityMessage(settings: UserSettings, entry: HistoryEntry): string {
+  return label(settings, entry.message, entry.messageYue ?? entry.message);
+}
+
 function historyDateError(settings: UserSettings, error: string): string {
   if (!error) return error;
   if (error.startsWith('Start date must be before')) return label(settings, 'Start date must be before the end date. Your typed values were kept.', '開始日期要早過結束日期；你輸入嘅內容保留返。');
@@ -90,7 +94,7 @@ export function ActivityPage({ entries, revisions, loading, settings, openRegex,
     if (kinds.size) source = source.filter((entry) => kinds.has(entry.kind));
     if (result !== 'all') source = source.filter((entry) => (result === 'ok' ? entry.ok : !entry.ok));
     source = source.filter((entry) => matchesHistoryDate(entry.occurredAt, dateRange, settings.language));
-    return source.filter((entry) => matcher(`${entry.displayName}\n${entry.kind}\n${entry.message}`));
+    return source.filter((entry) => matcher(`${entry.displayName}\n${entry.kind}\n${entry.message}\n${entry.messageYue ?? ''}`));
   }, [entries, kinds, result, dateRange, matcher, settings.language]);
   useEffect(() => {
     const ids = new Set(entries.map((entry) => entry.id));
@@ -322,7 +326,7 @@ export function ActivityPage({ entries, revisions, loading, settings, openRegex,
         <Icon>{entry.ok ? 'check_circle' : 'error'}</Icon>
         <div className="history-copy">
           <div className="history-heading"><strong>{highlight(search.state, entry.displayName)}</strong><span className="status-pill" {...el('status-pill')}>{actionLabel(entry.kind)}</span><time dateTime={entry.occurredAt}>{new Date(entry.occurredAt).toLocaleString()}</time></div>
-          <p>{highlight(search.state, entry.message)}</p>
+          <p>{highlight(search.state, activityMessage(settings, entry))}</p>
         </div>
       </li>)}</ul> : <div className="empty-state" {...el('empty-state')}><Icon>search_off</Icon><h2>{label(settings, 'No matching activity', '冇配到嘅操作記錄')}</h2><p>{label(settings, 'Clear the search, action, result, or date filters to see more history.', '清除搜尋、動作、結果或者日期篩選就會見到更多記錄。')}</p></div>}
     </section>
