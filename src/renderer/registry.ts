@@ -69,7 +69,7 @@ const STATIC_COMMANDS = [
   'open-notifications', 'open-changelog', 'open-school-mode', 'open-source-details',
   'personal-vocabulary-import', 'personal-vocabulary-clear',
   'authenticator-rename', 'authenticator-group', 'authenticator-reorder', 'authenticator-select',
-  'authenticator-export', 'authenticator-delete', 'authenticator-bulk-delete',
+  'authenticator-export', 'authenticator-secret-export', 'authenticator-delete', 'authenticator-bulk-delete',
 ] as const;
 
 export type StaticCommandId = (typeof STATIC_COMMANDS)[number];
@@ -555,6 +555,7 @@ export function buildRegistry(context: RegistryContext): Entry[] {
     command('authenticator-reorder', 'Reorder authenticator entries', '重新排列 authenticator 項目', 'swap_vert', ['authenticator', 'reorder', 'move'], 'Pages', { surface: 'authenticator', focusId: 'authenticator-entry-management' }),
     command('authenticator-select', 'Select authenticator entries', '揀選 authenticator 項目', 'check_box', ['authenticator', 'select', 'selection'], 'Pages', { surface: 'authenticator', focusId: 'authenticator-entry-management' }),
     command('authenticator-export', 'Export authenticator metadata without secrets', '匯出不含秘密嘅 authenticator metadata', 'download', ['authenticator', 'export', 'metadata', 'secret-free'], 'Pages', { surface: 'authenticator', focusId: 'authenticator-entry-management' }),
+    command('authenticator-secret-export', 'Export authenticator secrets to a local file', '匯出 authenticator 秘密到本機檔案', 'warning', ['authenticator', 'export', 'secrets', 'credential vault', 'destructive'], 'Pages', { surface: 'authenticator', focusId: 'authenticator-entry-management' }),
     command('authenticator-delete', 'Delete one authenticator entry', '刪除一個 authenticator 項目', 'delete', ['authenticator', 'delete'], 'Pages', { surface: 'authenticator', focusId: 'authenticator-entry-management' }),
     command('authenticator-bulk-delete', 'Delete selected authenticator entries', '刪除揀選嘅 authenticator 項目', 'delete_sweep', ['authenticator', 'delete', 'bulk', 'destructive'], 'Pages', { surface: 'authenticator', focusId: 'authenticator-entry-management' }),
   );

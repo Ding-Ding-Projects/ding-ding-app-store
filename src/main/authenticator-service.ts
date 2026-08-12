@@ -1,4 +1,6 @@
 import { randomUUID, timingSafeEqual } from 'node:crypto';
+import { chmod, open, rename, unlink } from 'node:fs/promises';
+import path from 'node:path';
 import { z } from 'zod';
 import {
   AUTHENTICATOR_ALGORITHMS,
@@ -6,6 +8,7 @@ import {
   AUTHENTICATOR_MAX_ACCOUNT_LENGTH,
   AUTHENTICATOR_MAX_ENTRIES,
   AUTHENTICATOR_MAX_EXPORT_LENGTH,
+  AUTHENTICATOR_MAX_SECRET_EXPORT_LENGTH,
   AUTHENTICATOR_MAX_GROUP_LENGTH,
   AUTHENTICATOR_MAX_ISSUER_LENGTH,
   AUTHENTICATOR_MAX_LABEL_LENGTH,
@@ -18,6 +21,8 @@ import {
   type AuthenticatorDeleteResult,
   type AuthenticatorExportRequest,
   type AuthenticatorExportResult,
+  type AuthenticatorSecretExportRequest,
+  type AuthenticatorSecretExportResult,
   type AuthenticatorExportOmittedField,
   type AuthenticatorGroupRequest,
   type AuthenticatorGroup,
@@ -85,6 +90,7 @@ const deleteRequestSchema = z.strictObject({ entryId: uuidSchema, confirmed: z.l
 const uniqueIds = (ids: string[]) => new Set(ids).size === ids.length;
 const bulkDeleteRequestSchema = z.strictObject({ entryIds: z.array(uuidSchema).min(1).max(AUTHENTICATOR_MAX_ENTRIES).refine(uniqueIds), confirmed: z.literal(true) });
 const exportRequestSchema = z.strictObject({ entryIds: z.array(uuidSchema).min(1).max(AUTHENTICATOR_MAX_ENTRIES).refine(uniqueIds), format: z.enum(['json', 'csv', 'markdown']) });
+const secretExportRequestSchema = z.strictObject({ entryIds: z.array(uuidSchema).min(1).max(AUTHENTICATOR_MAX_ENTRIES).refine(uniqueIds), format: z.enum(['json', 'csv']), confirmed: z.literal(true) });
 const groupCreateSchema = z.strictObject({ name: z.string().min(1).max(AUTHENTICATOR_MAX_GROUP_LENGTH), color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional() });
 const groupIdSchema = z.strictObject({ groupId: uuidSchema });
 const groupRenameSchema = z.strictObject({ groupId: uuidSchema, name: z.string().min(1).max(AUTHENTICATOR_MAX_GROUP_LENGTH) });
@@ -130,6 +136,10 @@ const EXPORT_OMITTED_FIELDS: AuthenticatorExportOmittedField[] = ['secret', 'uri
 
 function exportFailure(message: string, messageYue: string): AuthenticatorExportResult {
   return { ok: false, omittedFields: [...EXPORT_OMITTED_FIELDS], message, messageYue };
+}
+
+function secretExportFailure(reason: AuthenticatorSecretExportResult['reason'], message: string, messageYue: string, entryCount = 0): AuthenticatorSecretExportResult {
+  return { ok: false, reason, entryCount, message, messageYue };
 }
 
 function clockFailure(message: string, messageYue: string): AuthenticatorMutationResult {
@@ -202,11 +212,13 @@ export class AuthenticatorService {
    * URIs, secrets, codes, QR data, ciphertext, and paths never cross this seam.
    */
   private async recordActivity(
-    action: 'created' | 'renamed' | 'group-changed' | 'reordered' | 'deleted' | 'bulk-deleted' | 'group-created' | 'group-renamed' | 'group-reordered' | 'group-deleted' | 'group-moved',
+    action: 'created' | 'renamed' | 'group-changed' | 'reordered' | 'deleted' | 'bulk-deleted' | 'group-created' | 'group-renamed' | 'group-reordered' | 'group-deleted' | 'group-moved' | 'secrets-exported',
     options: { entryId?: string; ok?: boolean; committedCount?: number; skippedCount?: number; uncertainCount?: number } = {},
   ): Promise<void> {
     if (!this.activityRecorder) return;
-    const enSubject = action === 'group-created'
+    const enSubject = action === 'secrets-exported'
+      ? 'Exported authenticator secrets by explicit authorization'
+      : action === 'group-created'
       ? 'Created an authenticator group'
       : action === 'group-renamed'
         ? 'Renamed an authenticator group'
@@ -227,7 +239,9 @@ export class AuthenticatorService {
             : action === 'deleted'
               ? 'Deleted an authenticator entry'
               : 'Deleted authenticator entries';
-    const yueSubject = action === 'group-created'
+    const yueSubject = action === 'secrets-exported'
+      ? '已按明确授权匯出驗證器秘密'
+      : action === 'group-created'
       ? '已建立驗證器分組'
       : action === 'group-renamed'
         ? '已改名驗證器分組'
@@ -253,12 +267,16 @@ export class AuthenticatorService {
     const skippedCount = options.skippedCount ?? 0;
     const uncertainCount = options.uncertainCount ?? 0;
     const partial = action === 'bulk-deleted' && (skippedCount > 0 || uncertainCount > 0 || options.ok === false);
-    const enMetadata = entryId
+    const enMetadata = action === 'secrets-exported'
+      ? `${committedCount} entries; secret bytes omitted from Activity`
+      : entryId
       ? `opaque entry ID ${entryId}`
       : partial
         ? `${committedCount} deleted, ${skippedCount} skipped, ${uncertainCount} uncertain`
         : `${committedCount} entries`;
-    const yueMetadata = entryId
+    const yueMetadata = action === 'secrets-exported'
+      ? `${committedCount} 個項目；Activity 冇包括秘密內容`
+      : entryId
       ? `不透明項目 ID ${entryId}`
       : partial
         ? `刪除 ${committedCount} 個、跳過 ${skippedCount} 個、未能確定 ${uncertainCount} 個`
@@ -871,6 +889,66 @@ export class AuthenticatorService {
       return { ok: true, format: parsed.data.format, filename, content, omittedFields, message: 'Metadata export is ready; secrets, otpauth URIs, current codes, and next-code peeks were omitted.', messageYue: 'Metadata 匯出已準備好；秘密、otpauth URI、目前驗證碼同下一碼預覽都冇包括。' };
       } catch {
         return exportFailure('The authenticator metadata export could not be prepared safely.', '未能安全準備 authenticator metadata 匯出。');
+      }
+    });
+  }
+
+  /**
+   * Deliberate secret export. This is intentionally a main-process-only
+   * operation: vault plaintext is assembled and written here, and the bridge
+   * receives only a bounded status result. The native save path is supplied by
+   * the main process after its own save dialog has completed.
+   */
+  async secretExport(request: AuthenticatorSecretExportRequest, destinationPath: string): Promise<AuthenticatorSecretExportResult> {
+    if (this.restricted) return secretExportFailure('restricted', 'Secret export is unavailable while the shared restricted mode is enabled or unavailable.', '共享限制模式開啟或不可用時，秘密匯出暫時用唔到。');
+    const parsed = secretExportRequestSchema.safeParse(request);
+    if (!parsed.success || !path.isAbsolute(destinationPath) || destinationPath.length > 2_048) return secretExportFailure('invalid', 'The secret export request or destination was invalid; no file was created.', '秘密匯出要求或者目的地無效；冇建立檔案。');
+    return this.withMetadataSerial(async () => {
+      const generation = this.restrictionGeneration;
+      try {
+        if (await this.vault.status() === 'unavailable') return secretExportFailure('unavailable', 'The operating-system credential vault is unavailable; no file was created.', '作業系統憑證庫暫時用唔到；冇建立檔案。');
+        const metadata = await this.readMutableMetadata(generation);
+        if (!metadata) return secretExportFailure('restricted', 'Authenticator metadata is unavailable or restricted; no file was created.', 'Authenticator metadata 暫時用唔到或者受到限制；冇建立檔案。');
+        const selected = parsed.data.entryIds.map((id) => metadata.find((entry) => entry.id === id)).filter((entry): entry is AuthenticatorEntryMetadata => Boolean(entry));
+        if (selected.length !== parsed.data.entryIds.length) return secretExportFailure('invalid', 'One or more requested authenticator entries no longer exist; no file was created.', '有一個或者以上要求嘅 authenticator 項目已經唔存在；冇建立檔案。');
+        const records: Array<Record<string, string | number>> = [];
+        for (const entry of selected) {
+          const secret = await this.vault.readSecret(entry.id);
+          if (!this.capabilityIsLive(generation)) return secretExportFailure('restricted', 'Secret export was stopped because the shared restricted mode changed; no file was created.', '共享限制模式改變，所以秘密匯出已停止；冇建立檔案。');
+          if (!secret || secret.length > AUTHENTICATOR_MAX_SECRET_LENGTH) return secretExportFailure('unavailable', 'A selected credential-vault secret was unavailable; no file was created.', '揀選嘅憑證庫秘密暫時用唔到；冇建立檔案。', records.length);
+          records.push({ id: entry.id, issuer: entry.issuer, account: entry.account, label: entry.label, algorithm: entry.algorithm, digits: entry.digits, periodSeconds: entry.periodSeconds, secret });
+        }
+        const warning = 'WARNING: This file contains usable authenticator secrets. Keep it private and delete it when no longer needed.';
+        let content: string;
+        const filename = parsed.data.format === 'json' ? 'authenticator-secrets.json' : 'authenticator-secrets.csv';
+        if (parsed.data.format === 'json') {
+          content = JSON.stringify({ schemaVersion: 1, warning, entries: records }, null, 2) + '\n';
+        } else {
+          const headers = ['schemaVersion', 'warning', 'id', 'issuer', 'account', 'label', 'algorithm', 'digits', 'periodSeconds', 'secret'];
+          const csvEscape = (value: string | number) => `"${String(value).replace(/"/g, '""')}"`;
+          content = `${headers.join(',')}\n${records.map((record) => headers.map((header) => csvEscape(header === 'schemaVersion' ? 1 : header === 'warning' ? warning : record[header] ?? '')).join(',')).join('\n')}\n`;
+        }
+        if (!this.capabilityIsLive(generation)) return secretExportFailure('restricted', 'Secret export was stopped because the shared restricted mode changed; no file was created.', '共享限制模式改變，所以秘密匯出已停止；冇建立檔案。');
+        if (Buffer.byteLength(content, 'utf8') > AUTHENTICATOR_MAX_SECRET_EXPORT_LENGTH) return secretExportFailure('too-large', 'The secret export exceeded its bounded size; no file was created.', '秘密匯出超出大小上限；冇建立檔案。', records.length);
+        const temporaryPath = path.join(path.dirname(destinationPath), `.${path.basename(destinationPath)}.${randomUUID()}.tmp`);
+        let handle: Awaited<ReturnType<typeof open>> | null = null;
+        try {
+          handle = await open(temporaryPath, 'wx', 0o600);
+          await handle.writeFile(content, 'utf8');
+          await handle.sync();
+          await handle.close();
+          handle = null;
+          await rename(temporaryPath, destinationPath);
+          await chmod(destinationPath, 0o600);
+        } catch {
+          if (handle) await handle.close().catch(() => undefined);
+          await unlink(temporaryPath).catch(() => undefined);
+          return secretExportFailure('write-failed', 'The secret export could not be written safely; no success was claimed.', '未能安全寫入秘密匯出；冇聲稱成功。', records.length);
+        }
+        await this.recordActivity('secrets-exported', { committedCount: records.length });
+        return { ok: true, filename, entryCount: records.length, message: `Exported ${records.length} authenticator secrets to the selected local file. The Activity record contains no secret bytes.`, messageYue: `已將 ${records.length} 個 authenticator 秘密匯出到揀選嘅本機檔案。Activity 紀錄冇包括秘密內容。` };
+      } catch {
+        return secretExportFailure('unavailable', 'A credential-vault read or local write failed; no secret export was claimed.', '憑證庫讀取或者本機寫入失敗；冇聲稱秘密匯出成功。');
       }
     });
   }

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { FormEvent } from 'react';
-import { AUTHENTICATOR_CAMERA_SCAN_MS, type AuthenticatorAlgorithm, type AuthenticatorDigits, type AuthenticatorExportFormat, type AuthenticatorRegistrationPreviewResult, type UserSettings } from '../../shared/contracts';
+import { AUTHENTICATOR_CAMERA_SCAN_MS, type AuthenticatorAlgorithm, type AuthenticatorDigits, type AuthenticatorExportFormat, type AuthenticatorSecretExportFormat, type AuthenticatorRegistrationPreviewResult, type UserSettings } from '../../shared/contracts';
 import { SearchBox } from '../components/SearchBox';
 import { RegexBuilder } from '../components/RegexBuilder';
 import { DestructiveConfirmDialog } from '../components/DestructiveConfirmDialog';
@@ -236,12 +236,14 @@ export function AuthenticatorPage({ settings, authenticator, notify, openRegex, 
   const movePickerTriggerRef = useRef<HTMLButtonElement>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [secretExportOpen, setSecretExportOpen] = useState(false);
+  const [secretExportFormat, setSecretExportFormat] = useState<AuthenticatorSecretExportFormat>('json');
   const [exportFormat, setExportFormat] = useState<AuthenticatorExportFormat>('json');
   const viewSettings = settings;
-  const visible = matcher('Authenticator registration otpauth URI Base32 secret issuer account algorithm digits period credential vault QR pairing current code countdown saved entries local search rename delete reorder group group label save group move up move down select bulk export refresh metadata 改名 刪除 排序 分組 揀選 匯出');
+  const visible = matcher('Authenticator registration otpauth URI Base32 secret issuer account algorithm digits period credential vault QR pairing current code countdown saved entries local search rename delete reorder group group label save group move up move down select bulk export refresh metadata secret export warning 改名 刪除 排序 分組 揀選 匯出');
   const visibleEntries = useMemo(() => {
     const collapsedGroupIds = new Set(authenticator.groups.filter((group) => group.collapsed).map((group) => group.id));
-    return authenticator.entries.filter((entry) => !entry.groupId || !collapsedGroupIds.has(entry.groupId)).filter((entry) => matcher(`${entry.label} ${entry.issuer} ${entry.account} ${entry.group ?? ''} ${entry.algorithm} ${entry.digits} ${entry.periodSeconds} rename delete reorder group group label save group move up move down select bulk export refresh metadata 改名 刪除 排序 分組 揀選 匯出`));
+    return authenticator.entries.filter((entry) => !entry.groupId || !collapsedGroupIds.has(entry.groupId)).filter((entry) => matcher(`${entry.label} ${entry.issuer} ${entry.account} ${entry.group ?? ''} ${entry.algorithm} ${entry.digits} ${entry.periodSeconds} rename delete reorder group group label save group move up move down select bulk export refresh metadata secret export warning 改名 刪除 排序 分組 揀選 匯出`));
   }, [authenticator.entries, authenticator.groups, matcher, clock]);
   const visibleGroups = useMemo(() => authenticator.groups.filter((group) => makeMatcher({ query: groupSearch, regex: groupRegex })(`${group.name} ${group.color}`)), [authenticator.groups, groupSearch, groupRegex]);
   const moveTargets = useMemo(() => [{ id: null, name: label(viewSettings, 'Ungrouped', '未分組'), color: 'transparent', order: -1, collapsed: false }, ...authenticator.groups].filter((group) => makeMatcher({ query: movePickerQuery, regex: movePickerRegex })(`${group.name} ${group.color}`)), [authenticator.groups, movePickerQuery, movePickerRegex, viewSettings]);
@@ -520,6 +522,14 @@ export function AuthenticatorPage({ settings, authenticator, notify, openRegex, 
       notify({ ok: opened.ok, message: opened.ok ? label(viewSettings, 'Authenticator metadata export opened in Visual Studio Code.', '已喺 Visual Studio Code 開啟 authenticator metadata 匯出。') : opened.message });
     } catch { notify({ ok: false, message: label(viewSettings, 'The authenticator Visual Studio Code export bridge was unavailable; no open was claimed.', '驗證器 Visual Studio Code 匯出橋接暫時用唔到；冇聲稱已開啟。') }); }
   };
+  const exportSecrets = async () => {
+    if (!selectedVisibleIds.length) return;
+    try {
+      const result = await authenticator.secretExport({ entryIds: selectedVisibleIds, format: secretExportFormat, confirmed: true });
+      notify({ ok: result.ok, message: label(viewSettings, result.message, result.messageYue) });
+      if (result.ok) { setSecretExportOpen(false); setSelectedEntries(new Set()); }
+    } catch { notify({ ok: false, message: label(viewSettings, 'The secret export bridge was unavailable; no file was created.', '秘密匯出橋接暫時用唔到；冇建立檔案。') }); }
+  };
   const deleteEntry = async (entryId: string) => {
     try {
       const result = await authenticator.remove({ entryId, confirmed: true });
@@ -686,6 +696,8 @@ export function AuthenticatorPage({ settings, authenticator, notify, openRegex, 
           <button className="text-button" type="button" disabled={!selectedVisibleIds.length} onClick={() => { setSelectionAnchorId(null); setSelectedEntries(new Set()); }}>{label(viewSettings, 'Clear selection', '清除揀選')}</button>
           <AuthenticatorPicker id="authenticator-export-format" labelText={label(viewSettings, 'Export format', '匯出格式')} settings={viewSettings} value={exportFormat} disabled={!selectedVisibleIds.length} options={[{ value: 'json', label: 'JSON' }, { value: 'csv', label: 'CSV' }, { value: 'markdown', label: 'Markdown' }]} onChange={(value) => setExportFormat(value as AuthenticatorExportFormat)} />
           <button className="text-button" type="button" disabled={!selectedVisibleIds.length} onClick={() => void downloadMetadata()}>{label(viewSettings, 'Export metadata (secrets omitted)', '匯出 metadata（不包括秘密）')}</button>
+          <AuthenticatorPicker id="authenticator-secret-export-format" labelText={label(viewSettings, 'Secret export format', '秘密匯出格式')} settings={viewSettings} value={secretExportFormat} disabled={!selectedVisibleIds.length} options={[{ value: 'json', label: 'JSON' }, { value: 'csv', label: 'CSV' }]} onChange={(value) => setSecretExportFormat(value as AuthenticatorSecretExportFormat)} />
+          <button className="text-button danger" type="button" disabled={!selectedVisibleIds.length} onClick={() => setSecretExportOpen(true)}>{label(viewSettings, 'Export secrets…', '匯出秘密…')}</button>
           <button className="text-button" type="button" disabled={!selectedVisibleIds.length || !isExternalEditorBridgeAvailable()} title={isExternalEditorBridgeAvailable() ? undefined : label(viewSettings, 'Unavailable: this build has no validated Visual Studio Code adapter.', '未能使用：呢個版本冇已審核嘅 Visual Studio Code 適配器。')} onClick={() => void openMetadataInVsCode()}>{label(viewSettings, 'Open export in VS Code', '喺 VS Code 開匯出')}</button>
           <button className="text-button danger" type="button" disabled={!selectedVisibleIds.length} onClick={() => setBulkDeleteOpen(true)}>{label(viewSettings, 'Delete selected', '刪除已揀選')}</button>
         </div>}
@@ -716,6 +728,7 @@ export function AuthenticatorPage({ settings, authenticator, notify, openRegex, 
     </section>}
     {deleteTarget && <DestructiveConfirmDialog settings={viewSettings} title={label(viewSettings, 'Delete this authenticator entry?', '刪除呢個 authenticator 項目？')} description={label(viewSettings, 'This permanently deletes the selected metadata and its credential-vault ciphertext. The action is not covered by authenticator history restore in this bounded slice.', '呢個操作會永久刪除所揀 metadata 同憑證庫密文；呢個有限功能嘅 authenticator 歷史還原唔包括呢個操作。')} actionLabel={label(viewSettings, 'DELETE ENTRY', '刪除項目')} onClose={() => setDeleteTarget(null)} onConfirm={() => deleteEntry(deleteTarget)} />}
     {bulkDeleteOpen && <DestructiveConfirmDialog settings={viewSettings} title={label(viewSettings, `Delete ${selectedVisibleIds.length} authenticator entries?`, `刪除 ${selectedVisibleIds.length} 個 authenticator 項目？`)} description={label(viewSettings, `This permanently deletes ${selectedVisibleIds.length} selected entries and their credential-vault ciphertexts. Selected labels: ${selectedVisibleIds.slice(0, 8).map((id) => visibleEntries.find((entry) => entry.id === id)?.label ?? id).join(', ')}${selectedVisibleIds.length > 8 ? '…' : ''}. Skipped or uncertain items will remain listed. Review this exact preview before authorizing.`, `呢個操作會永久刪除 ${selectedVisibleIds.length} 個揀選項目同佢哋嘅憑證庫密文。已揀標籤：${selectedVisibleIds.slice(0, 8).map((id) => visibleEntries.find((entry) => entry.id === id)?.label ?? id).join('、')}${selectedVisibleIds.length > 8 ? '…' : ''}。跳過或者未能確定嘅項目會繼續顯示。授權前請檢查呢個預覽。`)} actionLabel={label(viewSettings, `DELETE ${selectedVisibleIds.length} ENTRIES`, `刪除 ${selectedVisibleIds.length} 個項目`)} onClose={() => setBulkDeleteOpen(false)} onConfirm={() => deleteSelected()} />}
+    {secretExportOpen && <DestructiveConfirmDialog settings={viewSettings} title={label(viewSettings, `Export ${selectedVisibleIds.length} authenticator secrets?`, `匯出 ${selectedVisibleIds.length} 個 authenticator 秘密？`)} description={label(viewSettings, 'This writes usable credential-vault secrets to a local file chosen in the native save dialog. Keep the file private and delete it when no longer needed. The Activity record is redacted and contains no secret bytes. Emergency exit cancels before any vault read or file write.', '呢個操作會將可用嘅憑證庫秘密寫入原生儲存對話框揀選嘅本機檔案。請保持檔案私密，用完即刪。Activity 紀錄會遮蓋秘密內容。緊急離開會喺讀取憑證庫或者寫檔之前取消。')} actionLabel={label(viewSettings, 'EXPORT SECRETS', '匯出秘密')} onClose={() => setSecretExportOpen(false)} onConfirm={() => exportSecrets()} />}
     {groupDeleteTarget && (() => {
       const group = authenticator.groups.find((item) => item.id === groupDeleteTarget);
       const memberCount = authenticator.entries.filter((entry) => entry.groupId === groupDeleteTarget).length;
