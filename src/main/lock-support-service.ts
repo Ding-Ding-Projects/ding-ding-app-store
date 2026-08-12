@@ -287,7 +287,7 @@ export class LockSupportService {
       try {
         const parsed = lockFileSchema.safeParse(JSON.parse(await readFile(this.lockPath, 'utf8')) as unknown);
         if (!parsed.success) { this.locksReadFailed = true; this.locks = []; }
-        else this.locks = parsed.data.records.map((record) => ({ ...record, credentialKind: record.credentialKind ?? 'password', unlockDuration: record.unlockDuration ?? DEFAULT_UNLOCK_DURATION }));
+        else this.locks = parsed.data.records.map((record) => ({ ...record, credentialKind: record.credentialKind ?? 'password', ...(record.credentialKind === 'totp' ? { totpAlgorithm: record.totpAlgorithm ?? 'sha1', totpDigits: record.totpDigits ?? 6, totpPeriodSeconds: record.totpPeriodSeconds ?? 30 } : {}), unlockDuration: record.unlockDuration ?? DEFAULT_UNLOCK_DURATION }));
       } catch { this.locksReadFailed = true; this.locks = []; }
       finally { this.locksLoaded = true; }
     })();
