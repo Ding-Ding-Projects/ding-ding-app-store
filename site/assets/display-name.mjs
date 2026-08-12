@@ -35,4 +35,6 @@ export function resetDisplayName(storage) {
     return { ok: true, value: DEFAULT_DISPLAY_NAME };
   } catch { return { ok: false, value: loadDisplayName(storage), reason: 'storage-unavailable' }; }
 }
-export function displayNameForPresentation(value, restricted = false) { return sanitizeDisplayName(value) ?? DEFAULT_DISPLAY_NAME; }
+// Restricted presentation hides the editor in the caller but continues to
+// render the previously saved label; it never silently substitutes another name.
+export function displayNameForPresentation(value) { return sanitizeDisplayName(value) ?? DEFAULT_DISPLAY_NAME; }
