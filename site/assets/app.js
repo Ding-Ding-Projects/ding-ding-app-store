@@ -7,6 +7,13 @@ import {
   tabIdFromHash,
   togglePinned,
 } from './tab-state.mjs';
+import {
+  clearCachedVocabulary,
+  loadCachedVocabulary,
+  parsePersonalVocabularyJson,
+  personalizeOwnedText,
+  saveCachedVocabulary,
+} from './personal-vocabulary.mjs';
 
 (() => {
   'use strict';
@@ -41,35 +48,37 @@ import {
     density: localStorage.getItem(storage + 'density') || 'comfortable',
     accent: localStorage.getItem(storage + 'accent') || '#4f378b',
     settingsTab: localStorage.getItem(storage + 'settingsTab') || 'general',
+    siteRestricted: localStorage.getItem(storage + 'siteRestricted') === 'true',
   };
+  let vocabulary = loadCachedVocabulary();
   const search = { docs: readStoredSearch('docs'), settings: readStoredSearch('settings'), palette: readStoredSearch('palette') };
 
   const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
   const articleId = (href) => href.match(/(?:^|\/)([a-z0-9-]+)\.md(?:#.*)?$/i)?.[1] || null;
-  function inline(raw) {
+  function inline(raw, allowVocabulary = true) {
     const pattern = /(\[[^\]]+\]\([^)]+\)|`[^`]+`|\*\*[^*]+\*\*)/g;
     let output = ''; let cursor = 0;
     for (const match of raw.matchAll(pattern)) {
-      output += escapeHtml(raw.slice(cursor, match.index));
+      output += escapeHtml(allowVocabulary ? copy(raw.slice(cursor, match.index)) : raw.slice(cursor, match.index));
       const token = match[0];
       if (token.startsWith('[')) {
         const link = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/); const id = link && articleId(link[2]);
-        output += id ? `<button class="article-link" data-open="${escapeHtml(id)}">${escapeHtml(link[1])}</button>` : escapeHtml(link?.[1] || token);
+        output += id ? `<button class="article-link" data-open="${escapeHtml(id)}">${escapeHtml(allowVocabulary ? copy(link[1]) : link[1])}</button>` : escapeHtml(allowVocabulary ? copy(link?.[1] || token) : (link?.[1] || token));
       } else if (token.startsWith('`')) output += `<code>${escapeHtml(token.slice(1, -1))}</code>`;
-      else output += `<strong>${escapeHtml(token.slice(2, -2))}</strong>`;
+      else output += `<strong>${escapeHtml(allowVocabulary ? copy(token.slice(2, -2)) : token.slice(2, -2))}</strong>`;
       cursor = match.index + token.length;
     }
-    return output + escapeHtml(raw.slice(cursor));
+    return output + escapeHtml(allowVocabulary ? copy(raw.slice(cursor)) : raw.slice(cursor));
   }
 
-  function markdown(body) {
+  function markdown(body, allowVocabulary = true) {
     const output = []; let paragraph = []; let bullets = [];
-    const flushParagraph = () => { if (paragraph.length) output.push(`<p>${inline(paragraph.join(' '))}</p>`); paragraph = []; };
-    const flushBullets = () => { if (bullets.length) output.push(`<ul>${bullets.map((line) => `<li>${inline(line)}</li>`).join('')}</ul>`); bullets = []; };
+    const flushParagraph = () => { if (paragraph.length) output.push(`<p>${inline(paragraph.join(' '), allowVocabulary)}</p>`); paragraph = []; };
+    const flushBullets = () => { if (bullets.length) output.push(`<ul>${bullets.map((line) => `<li>${inline(line, allowVocabulary)}</li>`).join('')}</ul>`); bullets = []; };
     for (const line of body.replace(/\r/g, '').split('\n')) {
       if (line.startsWith('# ')) continue;
-      if (line.startsWith('## ')) { flushParagraph(); flushBullets(); output.push(`<h2>${escapeHtml(line.slice(3))}</h2>`); }
-      else if (line.startsWith('### ')) { flushParagraph(); flushBullets(); output.push(`<h3>${escapeHtml(line.slice(4))}</h3>`); }
+      if (line.startsWith('## ')) { flushParagraph(); flushBullets(); output.push(`<h2>${escapeHtml(allowVocabulary ? copy(line.slice(3)) : line.slice(3))}</h2>`); }
+      else if (line.startsWith('### ')) { flushParagraph(); flushBullets(); output.push(`<h3>${escapeHtml(allowVocabulary ? copy(line.slice(4)) : line.slice(4))}</h3>`); }
       else if (line.startsWith('- ')) { flushParagraph(); bullets.push(line.slice(2)); }
       else if (!line.trim()) { flushParagraph(); flushBullets(); }
       else paragraph.push(line.trim());
@@ -77,10 +86,14 @@ import {
     flushParagraph(); flushBullets(); return output.join('');
   }
 
-  function title(article) { return state.mode === 'en' ? article.title : state.mode === 'yue' ? article.titleYue : `${article.title} · ${article.titleYue}`; }
+  function restricted() { return state.siteRestricted; }
+  function effectiveMode() { return restricted() ? 'en' : state.mode; }
+  function copy(value) { return personalizeOwnedText(value, vocabulary.entries, restricted()); }
+  function localized(en, yue) { const mode = effectiveMode(); return mode === 'yue' ? yue : mode === 'both' ? `${en} · ${yue}` : en; }
+  function title(article) { const mode = effectiveMode(); const raw = mode === 'en' ? article.title : mode === 'yue' ? article.titleYue : `${article.title} · ${article.titleYue}`; return article.source === 'canonical' ? copy(raw) : raw; }
   function setStatus(message) { $('status').textContent = message; }
   function saveControls() {
-    for (const key of ['mode', 'funnyEn', 'funnyYue', 'theme', 'density', 'accent', 'settingsTab']) localStorage.setItem(storage + key, state[key]);
+    for (const key of ['mode', 'funnyEn', 'funnyYue', 'theme', 'density', 'accent', 'settingsTab', 'siteRestricted']) localStorage.setItem(storage + key, state[key]);
   }
   function saveTabs() {
     localStorage.setItem(storage + 'tabs', JSON.stringify(state.tabs));
@@ -104,16 +117,59 @@ import {
     document.documentElement.dataset.theme = state.theme;
     document.documentElement.dataset.density = state.density;
     document.documentElement.style.setProperty('--primary', state.accent);
-    document.documentElement.lang = state.mode === 'yue' ? 'yue-Hant-HK' : 'en';
+    document.documentElement.lang = effectiveMode() === 'yue' ? 'yue-Hant-HK' : 'en';
+    document.querySelectorAll('[data-site-copy]').forEach((node) => {
+      const source = node.dataset.siteCopy;
+      const labels = { 'restricted-label': 'Restricted presentation (site-only)', 'restricted-help': "This site-only restricted switch is separate from the desktop app's shared School mode. It forces English and suppresses personal vocabulary on this browser only; it is not a security boundary.", 'vocabulary-title': 'Personal vocabulary', 'vocabulary-file-label': 'Choose a local JSON file', 'vocabulary-replace': 'Replace vocabulary', 'vocabulary-clear': 'Clear vocabulary', 'vocabulary-help': 'The file is parsed and cached in this browser only. Its path, metadata, and private values are never sent over the network or included in exports.' };
+      if (labels[source]) node.textContent = restricted() ? labels[source] : copy(labels[source]);
+    });
+    const restrictedInput = $('site-restricted');
+    if (restrictedInput) restrictedInput.checked = state.siteRestricted;
+    const card = $('personal-vocabulary-card');
+    if (card) card.hidden = restricted();
+    document.querySelectorAll('[data-restricted-hide]').forEach((node) => { node.hidden = restricted(); });
+  }
+
+  function vocabularyStatus(message, messageYue = message) {
+    const status = $('personal-vocabulary-status');
+    if (status) status.textContent = localized(message, messageYue);
+  }
+  function refreshVocabularyStatus() {
+    vocabulary = loadCachedVocabulary();
+    if (vocabulary.corrupt) vocabularyStatus('The cached vocabulary was rejected; original wording is active. Choose a valid local JSON file to replace it.', '快取詞彙被拒絕；而家使用原本文字。請揀有效本機 JSON 檔案取代。');
+    else if (vocabulary.loaded) vocabularyStatus(`${vocabulary.entries.length} local vocabulary entries are active. Source path and file metadata were not saved.`, `而家本機啟用緊 ${vocabulary.entries.length} 項詞彙；來源路徑同檔案資料冇被儲存。`);
+    else vocabularyStatus('No local JSON file is loaded. Original wording is active.', '未載入本機 JSON 檔案，而家使用原本文字。');
+  }
+  async function replaceVocabulary() {
+    if (restricted()) return;
+    const input = $('personal-vocabulary-file');
+    const file = input?.files?.[0];
+    if (!file) { vocabularyStatus('Choose one local JSON file before replacing vocabulary.', '請先揀一個本機 JSON 檔案，先可以取代詞彙。'); return; }
+    if (file.size > 64_000) { vocabularyStatus('The local JSON file is too large; the last valid cache remains active.', '本機 JSON 檔案太大；上一次有效快取會繼續啟用。'); return; }
+    try {
+      const result = parsePersonalVocabularyJson(new Uint8Array(await file.arrayBuffer()));
+      if (!result.ok) { vocabularyStatus(`The local vocabulary file was rejected (${result.reason}); the last valid cache remains active.`, `本機詞彙檔案被拒絕（${result.reason}）；上一次有效快取會繼續啟用。`); return; }
+      vocabulary = saveCachedVocabulary(result.document);
+      input.value = '';
+      refreshVocabularyStatus();
+      openArticle(state.article, false, { addTab: false, route: 'none' });
+    } catch { vocabularyStatus('The local vocabulary file could not be cached; the last valid cache remains active.', '本機詞彙檔案未能寫入快取；上一次有效快取會繼續啟用。'); }
+  }
+  function clearVocabulary() {
+    if (restricted()) return;
+    try { vocabulary = clearCachedVocabulary(); } catch { vocabularyStatus('The local vocabulary cache could not be cleared; original wording remains active only after browser storage is available.', '未能清除本機詞彙快取；瀏覽器儲存可用後先會恢復原本文字。'); return; }
+    const input = $('personal-vocabulary-file'); if (input) input.value = '';
+    refreshVocabularyStatus();
+    openArticle(state.article, false, { addTab: false, route: 'none' });
   }
 
   function bindOpen() { document.querySelectorAll('[data-open]').forEach((button) => button.addEventListener('click', () => openArticle(button.dataset.open))); }
   function homeContent() {
-    return `<h1>Ding Ding App Store complete documentation</h1><p class="lede">Every implemented feature and every explicit limit is documented from one canonical categorized source. Pending work is labelled pending and never presented as shipped.</p>${categories.map((category) => { const rows = articles.filter((article) => article.category === category.id); return `<section class="feature-category"><h2>${escapeHtml(category.title)}</h2><p>${escapeHtml(category.summary)}</p><div class="suggestion-list">${rows.map((article) => `<button class="result-card" data-open="${article.id}"><strong>${escapeHtml(title(article))}</strong><span class="tag ${article.status}">${article.status}</span><br>${escapeHtml(article.summary)}</button>`).join('')}</div></section>`; }).join('')}`;
+    return `<h1>${escapeHtml(copy('Ding Ding App Store complete documentation'))}</h1><p class="lede">${escapeHtml(copy('Every implemented feature and every explicit limit is documented from one canonical categorized source. Pending work is labelled pending and never presented as shipped.'))}</p>${categories.map((category) => { const rows = articles.filter((article) => article.category === category.id); return `<section class="feature-category"><h2>${escapeHtml(copy(category.title))}</h2><p>${escapeHtml(copy(category.summary))}</p><div class="suggestion-list">${rows.map((article) => `<button class="result-card" data-open="${article.id}"><strong>${escapeHtml(title(article))}</strong><span class="tag ${article.status}">${article.status}</span><br>${escapeHtml(copy(article.summary))}</button>`).join('')}</div></section>`; }).join('')}`;
   }
   function articleContent(article) {
     if (!article) return homeContent();
-    return `<span class="tag ${article.status}">${article.status}</span><h1>${escapeHtml(title(article))}</h1><p class="lede">${escapeHtml(article.summary)}</p>${markdown(article.body)}`;
+    return `<span class="tag ${article.status}">${escapeHtml(article.source === 'canonical' ? copy(article.status) : article.status)}</span><h1>${escapeHtml(title(article))}</h1><p class="lede">${escapeHtml(article.source === 'canonical' ? copy(article.summary) : article.summary)}</p>${markdown(article.body, article.source === 'canonical')}`;
   }
 
   function browserTabTitle(id) {
@@ -257,7 +313,7 @@ import {
     if (!key) { $('results').innerHTML = ''; return; }
     const match = matcher('docs', query);
     const rows = articles.filter((article) => match([article.title, article.titleYue, article.category, article.status, article.summary, article.body].join('\n')));
-    $('results').innerHTML = rows.length ? `<h2>Search results (${rows.length})</h2>${rows.map((article) => `<button class="result-card" data-open="${article.id}"><strong>${escapeHtml(title(article))}</strong><br>${escapeHtml(article.summary)}</button>`).join('')}` : `<p class="empty">No documentation matches “${escapeHtml(key)}”. Clear the query or adjust the pattern.</p>`;
+    $('results').innerHTML = rows.length ? `<h2>Search results (${rows.length})</h2>${rows.map((article) => `<button class="result-card" data-open="${article.id}"><strong>${escapeHtml(title(article))}</strong><br>${escapeHtml(article.source === 'canonical' ? copy(article.summary) : article.summary)}</button>`).join('')}` : `<p class="empty">No documentation matches “${escapeHtml(key)}”. Clear the query or adjust the pattern.</p>`;
     bindOpen();
   }
 
@@ -304,7 +360,7 @@ import {
     const panel = $(`settings-panel-${state.settingsTab}`); const match = matcher('settings', $('settings-search').value.trim()); let visible = 0;
     if (!search.settings.regex) search.settings.query = $('settings-search').value.trim();
     saveSearch('settings');
-    panel.querySelectorAll('[data-settings-text]').forEach((row) => { const show = match(`${row.dataset.settingsText} ${row.textContent}`); row.hidden = !show; if (show) visible += 1; });
+    panel.querySelectorAll('[data-settings-text]').forEach((row) => { const inVocabularyCard = Boolean(row.closest('#personal-vocabulary-card')); const show = !((restricted() && inVocabularyCard) || (restricted() && row.hasAttribute('data-restricted-hide'))) && match(`${row.dataset.settingsText} ${row.textContent}`); row.hidden = !show; if (show) visible += 1; });
     $('settings-empty').hidden = visible > 0;
   }
 
@@ -312,9 +368,9 @@ import {
     const value = $('palette-search').value.trim(); const match = matcher('palette', value);
     if (!search.palette.regex) search.palette.query = value;
     saveSearch('palette');
-    const rows = [{ id: 'home', label: 'Home', type: 'Destination' }, ...articles.map((article) => ({ id: article.id, label: title(article), type: `${article.category} · ${article.status}` })), ...['general', 'appearance', 'about'].map((id) => ({ id: `setting-${id}`, label: `${id[0].toUpperCase()}${id.slice(1)} settings`, type: 'Setting destination' }))].filter((row) => match(`${row.label} ${row.type}`));
+    const rows = [{ id: 'home', label: 'Home', type: 'Destination' }, ...articles.map((article) => ({ id: article.id, label: title(article), type: `${article.category} · ${article.status}` })), ...['general', 'appearance', 'about'].map((id) => ({ id: `setting-${id}`, label: `${id[0].toUpperCase()}${id.slice(1)} settings`, type: 'Setting destination' })), ...(restricted() ? [] : [{ id: 'setting-personal-vocabulary-import', label: localized('Import personal vocabulary JSON', '匯入本機個人詞彙 JSON'), type: localized('Settings control · local upload', '設定控制 · 本機上載') }, { id: 'setting-personal-vocabulary-clear', label: localized('Clear personal vocabulary', '清除本機個人詞彙'), type: localized('Settings control · local reset', '設定控制 · 本機重設') }]), { id: 'setting-site-restricted', label: localized('Restricted presentation (site-only)', '受限顯示（只限網站）'), type: localized('Settings control · local mode', '設定控制 · 本機模式') }].filter((row) => match(`${row.label} ${row.type}`));
     $('palette-results').innerHTML = rows.length ? rows.map((row) => `<button class="palette-row" data-command="${row.id}" role="option"><strong>${escapeHtml(row.label)}</strong><br><small>${escapeHtml(row.type)}</small></button>`).join('') : '<p class="empty">No command or destination matches.</p>';
-    document.querySelectorAll('[data-command]').forEach((button) => button.addEventListener('click', () => { $('palette').close(); const id = button.dataset.command; if (id.startsWith('setting-')) { openSettingsTab(id.slice(8)); $('settings-title').scrollIntoView(); } else openArticle(id); }));
+    document.querySelectorAll('[data-command]').forEach((button) => button.addEventListener('click', () => { $('palette').close(); const id = button.dataset.command; if (id === 'setting-personal-vocabulary-import') { openSettingsTab('general'); $('personal-vocabulary-file').focus(); $('settings-title').scrollIntoView(); } else if (id === 'setting-personal-vocabulary-clear') { openSettingsTab('general'); $('personal-vocabulary-clear').focus(); $('settings-title').scrollIntoView(); } else if (id === 'setting-site-restricted') { openSettingsTab('general'); $('site-restricted').focus(); $('settings-title').scrollIntoView(); } else if (id.startsWith('setting-')) { openSettingsTab(id.slice(8)); $('settings-title').scrollIntoView(); } else openArticle(id); }));
   }
 
   ['docs', 'settings', 'palette'].forEach((kind) => {
@@ -333,6 +389,11 @@ import {
 
   $('language').value = state.mode; $('funny-en').value = state.funnyEn; $('funny-yue').value = state.funnyYue; $('funny-en-value').textContent = state.funnyEn; $('funny-yue-value').textContent = state.funnyYue;
   $('theme').value = state.theme; $('density').value = state.density; $('accent').value = state.accent;
+  $('site-restricted').checked = state.siteRestricted;
+  $('site-restricted').addEventListener('change', (event) => { state.siteRestricted = Boolean(event.target.checked); saveControls(); applyAppearance(); openSettingsTab('general'); openArticle(state.article, false, { addTab: false, route: 'none' }); });
+  $('personal-vocabulary-replace').addEventListener('click', () => void replaceVocabulary());
+  $('personal-vocabulary-clear').addEventListener('click', clearVocabulary);
+  refreshVocabularyStatus();
   $('language').addEventListener('change', (event) => { state.mode = event.target.value; saveControls(); applyAppearance(); openArticle(state.article, false); });
   [['funny-en', 'funnyEn', 'funny-en-value'], ['funny-yue', 'funnyYue', 'funny-yue-value']].forEach(([id, key, output]) => $(id).addEventListener('input', (event) => { state[key] = +event.target.value; $(output).textContent = event.target.value; saveControls(); setStatus(`${id === 'funny-en' ? 'English' : 'Cantonese'} funny level set to ${event.target.value}; factual article content is unchanged.`); }));
   [['theme', 'theme'], ['density', 'density'], ['accent', 'accent']].forEach(([id, key]) => $(id).addEventListener('input', (event) => { state[key] = event.target.value; saveControls(); applyAppearance(); }));
