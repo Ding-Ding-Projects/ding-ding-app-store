@@ -7,7 +7,7 @@ import { AuthenticatorService } from '../src/main/authenticator-service.js';
 import { SafeStorageAuthenticatorVault } from '../src/main/authenticator-vault.js';
 import type { AuthenticatorEntryMetadata } from '../src/shared/contracts.js';
 import type { AuthenticatorVault, AuthenticatorVaultMetadataWriteOptions, AuthenticatorVaultSaveOptions } from '../src/main/authenticator-vault-contract.js';
-import { parseAuthenticatorBulkDelete, parseAuthenticatorDelete, parseAuthenticatorExport } from '../src/preload/index.js';
+import { parseAuthenticatorBulkDelete, parseAuthenticatorDelete, parseAuthenticatorExport, parseAuthenticatorGroupMutation, parseAuthenticatorList } from '../src/preload/index.js';
 import { generateTotp } from '../src/main/totp.js';
 import { selectAuthenticatorRange, toggleAuthenticatorSelection } from '../src/renderer/authenticator-selection.js';
 
@@ -207,6 +207,39 @@ describe('saved authenticator-entry management boundary', () => {
     expect((await service.deleteGroup({ groupId, confirmed: true })).ok).toBe(true);
     expect((await vault.listMetadata())[0]).toMatchObject({ groupId: null, group: null });
     expect(JSON.stringify(vault.records)).not.toContain('JBSWY3DPEHPK3PXP');
+  });
+
+  it('persists collapse state and rejects malformed group bridge payloads', async () => {
+    const vault = new ManagementVault();
+    vault.records.set(ID_A, { metadata: metadata(ID_A, 0), secret: 'JBSWY3DPEHPK3PXP' });
+    const service = new AuthenticatorService(vault);
+    const first = await service.createGroup({ name: 'Work' });
+    const second = await service.createGroup({ name: 'Personal' });
+    const groupId = first.group!.id;
+    expect((await service.collapseGroup({ groupId, collapsed: true })).group?.collapsed).toBe(true);
+    expect((await service.reorderGroup({ groupId, order: 1 })).group?.order).toBe(1);
+    expect((await service.reorderGroup({ groupId, order: 0 })).group?.order).toBe(0);
+    const valid = { entries: [{ ...metadata(ID_A, 0), group: 'Work', groupId, code: null, nextCode: null, remainingSeconds: null, expiresAt: null }], groups: [{ ...first.group!, collapsed: true, order: 0 }, { ...second.group!, order: 1 }], storage: 'os-vault', message: 'ok', messageYue: '好' };
+    expect(parseAuthenticatorList(valid).entries[0].groupId).toBe(groupId);
+    expect(() => parseAuthenticatorList({ ...valid, groups: [{ ...valid.groups[0], id: 'not-a-uuid' }] })).toThrow();
+    expect(() => parseAuthenticatorList({ ...valid, groups: [...valid.groups, { ...valid.groups[1], id: randomUUID(), order: 1 }] })).toThrow();
+    expect(() => parseAuthenticatorList({ ...valid, entries: [{ ...valid.entries[0], groupId: randomUUID() }] })).toThrow();
+    expect(() => parseAuthenticatorGroupMutation({ ok: true, group: { ...first.group, id: 'bad' }, message: 'x', messageYue: 'x' })).toThrow();
+  });
+
+  it('uses the native destructive group gate and a keyboard regex move picker', async () => {
+    const page = await readFile(new URL('../src/renderer/pages/AuthenticatorPage.tsx', import.meta.url), 'utf8');
+    expect(page).not.toContain('window.confirm');
+    expect(page).not.toContain('visibleGroups[0]');
+    expect(page).toContain('groupDeleteTarget');
+    expect(page).toContain('DELETE GROUP');
+    expect(page).toContain('movePickerQuery');
+    expect(page).toContain('movePickerRegex');
+    expect(page).toContain('Open regex builder for move targets');
+    expect(page).toContain('moveAuthenticatorPickerFocus');
+    expect(page).toContain('Move down');
+    expect(page).toContain('collapseGroup');
+    expect(page).toContain('collapsedGroupIds');
   });
 
   it('does not report moves when metadata publication fails', async () => {

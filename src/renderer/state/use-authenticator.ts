@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { AuthenticatorBulkDeleteRequest, AuthenticatorBulkDeleteResult, AuthenticatorDeleteRequest, AuthenticatorDeleteResult, AuthenticatorExportRequest, AuthenticatorExportResult, AuthenticatorGroupBulkMoveRequest, AuthenticatorGroupCreateRequest, AuthenticatorGroupDeleteRequest, AuthenticatorGroupMutationResult, AuthenticatorGroupRenameRequest, AuthenticatorGroupReorderRequest, AuthenticatorGroupRequest, AuthenticatorListResult, AuthenticatorMutationResult, AuthenticatorPreviewRequest, AuthenticatorPreviewResult, AuthenticatorRegistrationConfirmRequest, AuthenticatorRegistrationPreviewResult, AuthenticatorRegistrationRequest, AuthenticatorRenameRequest, AuthenticatorReorderRequest, AuthenticatorStatus } from '../../shared/contracts';
+import type { AuthenticatorBulkDeleteRequest, AuthenticatorBulkDeleteResult, AuthenticatorDeleteRequest, AuthenticatorDeleteResult, AuthenticatorExportRequest, AuthenticatorExportResult, AuthenticatorGroupBulkMoveRequest, AuthenticatorGroupCollapseRequest, AuthenticatorGroupCreateRequest, AuthenticatorGroupDeleteRequest, AuthenticatorGroupMutationResult, AuthenticatorGroupRenameRequest, AuthenticatorGroupReorderRequest, AuthenticatorGroupRequest, AuthenticatorListResult, AuthenticatorMutationResult, AuthenticatorPreviewRequest, AuthenticatorPreviewResult, AuthenticatorRegistrationConfirmRequest, AuthenticatorRegistrationPreviewResult, AuthenticatorRegistrationRequest, AuthenticatorRenameRequest, AuthenticatorReorderRequest, AuthenticatorStatus } from '../../shared/contracts';
 
 export interface AuthenticatorApi {
   status: AuthenticatorStatus | null;
@@ -22,6 +22,7 @@ export interface AuthenticatorApi {
   createGroup(request: AuthenticatorGroupCreateRequest): Promise<AuthenticatorGroupMutationResult>;
   renameGroup(request: AuthenticatorGroupRenameRequest): Promise<AuthenticatorGroupMutationResult>;
   reorderGroup(request: AuthenticatorGroupReorderRequest): Promise<AuthenticatorGroupMutationResult>;
+  collapseGroup(request: AuthenticatorGroupCollapseRequest): Promise<AuthenticatorGroupMutationResult>;
   deleteGroup(request: AuthenticatorGroupDeleteRequest): Promise<AuthenticatorGroupMutationResult>;
   moveToGroup(request: AuthenticatorGroupBulkMoveRequest): Promise<{ ok: boolean; movedIds: string[]; skippedIds: string[]; message: string; messageYue: string }>;
 }
@@ -119,7 +120,8 @@ export function useAuthenticator(enabled = true): AuthenticatorApi {
   const createGroup = useCallback((request: AuthenticatorGroupCreateRequest) => window.dingDingStore.authenticator.createGroup(request).then(async (value) => { if (value.ok) await refresh(); return value; }), [refresh]);
   const renameGroup = useCallback((request: AuthenticatorGroupRenameRequest) => window.dingDingStore.authenticator.renameGroup(request).then(async (value) => { if (value.ok) await refresh(); return value; }), [refresh]);
   const reorderGroup = useCallback((request: AuthenticatorGroupReorderRequest) => window.dingDingStore.authenticator.reorderGroup(request).then(async (value) => { if (value.ok) await refresh(); return value; }), [refresh]);
+  const collapseGroup = useCallback((request: AuthenticatorGroupCollapseRequest) => window.dingDingStore.authenticator.collapseGroup(request).then(async (value) => { if (value.ok) await refresh(); return value; }), [refresh]);
   const deleteGroup = useCallback((request: AuthenticatorGroupDeleteRequest) => window.dingDingStore.authenticator.deleteGroup(request).then(async (value) => { if (value.ok) await refresh(); return value; }), [refresh]);
   const moveToGroup = useCallback((request: AuthenticatorGroupBulkMoveRequest) => window.dingDingStore.authenticator.moveToGroup(request).then(async (value) => { if (value.movedIds.length) await refresh(); return value; }), [refresh]);
-  return { status, loading, preview, entries, groups, listLoading, refresh, prepare, cancelAttempt, confirm, cancel, rename, setGroup, reorder, remove, bulkRemove, export: exportMetadata, createGroup, renameGroup, reorderGroup, deleteGroup, moveToGroup };
+  return { status, loading, preview, entries, groups, listLoading, refresh, prepare, cancelAttempt, confirm, cancel, rename, setGroup, reorder, remove, bulkRemove, export: exportMetadata, createGroup, renameGroup, reorderGroup, collapseGroup, deleteGroup, moveToGroup };
 }
