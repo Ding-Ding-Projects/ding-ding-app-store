@@ -72,7 +72,7 @@ describe('source job contracts', () => {
     const challenge = createIsolationAttestationChallenge(jobId, 60_000, brokerIdentity, now);
     const lease = {
       leaseId: crypto.randomUUID(), jobId, challengeNonce: challenge.nonce, brokerId: brokerIdentity.brokerId, transportId: brokerIdentity.transportId,
-        issuedAt: new Date(now).toISOString(), expiresAt: challenge.leaseExpiresAt, capabilities: ['execute', 'dispose'] as const,
+        issuedAt: new Date(now).toISOString(), executeExpiresAt: challenge.executeExpiresAt, disposeExpiresAt: challenge.leaseExpiresAt, capabilities: ['execute', 'dispose'] as const,
     };
     const attestation = { ...REQUIRED_ISOLATION, version: 1 as const, jobId, challengeNonce: challenge.nonce, brokerId: brokerIdentity.brokerId, transportId: brokerIdentity.transportId, attestedAt: new Date(now).toISOString(), expiresAt: challenge.expiresAt, lease };
     expect(validateIsolationAttestation(attestation, challenge, now)).toMatchObject({ ok: true });
@@ -86,7 +86,7 @@ describe('source job contracts', () => {
     expect(() => createIsolationAttestationChallenge(crypto.randomUUID(), 0, brokerIdentity)).toThrow(/duration/i);
     expect(() => createIsolationAttestationChallenge(crypto.randomUUID(), 60_000, null)).toThrow(/identity/i);
     const challenge = createIsolationAttestationChallenge(crypto.randomUUID(), 60_000, { brokerId: 'test-broker', transportId: 'test-transport' }, Date.parse('2026-08-12T12:00:00.000Z'));
-    const lease = { leaseId: crypto.randomUUID(), jobId: challenge.jobId, challengeNonce: challenge.nonce, brokerId: challenge.expectedBrokerId, transportId: challenge.expectedTransportId, issuedAt: '2026-08-12T12:00:00.000Z', expiresAt: '2026-08-12T12:01:00.000Z', capabilities: ['execute', 'dispose'] as const };
+    const lease = { leaseId: crypto.randomUUID(), jobId: challenge.jobId, challengeNonce: challenge.nonce, brokerId: challenge.expectedBrokerId, transportId: challenge.expectedTransportId, issuedAt: '2026-08-12T12:00:00.000Z', executeExpiresAt: challenge.executeExpiresAt, disposeExpiresAt: challenge.leaseExpiresAt, capabilities: ['execute', 'dispose'] as const };
     expect(validateCapabilityLease({ ...lease, issuedAt: '2026-08-12T12:00:00.000Zx' }, challenge, 'execute', Date.parse('2026-08-12T12:00:01.000Z'))).toBe(false);
     expect(validateCapabilityLease({ ...lease, expiresAt: '2026-08-12T12:00:00.000Zx' }, challenge, 'execute', Date.parse('2026-08-12T12:00:01.000Z'))).toBe(false);
   });
@@ -293,7 +293,7 @@ class FakeBroker implements IsolationBroker {
   disposed: string[] = [];
   constructor(private readonly behavior: 'wait-for-cancel' | 'hang' | 'complete' = 'wait-for-cancel') {}
   identity() { return { brokerId: 'test-broker', transportId: 'test-transport' }; }
-  async attest(challenge: Readonly<IsolationAttestationChallenge>): Promise<IsolationAttestation> {
+  async attest(challenge: Readonly<IsolationAttestationChallenge>, _signal: AbortSignal): Promise<IsolationAttestation> {
     const now = Date.parse(challenge.issuedAt);
     return {
       ...REQUIRED_ISOLATION,
@@ -306,7 +306,7 @@ class FakeBroker implements IsolationBroker {
       expiresAt: challenge.expiresAt,
       lease: {
         leaseId: crypto.randomUUID(), jobId: challenge.jobId, challengeNonce: challenge.nonce, brokerId: challenge.expectedBrokerId, transportId: challenge.expectedTransportId,
-        issuedAt: new Date(now).toISOString(), expiresAt: challenge.leaseExpiresAt, capabilities: ['execute', 'dispose'],
+        issuedAt: new Date(now).toISOString(), executeExpiresAt: challenge.executeExpiresAt, disposeExpiresAt: challenge.leaseExpiresAt, capabilities: ['execute', 'dispose'],
       },
     };
   }

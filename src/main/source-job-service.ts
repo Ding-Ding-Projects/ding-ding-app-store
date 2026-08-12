@@ -189,7 +189,7 @@ export class SourceJobService {
         ? this.broker.dispose(jobId, job.lease)
         : this.broker.abort(jobId);
     }
-    await job.teardown.catch(() => undefined);
+    await job.teardown;
   }
 
   private async execute(jobId: string, request: SourceJobRequest, recipe: SourceRecipe): Promise<void> {
@@ -224,7 +224,7 @@ export class SourceJobService {
         throw new Error(`The hard-disposable runner is unavailable (${status.reason}). No source code or blanket-approved OpenCode ran on the host.`);
       }
       const challenge = createIsolationAttestationChallenge(jobId, Math.max(1, deadline - Date.now()), identity, Date.now());
-      const validation = validateIsolationAttestation(await withinDeadline(this.broker.attest(challenge)), challenge, Date.now());
+      const validation = validateIsolationAttestation(await withinDeadline(this.broker.attest(challenge, job.controller.signal)), challenge, Date.now());
       if (!validation.ok) {
         const status = await withinDeadline(this.isolationStatus());
         this.emit(job, { stream: 'stderr', state: 'failed', text: `Source execution withheld: ${status.reason}. Broker attestation was rejected (${validation.reason}). ${status.evidence.join(' ')}`, progress: null });
@@ -235,7 +235,10 @@ export class SourceJobService {
         throw new Error('The hard-disposable runner returned an incomplete capability lease. No source code ran.');
       }
       job.lease = attestation.lease;
-      if (job.controller.signal.aborted) throw new DOMException('Cancelled', 'AbortError');
+      if (job.controller.signal.aborted) {
+        await this.teardown(job, jobId);
+        throw new DOMException('Cancelled', 'AbortError');
+      }
       const plan = createSourceExecutionPlan(jobId, request.decision, recipe);
       this.emit(job, { stream: 'progress', state: 'preparing', text: `Pinned revision ${recipe.revision.slice(0, 12)} and reviewed command vectors accepted.`, progress: 10 });
       await withinDeadline(this.broker.execute(plan, (line) => this.emit(job, line), job.controller.signal, attestation.lease));

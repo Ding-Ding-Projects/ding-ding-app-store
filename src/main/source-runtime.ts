@@ -128,7 +128,8 @@ export const isolationCapabilityLeaseSchema = z.strictObject({
   brokerId: isolationBrokerIdentitySchema.shape.brokerId,
   transportId: isolationBrokerIdentitySchema.shape.transportId,
   issuedAt: z.iso.datetime(),
-  expiresAt: z.iso.datetime(),
+  executeExpiresAt: z.iso.datetime(),
+  disposeExpiresAt: z.iso.datetime(),
   capabilities: z.array(isolationCapabilitySchema).min(1).max(2).refine((values) => new Set(values).size === values.length, 'Lease capabilities must be unique.'),
 });
 
@@ -140,6 +141,7 @@ export const isolationAttestationChallengeSchema = z.strictObject({
   nonce: nonceSchema,
   issuedAt: z.iso.datetime(),
   expiresAt: z.iso.datetime(),
+  executeExpiresAt: z.iso.datetime(),
   leaseExpiresAt: z.iso.datetime(),
   requestedCapabilities: z.array(isolationCapabilitySchema).length(2).refine((values) => new Set(values).size === values.length, 'Requested capabilities must be unique.'),
   expectedBrokerId: isolationBrokerIdentitySchema.shape.brokerId,
@@ -206,6 +208,7 @@ export function createIsolationAttestationChallenge(
   if (!Number.isInteger(leaseDurationMs) || leaseDurationMs < 1 || leaseDurationMs > SOURCE_RUNTIME_LIMITS.maxJobMs) throw new Error('Source broker lease duration exceeded the bounded job limit.');
   const issuedAt = new Date(now).toISOString();
   const expiresAt = new Date(Math.min(now + SOURCE_BROKER_LIMITS.challengeTtlMs, now + leaseDurationMs)).toISOString();
+  const executeExpiresAt = new Date(now + leaseDurationMs).toISOString();
   const leaseExpiresAt = new Date(now + leaseDurationMs + SOURCE_BROKER_LIMITS.teardownGraceMs).toISOString();
   return isolationAttestationChallengeSchema.parse({
     version: 1,
@@ -213,6 +216,7 @@ export function createIsolationAttestationChallenge(
     nonce: randomBytes(32).toString('hex'),
     issuedAt,
     expiresAt,
+    executeExpiresAt,
     leaseExpiresAt,
     requestedCapabilities: ['execute', 'dispose'],
     expectedBrokerId: parsedIdentity.data.brokerId,
@@ -243,15 +247,17 @@ export function validateIsolationAttestation(
   const attestedAt = timestamp(attestation.attestedAt);
   const attestationExpires = timestamp(attestation.expiresAt);
   const leaseIssued = timestamp(attestation.lease.issuedAt);
-  const leaseExpires = timestamp(attestation.lease.expiresAt);
-  if (![challengeIssued, challengeExpires, leaseDeadline, attestedAt, attestationExpires, leaseIssued, leaseExpires].every(Number.isFinite)) return { ok: false, reason: 'guest-attestation-time-invalid' };
+  const executeExpires = timestamp(challenge.executeExpiresAt);
+  const leaseExecuteExpires = timestamp(attestation.lease.executeExpiresAt);
+  const leaseDisposeExpires = timestamp(attestation.lease.disposeExpiresAt);
+  if (![challengeIssued, challengeExpires, leaseDeadline, executeExpires, attestedAt, attestationExpires, leaseIssued, leaseExecuteExpires, leaseDisposeExpires].every(Number.isFinite)) return { ok: false, reason: 'guest-attestation-time-invalid' };
   if (attestation.jobId !== challenge.jobId || attestation.lease.jobId !== challenge.jobId) return { ok: false, reason: 'guest-attestation-job-mismatch' };
   if (attestation.challengeNonce !== challenge.nonce || attestation.lease.challengeNonce !== challenge.nonce) return { ok: false, reason: 'guest-attestation-nonce-mismatch' };
   if (attestation.brokerId !== challenge.expectedBrokerId || attestation.transportId !== challenge.expectedTransportId) return { ok: false, reason: 'guest-attestation-identity-mismatch' };
   if (attestation.lease.brokerId !== attestation.brokerId || attestation.lease.transportId !== attestation.transportId) return { ok: false, reason: 'guest-lease-identity-mismatch' };
   if (attestedAt < challengeIssued - SOURCE_BROKER_LIMITS.clockSkewMs || attestedAt > now + SOURCE_BROKER_LIMITS.clockSkewMs) return { ok: false, reason: 'guest-attestation-not-fresh' };
   if (now > challengeExpires + SOURCE_BROKER_LIMITS.clockSkewMs || attestationExpires <= now || attestationExpires > challengeExpires + SOURCE_BROKER_LIMITS.clockSkewMs) return { ok: false, reason: 'guest-attestation-expired' };
-  if (leaseIssued < attestedAt - SOURCE_BROKER_LIMITS.clockSkewMs || leaseIssued > now + SOURCE_BROKER_LIMITS.clockSkewMs || leaseExpires <= now || leaseExpires > leaseDeadline) return { ok: false, reason: 'guest-capability-lease-invalid' };
+  if (leaseIssued < attestedAt - SOURCE_BROKER_LIMITS.clockSkewMs || leaseIssued > now + SOURCE_BROKER_LIMITS.clockSkewMs || leaseExecuteExpires <= now || leaseExecuteExpires > executeExpires || leaseDisposeExpires <= now || leaseDisposeExpires > leaseDeadline || leaseDisposeExpires < leaseExecuteExpires) return { ok: false, reason: 'guest-capability-lease-invalid' };
   if (!attestation.lease.capabilities.includes('execute') || !attestation.lease.capabilities.includes('dispose')) return { ok: false, reason: 'guest-capability-lease-incomplete' };
   if (!isolationMatches(attestation)) return { ok: false, reason: 'guest-isolation-requirements-mismatch' };
   return { ok: true, attestation };
@@ -259,10 +265,9 @@ export function validateIsolationAttestation(
 
 export function validateCapabilityLease(
   lease: unknown,
-  expected: Pick<IsolationAttestationChallenge, 'jobId' | 'nonce' | 'expectedBrokerId' | 'expectedTransportId'>,
+  expected: Pick<IsolationAttestationChallenge, 'jobId' | 'nonce' | 'expectedBrokerId' | 'expectedTransportId' | 'executeExpiresAt' | 'leaseExpiresAt'>,
   capability: IsolationCapability,
   now = Date.now(),
-  allowExpired = false,
 ): boolean {
   const parsed = isolationCapabilityLeaseSchema.safeParse(lease);
   if (!parsed.success) return false;
@@ -270,10 +275,15 @@ export function validateCapabilityLease(
   if (value.jobId !== expected.jobId || value.challengeNonce !== expected.nonce || value.brokerId !== expected.expectedBrokerId || value.transportId !== expected.expectedTransportId) return false;
   if (!value.capabilities.includes(capability)) return false;
   const issuedAt = timestamp(value.issuedAt);
-  const expiresAt = timestamp(value.expiresAt);
-  if (!Number.isFinite(issuedAt) || !Number.isFinite(expiresAt) || expiresAt <= issuedAt) return false;
+  const executeExpiresAt = timestamp(value.executeExpiresAt);
+  const disposeExpiresAt = timestamp(value.disposeExpiresAt);
+  const expectedExecuteExpiresAt = timestamp(expected.executeExpiresAt);
+  const expectedDisposeExpiresAt = timestamp(expected.leaseExpiresAt);
+  if (![issuedAt, executeExpiresAt, disposeExpiresAt, expectedExecuteExpiresAt, expectedDisposeExpiresAt].every(Number.isFinite) || executeExpiresAt <= issuedAt || disposeExpiresAt < executeExpiresAt) return false;
+  if (executeExpiresAt > expectedExecuteExpiresAt || disposeExpiresAt > expectedDisposeExpiresAt) return false;
   if (issuedAt > now + SOURCE_BROKER_LIMITS.clockSkewMs) return false;
-  if (!allowExpired && expiresAt <= now) return false;
+  const expiresAt = capability === 'execute' ? executeExpiresAt : disposeExpiresAt;
+  if (expiresAt <= now) return false;
   return true;
 }
 
@@ -297,7 +307,7 @@ export interface SourceExecutionPlan {
 }
 
 export interface IsolationBroker {
-  attest(challenge: Readonly<IsolationAttestationChallenge>): Promise<unknown>;
+  attest(challenge: Readonly<IsolationAttestationChallenge>, signal: AbortSignal): Promise<unknown>;
   execute(plan: Readonly<SourceExecutionPlan>, emit: (event: RuntimeLine) => void, signal: AbortSignal, lease: Readonly<IsolationCapabilityLease>): Promise<void>;
   /** A validated lease is mandatory for an admitted guest teardown. The
    * broker must consume the lease at most once; repeated calls for the same
