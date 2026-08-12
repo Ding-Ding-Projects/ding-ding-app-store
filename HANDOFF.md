@@ -388,6 +388,12 @@ Implement the hard-disposable broker without host mounts or secrets, add reviewe
 
 # Appearance property lock affordances — 2026-08-12
 
+# Bounded self-updater release channel — 2026-08-12
+
+- The release workflow is now restricted to `main` pushes and manual dispatch. It proves the exact workflow SHA equals the freshly fetched `origin/main` tip before packaging and again before publication, rejecting stale manual dispatches and a `main` advance during publication.
+- One derived stable, monotonically higher package version now drives the Squirrel package filename, `RELEASES` entry, release tag, staged asset name, and immutable release-note URL. The unsigned Squirrel path remains unchanged.
+- Focused contract tests cover the main-only trigger/ancestry assertion and semantic version naming. This does not claim a published release or clean Windows download/restart/install proof.
+
 - Implemented on `codex/appearance-property-lock-ui` in `fea48ffcba1a146f4261a550a3d75ebf28ad7dfb` and `ba82f1b99617b136d8d8d858a074a82dc07939f2`.
 - Added per-token **Lock this property** / **Manage property lock** actions to both the edit-mode AppearancePanel and Settings → Appearance override list. Each action uses the typed `appearance-property` target with the canonical `element:token` key and routes to Settings → Locks & Support with originating focus retained.
 - School mode and unavailable credential vault states disable the affordances with explicit localized explanations. Renderer code contains no stored credential, verifier, salt, or ciphertext path.

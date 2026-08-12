@@ -38,5 +38,6 @@ describe('self-updater RELEASES contract', () => {
 
   it('constructs immutable release-note URLs from the validated version', () => {
     expect(updateInternals.releaseNotesUrl('0.2.0')).toBe('https://github.com/Ding-Ding-Projects/ding-ding-app-store/releases/tag/v0.2.0');
+    expect(updateInternals.releaseNotesUrl('0.2.42')).toBe('https://github.com/Ding-Ding-Projects/ding-ding-app-store/releases/tag/v0.2.42');
   });
 });
