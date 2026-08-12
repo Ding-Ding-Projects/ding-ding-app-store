@@ -67,6 +67,7 @@ const STATIC_COMMANDS = [
   'toggle-quiet-hours', 'apply-quiet-night', 'show-next-runs', 'toggle-badges', 'toggle-color-bar',
   'toggle-pinned-icon-only', 'save-schedule', 'reset-schedule',
   'open-notifications', 'open-changelog', 'open-school-mode', 'open-source-details',
+  'personal-vocabulary-import', 'personal-vocabulary-clear',
   'authenticator-rename', 'authenticator-group', 'authenticator-reorder', 'authenticator-select',
   'authenticator-export', 'authenticator-delete', 'authenticator-bulk-delete',
 ] as const;
@@ -142,7 +143,7 @@ export interface SurfaceRow { surface: SurfaceId; icon: string; en: string; yue:
 
 export const SURFACES: readonly SurfaceRow[] = [
   ...TAB_IDS.map((id) => ({ surface: id as SurfaceId, icon: TAB_META[id].icon, en: TAB_META[id].en, yue: TAB_META[id].yue, keywords: [id, 'page', 'tab'] })),
-  { surface: 'settings.general', icon: 'settings', en: 'Settings · General', yue: '設定 · 一般', keywords: ['language', 'funny', 'voice'] },
+  { surface: 'settings.general', icon: 'settings', en: 'Settings · General', yue: '設定 · 一般', keywords: ['language', 'funny', 'voice', 'personal vocabulary', 'private wording', 'json upload'] },
   { surface: 'settings.appearance', icon: 'palette', en: 'Settings · Appearance', yue: '設定 · 外觀', keywords: ['theme', 'density', 'accent', 'rail', 'tabs'] },
   { surface: 'settings.schedule', icon: 'schedule', en: 'Settings · Schedule', yue: '設定 · 排程', keywords: ['update', 'interval', 'quiet'] },
   { surface: 'settings.about', icon: 'info', en: 'Settings · About', yue: '設定 · 關於', keywords: ['version', 'licence', 'unsigned', 'changelog', 'external editor', 'vscode'] },

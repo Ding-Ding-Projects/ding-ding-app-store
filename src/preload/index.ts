@@ -60,6 +60,8 @@ import type {
   TabWorkspace,
   SettingsProvenance,
   UserSettings,
+  PersonalVocabularyImportResult,
+  PersonalVocabularyStatus,
 } from '../shared/contracts.js';
 import {
   parseSchoolModeMutationResult,
@@ -71,6 +73,25 @@ const SOURCE_STREAMS = new Set(['system', 'progress', 'stdout', 'stderr']);
 const SOURCE_EVENT_KEYS = new Set(['jobId', 'appId', 'sequence', 'at', 'stream', 'state', 'text', 'progress', 'final']);
 const OPERATION_PHASES = new Set(['queued', 'resolving', 'downloading', 'extracting', 'launching', 'committing', 'installer-running', 'cancelling', 'succeeded', 'failed', 'cancelled', 'unknown']);
 const OPERATION_EVENT_KEYS = new Set(['operationId', 'appId', 'kind', 'phase', 'progress', 'bytesReceived', 'bytesTotal', 'cancellable', 'locked', 'message', 'final']);
+function parsePersonalVocabularyStatus(value: unknown): PersonalVocabularyStatus {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('The personal vocabulary response was invalid.');
+  const result = value as Record<string, unknown>;
+  const keys = new Set(['loaded', 'entryCount', 'entries', 'message', 'messageYue']);
+  const validEntry = (entry: unknown): entry is { source: string; replacement: string } => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return false;
+    const record = entry as Record<string, unknown>;
+    return typeof record.source === 'string' && record.source.length >= 1 && record.source.length <= 128 && typeof record.replacement === 'string' && record.replacement.length >= 1 && record.replacement.length <= 256;
+  };
+  if (Object.keys(result).some((key) => !keys.has(key)) || typeof result.loaded !== 'boolean' || !Number.isInteger(result.entryCount) || Number(result.entryCount) < 0 || Number(result.entryCount) > 256 || !Array.isArray(result.entries) || result.entries.length > 256 || result.entries.some((entry) => !validEntry(entry)) || typeof result.message !== 'string' || result.message.length > 512 || typeof result.messageYue !== 'string' || result.messageYue.length > 512) throw new Error('The personal vocabulary response was invalid.');
+  const entries = (result.entries as unknown[]).map((entry: unknown) => { const record = entry as Record<string, unknown>; return { source: String(record.source), replacement: String(record.replacement) }; });
+  return Object.freeze({ loaded: result.loaded, entryCount: Number(result.entryCount), entries, message: result.message, messageYue: result.messageYue });
+}
+function parsePersonalVocabularyImport(value: unknown): PersonalVocabularyImportResult {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || typeof (value as Record<string, unknown>).ok !== 'boolean') throw new Error('The personal vocabulary import response was invalid.');
+  const raw = value as Record<string, unknown>;
+  const status = parsePersonalVocabularyStatus({ loaded: raw.loaded, entryCount: raw.entryCount, entries: raw.entries, message: raw.message, messageYue: raw.messageYue });
+  return Object.freeze({ ...status, ok: Boolean((value as Record<string, unknown>).ok) });
+}
 // Keep preload validation self-contained: this boundary must not load runtime
 // values from the shared contract module into the renderer bundle.
 const AUTHENTICATOR_ALGORITHM_SET = new Set<string>(['sha1', 'sha256', 'sha512']);
@@ -360,6 +381,11 @@ const api: DingDingStoreApi = {
     load: () => ipcRenderer.invoke('settings:load'),
     save: (settings: UserSettings) => ipcRenderer.invoke('settings:save', settings),
     provenance: () => ipcRenderer.invoke('settings:provenance') as Promise<SettingsProvenance>,
+  },
+  personalVocabulary: {
+    status: async () => parsePersonalVocabularyStatus(await ipcRenderer.invoke('personal-vocabulary:status')),
+    importFromFile: async () => parsePersonalVocabularyImport(await ipcRenderer.invoke('personal-vocabulary:import')),
+    clear: async () => parsePersonalVocabularyStatus(await ipcRenderer.invoke('personal-vocabulary:clear')),
   },
   schoolMode: {
     load: async () => parseSchoolModeSnapshot(await ipcRenderer.invoke('school-mode:load')),

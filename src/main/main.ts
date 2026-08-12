@@ -28,6 +28,7 @@ import { decodeAuthenticatorQrBitmap, inspectAuthenticatorImageDimensions } from
 import { SafeStorageAuthenticatorVault } from './authenticator-vault.js';
 import { LockSupportService } from './lock-support-service.js';
 import { StateMutationQueue } from './state-mutation-queue.js';
+import { PersonalVocabularyService } from './personal-vocabulary-service.js';
 
 const scheduleTaskSchema = z.enum(['self-update', 'catalog-refresh']);
 const PRODUCT_NAME = 'Ding Ding App Store';
@@ -128,6 +129,7 @@ void app.whenReady().then(async () => {
     try { contents.send('operations:progress', event); } catch { /* Renderer teardown must never interrupt a privileged install. */ }
   });
   const settings = new SettingsService(history);
+  const personalVocabulary = new PersonalVocabularyService();
   const schoolMode = new SchoolModeService();
   const authenticator = new AuthenticatorService(new SafeStorageAuthenticatorVault(), history);
   const lockSupport = new LockSupportService(history);
@@ -272,6 +274,9 @@ void app.whenReady().then(async () => {
   ipcMain.handle('settings:load', () => settings.load());
   ipcMain.handle('settings:provenance', () => settings.provenance());
   ipcMain.handle('settings:save', (_event, value: UserSettings) => stateMutationQueue.run(() => settings.save(value)));
+  ipcMain.handle('personal-vocabulary:status', (event) => event.sender === mainWindow?.webContents ? personalVocabulary.status() : Promise.reject(new Error('Blocked personal vocabulary request from an unknown renderer.')));
+  ipcMain.handle('personal-vocabulary:import', (event) => event.sender === mainWindow?.webContents ? personalVocabulary.importFromPicker(event.sender) : Promise.reject(new Error('Blocked personal vocabulary request from an unknown renderer.')));
+  ipcMain.handle('personal-vocabulary:clear', (event) => event.sender === mainWindow?.webContents ? personalVocabulary.clear() : Promise.reject(new Error('Blocked personal vocabulary request from an unknown renderer.')));
   ipcMain.handle('school-mode:load', (event) => event.sender === mainWindow?.webContents ? schoolMode.load() : Promise.reject(new Error('Blocked School mode request from an unknown renderer.')));
   ipcMain.handle('school-mode:configure', (event, request: SchoolModeConfigureRequest) => event.sender === mainWindow?.webContents ? schoolMode.configure(request) : Promise.reject(new Error('Blocked School mode request from an unknown renderer.')));
   ipcMain.handle('school-mode:rename', (event, request: SchoolModeRenameRequest) => event.sender === mainWindow?.webContents ? schoolMode.rename(request) : Promise.reject(new Error('Blocked School mode request from an unknown renderer.')));

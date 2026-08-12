@@ -35,7 +35,7 @@ import { TabRail } from './components/TabRail';
 import { el } from './el';
 import { downloadText, pickTextFile } from './files';
 import { Icon } from './icons';
-import { formatAbsolute, label } from './i18n';
+import { formatAbsolute, label, setPersonalVocabulary } from './i18n';
 import { AppsPage } from './pages/AppsPage';
 import type { RunningAction } from './pages/AppsPage';
 import { ActivityPage } from './pages/ActivityPage';
@@ -74,6 +74,12 @@ export function App() {
 
   const { settings: baseSettings, provenance: settingsProvenance, reload: reloadSettings, save: saveSettings, patch: patchSetting } = useSettings(notify);
   const schoolMode = useSchoolMode(notify, baseSettings);
+  useEffect(() => {
+    const loadVocabulary = () => void window.dingDingStore.personalVocabulary.status().then((status) => setPersonalVocabulary(status.entries, schoolMode.restricted)).catch(() => setPersonalVocabulary([], schoolMode.restricted));
+    loadVocabulary();
+    window.addEventListener('personal-vocabulary-changed', loadVocabulary);
+    return () => window.removeEventListener('personal-vocabulary-changed', loadVocabulary);
+  }, [schoolMode.restricted]);
   const authenticator = useAuthenticator(!schoolMode.loading && !schoolMode.restricted);
   const locks = useLocks(notify);
   const support = useSupport(notify);
@@ -735,6 +741,8 @@ export function App() {
       case 'open-changelog': openSurface('settings.about'); focusLater('changelog-title'); return;
       case 'open-school-mode': openSurface('settings.general'); focusLater('school-mode-title'); return;
       case 'open-source-details': openSurface('settings.general'); focusLater('source-isolation-title'); return;
+      case 'personal-vocabulary-import': openSurface('settings.general'); focusLater('personal-vocabulary-import'); return;
+      case 'personal-vocabulary-clear': openSurface('settings.general'); focusLater('personal-vocabulary-clear'); return;
       case 'authenticator-rename': case 'authenticator-group': case 'authenticator-reorder': case 'authenticator-select':
       case 'authenticator-export': case 'authenticator-delete': case 'authenticator-bulk-delete':
         openSurface('authenticator'); focusLater('authenticator-entry-management'); return;
