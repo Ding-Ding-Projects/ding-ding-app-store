@@ -5,7 +5,9 @@ export interface LabelPair { en: string; yue: string }
 
 let personalVocabulary: readonly PersonalVocabularyEntry[] = [];
 let personalVocabularyRestricted = false;
-const TECHNICAL_SPAN = /https?:\/\/[^\s]+|(?:[A-Za-z]:\\|\\\\)[^\s]+|\b[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)+\b|`[^`]+`|\b(?:SHA-(?:1|256|512)|sha(?:1|256|512)|JSON|URI|IPC|TOTP|Electron|Windows)\b/g;
+// Path boundaries are intentionally conservative: a drive/UNC path may contain spaces,
+// so protect the rest of its line rather than allowing a vocabulary replacement inside it.
+const TECHNICAL_SPAN = /https?:\/\/[^\s]+|(?:[A-Za-z]:\\|\\\\)[^\r\n]+|\b[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)+\b|`[^`]+`|\b(?:SHA-(?:1|256|512)|sha(?:1|256|512)|JSON|URI|IPC|TOTP|Electron|Windows)\b/g;
 
 export function setPersonalVocabulary(entries: readonly PersonalVocabularyEntry[], restricted = false): void {
   personalVocabulary = entries.map((entry) => ({ ...entry }));
