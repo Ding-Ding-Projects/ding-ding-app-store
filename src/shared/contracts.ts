@@ -1540,6 +1540,7 @@ export interface DingDingStoreApi {
     subscribe(listener: (status: ScheduleStatus) => void): () => void;
   };
   authenticator: {
+    readClipboardText(): Promise<string>;
     status(): Promise<AuthenticatorStatus>;
     preview(request: AuthenticatorPreviewRequest): Promise<AuthenticatorPreviewResult>;
     prepare(request: AuthenticatorRegistrationRequest): Promise<AuthenticatorRegistrationPreviewResult>;

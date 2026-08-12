@@ -411,6 +411,11 @@ const api: DingDingStoreApi = {
     },
   },
   authenticator: {
+    readClipboardText: async () => {
+      const value = await ipcRenderer.invoke('authenticator:clipboard-read');
+      if (typeof value !== 'string' || new TextEncoder().encode(value).byteLength > 2_048) throw new Error('The local clipboard text was unavailable or too large.');
+      return value;
+    },
     status: async () => parseAuthenticatorStatus(await ipcRenderer.invoke('authenticator:status')),
     preview: async (request: AuthenticatorPreviewRequest) => parseAuthenticatorPreviewResult(await ipcRenderer.invoke('authenticator:preview', request)),
     prepare: async (request: AuthenticatorRegistrationRequest) => parseAuthenticatorRegistrationPreview(await ipcRenderer.invoke('authenticator:prepare', request)),
