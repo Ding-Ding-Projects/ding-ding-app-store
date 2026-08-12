@@ -96,6 +96,7 @@ export interface HistoryRecordInput {
 export interface HistorySnapshotParticipant {
   snapshot(): Promise<string | null>;
   restore(content: string, options?: { shouldCommit?: () => boolean }): Promise<void>;
+  restoreAvailable?(): boolean;
 }
 
 /** Parses one append-only log line without allowing malformed records to poison the whole Activity list. */
@@ -129,11 +130,20 @@ export class HistoryService {
 
   /** Repairs an interrupted restore before any state service reads application data. */
   async recoverPendingRestore(): Promise<void> {
-    await this.enqueueState(() => recoverRestoreTransaction(this.restoreTransactionPath, app.getPath('userData'), async (manifest) => {
-      const label = manifest.recordLabel;
-      if (!label) return false;
-      return (await gitText(this.repositoryPath, ['log', '-1', '--format=%s', 'HEAD'], 256))?.trim() === label;
-    }, this.authenticatorHistory));
+    try {
+      await this.enqueueState(() => recoverRestoreTransaction(this.restoreTransactionPath, app.getPath('userData'), async (manifest) => {
+        const label = manifest.recordLabel;
+        if (!label) return false;
+        return (await gitText(this.repositoryPath, ['log', '-1', '--format=%s', 'HEAD'], 256))?.trim() === label;
+      }, this.authenticatorHistory));
+    } catch (error) {
+      // An outer journal may contain the protected authenticator slot. If the
+      // native no-follow adapter is unavailable, the participant must retain
+      // both journals and let the app start with the safe pre-authenticator
+      // files restored; never abort launch or attempt a path-based fallback.
+      if ((error as NodeJS.ErrnoException).code === 'EUNSUPPORTED') return;
+      throw error;
+    }
   }
 
   async list(): Promise<HistoryEntry[]> {
@@ -196,7 +206,9 @@ export class HistoryService {
       const subject = subjectParts.join('\t').slice(0, MAX_LABEL_LENGTH);
       const changed = await gitText(this.repositoryPath, ['diff-tree', '--no-commit-id', '--name-only', '-r', id, '--', 'state'], 32_000);
       const changedFiles = (changed ?? '').split(/\r?\n/).filter((file): file is string => SNAPSHOT_FILES.includes(file) || file === 'state/labels.v1.json');
-      rows.push({ id: id.toLowerCase(), occurredAt, subject, label: labels[id.toLowerCase()] ?? subject, changedFiles, restorable: await this.revisionHasSnapshots(id) });
+      const hasAuthenticatorSnapshot = await gitText(this.repositoryPath, ['cat-file', '-e', `${id}:state/authenticator-history.json`], 100) === '';
+      const protectedRestoreAvailable = !hasAuthenticatorSnapshot || this.authenticatorHistory?.restoreAvailable?.() === true;
+      rows.push({ id: id.toLowerCase(), occurredAt, subject, label: labels[id.toLowerCase()] ?? subject, changedFiles, restorable: protectedRestoreAvailable && await this.revisionHasSnapshots(id) });
     }
     return rows;
   }
@@ -239,6 +251,7 @@ export class HistoryService {
     const restored: Array<[string, string]> = [];
     const previous: Array<[string, string | null]> = [];
     const authenticatorTarget = this.authenticatorHistory ? await gitText(this.repositoryPath, ['show', `${id}:state/authenticator-history.json`], MAX_REVISION_BYTES) : null;
+    if (authenticatorTarget !== null && this.authenticatorHistory?.restoreAvailable?.() !== true) return { ok: false, message: 'Protected authenticator restore is unavailable until native atomic no-follow vault operations are available; no files were changed.' };
     const authenticatorPrevious = authenticatorTarget !== null && this.authenticatorHistory ? await this.authenticatorHistory.snapshot() : null;
     if (authenticatorTarget !== null && authenticatorPrevious === null) return { ok: false, message: 'The current authenticator state could not be preserved safely; no files were changed.' };
     for (const definition of SNAPSHOT_DEFINITIONS) {

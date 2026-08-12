@@ -18,7 +18,6 @@ export interface SafeStorageAuthenticatorVaultOptions {
   decryptString?: (value: Buffer) => string;
   writeMetadata?: (filePath: string, value: unknown, options?: { shouldPublish?: () => boolean }) => Promise<void>;
   renameSecret?: (from: string, to: string) => Promise<void>;
-  supportsAtomicNoFollow?: () => boolean;
 }
 
 const MAX_HISTORY_CIPHERTEXT_BYTES = 2_000_000;
@@ -96,7 +95,7 @@ export class SafeStorageAuthenticatorVault implements AuthenticatorVault {
   private readonly decryptString: (value: Buffer) => string;
   private readonly writeMetadataFile: (filePath: string, value: unknown, options?: { shouldPublish?: () => boolean }) => Promise<void>;
   private readonly renameSecret: (from: string, to: string) => Promise<void>;
-  private readonly atomicNoFollow: () => boolean;
+  private atomicNoFollow: () => boolean;
   private groups: AuthenticatorGroup[] = [];
   constructor(options: SafeStorageAuthenticatorVaultOptions = {}) {
     const userData = options.metadataPath && options.secretsDirectory ? '' : app.getPath('userData');
@@ -107,7 +106,22 @@ export class SafeStorageAuthenticatorVault implements AuthenticatorVault {
     this.decryptString = options.decryptString ?? ((value) => safeStorage.decryptString(value));
     this.writeMetadataFile = options.writeMetadata ?? ((filePath, value, writeOptions) => writeJsonAtomic(filePath, value, { shouldPublish: writeOptions?.shouldPublish }));
     this.renameSecret = options.renameSecret ?? rename;
-    this.atomicNoFollow = options.supportsAtomicNoFollow ?? (() => false);
+    // Production never opts into the path-based test seam. A native
+    // handle-relative no-follow implementation must be reviewed and wired
+    // here before protected authenticator snapshots/restores can be enabled.
+    this.atomicNoFollow = () => false;
+  }
+
+  /**
+   * Test-only constructor for exercising the protected snapshot algorithm.
+   * The production constructor has no capability override: Deen No reparse
+   * and junction races remain an explicit unavailable boundary.
+   */
+  static forTests(options: SafeStorageAuthenticatorVaultOptions, atomicNoFollow: () => boolean): SafeStorageAuthenticatorVault {
+    if (process.env.NODE_ENV !== 'test') throw new Error('The authenticator vault test constructor is unavailable outside tests.');
+    const vault = new SafeStorageAuthenticatorVault(options);
+    vault.atomicNoFollow = atomicNoFollow;
+    return vault;
   }
 
   async status(): Promise<AuthenticatorVaultStatus> {

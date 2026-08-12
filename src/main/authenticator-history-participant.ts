@@ -4,6 +4,10 @@ import { writeJsonAtomic } from './json-store.js';
 import type { AuthenticatorVault, AuthenticatorVaultHistorySnapshot } from './authenticator-vault-contract.js';
 import { entryMetadataSchema, authenticatorGroupSchema, normalizeAuthenticatorGroups } from './authenticator-metadata.js';
 
+export type AuthenticatorHistoryRecoveryResult =
+  | { status: 'clean' | 'recovered' }
+  | { status: 'unavailable'; code: 'EUNSUPPORTED'; message: string };
+
 const snapshotSchema = z.strictObject({
   schemaVersion: z.literal(1),
   metadata: z.array(z.unknown()).max(10_000),
@@ -32,16 +36,22 @@ async function removeJournal(pathname: string): Promise<void> {
 export class AuthenticatorHistoryParticipant {
   constructor(private readonly vault: AuthenticatorVault, private readonly journalPath?: string) {}
 
+  /** Protected snapshots require the native no-follow capability, not just a vault object. */
+  restoreAvailable(): boolean {
+    if (this.vault.restoreHistorySnapshot === undefined || this.vault.supportsAtomicNoFollow === undefined) return false;
+    try { return this.vault.supportsAtomicNoFollow() === true; } catch { return false; }
+  }
+
   async snapshot(): Promise<string | null> {
     if (!this.vault.createHistorySnapshot) return null;
-    if (this.vault.supportsAtomicNoFollow && !this.vault.supportsAtomicNoFollow()) return null;
+    if (!this.restoreAvailable()) return null;
     const value = await this.vault.createHistorySnapshot();
     return value ? `${JSON.stringify(value)}\n` : null;
   }
 
   async restore(content: string, options?: { shouldCommit?: () => boolean; recovery?: boolean }): Promise<void> {
     if (!this.vault.restoreHistorySnapshot) throw new Error('Authenticator history restore is unavailable.');
-    if (this.vault.supportsAtomicNoFollow && !this.vault.supportsAtomicNoFollow()) {
+    if (!this.restoreAvailable()) {
       const unsupported = new Error('Protected authenticator restore is unavailable because atomic no-follow vault operations are unsupported on this platform.') as NodeJS.ErrnoException;
       unsupported.code = 'EUNSUPPORTED';
       throw unsupported;
@@ -89,26 +99,37 @@ export class AuthenticatorHistoryParticipant {
     }
   }
 
-  async recover(): Promise<void> {
-    if (!this.journalPath || !this.vault.restoreHistorySnapshot) return;
+  async recover(): Promise<AuthenticatorHistoryRecoveryResult> {
+    if (!this.journalPath || !this.vault.restoreHistorySnapshot) return { status: 'clean' };
     try { await access(this.journalPath); } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { status: 'clean' };
       throw new Error('The authenticator history recovery journal could not be inspected safely.');
+    }
+    if (!this.restoreAvailable()) {
+      return {
+        status: 'unavailable',
+        code: 'EUNSUPPORTED',
+        message: 'Protected authenticator restore remains unavailable until native atomic no-follow vault operations are available; the recovery journal was retained.',
+      };
     }
     try {
       const raw: unknown = JSON.parse(await readFile(this.journalPath, 'utf8'));
       const journal = journalSchema.safeParse(raw);
       if (!journal.success) throw new Error('invalid journal');
-      if (journal.data.phase === 'committed') { await removeJournal(this.journalPath); return; }
+      if (journal.data.phase === 'committed') { await removeJournal(this.journalPath); return { status: 'recovered' }; }
       const parsed = snapshotSchema.safeParse(journal.data.previous);
       if (!parsed.success) throw new Error('invalid journal');
       const metadata = parsed.data.metadata.map((item) => entryMetadataSchema.parse(item));
       const groups = normalizeAuthenticatorGroups(parsed.data.groups.map((item) => authenticatorGroupSchema.parse(item)));
       await this.vault.restoreHistorySnapshot({ schemaVersion: 1, metadata, groups, ciphertext: parsed.data.ciphertext });
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'EUNSUPPORTED' || (error as NodeJS.ErrnoException).code === 'EINTEGRITY') throw error;
+      if ((error as NodeJS.ErrnoException).code === 'EUNSUPPORTED') {
+        return { status: 'unavailable', code: 'EUNSUPPORTED', message: 'Protected authenticator restore remains unavailable until native atomic no-follow vault operations are available; the recovery journal was retained.' };
+      }
+      if ((error as NodeJS.ErrnoException).code === 'EINTEGRITY') throw error;
       throw new Error('The authenticator history recovery journal was invalid; it was retained for recovery.');
     }
     await removeJournal(this.journalPath);
+    return { status: 'recovered' };
   }
 }

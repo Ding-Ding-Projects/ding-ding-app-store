@@ -248,17 +248,16 @@ describe('safeStorage ciphertext rollback', () => {
   let directory: string | undefined;
   afterEach(async () => { if (directory) await rm(directory, { recursive: true, force: true }); directory = undefined; });
 
-  async function createVault(overrides: Partial<ConstructorParameters<typeof SafeStorageAuthenticatorVault>[0]> = {}) {
+  async function createVault(overrides: Partial<ConstructorParameters<typeof SafeStorageAuthenticatorVault>[0]> = {}, atomicNoFollow: () => boolean = () => true) {
     directory = await mkdtemp(path.join(os.tmpdir(), 'ding-auth-'));
-    return new SafeStorageAuthenticatorVault({
+    return SafeStorageAuthenticatorVault.forTests({
       metadataPath: path.join(directory, 'authenticator.v1.json'),
       secretsDirectory: path.join(directory, 'secrets'),
       isEncryptionAvailable: () => true,
       encryptString: (value) => Buffer.from(`encrypted:${value}`, 'utf8'),
       decryptString: (value) => value.toString('utf8').replace(/^encrypted:/, ''),
-      supportsAtomicNoFollow: () => true,
       ...overrides,
-    });
+    }, atomicNoFollow);
   }
 
   it('removes the ciphertext when metadata publication fails', async () => {
@@ -291,10 +290,26 @@ describe('safeStorage ciphertext rollback', () => {
   });
 
   it('refuses protected restore when atomic no-follow operations are unavailable', async () => {
-    const vault = await createVault({ supportsAtomicNoFollow: () => false });
+    const vault = await createVault({}, () => false);
     await vault.save(metadata(), SECRET);
     await expect(vault.restoreHistorySnapshot({ schemaVersion: 1, metadata: [metadata()], groups: [], ciphertext: [] })).rejects.toMatchObject({ code: 'EUNSUPPORTED' });
     await expect(vault.readSecret(metadata().id)).resolves.toBe(SECRET);
+  });
+
+  it('keeps the production constructor fail-closed with no capability override', async () => {
+    directory = await mkdtemp(path.join(os.tmpdir(), 'ding-auth-production-'));
+    const vault = new SafeStorageAuthenticatorVault({
+      metadataPath: path.join(directory!, 'authenticator.v1.json'),
+      secretsDirectory: path.join(directory!, 'secrets'),
+      isEncryptionAvailable: () => true,
+      encryptString: (value) => Buffer.from(`encrypted:${value}`, 'utf8'),
+      decryptString: (value) => value.toString('utf8').replace(/^encrypted:/, ''),
+    });
+    expect(vault.supportsAtomicNoFollow()).toBe(false);
+    await expect(vault.createHistorySnapshot()).resolves.toBeNull();
+    await expect(vault.restoreHistorySnapshot({ schemaVersion: 1, metadata: [], groups: [], ciphertext: [] })).rejects.toMatchObject({ code: 'EUNSUPPORTED' });
+    await expect(readFile(path.join(directory!, 'authenticator.v1.json'))).rejects.toThrow();
+    await expect(readdir(path.join(directory!, 'secrets'))).rejects.toThrow();
   });
 
   it('restores metadata when an injected writer publishes before rejecting', async () => {
@@ -395,6 +410,7 @@ describe('authenticator history participant lifecycle', () => {
       status: async () => 'os-credential-vault', listMetadata: async () => [metadata()], writeMetadata: async () => undefined,
       save: async () => undefined, remove: async () => undefined, readSecret: async () => SECRET,
       createHistorySnapshot: async () => snapshot(), restoreHistorySnapshot: async () => { restores += 1; },
+      supportsAtomicNoFollow: () => true,
     };
     const participant = new AuthenticatorHistoryParticipant(vault, journal);
     await participant.recover();
@@ -414,10 +430,25 @@ describe('authenticator history participant lifecycle', () => {
       createHistorySnapshot: async () => snapshot(), restoreHistorySnapshot: async () => { throw new Error('restore failure'); },
     };
     const participant = new AuthenticatorHistoryParticipant(vault, journal);
-    await expect(participant.recover()).rejects.toThrow('retained');
+    await expect(participant.recover()).resolves.toMatchObject({ status: 'unavailable', code: 'EUNSUPPORTED' });
     await expect(readFile(journal, 'utf8')).resolves.toContain('phase');
-    await expect(participant.restore(JSON.stringify(snapshot()))).rejects.toThrow('recovery is pending');
+    await expect(participant.restore(JSON.stringify(snapshot()))).rejects.toMatchObject({ code: 'EUNSUPPORTED' });
     await expect(readFile(journal, 'utf8')).resolves.toContain('phase');
+  });
+
+  it('retains a recovery journal and reports typed unavailability without mutating', async () => {
+    directory = await mkdtemp(path.join(os.tmpdir(), 'ding-auth-history-'));
+    const journal = path.join(directory, 'restore.json');
+    await writeJsonAtomic(journal, { schemaVersion: 1, phase: 'applying', previous: snapshot(), target: snapshot() });
+    const vault: AuthenticatorVault = {
+      status: async () => 'os-credential-vault', listMetadata: async () => [metadata()], writeMetadata: async () => undefined,
+      save: async () => undefined, remove: async () => undefined, readSecret: async () => SECRET,
+      createHistorySnapshot: async () => null, restoreHistorySnapshot: async () => { throw new Error('must not mutate'); },
+      supportsAtomicNoFollow: () => false,
+    };
+    const result = await new AuthenticatorHistoryParticipant(vault, journal).recover();
+    expect(result).toMatchObject({ status: 'unavailable', code: 'EUNSUPPORTED' });
+    await expect(readFile(journal, 'utf8')).resolves.toContain('applying');
   });
 
   it('refuses participant restore without a current rollback snapshot', async () => {
