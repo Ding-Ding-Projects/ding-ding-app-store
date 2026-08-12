@@ -22,11 +22,17 @@ export function saveDisplayName(value, storage) {
     const target = storage ?? browserStorage();
     if (!target?.setItem) return { ok: false, value: loadDisplayName(storage), reason: 'storage-unavailable' };
     target.setItem(SITE_DISPLAY_NAME_STORAGE_KEY, sanitized);
+    if (target.getItem?.(SITE_DISPLAY_NAME_STORAGE_KEY) !== sanitized) return { ok: false, value: loadDisplayName(storage), reason: 'storage-unavailable' };
     return { ok: true, value: sanitized };
   } catch { return { ok: false, value: loadDisplayName(storage), reason: 'storage-unavailable' }; }
 }
 export function resetDisplayName(storage) {
-  try { (storage ?? browserStorage())?.removeItem?.(SITE_DISPLAY_NAME_STORAGE_KEY); } catch { /* fail closed */ }
-  return DEFAULT_DISPLAY_NAME;
+  try {
+    const target = storage ?? browserStorage();
+    if (!target?.removeItem) return { ok: false, value: loadDisplayName(storage), reason: 'storage-unavailable' };
+    target.removeItem(SITE_DISPLAY_NAME_STORAGE_KEY);
+    if (target.getItem?.(SITE_DISPLAY_NAME_STORAGE_KEY) != null) return { ok: false, value: loadDisplayName(storage), reason: 'storage-unavailable' };
+    return { ok: true, value: DEFAULT_DISPLAY_NAME };
+  } catch { return { ok: false, value: loadDisplayName(storage), reason: 'storage-unavailable' }; }
 }
 export function displayNameForPresentation(value, restricted = false) { return sanitizeDisplayName(value) ?? DEFAULT_DISPLAY_NAME; }

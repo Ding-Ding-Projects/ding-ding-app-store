@@ -417,7 +417,7 @@ import { DEFAULT_DISPLAY_NAME, displayNameForPresentation, loadDisplayName, rese
     paletteResults();
   }
   $('site-display-name-save').addEventListener('click', () => commitDisplayName($('site-display-name').value));
-  $('site-display-name-reset').addEventListener('click', () => { if (restricted()) return; state.displayName = resetDisplayName(); applyAppearance(); openArticle(state.article, false, { addTab: false, route: 'none' }); setStatus(`Display name reset to ${DEFAULT_DISPLAY_NAME}. Routes and URLs are unchanged.`); paletteResults(); });
+  $('site-display-name-reset').addEventListener('click', () => { if (restricted()) return; const result = resetDisplayName(); if (!result.ok) { setStatus('Browser storage could not reset the display name; the previous label remains active.'); return; } state.displayName = result.value; applyAppearance(); openArticle(state.article, false, { addTab: false, route: 'none' }); setStatus(`Display name reset to ${DEFAULT_DISPLAY_NAME}. Routes and URLs are unchanged.`); paletteResults(); });
   $('personal-vocabulary-replace').addEventListener('click', () => void replaceVocabulary());
   $('personal-vocabulary-clear').addEventListener('click', clearVocabulary);
   refreshVocabularyStatus();
