@@ -6,6 +6,8 @@
 
 Selecting **Install** or **Reinstall** immediately submits only the catalog application identifier and the closed `install` decision. The main process selects one of 25 hand-written adapter records; the renderer cannot submit an executable, URL, path, argument, checksum, dependency, or package type. Twenty-two records currently have a reviewed Windows release route. Three are explicitly unavailable and cannot be mislabeled installable. The new record is Amulet Map Editor, whose public release has an unsigned Squirrel.Windows Setup.exe but no packaged runtime/UI proof in this repository.
 
+The App Store's own Squirrel package carries an explicit `Ding Ding App Store` product identity, a checked-in branded ICO for the installer and native window, and the same local SVG mark in the renderer title bar. The main process creates that branded shell before restore and migration work, pins the native title against renderer title changes, and reports renderer load failures to the application log instead of silently leaving an Electron fallback shell. A package is not launch proof by itself: the packaged smoke path must observe a live window with the product title and a non-default icon.
+
 | Application | Reviewed route | Current public evidence or blocker |
 | --- | --- | --- |
 | Lowlevel Computer Use MCP | Squirrel | `lowlevel-computer-use-manual-0.1.0-win-x64.exe`; Squirrel target in `electron/package.json`. |

@@ -63,9 +63,12 @@
     "files": [
       "dist/**/*",
       "data/**/*",
+      "assets/**/*",
       "package.json"
     ],
+    "icon": "assets/ding-ding-app-store.ico",
     "win": {
+      "icon": "assets/ding-ding-app-store.ico",
       "target": [
         {
           "target": "squirrel",
@@ -81,7 +84,7 @@
     "squirrelWindows": {
       "name": "DingDingAppStore",
       "artifactName": "DingDingAppStore-Setup.${ext}",
-      "iconUrl": "https://github.com/favicon.ico",
+      "iconUrl": "https://raw.githubusercontent.com/Ding-Ding-Projects/ding-ding-app-store/main/assets/ding-ding-app-store.ico",
       "msi": false
     },
     "publish": {

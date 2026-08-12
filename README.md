@@ -19,6 +19,7 @@ Material Design 3 desktop software center for discovering, documenting, installi
 <summary><strong>Application architecture</strong></summary>
 
 - Frameless Electron window with a React/TypeScript Material Design 3 renderer.
+- Branded Ding Ding App Store identity: native title and ICO installer icon, bundled SVG title-bar mark, and startup diagnostics that surface renderer load failures instead of falling back to the Electron shell.
 - Sandboxed renderer (`contextIsolation`, no Node integration) and a narrow typed preload bridge.
 - Reviewed, versioned public catalog; private repositories and infrastructure never enter the product catalog.
 - Stable-release comparison for every catalog entry and a separate unsigned Squirrel self-updater with bounded RELEASES/package-hash validation, cancellable discovery/download states, immutable release-note links, rollback warning, and explicit restart-only installation.

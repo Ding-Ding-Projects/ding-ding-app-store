@@ -42,6 +42,7 @@
   .titlebar button:hover { background: var(--surface-high); }
   .titlebar .close-window:hover { color: white; background: #c42b1c; }
   .titlebar strong { color: var(--elx-titlebar-brand-foreground, inherit); font-size: calc(1rem * var(--elx-titlebar-brand-font-scale, 1)); font-weight: var(--elx-titlebar-brand-font-weight, 700); }
+  .titlebar-logo { width: 28px; height: 28px; margin-right: 2px; flex: 0 0 auto; border-radius: 8px; object-fit: contain; }
   .brand-mark { display: grid; place-items: center; width: 32px; height: 32px; color: var(--on-primary); background: var(--primary); border-radius: 10px; }
   .dev-badge {
     padding: calc(4px * var(--elx-titlebar-badge-pad-scale, 1)) calc(10px * var(--elx-titlebar-badge-pad-scale, 1));
