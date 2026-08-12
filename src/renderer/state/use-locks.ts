@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   LockCredentialRequest,
+  LockBulkMutationResult,
+  LockBulkRemoveRequest,
   LockMutationResult,
   LockSetRequest,
   LockState,
@@ -24,6 +26,8 @@ export interface LocksApi {
   unlock(request: LockCredentialRequest): Promise<LockMutationResult>;
   lockAgain(target: LockTarget): Promise<LockMutationResult>;
   remove(request: LockCredentialRequest): Promise<LockMutationResult>;
+  bulkLockAgain(targets: LockTarget[]): Promise<LockBulkMutationResult>;
+  bulkRemove(request: LockBulkRemoveRequest): Promise<LockBulkMutationResult>;
   isLocked(target: LockTarget): boolean;
 }
 export function useLocks(notify: Notify): LocksApi {
@@ -48,7 +52,7 @@ export function useLocks(notify: Notify): LocksApi {
     const timer = window.setTimeout(() => { void reload(); }, Math.min(delay, 2_147_000_000));
     return () => window.clearTimeout(timer);
   }, [reload, state.records]);
-  const apply = useCallback(async (operation: () => Promise<LockMutationResult>) => {
+  const apply = useCallback(async <T extends LockMutationResult>(operation: () => Promise<T>): Promise<T> => {
       ++requestEpoch.current;
       try {
       const result = await operation();
@@ -58,13 +62,15 @@ export function useLocks(notify: Notify): LocksApi {
     } catch (error) {
       const message = (error as Error).message;
       notify({ ok: false, message });
-      return { ok: false, state, message, reason: 'invalid' as const };
+      return { ok: false, state, message, reason: 'invalid' as const } as T;
     }
   }, [notify, state]);
   const set = useCallback((request: LockSetRequest) => apply(() => window.dingDingStore.locks.set(request)), [apply]);
   const unlock = useCallback((request: LockCredentialRequest) => apply(() => window.dingDingStore.locks.unlock(request)), [apply]);
   const lockAgain = useCallback((target: LockTarget) => apply(() => window.dingDingStore.locks.lockAgain(target)), [apply]);
   const remove = useCallback((request: LockCredentialRequest) => apply(() => window.dingDingStore.locks.remove(request)), [apply]);
+  const bulkLockAgain = useCallback((targets: LockTarget[]) => apply(() => window.dingDingStore.locks.bulkLockAgain(targets)), [apply]);
+  const bulkRemove = useCallback((request: LockBulkRemoveRequest) => apply(() => window.dingDingStore.locks.bulkRemove(request)), [apply]);
   const byKey = useMemo(() => new Map(state.records.map((record) => [`${record.targetKind}:${record.targetId}`, record])), [state.records]);
   const isLocked = useCallback((target: LockTarget) => {
     const record = byKey.get(`${target.targetKind}:${target.targetId}`);
@@ -72,5 +78,5 @@ export function useLocks(notify: Notify): LocksApi {
     if (record.locked) return true;
     return record.unlockedUntil !== null && Date.parse(record.unlockedUntil) <= Date.now();
   }, [byKey]);
-  return { state, loading, reload, set, unlock, lockAgain, remove, isLocked };
+  return { state, loading, reload, set, unlock, lockAgain, remove, bulkLockAgain, bulkRemove, isLocked };
 }

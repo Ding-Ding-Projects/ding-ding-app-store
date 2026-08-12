@@ -9,6 +9,7 @@ import type { LocksApi } from '../state/use-locks';
 import type { SupportApi } from '../state/use-support';
 import { TAB_META, TOKEN_META } from '../registry';
 import { SearchablePicker } from '../components/SearchablePicker';
+import { DestructiveConfirmDialog } from '../components/DestructiveConfirmDialog';
 import QRCode from 'qrcode';
 
 const CATEGORY_LABELS: Record<SupportTicketCategory, { en: string; yue: string }> = {
@@ -68,6 +69,10 @@ export function LockSupportPage({ settings, workspace, locks, support, notify, m
   const [category, setCategory] = useState<SupportTicketCategory>('unlock');
   const [severity, setSeverity] = useState<SupportTicketSeverity>('normal');
   const [description, setDescription] = useState('');
+  const [selectedLockKeys, setSelectedLockKeys] = useState<Set<string>>(new Set());
+  const [selectionAnchor, setSelectionAnchor] = useState<number | null>(null);
+  const [bulkRemoveOpen, setBulkRemoveOpen] = useState(false);
+  const [bulkCredentials, setBulkCredentials] = useState<Record<string, string>>({});
 
   const targets = useMemo<LockTarget[]>(() => [
     ...workspace.tabs.map((tab) => ({ targetKind: 'tab' as const, targetId: tab.id })),
@@ -103,6 +108,15 @@ export function LockSupportPage({ settings, workspace, locks, support, notify, m
   };
   const visibleTargets = targets.filter((candidate) => matcher(`${targetLabel(candidate)}\n${targetYue(candidate)}\n${candidate.targetKind}\nlock`));
   const selectedRecord = locks.state.records.find((record) => targetKey(record) === targetKey(target));
+  const visibleRecords = locks.state.records.filter((record) => matcher(`${targetLabel(record)}\n${targetYue(record)}\n${record.targetKind}\nlock`));
+  const selectedVisibleRecords = visibleRecords.filter((record) => selectedLockKeys.has(targetKey(record)));
+  const toggleLockSelection = (index: number, shiftKey = false) => { setSelectedLockKeys((current) => { const next = new Set(current); if (shiftKey && selectionAnchor !== null) { for (let cursor = Math.min(selectionAnchor, index); cursor <= Math.max(selectionAnchor, index); cursor += 1) next.add(targetKey(visibleRecords[cursor])); } else { const key = targetKey(visibleRecords[index]); if (next.has(key)) next.delete(key); else next.add(key); } return next; }); setSelectionAnchor(index); };
+  const selectAllVisible = () => setSelectedLockKeys(new Set(visibleRecords.map(targetKey)));
+  const invertVisible = () => setSelectedLockKeys(new Set(visibleRecords.filter((record) => !selectedLockKeys.has(targetKey(record))).map(targetKey)));
+  const clearVisible = () => setSelectedLockKeys((current) => new Set([...current].filter((key) => !visibleRecords.some((record) => targetKey(record) === key))));
+  const bulkLockAgain = async () => { if (selectedVisibleRecords.length) { await locks.bulkLockAgain(selectedVisibleRecords.map(({ targetKind, targetId }) => ({ targetKind, targetId }))); clearVisible(); } };
+  const beginBulkRemove = () => { setBulkCredentials(Object.fromEntries(selectedVisibleRecords.map((record) => [targetKey(record), '']))); setBulkRemoveOpen(true); };
+  const completeBulkRemove = async () => { await locks.bulkRemove({ confirmed: true, items: selectedVisibleRecords.map(({ targetKind, targetId }) => ({ targetKind, targetId, credential: bulkCredentials[targetKey({ targetKind, targetId })] ?? '' })) }); setBulkRemoveOpen(false); clearVisible(); };
   useEffect(() => {
     if (selectedRecord) {
       setUnlockDuration(selectedRecord.unlockDuration);
@@ -169,8 +183,10 @@ export function LockSupportPage({ settings, workspace, locks, support, notify, m
           {selectedRecord && <button className="text-button danger" disabled={!locks.state.vaultAvailable || credential.length < 4} onClick={() => void remove()}>{label(settings, 'Remove lock', '移除鎖')}</button>}
         </div>
         <p className="supporting" role="status">{selectedRecord ? (selectedRecord.locked ? label(settings, 'This target is locked. Activation should ask for its own credential before proceeding.', '呢個目標已鎖定；啟用前應該要求自己嗰個憑證。') : selectedRecord.unlockedUntil ? label(settings, `This target is unlocked until ${new Date(selectedRecord.unlockedUntil).toLocaleTimeString()}.`, `呢個目標解鎖到 ${new Date(selectedRecord.unlockedUntil).toLocaleTimeString()}。`) : label(settings, 'This target is unlocked until this app closes.', '呢個目標解鎖直到呢個 app 關閉。')) : label(settings, 'No lock is configured for this target.', '呢個目標未設定鎖。')}</p>
-        <div className="ticket-list" aria-label={label(settings, 'Configured locks', '已設定嘅鎖')}>
-          {locks.state.records.filter((record) => matcher(`${targetLabel(record)}\n${targetYue(record)}\n${record.targetKind}\nlock`)).map((record) => <div className="ticket-row" key={targetKey(record)}><span><strong>{label(settings, targetLabel(record), targetYue(record))}</strong><small>{record.targetKind === 'tab' ? label(settings, 'Tab', '分頁') : record.targetKind === 'group' ? label(settings, 'Group', '分組') : label(settings, 'Appearance property', '外觀屬性')} · {label(settings, record.credentialKind === 'totp' ? 'TOTP' : 'Password', record.credentialKind === 'totp' ? 'TOTP' : '密碼')} · {label(settings, record.unlockDuration === '15m' ? '15-minute unlock' : record.unlockDuration === '60m' ? '60-minute unlock' : 'Until app closes', record.unlockDuration === '15m' ? '解鎖 15 分鐘' : record.unlockDuration === '60m' ? '解鎖 60 分鐘' : '直到 app 關閉')} · {record.locked ? label(settings, 'Locked', '已鎖定') : record.unlockedUntil ? label(settings, `Unlocked until ${new Date(record.unlockedUntil).toLocaleTimeString()}`, `解鎖到 ${new Date(record.unlockedUntil).toLocaleTimeString()}`) : label(settings, 'Unlocked until app closes', '解鎖直到 app 關閉')}</small></span><button className="text-button" onClick={() => { const next = { targetKind: record.targetKind, targetId: record.targetId } as LockTarget; setTarget(next); setCredential(''); setCurrentCredential(''); setConfirmationCode(''); setCredentialKind(record.credentialKind); setUnlockDuration(record.unlockDuration); }}>{label(settings, 'Select', '選擇')}</button></div>)}
+        <div className="settings-actions" aria-label={label(settings, 'Bulk lock actions', '批量鎖操作')}><button className="text-button" disabled={!visibleRecords.length} onClick={selectAllVisible}>{label(settings, `Select all shown (${visibleRecords.length})`, `揀晒顯示嘅（${visibleRecords.length}）`)}</button><button className="text-button" disabled={!visibleRecords.length} onClick={invertVisible}>{label(settings, 'Invert shown selection', '反轉顯示中選擇')}</button><button className="text-button" disabled={!selectedVisibleRecords.length} onClick={clearVisible}>{label(settings, 'Clear shown selection', '清除顯示中選擇')}</button><button className="tonal-button" disabled={!selectedVisibleRecords.length} onClick={() => void bulkLockAgain()}>{label(settings, `Lock again (${selectedVisibleRecords.length})`, `重新鎖定（${selectedVisibleRecords.length}）`)}</button><button className="text-button danger" disabled={!selectedVisibleRecords.length || !locks.state.vaultAvailable} onClick={beginBulkRemove}>{label(settings, `Remove selected (${selectedVisibleRecords.length})`, `移除所選（${selectedVisibleRecords.length}）`)}</button></div>
+        <p className="supporting" role="status">{label(settings, `${selectedVisibleRecords.length} selected of ${visibleRecords.length} shown. Shift-click or Shift+Arrow selects a visible range; filtered-out locks are never included.`, `顯示${visibleRecords.length} 個入面揀咗${selectedVisibleRecords.length} 個。Shift-click 或 Shift+方向鍵可以揀範圍；篩走嘅鎖唔會包括。`)}</p>
+        <div className="ticket-list" role="listbox" aria-multiselectable="true" aria-label={label(settings, 'Configured locks', '已設定嘅鎖')}>
+          {visibleRecords.map((record, index) => <div className="ticket-row" role="option" aria-selected={selectedLockKeys.has(targetKey(record))} tabIndex={0} key={targetKey(record)} onClick={(event) => toggleLockSelection(index, event.shiftKey)} onKeyDown={(event) => { if (event.key === ' ' || event.key === 'Enter') { event.preventDefault(); toggleLockSelection(index, event.shiftKey); } }}><input type="checkbox" tabIndex={-1} checked={selectedLockKeys.has(targetKey(record))} readOnly aria-label={label(settings, `Select ${targetLabel(record)}`, `揀選${targetYue(record)}`)} /><span><strong>{label(settings, targetLabel(record), targetYue(record))}</strong><small>{record.targetKind === 'tab' ? label(settings, 'Tab', '分頁') : record.targetKind === 'group' ? label(settings, 'Group', '分組') : label(settings, 'Appearance property', '外觀屬性')} · {label(settings, record.credentialKind === 'totp' ? 'TOTP' : 'Password', record.credentialKind === 'totp' ? 'TOTP' : '密碼')} · {record.locked ? label(settings, 'Locked', '已鎖定') : label(settings, 'Unlocked', '已解鎖')}</small></span><button className="text-button" onClick={(event) => { event.stopPropagation(); const next = { targetKind: record.targetKind, targetId: record.targetId } as LockTarget; setTarget(next); }}>{label(settings, 'Select', '選擇')}</button></div>)}
           {!locks.state.records.length && <p className="supporting">{label(settings, 'No locks configured yet.', '暫時未設定鎖。')}</p>}
         </div>
         <p className="supporting">{label(settings, 'Forgotten credentials are recovered only by deleting the application-data folder yourself. This is a UX reset, not a security recovery service.', '唔記得憑證只可以由你自己刪除應用程式資料夾重設。呢個係 UX 重設，唔係安全恢復服務。')}</p>

@@ -6,6 +6,8 @@ import { z } from 'zod';
 import type {
   ElementKey,
   LockCredentialRequest,
+  LockBulkRemoveRequest,
+  LockBulkMutationResult,
   LockMutationResult,
   LockSetRequest,
   LockState,
@@ -109,6 +111,7 @@ export class LockSupportService {
   private vaultReadFailed = false;
   private locksReadFailed = false;
   private readonly attempts = new Map<string, { count: number; windowStartedAt: number }>();
+  private mutationTail: Promise<void> = Promise.resolve();
 
   constructor(private readonly history?: Pick<HistoryService, 'record'>) {}
 
@@ -117,7 +120,9 @@ export class LockSupportService {
     return this.lockState();
   }
 
-  async setLock(input: LockSetRequest): Promise<LockMutationResult> {
+  private enqueue<T>(operation: () => Promise<T>): Promise<T> { const run = this.mutationTail.then(operation, operation); this.mutationTail = run.then(() => undefined, () => undefined); return run; }
+  async setLock(input: LockSetRequest): Promise<LockMutationResult> { return this.enqueue(() => this.setLockImpl(input)); }
+  private async setLockImpl(input: LockSetRequest): Promise<LockMutationResult> {
     await this.ensureLocksLoaded();
     const parsed = lockSetSchema.safeParse(input);
     if (!parsed.success) return this.lockFailure('Lock details are invalid.', 'invalid');
@@ -163,7 +168,8 @@ export class LockSupportService {
     }
   }
 
-  async unlock(input: LockCredentialRequest): Promise<LockMutationResult> {
+  async unlock(input: LockCredentialRequest): Promise<LockMutationResult> { return this.enqueue(() => this.unlockImpl(input)); }
+  private async unlockImpl(input: LockCredentialRequest): Promise<LockMutationResult> {
     await this.ensureLocksLoaded();
     const parsed = lockCredentialSchema.safeParse(input);
     if (!parsed.success) return this.lockFailure('Unlock details are invalid.', 'invalid');
@@ -182,7 +188,8 @@ export class LockSupportService {
     return { ok: true, state: this.lockState(), message: duration === 'session' ? 'Unlocked until this app closes. Use Lock again when you want the UX speed bump back.' : `Unlocked for ${duration === '15m' ? '15 minutes' : '60 minutes'}. It will lock again automatically.` };
   }
 
-  async lockAgain(input: LockTarget): Promise<LockMutationResult> {
+  async lockAgain(input: LockTarget): Promise<LockMutationResult> { return this.enqueue(() => this.lockAgainImpl(input)); }
+  private async lockAgainImpl(input: LockTarget): Promise<LockMutationResult> {
     await this.ensureLocksLoaded();
     const parsed = lockTargetSchema.safeParse(input);
     if (!parsed.success) return this.lockFailure('Lock target is invalid.', 'invalid');
@@ -193,7 +200,8 @@ export class LockSupportService {
     return { ok: true, state: this.lockState(), message: 'Lock restored for this app session.' };
   }
 
-  async remove(input: LockCredentialRequest): Promise<LockMutationResult> {
+  async remove(input: LockCredentialRequest): Promise<LockMutationResult> { return this.enqueue(() => this.removeImpl(input)); }
+  private async removeImpl(input: LockCredentialRequest): Promise<LockMutationResult> {
     await this.ensureLocksLoaded();
     const parsed = lockCredentialSchema.safeParse(input);
     if (!parsed.success) return this.lockFailure('Lock details are invalid.', 'invalid');
@@ -218,6 +226,26 @@ export class LockSupportService {
       try { await writeJsonAtomic(this.lockPath, { schemaVersion: 1, records: previousLocks }); } catch { /* preserve the honest failure state */ }
       return this.lockFailure('The lock could not be removed; no content was deleted.', 'credential-store-read-failed');
     }
+  }
+  async bulkLockAgain(inputs: LockTarget[]): Promise<LockBulkMutationResult> { return this.enqueue(() => this.bulkLockAgainImpl(inputs)); }
+  private async bulkLockAgainImpl(inputs: LockTarget[]): Promise<LockBulkMutationResult> {
+    await this.ensureLocksLoaded(); const unique = new Map<string, LockTarget>(); for (const input of inputs) { const parsed = lockTargetSchema.safeParse(input); if (parsed.success) unique.set(keyOf(parsed.data), parsed.data); }
+    const skippedTargets: LockTarget[] = []; const affected = [...unique.values()].filter((target) => { if (!this.locks.some((record) => keyOf(record) === keyOf(target))) { skippedTargets.push(target); return false; } return true; });
+    for (const target of affected) { const key = keyOf(target); this.unlockGenerations.set(key, (this.unlockGenerations.get(key) ?? 0) + 1); this.unlocked.delete(key); }
+    await this.recordHistory(`Bulk lock-again changed ${affected.length} selected locks; ${skippedTargets.length} skipped.`);
+    return { ok: affected.length > 0, state: this.lockState(), affectedCount: affected.length, skippedCount: skippedTargets.length, skippedTargets, message: `${affected.length} lock${affected.length === 1 ? '' : 's'} locked again${skippedTargets.length ? `; ${skippedTargets.length} skipped` : ''}.`, reason: affected.length ? undefined : 'not-found' };
+  }
+  async bulkRemove(input: LockBulkRemoveRequest): Promise<LockBulkMutationResult> { return this.enqueue(() => this.bulkRemoveImpl(input)); }
+  private async bulkRemoveImpl(input: LockBulkRemoveRequest): Promise<LockBulkMutationResult> {
+    await this.ensureLocksLoaded(); if (!input || input.confirmed !== true || !Array.isArray(input.items) || input.items.length > 64) return { ok: false, state: this.lockState(), affectedCount: 0, skippedCount: 0, skippedTargets: [], message: 'Bulk lock removal requires the completed confirmation.', reason: 'invalid' };
+    const unique = new Map<string, LockCredentialRequest>(); for (const item of input.items) { const parsed = lockCredentialSchema.safeParse(item); if (parsed.success) unique.set(keyOf(parsed.data), parsed.data); }
+    if (!this.vaultAvailable()) return { ok: false, state: this.lockState(), affectedCount: 0, skippedCount: unique.size, skippedTargets: [...unique.values()].map(({ targetKind, targetId }) => ({ targetKind, targetId })), message: 'The operating-system credential vault is unavailable; no locks were removed.', reason: 'credential-store-unavailable' };
+    const vault = await this.readVault(); if (!vault) return { ok: false, state: this.lockState(), affectedCount: 0, skippedCount: unique.size, skippedTargets: [...unique.values()].map(({ targetKind, targetId }) => ({ targetKind, targetId })), message: 'The credential vault could not be read; no locks were removed.', reason: 'credential-store-read-failed' };
+    const skippedTargets: LockTarget[] = []; const removable: LockCredentialRequest[] = []; for (const request of unique.values()) { const key = keyOf(request); if (!this.locks.some((record) => keyOf(record) === key) || !this.verifyCredential(key, request.credential, this.normalizeVaultEntry(vault[key]))) skippedTargets.push({ targetKind: request.targetKind, targetId: request.targetId }); else removable.push(request); }
+    if (!removable.length) return { ok: false, state: this.lockState(), affectedCount: 0, skippedCount: skippedTargets.length, skippedTargets, message: 'No selected locks were removed; each was missing or its credential did not match.', reason: 'credential-mismatch' };
+    const keys = new Set(removable.map(keyOf)); const previousLocks = this.locks; const nextLocks = this.locks.filter((record) => !keys.has(keyOf(record))); const nextVault = { ...vault }; for (const key of keys) delete nextVault[key];
+    try { await writeJsonAtomic(this.lockPath, { schemaVersion: 1, records: nextLocks }); await this.writeVault(nextVault); this.locks = nextLocks; for (const key of keys) { this.unlockGenerations.set(key, (this.unlockGenerations.get(key) ?? 0) + 1); this.unlocked.delete(key); } await this.recordHistory(`Bulk lock removal changed ${removable.length} selected locks; ${skippedTargets.length} skipped.`); return { ok: true, state: this.lockState(), affectedCount: removable.length, skippedCount: skippedTargets.length, skippedTargets, message: `${removable.length} lock${removable.length === 1 ? '' : 's'} removed${skippedTargets.length ? `; ${skippedTargets.length} skipped` : ''}.` }; }
+    catch { let rollbackOk = true; try { await writeJsonAtomic(this.lockPath, { schemaVersion: 1, records: previousLocks }); } catch { rollbackOk = false; } try { await this.writeVault(vault); } catch { rollbackOk = false; } return { ok: false, state: this.lockState(), affectedCount: 0, skippedCount: skippedTargets.length, skippedTargets, message: rollbackOk ? 'Bulk removal could not be committed atomically; no content was deleted.' : 'Bulk removal failed and rollback could not be proven; refresh before changing any lock.', reason: 'credential-store-read-failed' }; }
   }
 
   async loadSupport(): Promise<SupportState> {
