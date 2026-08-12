@@ -6,6 +6,15 @@ const root = path.resolve(import.meta.dirname, '..');
 const read = async (file: string) => (await readFile(path.join(root, file), 'utf8')).replace(/\r\n?/g, '\n');
 
 describe('GitHub-hosted workflow and bootstrap contract', () => {
+  it('redeploys Pages after a successful main Release so generated release history cannot go stale', async () => {
+    const pages = await read('.github/workflows/pages.yml');
+    expect(pages).toContain('workflow_run:');
+    expect(pages).toContain('workflows: [Release]');
+    expect(pages).toContain("github.event.workflow_run.conclusion == 'success'");
+    expect(pages).toContain("github.event.workflow_run.head_branch == 'main'");
+    expect(pages).toContain('generate-release-changelog.mjs --fallback');
+    expect(pages).toContain('test -s site/assets/generated-changelog.mjs');
+  });
   it('keeps validation and release jobs on pinned cloud runner images', async () => {
     const ci = await read('.github/workflows/ci.yml');
     const release = await read('.github/workflows/release.yml');
