@@ -1,5 +1,11 @@
 # Handoff
 
+## 2026-08-12 packaged Activity and protected-history capture evidence
+
+- Release `v0.1.1004` was launched from exact commit `31c46ee` through the sanctioned hidden-desktop route. The packaged artifact's SHA-256 and Squirrel `.nupkg` provenance were verified against that commit.
+- Real packaged captures prove the Home surface and the bilingual protected-history lock gate. These captures are external evidence for the release build; no private machine paths or credentials are included here.
+- Local versions filtering, selection, and restore remain uncaptured because first-use history credential creation would mutate the disposable profile. The existing focused tests and docs checks remain the available evidence for those controls.
+
 ## 2026-08-12 Static-site schedule accessibility, localization, and discovery
 
 - The documentation site's schedule help now owns the stable `schedule-help` id, every generated control references real description targets, and each weekday field also points to its own unique weekday-convention help.
