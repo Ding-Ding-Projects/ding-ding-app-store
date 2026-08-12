@@ -90,8 +90,8 @@ describe('source job contracts', () => {
     expect(validateCapabilityLease({ ...lease, issuedAt: '2026-08-12T12:00:00.000Zx' }, challenge, 'execute', Date.parse('2026-08-12T12:00:01.000Z'))).toBe(false);
     expect(validateCapabilityLease({ ...lease, executeExpiresAt: '2026-08-12T12:00:00.000Zx' }, challenge, 'execute', Date.parse('2026-08-12T12:00:01.000Z'))).toBe(false);
     expect(validateCapabilityLease({ ...lease, disposeExpiresAt: '2026-08-12T12:00:00.000Zx' }, challenge, 'dispose', Date.parse('2026-08-12T12:00:01.000Z'))).toBe(false);
-    expect(validateCapabilityLease(lease, challenge, 'execute', Date.parse(challenge.executeExpiresAt))).toBe(false);
-    expect(validateCapabilityLease(lease, challenge, 'dispose', Date.parse(challenge.executeExpiresAt) + 1_000)).toBe(true);
+    expect(validateCapabilityLease(lease, challenge, 'execute', Date.parse(lease.expiresAt))).toBe(false);
+    expect(validateCapabilityLease(lease, challenge, 'dispose', Date.parse(lease.expiresAt) + 1_000)).toBe(false);
   });
 
   it('accepts only an app ID plus a typed build/run decision', () => {
@@ -296,7 +296,7 @@ class FakeBroker implements IsolationBroker {
   disposed: string[] = [];
   constructor(private readonly behavior: 'wait-for-cancel' | 'hang' | 'complete' = 'wait-for-cancel') {}
   identity() { return { brokerId: 'test-broker', transportId: 'test-transport' }; }
-  async attest(challenge: Readonly<IsolationAttestationChallenge>): Promise<IsolationAttestation> {
+  async attest(challenge: Readonly<IsolationAttestationChallenge>, _signal: AbortSignal): Promise<IsolationAttestation> {
     const now = Date.parse(challenge.issuedAt);
     return {
       ...REQUIRED_ISOLATION,

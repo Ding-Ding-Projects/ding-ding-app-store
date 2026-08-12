@@ -226,7 +226,7 @@ export class SourceJobService {
         throw new Error(`The hard-disposable runner is unavailable (${status.reason}). No source code or blanket-approved OpenCode ran on the host.`);
       }
       const challenge = createIsolationAttestationChallenge(jobId, Math.max(1, deadline - Date.now()), identity, Date.now());
-      const validation = validateIsolationAttestation(await withinDeadline(this.broker.attest(challenge)), challenge, Date.now());
+      const validation = validateIsolationAttestation(await withinDeadline(this.broker.attest(challenge, job.controller.signal)), challenge, Date.now());
       if (!validation.ok) {
         const status = await withinDeadline(this.isolationStatus());
         this.emit(job, { stream: 'stderr', state: 'failed', text: `Source execution withheld: ${status.reason}. Broker attestation was rejected (${validation.reason}). ${status.evidence.join(' ')}`, progress: null });

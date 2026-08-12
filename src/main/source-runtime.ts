@@ -393,7 +393,7 @@ export class WindowsSandboxIsolationBroker implements IsolationBroker {
 
   async diagnose(): Promise<SourceIsolationStatus> { return this.probe(); }
 
-  async attest(_challenge: Readonly<IsolationAttestationChallenge>): Promise<null> {
+  async attest(_challenge: Readonly<IsolationAttestationChallenge>, _signal: AbortSignal): Promise<null> {
     await this.probe();
     return null;
   }
@@ -408,7 +408,7 @@ export class WindowsSandboxIsolationBroker implements IsolationBroker {
 }
 
 export class UnavailableIsolationBroker implements IsolationBroker {
-  async attest(_challenge: Readonly<IsolationAttestationChallenge>): Promise<null> { return null; }
+  async attest(_challenge: Readonly<IsolationAttestationChallenge>, _signal: AbortSignal): Promise<null> { return null; }
   async execute(): Promise<void> { throw new Error('A reviewed hard-disposable source runner is not available. Source code was not executed on the host.'); }
   async dispose(): Promise<void> { /* No guest exists. */ }
   async abort(): Promise<void> { /* No guest exists. */ }
