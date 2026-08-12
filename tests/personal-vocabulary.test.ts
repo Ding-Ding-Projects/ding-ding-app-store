@@ -46,6 +46,7 @@ describe('personal vocabulary parser', () => {
     expect(personalizeText('Open C:\\data\\Install.exe')).toBe('Open C:\\data\\Install.exe');
     expect(personalizeText('Open C:\\data\\foo.exe')).toBe('Open C:\\data\\foo.exe');
     expect(personalizeText('Open C:\\Program Files\\foo')).toBe('Open C:\\Program Files\\foo');
+    expect(personalizeText('Open C:\\Program Files\\foo then Install')).toBe('Open C:\\Program Files\\foo then 啟動');
     expect(personalizeText('Open \\\\server\\share\\foo.exe')).toBe('Open \\\\server\\share\\foo.exe');
     expect(personalizeText('Open \\\\server\\share name\\foo')).toBe('Open \\\\server\\share name\\foo');
     expect(personalizeText('Run foo.exe then Install')).toBe('Run foo.exe then 啟動');
