@@ -15,6 +15,7 @@ const TARGETS = [
   'schedule-runs.v1.json',
   'external-editor.v1.json',
 ] as const;
+const AUTHENTICATOR_TARGET = 'authenticator-history.v1.json' as const;
 
 async function fixture() {
   const root = await mkdtemp(path.join(os.tmpdir(), 'ding-history-restore-'));
@@ -31,6 +32,29 @@ afterEach(async () => {
 });
 
 describe('history restore transaction recovery', () => {
+  it('accepts the optional authenticator participant after the legacy seven files', async () => {
+    const { transactionRoot, targetRoot } = await fixture();
+    const targets = [...TARGETS, AUTHENTICATOR_TARGET] as const;
+    await writeFile(path.join(targetRoot, AUTHENTICATOR_TARGET), '{"old":"authenticator"}\n', 'utf8');
+    const manifest = await prepareRestoreTransaction(transactionRoot, targets.map((target) => ({
+      targetName: target,
+      content: `{"new":"${target}"}\n`,
+      previous: target === AUTHENTICATOR_TARGET ? '{"old":"authenticator"}\n' : `{"old":"${target}"}\n`,
+    })));
+    expect(manifest.files).toHaveLength(8);
+    const participant = { restore: async (content: string) => { await writeFile(path.join(targetRoot, AUTHENTICATOR_TARGET), content, 'utf8'); } };
+    const applied = await applyRestoreTransaction(transactionRoot, targetRoot, manifest, participant);
+    expect(applied.files.at(-1)?.targetName).toBe(AUTHENTICATOR_TARGET);
+    await expect(readFile(path.join(targetRoot, AUTHENTICATOR_TARGET), 'utf8')).resolves.toBe('{"new":"authenticator-history.v1.json"}\n');
+    await recoverRestoreTransaction(transactionRoot, targetRoot, undefined, participant);
+  });
+
+  it('keeps rejecting arbitrary participant files and wrong target order', async () => {
+    const { transactionRoot } = await fixture();
+    await expect(prepareRestoreTransaction(transactionRoot, TARGETS.map((target) => ({ targetName: target, content: '{}\n', previous: '{}\n' })).concat({ targetName: 'other.json', content: '{}\n', previous: '{}\n' }) as never)).rejects.toThrow(/targets were invalid|legacy seven files|current seven files/);
+    await expect(prepareRestoreTransaction(transactionRoot, [{ targetName: 'settings.v1.json', content: '{}\n', previous: '{}\n' }, ...TARGETS.slice(1).map((target) => ({ targetName: target, content: '{}\n', previous: '{}\n' }))])).rejects.toThrow('targets were invalid');
+  });
+
   it('recovers a partial apply back to the complete previous state', async () => {
     const { transactionRoot, targetRoot } = await fixture();
     const manifest = await prepareRestoreTransaction(transactionRoot, TARGETS.map((target) => ({

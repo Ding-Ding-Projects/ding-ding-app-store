@@ -29,10 +29,15 @@ export interface RestoreTransactionInput {
   previous: string | null;
 }
 
+/** Optional non-file participant for the fixed authenticator snapshot slot. */
+export interface RestoreTransactionParticipant {
+  restore(content: string, options?: { shouldCommit?: () => boolean }): Promise<void>;
+}
+
 const MANIFEST_NAME = 'manifest.json';
 const MANIFEST_VERSION = 1;
 const ALLOWED_PHASES = new Set<RestoreTransactionPhase>(['prepared', 'applying', 'applied', 'recording', 'recorded', 'rolling-back', 'rolled-back']);
-const RESTORE_TARGET_NAMES = [
+const CORE_RESTORE_TARGET_NAMES = [
   'installed-apps.v1.json',
   'settings.v1.json',
   'workspace.v1.json',
@@ -41,7 +46,16 @@ const RESTORE_TARGET_NAMES = [
   'schedule-runs.v1.json',
   'external-editor.v1.json',
 ] as const;
+/**
+ * Authenticator history is an optional eighth participant. Seven-file
+ * journals predate it and must remain recoverable; new journals place the
+ * fixed participant record last so the old positional contract is unchanged.
+ */
+const AUTHENTICATOR_RESTORE_TARGET_NAME = 'authenticator-history.v1.json' as const;
+const RESTORE_TARGET_NAMES = [...CORE_RESTORE_TARGET_NAMES, AUTHENTICATOR_RESTORE_TARGET_NAME] as const;
 const RESTORE_TARGET_SET = new Set<string>(RESTORE_TARGET_NAMES);
+const LEGACY_RESTORE_FILE_COUNT = CORE_RESTORE_TARGET_NAMES.length;
+const CURRENT_RESTORE_FILE_COUNT = RESTORE_TARGET_NAMES.length;
 const MAX_MANIFEST_BYTES = 32_000;
 const MAX_RESTORE_FILE_BYTES = 2_000_000;
 const RECORD_LABEL_PATTERN = /^restore: [0-9a-f]{40} \([0-9a-f-]{36}\)$/i;
@@ -61,7 +75,7 @@ function sha256(content: string): string {
 function assertManifest(value: unknown): asserts value is RestoreTransactionManifest {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('The restore transaction manifest was invalid.');
   const record = value as Record<string, unknown>;
-  if (record.schemaVersion !== MANIFEST_VERSION || typeof record.phase !== 'string' || !ALLOWED_PHASES.has(record.phase as RestoreTransactionPhase) || !Array.isArray(record.files) || record.files.length !== RESTORE_TARGET_NAMES.length) {
+  if (record.schemaVersion !== MANIFEST_VERSION || typeof record.phase !== 'string' || !ALLOWED_PHASES.has(record.phase as RestoreTransactionPhase) || !Array.isArray(record.files) || !new Set<number>([LEGACY_RESTORE_FILE_COUNT, CURRENT_RESTORE_FILE_COUNT]).has(record.files.length)) {
     throw new Error('The restore transaction manifest was invalid.');
   }
   if (record.recordLabel !== undefined && (typeof record.recordLabel !== 'string' || !RECORD_LABEL_PATTERN.test(record.recordLabel))) {
@@ -71,10 +85,11 @@ function assertManifest(value: unknown): asserts value is RestoreTransactionMani
   const targets = new Set<string>();
   const staged = new Set<string>();
   const previous = new Set<string>();
+  const expectedTargets = record.files.length === LEGACY_RESTORE_FILE_COUNT ? CORE_RESTORE_TARGET_NAMES : RESTORE_TARGET_NAMES;
   for (const [index, item] of record.files.entries()) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) throw new Error('The restore transaction manifest was invalid.');
     const file = item as Record<string, unknown>;
-    if (!safeBasename(file.targetName) || !RESTORE_TARGET_SET.has(file.targetName) || file.targetName !== RESTORE_TARGET_NAMES[index] || targets.has(file.targetName)) {
+    if (!safeBasename(file.targetName) || !RESTORE_TARGET_SET.has(file.targetName) || file.targetName !== expectedTargets[index] || targets.has(file.targetName)) {
       throw new Error('The restore transaction manifest was invalid.');
     }
     if (!safeBasename(file.stagedName) || file.stagedName !== `staged-${index}.json` || staged.has(file.stagedName)) {
@@ -93,9 +108,9 @@ function assertManifest(value: unknown): asserts value is RestoreTransactionMani
     }
     targets.add(file.targetName);
     staged.add(file.stagedName);
-    if (file.previousName !== null) previous.add(file.previousName);
+    if (file.previousName !== null) previous.add(file.previousName as string);
   }
-  if (targets.size !== RESTORE_TARGET_NAMES.length || staged.size !== RESTORE_TARGET_NAMES.length) {
+  if (targets.size !== expectedTargets.length || staged.size !== expectedTargets.length) {
     throw new Error('The restore transaction manifest was invalid.');
   }
 }
@@ -150,6 +165,9 @@ async function replaceFromStage(source: string, target: string): Promise<void> {
 }
 
 export async function prepareRestoreTransaction(transactionRoot: string, files: RestoreTransactionInput[]): Promise<RestoreTransactionManifest> {
+  if (!new Set<number>([LEGACY_RESTORE_FILE_COUNT, CURRENT_RESTORE_FILE_COUNT]).has(files.length)) throw new Error('The restore transaction must contain the legacy seven files or the current seven files plus its fixed authenticator participant.');
+  const expectedTargets = files.length === LEGACY_RESTORE_FILE_COUNT ? CORE_RESTORE_TARGET_NAMES : RESTORE_TARGET_NAMES;
+  if (files.some((file, index) => !safeBasename(file.targetName) || file.targetName !== expectedTargets[index])) throw new Error('The restore transaction targets were invalid or out of order.');
   await rm(transactionRoot, { recursive: true, force: true });
   await mkdir(transactionRoot, { recursive: true });
   const manifestFiles: RestoreTransactionFile[] = [];
@@ -175,13 +193,16 @@ export async function prepareRestoreTransaction(transactionRoot: string, files: 
   return manifest;
 }
 
-export async function applyRestoreTransaction(transactionRoot: string, targetRoot: string, manifest: RestoreTransactionManifest): Promise<RestoreTransactionManifest> {
+export async function applyRestoreTransaction(transactionRoot: string, targetRoot: string, manifest: RestoreTransactionManifest, participant?: RestoreTransactionParticipant): Promise<RestoreTransactionManifest> {
   assertManifest(manifest);
   const applying = { ...manifest, phase: 'applying' as const };
   await writeManifest(transactionRoot, applying);
   for (const file of applying.files) {
     await verifyDurable(path.join(transactionRoot, file.stagedName), file.stagedBytes, file.stagedSha256);
-    await replaceFromStage(path.join(transactionRoot, file.stagedName), path.join(targetRoot, file.targetName));
+    if (file.targetName === AUTHENTICATOR_RESTORE_TARGET_NAME) {
+      if (!participant) throw new Error('The authenticator restore participant was unavailable.');
+      await participant.restore(await readFile(path.join(transactionRoot, file.stagedName), 'utf8'));
+    } else await replaceFromStage(path.join(transactionRoot, file.stagedName), path.join(targetRoot, file.targetName));
   }
   const applied = { ...applying, phase: 'applied' as const };
   await writeManifest(transactionRoot, applied);
@@ -196,13 +217,18 @@ export async function markRestoreTransactionRecording(transactionRoot: string, m
   return recording;
 }
 
-export async function rollbackRestoreTransaction(transactionRoot: string, targetRoot: string, manifest: RestoreTransactionManifest): Promise<RestoreTransactionManifest> {
+export async function rollbackRestoreTransaction(transactionRoot: string, targetRoot: string, manifest: RestoreTransactionManifest, participant?: RestoreTransactionParticipant): Promise<RestoreTransactionManifest> {
   assertManifest(manifest);
   const rollingBack = { ...manifest, phase: 'rolling-back' as const };
   await writeManifest(transactionRoot, rollingBack);
   for (const file of rollingBack.files) {
     const target = path.join(targetRoot, file.targetName);
-    if (file.previousName === null) await rm(target, { force: true });
+    if (file.targetName === AUTHENTICATOR_RESTORE_TARGET_NAME) {
+      if (!participant) throw new Error('The authenticator restore participant was unavailable.');
+      if (file.previousName === null) throw new Error('The authenticator restore participant had no rollback snapshot.');
+      await verifyDurable(path.join(transactionRoot, file.previousName), file.previousBytes as number, file.previousSha256 as string);
+      await participant.restore(await readFile(path.join(transactionRoot, file.previousName), 'utf8'));
+    } else if (file.previousName === null) await rm(target, { force: true });
     else {
       await verifyDurable(path.join(transactionRoot, file.previousName), file.previousBytes as number, file.previousSha256 as string);
       const previous = await readFile(path.join(transactionRoot, file.previousName), 'utf8');
@@ -237,7 +263,7 @@ export async function cleanupRestoreTransaction(transactionRoot: string): Promis
 }
 
 /** Recovers an interrupted restore before any state service reads application data. */
-export async function recoverRestoreTransaction(transactionRoot: string, targetRoot: string, keepRecorded?: (manifest: RestoreTransactionManifest) => Promise<boolean>): Promise<void> {
+export async function recoverRestoreTransaction(transactionRoot: string, targetRoot: string, keepRecorded?: (manifest: RestoreTransactionManifest) => Promise<boolean>, participant?: RestoreTransactionParticipant): Promise<void> {
   const manifest = await readManifest(transactionRoot);
   if (!manifest) {
     await cleanupRestoreTransaction(transactionRoot);
@@ -247,5 +273,5 @@ export async function recoverRestoreTransaction(transactionRoot: string, targetR
     await cleanupRestoreTransaction(transactionRoot);
     return;
   }
-  await rollbackRestoreTransaction(transactionRoot, targetRoot, manifest);
+  await rollbackRestoreTransaction(transactionRoot, targetRoot, manifest, participant);
 }
