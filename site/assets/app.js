@@ -17,6 +17,7 @@ import {
 import { readDialogEmojiPreference, shouldShowDialogEmoji, writeDialogEmojiPreference } from './dialog-emoji.mjs';
 import { DEFAULT_DISPLAY_NAME, displayNameForPresentation, loadDisplayName, resetDisplayName, saveDisplayName } from './display-name.mjs';
 import { EMPTY_SCHEDULE, loadSchedule, resolveSchedule, saveSchedule } from './schedule.mjs';
+import { scheduleRuleMarkup } from './schedule-ui.mjs';
 
 (() => {
   'use strict';
@@ -57,6 +58,8 @@ import { EMPTY_SCHEDULE, loadSchedule, resolveSchedule, saveSchedule } from './s
     schedule: loadSchedule(),
   };
   let scheduleDraft = structuredClone(state.schedule);
+  let renderedSchedulePresentation = null;
+  let currentScheduleStatus = ['No schedule rules are saved. Base settings remain active.', '未儲存任何排程規則；而家使用基本設定。'];
   let vocabulary = loadCachedVocabulary();
   const search = { docs: readStoredSearch('docs'), settings: readStoredSearch('settings'), palette: readStoredSearch('palette') };
 
@@ -142,8 +145,29 @@ import { EMPTY_SCHEDULE, loadSchedule, resolveSchedule, saveSchedule } from './s
     const displayInput = $('site-display-name'); if (displayInput) { displayInput.value = state.displayName; displayInput.disabled = restricted(); }
     document.querySelectorAll('[data-site-copy]').forEach((node) => {
       const source = node.dataset.siteCopy;
-      const labels = { 'restricted-label': 'Restricted presentation (site-only)', 'restricted-help': "This site-only restricted switch is separate from the desktop app's shared School mode. It forces English and suppresses personal vocabulary on this browser only; it is not a security boundary.", 'dialog-emoji-label': 'Show emojis in dialogs and message boxes', 'dialog-emoji-help': 'Adds a non-semantic emoji to the command palette dialog title while leaving controls and accessible names unchanged.', 'display-name-label': 'Display name', 'display-name-save': 'Save display name', 'display-name-reset': 'Reset to Ding Ding App Store', 'display-name-help': 'This changes the label shown by this site only. Routes, asset names, URLs, and application identity never change.', 'vocabulary-title': 'Personal vocabulary', 'vocabulary-file-label': 'Choose a local JSON file', 'vocabulary-replace': 'Replace vocabulary', 'vocabulary-clear': 'Clear vocabulary', 'vocabulary-help': 'The file is parsed and cached in this browser only. Its path, metadata, and private values are never sent over the network or included in exports.', 'schedule-help': "Schedule local browser-only overrides. Lower priority numbers win; the base settings remain recoverable.", 'schedule-reset': 'Reset schedule', 'schedule-add': 'Add rule', 'schedule-save': 'Save schedule', 'schedule-boundary': 'This static site stores schedule data in browser storage only. It does not read an operating-system vault, Home Assistant, or an external API.' };
-      if (labels[source]) node.textContent = restricted() ? labels[source] : copy(labels[source]);
+      const labels = {
+        'restricted-label': ['Restricted presentation (site-only)', '受限顯示（只限網站）'],
+        'restricted-help': ["This site-only restricted switch is separate from the desktop app's shared School mode. It forces English and suppresses personal vocabulary on this browser only; it is not a security boundary.", '呢個只限網站嘅受限顯示開關，同桌面 app 共用嘅 School mode 分開。佢只會喺呢個瀏覽器強制用英文同收起個人詞彙；唔係保安界線。'],
+        'dialog-emoji-label': ['Show emojis in dialogs and message boxes', '喺對話框同訊息框顯示 emoji'],
+        'dialog-emoji-help': ['Adds a non-semantic emoji to the command palette dialog title while leaving controls and accessible names unchanged.', '只會喺 command palette 對話框標題加非語意 emoji；控制項同無障礙名稱完全不變。'],
+        'display-name-label': ['Display name', '顯示名稱'],
+        'display-name-save': ['Save display name', '儲存顯示名稱'],
+        'display-name-reset': ['Reset to Ding Ding App Store', '重設做 Ding Ding App Store'],
+        'display-name-help': ['This changes the label shown by this site only. Routes, asset names, URLs, and application identity never change.', '只會改呢個網站顯示嘅名稱；route、asset 名、網址同應用程式身份永遠唔會改。'],
+        'vocabulary-title': ['Personal vocabulary', '個人詞彙'],
+        'vocabulary-file-label': ['Choose a local JSON file', '揀本機 JSON 檔案'],
+        'vocabulary-replace': ['Replace vocabulary', '取代詞彙'],
+        'vocabulary-clear': ['Clear vocabulary', '清除詞彙'],
+        'vocabulary-help': ['The file is parsed and cached in this browser only. Its path, metadata, and private values are never sent over the network or included in exports.', '檔案只會喺呢個瀏覽器解析同快取；路徑、metadata 同私人內容永遠唔會經網絡送出或放入匯出檔。'],
+        'schedule-tab': ['Schedule', '排程'],
+        'schedule-help': ["Schedule temporary local browser overrides for language, funny levels, theme, density, accent, and display name. Values use this device's local timezone; daylight-saving changes follow the browser clock. Lower priority numbers win, and base settings return when no rule is active.", '排定語言、幽默程度、主題、密度、主色同顯示名稱嘅臨時本機瀏覽器覆蓋。所有日期時間都用呢部裝置嘅本地時區；夏令時間轉換跟瀏覽器時鐘。優先數字越細越先，冇規則生效時會還原基本設定。'],
+        'schedule-reset': ['Reset schedule', '重設排程'],
+        'schedule-add': ['Add rule', '新增規則'],
+        'schedule-save': ['Save schedule', '儲存排程'],
+        'schedule-boundary': ['This static site intentionally supports local browser data only. It does not read an operating-system vault, Home Assistant, or an external API; those sources belong to the desktop app and are not silently emulated here.', '呢個靜態網站刻意只支援本機瀏覽器資料。佢唔會讀取作業系統憑證庫、Home Assistant 或外部 API；嗰啲來源屬於桌面 app，呢度唔會靜雞雞扮到有。'],
+        'schedule-empty': ['No valid schedule rules are present.', '而家冇有效排程規則。'],
+      };
+      if (labels[source]) node.textContent = restricted() ? labels[source][0] : localized(copy(labels[source][0]), copy(labels[source][1]));
     });
     const restrictedInput = $('site-restricted');
     if (restrictedInput) restrictedInput.checked = state.siteRestricted;
@@ -157,6 +181,9 @@ import { EMPTY_SCHEDULE, loadSchedule, resolveSchedule, saveSchedule } from './s
     if (emoji) emoji.hidden = !shouldShowDialogEmoji(state.showEmojisInDialogs, restricted());
     const emojiInput = $('show-emojis-in-dialogs');
     if (emojiInput) emojiInput.checked = state.showEmojisInDialogs;
+    const schedulePresentation = `${effectiveMode()}:${funnyLevel()}`;
+    if (!restricted() && renderedSchedulePresentation !== schedulePresentation) renderSchedule();
+    renderScheduleStatus();
   }
 
   function vocabularyStatus(message, messageYue = message) {
@@ -192,21 +219,24 @@ import { EMPTY_SCHEDULE, loadSchedule, resolveSchedule, saveSchedule } from './s
     openArticle(state.article, false, { addTab: false, route: 'none' });
   }
 
-  function scheduleStatus(message) { const node = $('schedule-status'); if (node) node.textContent = localized(message, message); }
+  function renderScheduleStatus() { const node = $('schedule-status'); if (node) node.textContent = localized(currentScheduleStatus[0], currentScheduleStatus[1]); }
+  function scheduleStatus(message, messageYue) { currentScheduleStatus = [message, messageYue]; renderScheduleStatus(); }
   function newRule(index = scheduleDraft.rules.length) {
     return { id: `rule-${Date.now().toString(36)}-${index}`, label: `Scheduled override ${index + 1}`, enabled: true, priority: 0, startDate: '', endDate: '', startTime: '', endTime: '', weekdays: [], values: { mode: state.mode } };
   }
-  function renderSchedule() {
+  function renderSchedule(requestedFocusId = null) {
     const host = $('schedule-rules'); if (!host) return;
+    const previousFocusId = host.contains(document.activeElement) ? document.activeElement.id : null;
+    renderedSchedulePresentation = `${effectiveMode()}:${funnyLevel()}`;
     const l = (en, yue) => localized(en, yue);
-    host.innerHTML = scheduleDraft.rules.map((rule, index) => { const selectedField = Object.keys(rule.values)[0] ?? 'mode'; const selectedValue = rule.values[selectedField] ?? ''; return `<article class="schedule-rule" data-schedule-index="${index}" data-settings-text="schedule rule ${escapeHtml(rule.label)} ${rule.id}"><h3>${escapeHtml(rule.label)}</h3><div class="schedule-grid"><label>${l('Label', '標籤')} <input aria-describedby="schedule-help" data-schedule-field="label" value="${escapeHtml(rule.label)}" maxlength="96"></label><label>${l('Priority (lower wins)', '優先次序（數字越細越先）')} <input aria-describedby="schedule-help" data-schedule-field="priority" type="number" min="-100000" max="100000" value="${rule.priority}"></label><label><input aria-describedby="schedule-help" data-schedule-field="enabled" type="checkbox" ${rule.enabled ? 'checked' : ''}> ${l('Enabled', '啟用')}</label><label>${l('Start date', '開始日期')} <input aria-describedby="schedule-help" data-schedule-field="startDate" type="date" value="${rule.startDate}"></label><label>${l('End date', '結束日期')} <input aria-describedby="schedule-help" data-schedule-field="endDate" type="date" value="${rule.endDate}"></label><label>${l('Start time', '開始時間')} <input aria-describedby="schedule-help" data-schedule-field="startTime" type="time" value="${rule.startTime}"></label><label>${l('End time', '結束時間')} <input aria-describedby="schedule-help" data-schedule-field="endTime" type="time" value="${rule.endTime}"></label><label>${l('Weekdays', '星期')} <input aria-describedby="schedule-help" data-schedule-field="weekdays" value="${rule.weekdays.join(',')}" placeholder="0,1,2,3,4,5,6"><small>${l('0 Sunday · 6 Saturday; empty means every day', '0 代表星期日 · 6 代表星期六；留空代表每日')}</small></label><label>${l('Override field', '覆蓋欄位')} <select aria-describedby="schedule-help" data-schedule-field="valueField"><option value="mode">${l('Language', '語言')}</option><option value="funnyEn">${l('English funny level', '英文幽默程度')}</option><option value="funnyYue">${l('Cantonese funny level', '廣東話幽默程度')}</option><option value="theme">${l('Theme', '主題')}</option><option value="density">${l('Density', '密度')}</option><option value="accent">${l('Accent', '主色')}</option><option value="displayName">${l('Display name', '顯示名稱')}</option></select></label><label>${l('Override value', '覆蓋值')} <input aria-describedby="schedule-help" data-schedule-field="valueValue" value="${escapeHtml(String(selectedValue))}"></label></div><div class="button-row"><button type="button" class="text-button" data-schedule-delete="${index}">${l('Delete rule', '刪除規則')}</button></div></article>`; }).join('');
+    host.innerHTML = scheduleDraft.rules.map((rule, index) => scheduleRuleMarkup(rule, index, l, escapeHtml, displayName())).join('');
     host.querySelectorAll('[data-schedule-index]').forEach((card) => {
       const index = Number(card.dataset.scheduleIndex); const rule = scheduleDraft.rules[index];
       const field = (name) => card.querySelector(`[data-schedule-field="${name}"]`);
       field('valueField').value = Object.keys(rule.values)[0] ?? 'mode'; field('valueValue').value = String(rule.values[field('valueField').value] ?? '');
       card.querySelectorAll('[data-schedule-field]').forEach((control) => control.addEventListener('change', () => {
         const name = control.dataset.scheduleField;
-        if (name === 'valueField') { const next = field('valueField').value; rule.values = { [next]: rule.values[next] ?? (next.startsWith('funny') ? 1 : next === 'accent' ? '#4f378b' : next === 'displayName' ? displayName() : next === 'mode' ? 'en' : next === 'theme' ? 'system' : 'comfortable') }; renderSchedule(); return; }
+        if (name === 'valueField') { const next = field('valueField').value; rule.values = { [next]: rule.values[next] ?? (next.startsWith('funny') ? 1 : next === 'accent' ? '#4f378b' : next === 'displayName' ? displayName() : next === 'mode' ? 'en' : next === 'theme' ? 'system' : 'comfortable') }; renderSchedule(`schedule-rule-${index}-valueField`); return; }
         if (name === 'weekdays') rule.weekdays = control.value.split(',').filter(Boolean).map(Number);
         else if (name === 'priority') rule.priority = Number(control.value);
         else if (name === 'enabled') rule.enabled = control.checked;
@@ -214,14 +244,24 @@ import { EMPTY_SCHEDULE, loadSchedule, resolveSchedule, saveSchedule } from './s
         else rule[name] = control.value;
       }));
     });
-    host.querySelectorAll('[data-schedule-delete]').forEach((button) => button.addEventListener('click', () => { scheduleDraft.rules.splice(Number(button.dataset.scheduleDelete), 1); renderSchedule(); }));
+    host.querySelectorAll('[data-schedule-delete]').forEach((button) => button.addEventListener('click', () => {
+      const index = Number(button.dataset.scheduleDelete);
+      scheduleDraft.rules.splice(index, 1);
+      const targetIndex = Math.min(index, scheduleDraft.rules.length - 1);
+      renderSchedule(targetIndex >= 0 ? `schedule-rule-${targetIndex}-label` : 'schedule-add');
+      paletteResults();
+    }));
     $('schedule-empty').hidden = scheduleDraft.rules.length > 0;
+    if (state.settingsTab === 'schedule') filterSettings();
+    const focusId = requestedFocusId || previousFocusId;
+    const focusTarget = focusId ? $(focusId) : null;
+    if (focusTarget && !focusTarget.closest('[hidden]')) { focusTarget.focus(); focusTarget.scrollIntoView({ block: 'center' }); }
   }
   function saveScheduleDraft() {
     if (restricted()) return;
     const result = saveSchedule(scheduleDraft);
-    if (!result.ok) { scheduleStatus(`Schedule was not saved (${result.reason}); the previous valid schedule remains active.`); return; }
-    state.schedule = result.schedule; scheduleDraft = structuredClone(state.schedule); scheduleStatus(`${state.schedule.rules.length} local schedule rule${state.schedule.rules.length === 1 ? '' : 's'} saved. Base settings remain recoverable.`); applyAppearance(); renderSchedule();
+    if (!result.ok) { scheduleStatus(`Schedule was not saved (${result.reason}); the previous valid schedule remains active.`, `排程未能儲存（${result.reason}）；之前有效嘅排程會繼續生效。`); return; }
+    state.schedule = result.schedule; scheduleDraft = structuredClone(state.schedule); scheduleStatus(`${state.schedule.rules.length} local schedule rule${state.schedule.rules.length === 1 ? '' : 's'} saved. Base settings remain recoverable.`, `已儲存 ${state.schedule.rules.length} 條本機排程規則；基本設定仍然可以還原。`); applyAppearance(); renderSchedule();
   }
   function reevaluateSchedule() { applyAppearance(); openArticle(state.article, false, { addTab: false, route: 'none' }); }
   function resetSchedule() {
@@ -231,8 +271,8 @@ import { EMPTY_SCHEDULE, loadSchedule, resolveSchedule, saveSchedule } from './s
       if (!globalThis.localStorage || typeof globalThis.localStorage.removeItem !== 'function') throw new Error('storage-unavailable');
       globalThis.localStorage.removeItem('ding-ding-docs:schedule:v1');
       if (globalThis.localStorage.getItem('ding-ding-docs:schedule:v1') !== null) throw new Error('storage-readback-mismatch');
-      scheduleDraft = { ...EMPTY_SCHEDULE, rules: [] }; state.schedule = scheduleDraft; scheduleStatus('Schedule reset. Base settings are active.'); renderSchedule(); applyAppearance();
-    } catch { state.schedule = previous; scheduleDraft = structuredClone(previous); scheduleStatus('Schedule reset could not be confirmed; the previous valid schedule remains active.'); renderSchedule(); }
+      scheduleDraft = { ...EMPTY_SCHEDULE, rules: [] }; state.schedule = scheduleDraft; scheduleStatus('Schedule reset. Base settings are active.', '排程已重設，而家使用基本設定。'); renderSchedule(); applyAppearance();
+    } catch { state.schedule = previous; scheduleDraft = structuredClone(previous); scheduleStatus('Schedule reset could not be confirmed; the previous valid schedule remains active.', '未能確認排程已重設；之前有效嘅排程會繼續生效。'); renderSchedule(); }
   }
 
   function bindOpen() { document.querySelectorAll('[data-open]').forEach((button) => button.addEventListener('click', () => openArticle(button.dataset.open))); }
@@ -437,15 +477,40 @@ import { EMPTY_SCHEDULE, loadSchedule, resolveSchedule, saveSchedule } from './s
     $('settings-empty').hidden = visible > 0;
   }
 
+  function schedulePaletteControls() {
+    if (restricted()) return [];
+    return [...document.querySelectorAll('#settings-panel-schedule [data-settings-focus]')].map((row) => {
+      const focusId = row.dataset.settingsFocus;
+      const card = row.closest('[data-schedule-index]');
+      const ruleNumber = Number(card?.dataset.scheduleIndex ?? 0) + 1;
+      const ruleLabel = card?.querySelector('h3')?.textContent.trim() || localized('Unnamed rule', '未命名規則');
+      const controlLabel = row.textContent.replace(/\s+/g, ' ').trim();
+      const label = localized(`Rule ${ruleNumber}: ${ruleLabel} — ${controlLabel}`, `規則 ${ruleNumber}：${ruleLabel} — ${controlLabel}`);
+      return { id: `setting-schedule-control-${focusId}`, label, type: localized('Schedule rule control', '排程規則控制') };
+    });
+  }
+
+  function focusSettingsControl(tab, focusId) {
+    search.settings.regex = false;
+    search.settings.pattern = '';
+    search.settings.query = '';
+    openSettingsTab(tab);
+    const control = $(focusId);
+    if (!control) return false;
+    control.focus();
+    control.scrollIntoView({ block: 'center' });
+    return document.activeElement === control;
+  }
+
   function paletteResults() {
     const value = $('palette-search').value.trim(); const match = matcher('palette', value);
     if (!search.palette.regex) search.palette.query = value;
     saveSearch('palette');
-    const destinationSettings = ['general', 'appearance', ...(restricted() ? [] : ['schedule']), 'about'].map((id) => ({ id: `setting-${id}`, label: `${id[0].toUpperCase()}${id.slice(1)} settings`, type: 'Setting destination' }));
+    const destinationSettings = ['general', 'appearance', ...(restricted() ? [] : ['schedule']), 'about'].map((id) => ({ id: `setting-${id}`, label: id === 'schedule' ? localized('Schedule settings', '排程設定') : `${id[0].toUpperCase()}${id.slice(1)} settings`, type: id === 'schedule' ? localized('Setting destination', '設定目的地') : 'Setting destination' }));
     const scheduleControls = restricted() ? [] : ['schedule-add', 'schedule-save', 'schedule-reset'].map((id) => ({ id: `setting-${id}`, label: localized(id.replace('schedule-', '').replace('-', ' '), id === 'schedule-add' ? '新增規則' : id === 'schedule-save' ? '儲存排程' : '重設排程'), type: localized('Schedule control', '排程控制') }));
-    const rows = [{ id: 'home', label: displayName(), type: 'Destination' }, ...articles.map((article) => ({ id: article.id, label: title(article), type: `${article.category} · ${article.status}` })), ...destinationSettings, ...scheduleControls, ...(restricted() ? [] : [{ id: 'setting-display-name', label: localized('Display name', '顯示名稱'), type: localized('Settings control · local label', '設定控制 · 本機標籤') }, { id: 'setting-show-emojis-in-dialogs', label: localized('Show emojis in dialogs and message boxes', '喺對話框同訊息框顯示 emoji'), type: localized('Settings control · dialog decoration', '設定控制 · 對話框裝飾') }, { id: 'setting-personal-vocabulary-import', label: localized('Import personal vocabulary JSON', '匯入本機個人詞彙 JSON'), type: localized('Settings control · local upload', '設定控制 · 本機上載') }, { id: 'setting-personal-vocabulary-clear', label: localized('Clear personal vocabulary', '清除本機個人詞彙'), type: localized('Settings control · local reset', '設定控制 · 本機重設') }, { id: 'setting-schedule', label: localized('Scheduled settings', '設定排程'), type: localized('Settings control · local browser schedule', '設定控制 · 本機瀏覽器排程') }]), { id: 'setting-site-restricted', label: localized('Restricted presentation (site-only)', '受限顯示（只限網站）'), type: localized('Settings control · local mode', '設定控制 · 本機模式') }].filter((row) => match(`${row.label} ${row.type}`));
+    const rows = [{ id: 'home', label: displayName(), type: 'Destination' }, ...articles.map((article) => ({ id: article.id, label: title(article), type: `${article.category} · ${article.status}` })), ...destinationSettings, ...scheduleControls, ...schedulePaletteControls(), ...(restricted() ? [] : [{ id: 'setting-display-name', label: localized('Display name', '顯示名稱'), type: localized('Settings control · local label', '設定控制 · 本機標籤') }, { id: 'setting-show-emojis-in-dialogs', label: localized('Show emojis in dialogs and message boxes', '喺對話框同訊息框顯示 emoji'), type: localized('Settings control · dialog decoration', '設定控制 · 對話框裝飾') }, { id: 'setting-personal-vocabulary-import', label: localized('Import personal vocabulary JSON', '匯入本機個人詞彙 JSON'), type: localized('Settings control · local upload', '設定控制 · 本機上載') }, { id: 'setting-personal-vocabulary-clear', label: localized('Clear personal vocabulary', '清除本機個人詞彙'), type: localized('Settings control · local reset', '設定控制 · 本機重設') }, { id: 'setting-schedule', label: localized('Scheduled settings', '設定排程'), type: localized('Settings control · local browser schedule', '設定控制 · 本機瀏覽器排程') }]), { id: 'setting-site-restricted', label: localized('Restricted presentation (site-only)', '受限顯示（只限網站）'), type: localized('Settings control · local mode', '設定控制 · 本機模式') }].filter((row) => match(`${row.label} ${row.type}`));
     $('palette-results').innerHTML = rows.length ? rows.map((row) => `<button class="palette-row" data-command="${row.id}" role="option"><strong>${escapeHtml(row.label)}</strong><br><small>${escapeHtml(row.type)}</small></button>`).join('') : '<p class="empty">No command or destination matches.</p>';
-    document.querySelectorAll('[data-command]').forEach((button) => button.addEventListener('click', () => { $('palette').close(); const id = button.dataset.command; if (id === 'setting-display-name') { openSettingsTab('general'); $('site-display-name').focus(); $('settings-title').scrollIntoView(); } else if (id === 'setting-show-emojis-in-dialogs') { openSettingsTab('general'); $('show-emojis-in-dialogs').focus(); $('settings-title').scrollIntoView(); } else if (id === 'setting-personal-vocabulary-import') { openSettingsTab('general'); $('personal-vocabulary-file').focus(); $('settings-title').scrollIntoView(); } else if (id === 'setting-personal-vocabulary-clear') { openSettingsTab('general'); $('personal-vocabulary-clear').focus(); $('settings-title').scrollIntoView(); } else if (id === 'setting-site-restricted') { openSettingsTab('general'); $('site-restricted').focus(); $('settings-title').scrollIntoView(); } else if (id === 'setting-schedule-add' || id === 'setting-schedule-save' || id === 'setting-schedule-reset') { openSettingsTab('schedule'); $(id.slice(8)).focus(); $('settings-title').scrollIntoView(); } else if (id.startsWith('setting-')) { openSettingsTab(id.slice(8)); $('settings-title').scrollIntoView(); } else openArticle(id); }));
+    document.querySelectorAll('[data-command]').forEach((button) => button.addEventListener('click', () => { $('palette').close(); const id = button.dataset.command; if (id === 'setting-display-name') { openSettingsTab('general'); $('site-display-name').focus(); $('settings-title').scrollIntoView(); } else if (id === 'setting-show-emojis-in-dialogs') { openSettingsTab('general'); $('show-emojis-in-dialogs').focus(); $('settings-title').scrollIntoView(); } else if (id === 'setting-personal-vocabulary-import') { openSettingsTab('general'); $('personal-vocabulary-file').focus(); $('settings-title').scrollIntoView(); } else if (id === 'setting-personal-vocabulary-clear') { openSettingsTab('general'); $('personal-vocabulary-clear').focus(); $('settings-title').scrollIntoView(); } else if (id === 'setting-site-restricted') { openSettingsTab('general'); $('site-restricted').focus(); $('settings-title').scrollIntoView(); } else if (id.startsWith('setting-schedule-control-')) { focusSettingsControl('schedule', id.slice('setting-schedule-control-'.length)); } else if (id === 'setting-schedule-add' || id === 'setting-schedule-save' || id === 'setting-schedule-reset') { focusSettingsControl('schedule', id.slice(8)); } else if (id.startsWith('setting-')) { openSettingsTab(id.slice(8)); $('settings-title').scrollIntoView(); } else openArticle(id); }));
   }
 
   ['docs', 'settings', 'palette'].forEach((kind) => {
@@ -468,7 +533,7 @@ import { EMPTY_SCHEDULE, loadSchedule, resolveSchedule, saveSchedule } from './s
   $('show-emojis-in-dialogs').checked = state.showEmojisInDialogs;
   $('show-emojis-in-dialogs').addEventListener('change', (event) => { const enabled = Boolean(event.target.checked); if (!writeDialogEmojiPreference(enabled)) { state.showEmojisInDialogs = true; event.target.checked = true; setStatus('Browser storage is unavailable; dialog emojis remain enabled for this session.'); } else state.showEmojisInDialogs = enabled; applyAppearance(); });
   $('site-restricted').addEventListener('change', (event) => { state.siteRestricted = Boolean(event.target.checked); saveControls(); applyAppearance(); openSettingsTab('general'); openArticle(state.article, false, { addTab: false, route: 'none' }); });
-  $('schedule-add').addEventListener('click', () => { if (restricted() || scheduleDraft.rules.length >= 32) return; scheduleDraft.rules.push(newRule()); renderSchedule(); });
+  $('schedule-add').addEventListener('click', () => { if (restricted() || scheduleDraft.rules.length >= 32) return; const index = scheduleDraft.rules.length; scheduleDraft.rules.push(newRule()); renderSchedule(`schedule-rule-${index}-label`); paletteResults(); });
   $('schedule-save').addEventListener('click', saveScheduleDraft);
   $('schedule-reset').addEventListener('click', resetSchedule);
   window.setInterval(reevaluateSchedule, 30_000);
@@ -505,9 +570,10 @@ import { EMPTY_SCHEDULE, loadSchedule, resolveSchedule, saveSchedule } from './s
   });
 
   renderSchedule();
-  if (state.schedule.corrupt) scheduleStatus('The saved schedule was rejected; base settings are active. Add valid rules and save to replace it.');
-  else if (state.schedule.unavailable) scheduleStatus('Browser storage is unavailable; schedule changes stay in this session only.');
-  else if (state.schedule.rules.length) scheduleStatus(`${state.schedule.rules.length} local schedule rule${state.schedule.rules.length === 1 ? '' : 's'} loaded. Base settings remain recoverable.`);
+  if (state.schedule.corrupt) scheduleStatus('The saved schedule was rejected; base settings are active. Add valid rules and save to replace it.', '已儲存嘅排程被拒絕；而家使用基本設定。請新增有效規則再儲存取代。');
+  else if (state.schedule.unavailable) scheduleStatus('Browser storage is unavailable; schedule changes stay in this session only.', '瀏覽器儲存不可用；排程變更只會留喺今次工作階段。');
+  else if (state.schedule.rules.length) scheduleStatus(`${state.schedule.rules.length} local schedule rule${state.schedule.rules.length === 1 ? '' : 's'} loaded. Base settings remain recoverable.`, `已載入 ${state.schedule.rules.length} 條本機排程規則；基本設定仍然可以還原。`);
+  else scheduleStatus('No schedule rules are saved. Base settings remain active.', '未儲存任何排程規則；而家使用基本設定。');
   applyAppearance(); openSettingsTab(state.settingsTab);
   openArticle(tabIdFromHash(window.location.hash, articleIds) || state.tabs.activeTab, false, { route: 'replace' });
 })();

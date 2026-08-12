@@ -58,7 +58,7 @@ describe('personal vocabulary parser', () => {
   it('emits vocabulary palette commands in normal mode and suppresses them in School mode', () => {
     const context = { settings: DEFAULT_USER_SETTINGS, workspace: DEFAULT_TAB_WORKSPACE, appearance: {}, schedule: DEFAULT_SCHEDULE, apps: [] } as never;
     const normal = buildRegistry(context).filter((entry) => entry.id.includes('personal-vocabulary'));
-    expect(normal.map((entry) => entry.id)).toEqual(['cmd:personal-vocabulary-import', 'cmd:personal-vocabulary-clear']);
+    expect(normal.map((entry) => entry.id)).toEqual(['cmd:open-doc:personal-vocabulary-site', 'cmd:personal-vocabulary-import', 'cmd:personal-vocabulary-clear']);
     expect(buildRegistry({ ...context, schoolModeEnabled: true }).some((entry) => entry.id.includes('personal-vocabulary'))).toBe(false);
   });
 });

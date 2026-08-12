@@ -39,7 +39,7 @@
         <div id="settings-tabs" class="settings-tabs" role="tablist" aria-label="Documentation settings sections">
           <button role="tab" id="settings-tab-general" aria-controls="settings-panel-general" aria-selected="true" data-settings-tab="general">General</button>
           <button role="tab" id="settings-tab-appearance" aria-controls="settings-panel-appearance" aria-selected="false" data-settings-tab="appearance" tabindex="-1">Appearance</button>
-          <button role="tab" id="settings-tab-schedule" aria-controls="settings-panel-schedule" aria-selected="false" data-settings-tab="schedule" tabindex="-1">Schedule</button>
+          <button role="tab" id="settings-tab-schedule" aria-controls="settings-panel-schedule" aria-selected="false" data-settings-tab="schedule" data-site-copy="schedule-tab" tabindex="-1">Schedule</button>
           <button role="tab" id="settings-tab-about" aria-controls="settings-panel-about" aria-selected="false" data-settings-tab="about" tabindex="-1">About</button>
         </div>
         <div class="search-wrap settings-search-wrap">
@@ -77,12 +77,12 @@
           <label data-settings-text="accent seed colour color">Accent <input id="accent" type="color" value="#4f378b"></label>
         </div>
         <div id="settings-panel-schedule" role="tabpanel" aria-labelledby="settings-tab-schedule" data-settings-panel="schedule" hidden>
-          <p class="supporting" data-settings-text="schedule local browser timezone date time weekdays priority persisted" data-site-copy="schedule-help">Schedule temporary local browser overrides for language, funny levels, theme, density, accent, and display name. Values use this device's local timezone; daylight-saving changes follow the browser clock.</p>
-          <p id="schedule-status" class="supporting" role="status" data-settings-text="schedule status persisted corrupt unavailable reset" data-site-copy="schedule-status">No schedule rules are saved. Base settings remain active.</p>
-          <div class="schedule-actions button-row"><button id="schedule-reset" class="text-button" type="button" data-site-copy="schedule-reset">Reset schedule</button><button id="schedule-add" class="filled-button" type="button" data-site-copy="schedule-add">Add rule</button><button id="schedule-save" class="filled-button" type="button" data-site-copy="schedule-save">Save schedule</button></div>
+          <p id="schedule-help" class="supporting" data-settings-text="schedule local browser timezone daylight saving dst date time weekdays priority persisted" data-site-copy="schedule-help">Schedule temporary local browser overrides for language, funny levels, theme, density, accent, and display name. Values use this device's local timezone; daylight-saving changes follow the browser clock. Lower priority numbers win, and base settings return when no rule is active.</p>
+          <p id="schedule-status" class="supporting" role="status" data-settings-text="schedule status persisted corrupt unavailable reset">No schedule rules are saved. Base settings remain active.</p>
+          <div class="schedule-actions button-row"><button id="schedule-reset" class="text-button" type="button" data-site-copy="schedule-reset" data-settings-text="schedule reset clear base settings">Reset schedule</button><button id="schedule-add" class="filled-button" type="button" data-site-copy="schedule-add" data-settings-text="schedule add new rule">Add rule</button><button id="schedule-save" class="filled-button" type="button" data-site-copy="schedule-save" data-settings-text="schedule save persist rules">Save schedule</button></div>
           <p class="supporting" data-settings-text="schedule source local only api home assistant vault security" data-site-copy="schedule-boundary">This static site intentionally supports local browser data only. It does not read an operating-system vault, Home Assistant, or an external API; those sources belong to the desktop app and are not silently emulated here.</p>
           <div id="schedule-rules" class="schedule-rules" aria-live="polite"></div>
-          <p id="schedule-empty" class="empty" hidden>No valid schedule rules are present.</p>
+          <p id="schedule-empty" class="empty" data-site-copy="schedule-empty" hidden>No valid schedule rules are present.</p>
         </div>
         <div id="settings-panel-about" role="tabpanel" aria-labelledby="settings-tab-about" data-settings-panel="about" hidden>
           <p data-settings-text="offline generated canonical wiki site bundle">All articles are generated from the canonical categorized Markdown and bundled locally. No analytics, remote fonts, or CDN assets are used.</p>
