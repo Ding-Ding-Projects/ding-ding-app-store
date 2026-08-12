@@ -1,5 +1,12 @@
 # Handoff
 
+## 2026-08-12 static-site personal vocabulary boundary
+
+- Added `site/assets/personal-vocabulary.mjs` with fatal UTF-8 decoding, schema-v1 strict fields, duplicate-key/unknown-field/unsafe-key rejection, iterative depth and byte/entry/string/control bounds, localStorage-only validated caching, replacement, clear, corrupt-cache fail-closed behavior, and technical-token preservation. No network, source path, metadata, private default, or private mapping is included.
+- Settings → General now always exposes a semantic local JSON picker, status, Replace, and Clear controls. Settings search and `Ctrl+Shift+F` command palette entries focus the exact controls. Canonical article labels/body text may use validated local replacements; generated/provider-authored catalog metadata and technical tokens remain factual and unchanged with HTML escaping preserved.
+- The static site cannot observe the desktop app's shared School-mode record. It therefore exposes a separately persisted, explicitly labelled site-only Restricted presentation switch that forces effective English, suppresses personal vocabulary and funny-level controls, and restores base choices when disabled. This is not a security boundary or desktop parity claim.
+- Focused site tests are in `tests/site-personal-vocabulary.test.ts`; docs generation/check updates the canonical article, generated offline bundle, site mirror, wiki page, and indexes. No packaged desktop or browser visual/runtime evidence is claimed by this lane.
+
 ## 2026-08-12 source broker challenge and capability-lease boundary
 
 - The source runtime now issues a per-job challenge with a cryptographically random nonce, UUID-bound job identity, expected broker/transport identity, and bounded challenge plus lease expiry. A future broker response must satisfy the hard-disposable attestation schema and carry an `execute` plus `dispose` capability lease; replayed, stale, cross-job, cross-transport, incomplete, and expired responses are rejected before execution.

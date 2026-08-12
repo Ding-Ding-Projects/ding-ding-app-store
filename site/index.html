@@ -48,9 +48,19 @@
           <div id="settings-regex-panel" class="regex-panel" hidden></div>
         </div>
         <div id="settings-panel-general" role="tabpanel" aria-labelledby="settings-tab-general" data-settings-panel="general">
-          <label data-settings-text="language english cantonese bilingual">Language <select id="language"><option value="en">English</option><option value="yue">香港粵語</option><option value="both">Bilingual</option></select></label>
-          <label data-settings-text="english funny level voice">English funny level <input id="funny-en" type="range" min="1" max="5" value="2"><output id="funny-en-value">2</output></label>
-          <label data-settings-text="cantonese funny level voice">Cantonese funny level <input id="funny-yue" type="range" min="1" max="5" value="3"><output id="funny-yue-value">3</output></label>
+          <label data-settings-text="language english cantonese bilingual" data-restricted-hide>Language <select id="language"><option value="en">English</option><option value="yue">香港粵語</option><option value="both">Bilingual</option></select></label>
+          <label data-settings-text="english funny level voice" data-restricted-hide>English funny level <input id="funny-en" type="range" min="1" max="5" value="2"><output id="funny-en-value">2</output></label>
+          <label data-settings-text="cantonese funny level voice" data-restricted-hide>Cantonese funny level <input id="funny-yue" type="range" min="1" max="5" value="3"><output id="funny-yue-value">3</output></label>
+          <label data-settings-text="restricted presentation site only school mode equivalent"><input id="site-restricted" type="checkbox"> <span data-site-copy="restricted-label">Restricted presentation (site-only)</span></label>
+          <p class="supporting" data-settings-text="restricted presentation site only boundary" data-site-copy="restricted-help">This site-only restricted switch is separate from the desktop app's shared School mode. It forces English and suppresses personal vocabulary on this browser only; it is not a security boundary.</p>
+          <section id="personal-vocabulary-card" class="settings-card" aria-labelledby="personal-vocabulary-title">
+            <h3 id="personal-vocabulary-title" data-site-copy="vocabulary-title">Personal vocabulary</h3>
+            <p id="personal-vocabulary-status" class="supporting" role="status" data-settings-text="personal vocabulary status local json loaded invalid corruption">No local JSON file is loaded. Original wording is active.</p>
+            <label for="personal-vocabulary-file" data-site-copy="vocabulary-file-label" data-settings-text="personal vocabulary choose local json file upload replace">Choose a local JSON file</label>
+            <input id="personal-vocabulary-file" type="file" accept="application/json,.json" aria-describedby="personal-vocabulary-status">
+            <div class="button-row"><button id="personal-vocabulary-replace" class="filled-button" type="button" data-site-copy="vocabulary-replace" data-settings-text="personal vocabulary replace upload">Replace vocabulary</button><button id="personal-vocabulary-clear" class="text-button" type="button" data-site-copy="vocabulary-clear" data-settings-text="personal vocabulary clear reset">Clear vocabulary</button></div>
+            <p class="supporting" data-site-copy="vocabulary-help" data-settings-text="personal vocabulary local browser cache privacy network export">The file is parsed and cached in this browser only. Its path, metadata, and private values are never sent over the network or included in exports.</p>
+          </section>
         </div>
         <div id="settings-panel-appearance" role="tabpanel" aria-labelledby="settings-tab-appearance" data-settings-panel="appearance" hidden>
           <label data-settings-text="theme light dark system">Theme <select id="theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>

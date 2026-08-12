@@ -58,6 +58,7 @@ The wiki mirrors the same canonical feature articles bundled into the applicatio
 - [Search and regex builder](Search-and-Regex-Builder) — **shipped** — Gives every current collection/settings surface independent plain-text-first search and the same adjacent guided JavaScript regex builder.
 - [Command palette](Command-Palette) — **shipped** — Opens with Ctrl+Shift+F and searches page, tab, appearance, schedule, search, setting, and catalog-app registry entries.
 - [Settings, language, and display name](Settings-Language-and-Display-Name) — **shipped** — Persists language, two independent funny levels, optional narrator preferences, dialog emoji decoration, theme, density, accent, and a display-only app name through tabbed searchable settings.
+- [Local personal vocabulary on the documentation site](Personal-Vocabulary-Site) — **shipped** — Adds a strict local-only personal-vocabulary picker, validated browser cache, restricted site presentation boundary, and technical-token-safe article replacements.
 - [Universal School mode](School-Mode) — **shipped** — One revisioned, user-renamable English-only presentation control that live-synchronizes across already-running apps.
 - [Optional spoken narrator](Optional-Spoken-Narrator) — **shipped** — Optional renderer-only notification speech with serialized English and Hong Kong Cantonese delivery.
 - [External editor exports](External-Editor-Exports) — **shipped** — Exports every exposed record and view to an app-owned VS Code workspace through a validated, shell-free main-process adapter.
