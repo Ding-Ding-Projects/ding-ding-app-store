@@ -1,5 +1,17 @@
 # Handoff
 
+## 2026-08-12 source broker challenge and capability-lease boundary
+
+- The source runtime now issues a per-job challenge with a cryptographically random nonce, UUID-bound job identity, expected broker/transport identity, and bounded challenge plus lease expiry. A future broker response must satisfy the hard-disposable attestation schema and carry an `execute` plus `dispose` capability lease; replayed, stale, cross-job, cross-transport, incomplete, and expired responses are rejected before execution.
+- Cancellation during an in-flight attestation uses a separate pre-admission abort path, while admitted teardown receives the validated lease. Cancellation and final cleanup share one in-flight teardown operation, and the lease carries a short bounded grace window so deadline cleanup is still authorized.
+- The production Windows Sandbox and unavailable adapters remain fail-closed: they do not invent a broker identity, return an attestation, launch a host process, or claim a real guest. Focused `tests/source-runtime.test.ts` passes 21/21 and the main TypeScript build is green. Real broker transport, guest process-tree disposal, source recipe execution, clean-Windows build/run, and packaged terminal interaction remain unverified by design.
+
+## 2026-08-12 source broker challenge and capability-lease boundary
+
+- The source runtime now issues a per-job challenge with a cryptographically random nonce, UUID-bound job identity, expected broker/transport identity, and bounded challenge plus lease expiry. A future broker response must satisfy the hard-disposable attestation schema and carry an `execute` plus `dispose` capability lease; replayed, stale, cross-job, cross-transport, incomplete, and expired responses are rejected before execution.
+- The production Windows Sandbox and unavailable adapters remain fail-closed: they do not invent a broker identity, return an attestation, launch a host process, or claim a real guest. Disposal remains callable during pre-attestation cancellation, while admitted teardown receives the validated lease.
+- Focused `tests/source-runtime.test.ts` passes 21/21, including nonce/identity/freshness/expiry and capability binding. Main TypeScript build is green. Real broker transport, guest process-tree disposal, source recipe execution, clean-Windows build/run, and packaged terminal interaction remain unverified by design.
+
 ## 2026-08-12 stable authenticator group completion
 
 - Stable UUID-backed groups now preserve colour, contiguous order, and collapsed state. The renderer exposes collapse/expand and both reorder directions, while the preload rejects malformed UUIDs, excessive/duplicate/non-contiguous groups or entries, dangling memberships, contradictory bulk-move outcomes, and no longer drops `groupId`.

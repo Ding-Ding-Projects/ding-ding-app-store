@@ -15,6 +15,9 @@ import {
   createRepairPrompt,
   createSourceExecutionPlan,
   isolationMatches,
+  createIsolationAttestationChallenge,
+  validateCapabilityLease,
+  validateIsolationAttestation,
   rejectSymlinkEscape,
   resolveOwnedPath,
   runFiniteRepairLoop,
@@ -26,6 +29,7 @@ import {
   probeWindowsDisposableGuest,
   verifyOwnedRoot,
   type IsolationAttestation,
+  type IsolationAttestationChallenge,
   type IsolationBroker,
   type RuntimeLine,
   type SourceExecutionPlan,
@@ -60,6 +64,33 @@ const recipe: SourceRecipe = {
 };
 
 describe('source job contracts', () => {
+  const brokerIdentity = { brokerId: 'test-broker', transportId: 'test-transport' } as const;
+
+  it('binds guest attestation and capability lease to a fresh nonce, identity, and expiry', () => {
+    const now = Date.parse('2026-08-12T12:00:00.000Z');
+    const jobId = crypto.randomUUID();
+    const challenge = createIsolationAttestationChallenge(jobId, 60_000, brokerIdentity, now);
+    const lease = {
+      leaseId: crypto.randomUUID(), jobId, challengeNonce: challenge.nonce, brokerId: brokerIdentity.brokerId, transportId: brokerIdentity.transportId,
+        issuedAt: new Date(now).toISOString(), expiresAt: challenge.leaseExpiresAt, capabilities: ['execute', 'dispose'] as const,
+    };
+    const attestation = { ...REQUIRED_ISOLATION, version: 1 as const, jobId, challengeNonce: challenge.nonce, brokerId: brokerIdentity.brokerId, transportId: brokerIdentity.transportId, attestedAt: new Date(now).toISOString(), expiresAt: challenge.expiresAt, lease };
+    expect(validateIsolationAttestation(attestation, challenge, now)).toMatchObject({ ok: true });
+    expect(validateCapabilityLease(lease, challenge, 'execute', now)).toBe(true);
+    expect(validateCapabilityLease({ ...lease, challengeNonce: '0'.repeat(64) }, challenge, 'execute', now)).toBe(false);
+    expect(validateIsolationAttestation({ ...attestation, transportId: 'other-transport' }, challenge, now)).toMatchObject({ ok: false, reason: 'guest-attestation-identity-mismatch' });
+    expect(validateIsolationAttestation(attestation, challenge, now + 31_000)).toMatchObject({ ok: false, reason: 'guest-attestation-expired' });
+  });
+
+  it('rejects malformed challenge identities and unbounded leases', () => {
+    expect(() => createIsolationAttestationChallenge(crypto.randomUUID(), 0, brokerIdentity)).toThrow(/duration/i);
+    expect(() => createIsolationAttestationChallenge(crypto.randomUUID(), 60_000, null)).toThrow(/identity/i);
+    const challenge = createIsolationAttestationChallenge(crypto.randomUUID(), 60_000, { brokerId: 'test-broker', transportId: 'test-transport' }, Date.parse('2026-08-12T12:00:00.000Z'));
+    const lease = { leaseId: crypto.randomUUID(), jobId: challenge.jobId, challengeNonce: challenge.nonce, brokerId: challenge.expectedBrokerId, transportId: challenge.expectedTransportId, issuedAt: '2026-08-12T12:00:00.000Z', expiresAt: '2026-08-12T12:01:00.000Z', capabilities: ['execute', 'dispose'] as const };
+    expect(validateCapabilityLease({ ...lease, issuedAt: '2026-08-12T12:00:00.000Zx' }, challenge, 'execute', Date.parse('2026-08-12T12:00:01.000Z'))).toBe(false);
+    expect(validateCapabilityLease({ ...lease, expiresAt: '2026-08-12T12:00:00.000Zx' }, challenge, 'execute', Date.parse('2026-08-12T12:00:01.000Z'))).toBe(false);
+  });
+
   it('accepts only an app ID plus a typed build/run decision', () => {
     expect(sourceJobRequestSchema.safeParse({ appId: 'reviewed-app', decision: 'build' }).success).toBe(true);
     for (const invalid of [
@@ -261,8 +292,25 @@ describe('owned workspace and repair bounds', () => {
 class FakeBroker implements IsolationBroker {
   disposed: string[] = [];
   constructor(private readonly behavior: 'wait-for-cancel' | 'hang' | 'complete' = 'wait-for-cancel') {}
-  async attest(): Promise<IsolationAttestation> { return { ...REQUIRED_ISOLATION }; }
-  async execute(_plan: Readonly<SourceExecutionPlan>, emit: (line: RuntimeLine) => void, signal: AbortSignal): Promise<void> {
+  identity() { return { brokerId: 'test-broker', transportId: 'test-transport' }; }
+  async attest(challenge: Readonly<IsolationAttestationChallenge>): Promise<IsolationAttestation> {
+    const now = Date.parse(challenge.issuedAt);
+    return {
+      ...REQUIRED_ISOLATION,
+      version: 1,
+      jobId: challenge.jobId,
+      challengeNonce: challenge.nonce,
+      brokerId: challenge.expectedBrokerId,
+      transportId: challenge.expectedTransportId,
+      attestedAt: new Date(now).toISOString(),
+      expiresAt: challenge.expiresAt,
+      lease: {
+        leaseId: crypto.randomUUID(), jobId: challenge.jobId, challengeNonce: challenge.nonce, brokerId: challenge.expectedBrokerId, transportId: challenge.expectedTransportId,
+        issuedAt: new Date(now).toISOString(), expiresAt: challenge.leaseExpiresAt, capabilities: ['execute', 'dispose'],
+      },
+    };
+  }
+  async execute(_plan: Readonly<SourceExecutionPlan>, emit: (line: RuntimeLine) => void, signal: AbortSignal, _lease: Readonly<import('../src/main/source-runtime.js').IsolationCapabilityLease>): Promise<void> {
     emit({ stream: 'progress', state: 'running', text: 'running', progress: 20 });
     if (this.behavior === 'complete') return;
     await new Promise<void>((resolve, reject) => {
@@ -272,6 +320,7 @@ class FakeBroker implements IsolationBroker {
     });
   }
   async dispose(jobId: string): Promise<void> { this.disposed.push(jobId); }
+  async abort(jobId: string): Promise<void> { this.disposed.push(jobId); }
 }
 
 async function serviceFixture(behavior: 'wait-for-cancel' | 'hang' | 'complete', timeoutMs = 2_000) {

@@ -8,7 +8,7 @@
 - [x] Per-app update comparison and App Store self-update state machine
 - [x] Initial Material Design 3 catalog/settings/docs surfaces
 - [ ] Disposable Windows source-build runner
-- [x] Common typed source-job runtime, M3 terminal simulator, consent, pinned OpenCode bootstrap contract, bounded repair loop, cancellation, and fail-closed isolation gate
+- [x] Common typed source-job runtime, M3 terminal simulator, consent, pinned OpenCode bootstrap contract, bounded repair loop, cancellation, nonce/identity/expiry-bound capability lease contract, one-shot teardown grace, and fail-closed isolation gate
 - [x] Typed terminal retry path and guest-only pinned OpenCode bootstrap (reuses or downloads the exact archive without host PATH access)
 - [x] Windows Sandbox capability probe and typed source-runner status (reports binary presence without launching a host process; fails closed while guest transport is absent)
 - [x] Source isolation status is directly visible in Settings → General and reachable through a typed command-palette destination; the card remains read-only and fail-closed

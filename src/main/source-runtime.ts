@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { lstat, mkdir, realpath, readdir, readFile, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
@@ -18,6 +18,18 @@ export const SOURCE_RUNTIME_LIMITS = Object.freeze({
   maxWorkspaceFiles: 20_000,
   maxWorkspaceBytes: 2_000_000_000,
   maxWorkspaceDepth: 64,
+});
+
+/**
+ * The challenge is intentionally short-lived. It is only an admission
+ * handshake; the capability lease below carries the bounded lifetime of the
+ * actual job. Keeping these windows separate prevents a replayed attestation
+ * from being accepted while a long source job is still allowed to run.
+ */
+export const SOURCE_BROKER_LIMITS = Object.freeze({
+  challengeTtlMs: 30_000,
+  clockSkewMs: 5_000,
+  teardownGraceMs: 10_000,
 });
 
 export const PINNED_OPENCODE = Object.freeze({
@@ -97,7 +109,46 @@ export type SourceStep = z.infer<typeof sourceStepSchema>;
 export type SourceRecipe = z.infer<typeof sourceRecipeSchema>;
 export type SourceRecipeCatalog = z.infer<typeof sourceRecipeCatalogSchema>;
 
-export interface IsolationAttestation {
+export const isolationBrokerIdentitySchema = z.strictObject({
+  brokerId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/),
+  transportId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/),
+});
+
+export type IsolationBrokerIdentity = z.infer<typeof isolationBrokerIdentitySchema>;
+
+export const isolationCapabilitySchema = z.enum(['execute', 'dispose']);
+export type IsolationCapability = z.infer<typeof isolationCapabilitySchema>;
+
+const nonceSchema = z.string().regex(/^[a-f0-9]{64}$/);
+
+export const isolationCapabilityLeaseSchema = z.strictObject({
+  leaseId: z.uuid(),
+  jobId: z.uuid(),
+  challengeNonce: nonceSchema,
+  brokerId: isolationBrokerIdentitySchema.shape.brokerId,
+  transportId: isolationBrokerIdentitySchema.shape.transportId,
+  issuedAt: z.iso.datetime(),
+  expiresAt: z.iso.datetime(),
+  capabilities: z.array(isolationCapabilitySchema).min(1).max(2).refine((values) => new Set(values).size === values.length, 'Lease capabilities must be unique.'),
+});
+
+export type IsolationCapabilityLease = z.infer<typeof isolationCapabilityLeaseSchema>;
+
+export const isolationAttestationChallengeSchema = z.strictObject({
+  version: z.literal(1),
+  jobId: z.uuid(),
+  nonce: nonceSchema,
+  issuedAt: z.iso.datetime(),
+  expiresAt: z.iso.datetime(),
+  leaseExpiresAt: z.iso.datetime(),
+  requestedCapabilities: z.array(isolationCapabilitySchema).length(2).refine((values) => new Set(values).size === values.length, 'Requested capabilities must be unique.'),
+  expectedBrokerId: isolationBrokerIdentitySchema.shape.brokerId,
+  expectedTransportId: isolationBrokerIdentitySchema.shape.transportId,
+});
+
+export type IsolationAttestationChallenge = z.infer<typeof isolationAttestationChallengeSchema>;
+
+export interface IsolationRequirements {
   kind: 'hard-disposable';
   network: 'recipe-and-opencode-only';
   hostMounts: 0;
@@ -108,7 +159,30 @@ export interface IsolationAttestation {
   cleanupOnExit: true;
 }
 
-export const REQUIRED_ISOLATION: Readonly<IsolationAttestation> = Object.freeze({
+export const isolationAttestationSchema = z.strictObject({
+  ...{
+    kind: z.literal('hard-disposable'),
+    network: z.literal('recipe-and-opencode-only'),
+    hostMounts: z.literal(0),
+    userProfileMounted: z.literal(false),
+    credentialsInjected: z.literal(false),
+    secretsInjected: z.literal(false),
+    shellStringsAllowed: z.literal(false),
+    cleanupOnExit: z.literal(true),
+  },
+  version: z.literal(1),
+  jobId: z.uuid(),
+  challengeNonce: nonceSchema,
+  brokerId: isolationBrokerIdentitySchema.shape.brokerId,
+  transportId: isolationBrokerIdentitySchema.shape.transportId,
+  attestedAt: z.iso.datetime(),
+  expiresAt: z.iso.datetime(),
+  lease: isolationCapabilityLeaseSchema,
+});
+
+export type IsolationAttestation = z.infer<typeof isolationAttestationSchema>;
+
+export const REQUIRED_ISOLATION: Readonly<IsolationRequirements> = Object.freeze({
   kind: 'hard-disposable',
   network: 'recipe-and-opencode-only',
   hostMounts: 0,
@@ -118,6 +192,90 @@ export const REQUIRED_ISOLATION: Readonly<IsolationAttestation> = Object.freeze(
   shellStringsAllowed: false,
   cleanupOnExit: true,
 });
+
+export function createIsolationAttestationChallenge(
+  jobId: string,
+  leaseDurationMs: number,
+  identity: IsolationBrokerIdentity | null,
+  now = Date.now(),
+): IsolationAttestationChallenge {
+  const parsedJob = z.uuid().safeParse(jobId);
+  if (!parsedJob.success) throw new Error('Source broker challenge requires a valid job ID.');
+  const parsedIdentity = isolationBrokerIdentitySchema.safeParse(identity);
+  if (!parsedIdentity.success) throw new Error('Source broker challenge requires an expected broker and transport identity.');
+  if (!Number.isInteger(leaseDurationMs) || leaseDurationMs < 1 || leaseDurationMs > SOURCE_RUNTIME_LIMITS.maxJobMs) throw new Error('Source broker lease duration exceeded the bounded job limit.');
+  const issuedAt = new Date(now).toISOString();
+  const expiresAt = new Date(Math.min(now + SOURCE_BROKER_LIMITS.challengeTtlMs, now + leaseDurationMs)).toISOString();
+  const leaseExpiresAt = new Date(now + leaseDurationMs + SOURCE_BROKER_LIMITS.teardownGraceMs).toISOString();
+  return isolationAttestationChallengeSchema.parse({
+    version: 1,
+    jobId,
+    nonce: randomBytes(32).toString('hex'),
+    issuedAt,
+    expiresAt,
+    leaseExpiresAt,
+    requestedCapabilities: ['execute', 'dispose'],
+    expectedBrokerId: parsedIdentity.data.brokerId,
+    expectedTransportId: parsedIdentity.data.transportId,
+  });
+}
+
+export type AttestationValidation =
+  | { ok: true; attestation: IsolationAttestation }
+  | { ok: false; reason: string };
+
+function timestamp(value: string): number {
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : Number.NaN;
+}
+
+export function validateIsolationAttestation(
+  input: unknown,
+  challenge: IsolationAttestationChallenge,
+  now = Date.now(),
+): AttestationValidation {
+  const parsed = isolationAttestationSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, reason: 'guest-attestation-schema-invalid' };
+  const attestation = parsed.data;
+  const challengeIssued = timestamp(challenge.issuedAt);
+  const challengeExpires = timestamp(challenge.expiresAt);
+  const leaseDeadline = timestamp(challenge.leaseExpiresAt);
+  const attestedAt = timestamp(attestation.attestedAt);
+  const attestationExpires = timestamp(attestation.expiresAt);
+  const leaseIssued = timestamp(attestation.lease.issuedAt);
+  const leaseExpires = timestamp(attestation.lease.expiresAt);
+  if (![challengeIssued, challengeExpires, leaseDeadline, attestedAt, attestationExpires, leaseIssued, leaseExpires].every(Number.isFinite)) return { ok: false, reason: 'guest-attestation-time-invalid' };
+  if (attestation.jobId !== challenge.jobId || attestation.lease.jobId !== challenge.jobId) return { ok: false, reason: 'guest-attestation-job-mismatch' };
+  if (attestation.challengeNonce !== challenge.nonce || attestation.lease.challengeNonce !== challenge.nonce) return { ok: false, reason: 'guest-attestation-nonce-mismatch' };
+  if (attestation.brokerId !== challenge.expectedBrokerId || attestation.transportId !== challenge.expectedTransportId) return { ok: false, reason: 'guest-attestation-identity-mismatch' };
+  if (attestation.lease.brokerId !== attestation.brokerId || attestation.lease.transportId !== attestation.transportId) return { ok: false, reason: 'guest-lease-identity-mismatch' };
+  if (attestedAt < challengeIssued - SOURCE_BROKER_LIMITS.clockSkewMs || attestedAt > now + SOURCE_BROKER_LIMITS.clockSkewMs) return { ok: false, reason: 'guest-attestation-not-fresh' };
+  if (now > challengeExpires + SOURCE_BROKER_LIMITS.clockSkewMs || attestationExpires <= now || attestationExpires > challengeExpires + SOURCE_BROKER_LIMITS.clockSkewMs) return { ok: false, reason: 'guest-attestation-expired' };
+  if (leaseIssued < attestedAt - SOURCE_BROKER_LIMITS.clockSkewMs || leaseIssued > now + SOURCE_BROKER_LIMITS.clockSkewMs || leaseExpires <= now || leaseExpires > leaseDeadline) return { ok: false, reason: 'guest-capability-lease-invalid' };
+  if (!attestation.lease.capabilities.includes('execute') || !attestation.lease.capabilities.includes('dispose')) return { ok: false, reason: 'guest-capability-lease-incomplete' };
+  if (!isolationMatches(attestation)) return { ok: false, reason: 'guest-isolation-requirements-mismatch' };
+  return { ok: true, attestation };
+}
+
+export function validateCapabilityLease(
+  lease: unknown,
+  expected: Pick<IsolationAttestationChallenge, 'jobId' | 'nonce' | 'expectedBrokerId' | 'expectedTransportId'>,
+  capability: IsolationCapability,
+  now = Date.now(),
+  allowExpired = false,
+): boolean {
+  const parsed = isolationCapabilityLeaseSchema.safeParse(lease);
+  if (!parsed.success) return false;
+  const value = parsed.data;
+  if (value.jobId !== expected.jobId || value.challengeNonce !== expected.nonce || value.brokerId !== expected.expectedBrokerId || value.transportId !== expected.expectedTransportId) return false;
+  if (!value.capabilities.includes(capability)) return false;
+  const issuedAt = timestamp(value.issuedAt);
+  const expiresAt = timestamp(value.expiresAt);
+  if (!Number.isFinite(issuedAt) || !Number.isFinite(expiresAt) || expiresAt <= issuedAt) return false;
+  if (issuedAt > now + SOURCE_BROKER_LIMITS.clockSkewMs) return false;
+  if (!allowExpired && expiresAt <= now) return false;
+  return true;
+}
 
 export interface SourceExecutionPlan {
   jobId: string;
@@ -139,9 +297,15 @@ export interface SourceExecutionPlan {
 }
 
 export interface IsolationBroker {
-  attest(): Promise<IsolationAttestation | null>;
-  execute(plan: Readonly<SourceExecutionPlan>, emit: (event: RuntimeLine) => void, signal: AbortSignal): Promise<void>;
-  dispose(jobId: string): Promise<void>;
+  attest(challenge: Readonly<IsolationAttestationChallenge>): Promise<unknown>;
+  execute(plan: Readonly<SourceExecutionPlan>, emit: (event: RuntimeLine) => void, signal: AbortSignal, lease: Readonly<IsolationCapabilityLease>): Promise<void>;
+  /** A validated lease is mandatory for an admitted guest teardown. The
+   * broker must consume the lease at most once; repeated calls for the same
+   * job are idempotent cleanup acknowledgements, never new authority. */
+  dispose(jobId: string, lease: Readonly<IsolationCapabilityLease>): Promise<void>;
+  /** Pre-attestation abort path for a guest that never received a lease. */
+  abort(jobId: string): Promise<void>;
+  identity?(): IsolationBrokerIdentity | null;
   diagnose?(): Promise<SourceIsolationStatus>;
 }
 
@@ -225,7 +389,7 @@ export class WindowsSandboxIsolationBroker implements IsolationBroker {
 
   async diagnose(): Promise<SourceIsolationStatus> { return this.probe(); }
 
-  async attest(): Promise<IsolationAttestation | null> {
+  async attest(_challenge: Readonly<IsolationAttestationChallenge>): Promise<null> {
     await this.probe();
     return null;
   }
@@ -236,12 +400,14 @@ export class WindowsSandboxIsolationBroker implements IsolationBroker {
   }
 
   async dispose(): Promise<void> { /* No guest was started by this fail-closed adapter. */ }
+  async abort(): Promise<void> { /* No pre-attestation guest exists. */ }
 }
 
 export class UnavailableIsolationBroker implements IsolationBroker {
-  async attest(): Promise<null> { return null; }
+  async attest(_challenge: Readonly<IsolationAttestationChallenge>): Promise<null> { return null; }
   async execute(): Promise<void> { throw new Error('A reviewed hard-disposable source runner is not available. Source code was not executed on the host.'); }
   async dispose(): Promise<void> { /* No guest exists. */ }
+  async abort(): Promise<void> { /* No guest exists. */ }
   async diagnose(): Promise<SourceIsolationStatus> {
     return {
       available: false,
@@ -254,8 +420,8 @@ export class UnavailableIsolationBroker implements IsolationBroker {
   }
 }
 
-export function isolationMatches(attestation: IsolationAttestation | null): attestation is IsolationAttestation {
-  return Boolean(attestation && Object.entries(REQUIRED_ISOLATION).every(([key, value]) => attestation[key as keyof IsolationAttestation] === value));
+export function isolationMatches(attestation: IsolationRequirements | IsolationAttestation | null): boolean {
+  return Boolean(attestation && Object.entries(REQUIRED_ISOLATION).every(([key, value]) => (attestation as IsolationRequirements)[key as keyof IsolationRequirements] === value));
 }
 
 export function createOpenCodeConfig(): Readonly<Record<string, unknown>> {

@@ -10,11 +10,15 @@ import {
   TerminalEventBudget,
   WindowsSandboxIsolationBroker,
   cleanupOwnedWorkspace,
+  createIsolationAttestationChallenge,
   createSourceExecutionPlan,
   isolationMatches,
   resolveOwnedPath,
   sourceRecipeCatalogSchema,
+  validateIsolationAttestation,
+  validateCapabilityLease,
   type IsolationBroker,
+  type IsolationCapabilityLease,
   type RuntimeLine,
   type SourceRecipe,
   runtimeLineSchema,
@@ -29,6 +33,8 @@ interface ActiveJob {
   workspaceName: string;
   controller: AbortController;
   budget: TerminalEventBudget;
+  lease?: IsolationCapabilityLease;
+  teardown?: Promise<void>;
 }
 
 interface CompletedJob {
@@ -141,7 +147,7 @@ export class SourceJobService {
     if (job.controller.signal.aborted) return { ok: true, appId: job.appId, jobId: request.jobId, state: 'cancelling', message: 'Cancellation is already in progress.' };
     job.controller.abort();
     this.emit(job, { stream: 'system', state: 'cancelling', text: 'Cancellation requested. The disposable guest is stopping its entire process tree and cleaning up.', progress: null });
-    await this.broker.dispose(request.jobId).catch(() => undefined);
+    await this.teardown(job, request.jobId);
     return { ok: true, appId: job.appId, jobId: request.jobId, state: 'cancelled', message: 'Cancellation requested.' };
   }
 
@@ -177,6 +183,15 @@ export class SourceJobService {
     if (event) this.publish(event);
   }
 
+  private async teardown(job: ActiveJob, jobId: string): Promise<void> {
+    if (!job.teardown) {
+      job.teardown = job.lease
+        ? this.broker.dispose(jobId, job.lease)
+        : this.broker.abort(jobId);
+    }
+    await job.teardown.catch(() => undefined);
+  }
+
   private async execute(jobId: string, request: SourceJobRequest, recipe: SourceRecipe): Promise<void> {
     const job = this.active.get(jobId);
     if (!job) return;
@@ -202,16 +217,28 @@ export class SourceJobService {
     };
     try {
       this.emit(job, { stream: 'progress', state: 'preparing', text: 'Checking the hard-disposable isolation boundary before any source or OpenCode execution.', progress: 5 });
-      const attestation = await withinDeadline(this.broker.attest());
-      if (!isolationMatches(attestation)) {
+      const identity = this.broker.identity?.() ?? null;
+      if (!identity) {
         const status = await withinDeadline(this.isolationStatus());
         this.emit(job, { stream: 'stderr', state: 'failed', text: `Source execution withheld: ${status.reason}. ${status.evidence.join(' ')}`, progress: null });
         throw new Error(`The hard-disposable runner is unavailable (${status.reason}). No source code or blanket-approved OpenCode ran on the host.`);
       }
+      const challenge = createIsolationAttestationChallenge(jobId, Math.max(1, deadline - Date.now()), identity, Date.now());
+      const validation = validateIsolationAttestation(await withinDeadline(this.broker.attest(challenge)), challenge, Date.now());
+      if (!validation.ok) {
+        const status = await withinDeadline(this.isolationStatus());
+        this.emit(job, { stream: 'stderr', state: 'failed', text: `Source execution withheld: ${status.reason}. Broker attestation was rejected (${validation.reason}). ${status.evidence.join(' ')}`, progress: null });
+        throw new Error(`The hard-disposable runner is unavailable (${status.reason}; ${validation.reason}). No source code or blanket-approved OpenCode ran on the host.`);
+      }
+      const attestation = validation.attestation;
+      if (!isolationMatches(attestation) || !validateCapabilityLease(attestation.lease, challenge, 'execute') || !validateCapabilityLease(attestation.lease, challenge, 'dispose')) {
+        throw new Error('The hard-disposable runner returned an incomplete capability lease. No source code ran.');
+      }
+      job.lease = attestation.lease;
       if (job.controller.signal.aborted) throw new DOMException('Cancelled', 'AbortError');
       const plan = createSourceExecutionPlan(jobId, request.decision, recipe);
       this.emit(job, { stream: 'progress', state: 'preparing', text: `Pinned revision ${recipe.revision.slice(0, 12)} and reviewed command vectors accepted.`, progress: 10 });
-      await withinDeadline(this.broker.execute(plan, (line) => this.emit(job, line), job.controller.signal));
+      await withinDeadline(this.broker.execute(plan, (line) => this.emit(job, line), job.controller.signal, attestation.lease));
       if (job.controller.signal.aborted) throw new DOMException('Cancelled', 'AbortError');
       ok = true;
       message = `${job.displayName} source ${request.decision} completed in the disposable runner and expected outputs were validated.`;
@@ -222,7 +249,7 @@ export class SourceJobService {
       finalState = cancelled ? 'cancelled' : 'failed';
     } finally {
       try {
-        await this.broker.dispose(jobId);
+        await this.teardown(job, jobId);
       } catch (disposeError) {
         ok = false;
         finalState = 'failed';
