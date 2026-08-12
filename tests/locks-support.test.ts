@@ -5,15 +5,15 @@ const root = new URL('../', import.meta.url);
 const read = (relative: string) => readFile(new URL(relative, root), 'utf8');
 
 describe('tab/group UX locks and local Support Tickets', () => {
-  it('publishes typed lock and ticket contracts without an OTP or property-lock claim', async () => {
+  it('publishes typed password, TOTP, and appearance-property lock contracts', async () => {
     const contracts = await read('src/shared/contracts.ts');
-    expect(contracts).toContain("export type LockTargetKind = 'tab' | 'group';");
-    expect(contracts).toContain("credentialKind: 'password';");
+    expect(contracts).toContain("export type LockTargetKind = 'tab' | 'group' | 'appearance-property';");
+    expect(contracts).toContain("credentialKind: 'password' | 'totp';");
+    expect(contracts).toContain('confirmationCode?: string;');
     expect(contracts).toContain('vaultAvailable: boolean;');
     expect(contracts).toContain('recoveryPath: string;');
     expect(contracts).toContain('SupportTicketMutationResult');
-    expect(contracts).not.toContain('otpSecret:');
-    expect(contracts).not.toContain('appearancePropertyLock:');
+    expect(contracts).toContain("reason?: 'credential-store-unavailable'");
   });
 
   it('keeps credentials encrypted, fail-closed, and locally recoverable', async () => {
@@ -30,6 +30,11 @@ describe('tab/group UX locks and local Support Tickets', () => {
     expect(service).not.toMatch(/\bfetch\s*\(/);
     expect(service).not.toMatch(/shell\.(?:trashItem|rm|delete)/i);
     expect(service).toContain('Delete this folder yourself');
+    expect(service).toContain('normalizeBase32Secret');
+    expect(service).toContain('generateTotp');
+    expect(service).toContain("targetKind: 'appearance-property'");
+    expect(service).toContain('rate-limited');
+    expect(service).not.toContain('safeStorage.decryptString(entry.secret)');
   });
 
   it('validates every lock/support sender at the main/preload boundary', async () => {
@@ -41,6 +46,8 @@ describe('tab/group UX locks and local Support Tickets', () => {
     }
     expect(main.match(/Blocked lock request from an unknown renderer/g)?.length).toBeGreaterThanOrEqual(5);
     expect(main.match(/Blocked Support Tickets request from an unknown renderer/g)?.length).toBeGreaterThanOrEqual(4);
+    expect(main).toContain("ipcMain.handle('appearance:set-element', (event");
+    expect(main).toContain('Blocked appearance request from an unknown renderer.');
   });
 
   it('guards visible activation, Settings, Help, and accessible recovery copy', async () => {
@@ -62,14 +69,25 @@ describe('tab/group UX locks and local Support Tickets', () => {
     expect(page).toContain('application-data folder yourself');
   });
 
-  it('documents the limited boundary and generated mirrors', async () => {
+  it('documents the password/TOTP/property boundary and generated mirrors', async () => {
     const article = await read('docs/features/experience/tab-and-group-locks-and-support-tickets.md');
     const generator = await read('scripts/docs-generate.mjs');
     expect(article).toContain('status: limited');
-    expect(article).toContain('does not claim per-property appearance locks, OTP/TOTP locks');
+    expect(article).toContain('TOTP');
+    expect(article).toContain('appearance-property');
     expect(article).toContain('## Suggested articles');
     expect(generator).toContain('tab-and-group-locks-and-support-tickets');
     expect(await read('site/articles/experience/tab-and-group-locks-and-support-tickets.md')).toContain('Support Tickets');
     expect(await read('wiki/Tab-And-Group-Locks-And-Support-Tickets.md')).toContain('Support Tickets');
+  });
+
+  it('keeps TOTP verification main-only and refuses a locked appearance token', async () => {
+    const service = await read('src/main/lock-support-service.ts');
+    const appearance = await read('src/main/appearance-service.ts');
+    expect(service).toContain("generateTotp({ secret, algorithm: 'sha1', digits: 6, periodSeconds: 30 })");
+    expect(service).toContain('private readonly attempts');
+    expect(service).toContain('async assertAppearanceMutation');
+    expect(appearance).toContain('mutationGuard?.(elementKey');
+    expect(appearance).toContain('await this.mutationGuard?.(key, {}, current.elements[key] ?? {})');
   });
 });

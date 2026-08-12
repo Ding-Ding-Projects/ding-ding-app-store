@@ -4,6 +4,7 @@ import path from 'node:path';
 import { app, safeStorage, shell } from 'electron';
 import { z } from 'zod';
 import type {
+  ElementKey,
   LockCredentialRequest,
   LockMutationResult,
   LockSetRequest,
@@ -16,27 +17,40 @@ import type {
   SupportTicketMutationResult,
   SupportTicketStatus,
 } from '../shared/contracts.js';
+import { ELEMENT_KEYS, TOKEN_IDS } from '../shared/contracts.js';
 import type { HistoryService } from './history-service.js';
 import { writeJsonAtomic } from './json-store.js';
+import { generateTotp, normalizeBase32Secret } from './totp.js';
 
 const MAX_LOCKS = 64;
 const MAX_TICKETS = 1_000;
 const MAX_CREDENTIAL = 512;
 const MAX_DESCRIPTION = 2_000;
 const lockTargetSchema = z.strictObject({
-  targetKind: z.enum(['tab', 'group']),
-  targetId: z.string().regex(/^(?:[a-z][a-z0-9-]{0,31}|grp_[a-z0-9]{8})$/),
+  targetKind: z.enum(['tab', 'group', 'appearance-property']),
+  targetId: z.string().min(1).max(128),
+}).superRefine((value, context) => {
+  if (value.targetKind === 'appearance-property') {
+    const [element, token, ...rest] = value.targetId.split(':');
+    if (rest.length || !(ELEMENT_KEYS as readonly string[]).includes(element ?? '') || !(TOKEN_IDS as readonly string[]).includes(token ?? '')) context.addIssue({ code: 'custom', path: ['targetId'], message: 'Appearance locks must name one known element and token.' });
+  } else if (!/^(?:[a-z][a-z0-9-]{0,31}|grp_[a-z0-9]{8})$/.test(value.targetId)) {
+    context.addIssue({ code: 'custom', path: ['targetId'], message: 'The tab or group identifier is invalid.' });
+  }
 });
 const credentialSchema = z.string().min(4).max(MAX_CREDENTIAL);
-const lockSetSchema = lockTargetSchema.extend({ credential: credentialSchema, currentCredential: credentialSchema.optional() }).strict();
+const lockSetSchema = lockTargetSchema.extend({ credentialKind: z.enum(['password', 'totp']).optional(), credential: credentialSchema, currentCredential: credentialSchema.optional(), confirmationCode: z.string().regex(/^\d{6,8}$/).optional() }).strict();
 const lockCredentialSchema = lockTargetSchema.extend({ credential: credentialSchema }).strict();
 const lockRecordSchema = lockTargetSchema.extend({
+  credentialKind: z.enum(['password', 'totp']).optional(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 }).strict();
 const lockFileSchema = z.strictObject({ schemaVersion: z.literal(1), records: z.array(lockRecordSchema).max(MAX_LOCKS) });
-const vaultEntrySchema = z.strictObject({ salt: z.string().base64(), verifier: z.string().base64() });
-const vaultSchema = z.record(z.string().regex(/^(?:tab|group):[a-z][a-z0-9-]{0,31}$|^(?:tab|group):grp_[a-z0-9]{8}$/), vaultEntrySchema);
+const passwordVaultEntrySchema = z.strictObject({ kind: z.literal('password'), salt: z.string().base64(), verifier: z.string().base64() });
+const totpVaultEntrySchema = z.strictObject({ kind: z.literal('totp'), secret: z.string().min(1).max(256) });
+const legacyVaultEntrySchema = z.strictObject({ salt: z.string().base64(), verifier: z.string().base64() });
+const vaultEntrySchema = z.union([passwordVaultEntrySchema, totpVaultEntrySchema, legacyVaultEntrySchema]);
+const vaultSchema = z.record(z.string().regex(/^(?:tab|group):[a-z][a-z0-9-]{0,31}$|^(?:tab|group):grp_[a-z0-9]{8}$|^appearance-property:[a-z0-9-]+:[a-z0-9-]+$/), vaultEntrySchema);
 const supportTicketSchema = z.strictObject({
   id: z.uuid(),
   number: z.string().regex(/^DDAS-[0-9]{4}-[A-Z0-9]{8}$/),
@@ -52,7 +66,7 @@ const supportFileSchema = z.strictObject({ schemaVersion: z.literal(1), tickets:
 const supportCreateSchema = z.strictObject({ category: z.enum(['unlock', 'lock', 'other']), description: z.string().trim().min(1).max(MAX_DESCRIPTION), severity: z.enum(['low', 'normal', 'high']) });
 
 type StoredLock = z.infer<typeof lockRecordSchema>;
-type VaultEntry = z.infer<typeof vaultEntrySchema>;
+type VaultEntry = z.infer<typeof passwordVaultEntrySchema> | z.infer<typeof totpVaultEntrySchema>;
 
 function keyOf(target: LockTarget): string { return `${target.targetKind}:${target.targetId}`; }
 function encode(value: Uint8Array): string { return Buffer.from(value).toString('base64'); }
@@ -76,6 +90,7 @@ export class LockSupportService {
   private locksLoaded = false;
   private ticketsLoaded = false;
   private vaultReadFailed = false;
+  private readonly attempts = new Map<string, { count: number; windowStartedAt: number }>();
 
   constructor(private readonly history?: Pick<HistoryService, 'record'>) {}
 
@@ -91,13 +106,23 @@ export class LockSupportService {
     if (!this.vaultAvailable()) return this.lockFailure('The operating-system credential vault is unavailable; this local UX lock was not created.', this.vaultReadFailed ? 'credential-store-read-failed' : 'credential-store-unavailable');
     const target = { targetKind: parsed.data.targetKind, targetId: parsed.data.targetId } as const;
     const existing = this.locks.find((record) => keyOf(record) === keyOf(target));
+    const credentialKind = parsed.data.credentialKind ?? existing?.credentialKind ?? 'password';
     const vault = await this.readVault();
     if (!vault) return this.lockFailure('The operating-system credential vault could not be read; no lock change was made.', 'credential-store-read-failed');
-    if (existing && (!parsed.data.currentCredential || !this.matches(parsed.data.currentCredential, vault[keyOf(target)]))) return this.lockFailure('The current lock credential did not match; the new credential was not saved.', 'credential-mismatch');
+    if (existing && (!parsed.data.currentCredential || !this.verifyCredential(keyOf(target), parsed.data.currentCredential, this.normalizeVaultEntry(vault[keyOf(target)])))) return this.lockFailure('The current lock credential did not match; the new credential was not saved.', 'credential-mismatch');
+    let vaultEntry: VaultEntry;
+    if (credentialKind === 'totp') {
+      let normalized: string;
+      try { normalized = normalizeBase32Secret(parsed.data.credential); } catch { return this.lockFailure('The TOTP secret is not a valid Base32 value.', 'invalid'); }
+      if (!parsed.data.confirmationCode || !this.verifyTotpSecret(normalized, parsed.data.confirmationCode)) return this.lockFailure('Enter the current six-digit code to confirm this TOTP lock.', 'invalid-otp');
+      vaultEntry = { kind: 'totp', secret: normalized };
+    } else {
+      vaultEntry = { kind: 'password', ...this.makeVerifier(parsed.data.credential) };
+    }
     const now = new Date().toISOString();
-    const record: StoredLock = existing ? { ...existing, updatedAt: now } : { ...target, createdAt: now, updatedAt: now };
+    const record: StoredLock = existing ? { ...existing, credentialKind, updatedAt: now } : { ...target, credentialKind, createdAt: now, updatedAt: now };
     const nextLocks = existing ? this.locks.map((candidate) => keyOf(candidate) === keyOf(target) ? record : candidate) : [...this.locks, record];
-    const nextVault = { ...vault, [keyOf(target)]: this.makeVerifier(parsed.data.credential) };
+    const nextVault = { ...vault, [keyOf(target)]: vaultEntry };
     const previousLocks = this.locks;
     try {
       // Each file is individually atomic, and a failed second write rolls the first
@@ -121,7 +146,7 @@ export class LockSupportService {
     if (!this.locks.some((record) => keyOf(record) === keyOf(target))) return this.lockFailure('That lock does not exist.', 'not-found');
     if (!this.vaultAvailable()) return this.lockFailure('The operating-system credential vault is unavailable; the lock remains honest and unavailable.', this.vaultReadFailed ? 'credential-store-read-failed' : 'credential-store-unavailable');
     const vault = await this.readVault();
-    if (!vault || !this.matches(parsed.data.credential, vault[keyOf(target)])) return this.lockFailure('The credential did not match. If it is forgotten, use Support Tickets and delete the application-data folder yourself.', 'credential-mismatch');
+    if (!vault || !this.verifyCredential(keyOf(target), parsed.data.credential, this.normalizeVaultEntry(vault[keyOf(target)]))) return this.lockFailure('The credential did not match. If it is forgotten, use Support Tickets and delete the application-data folder yourself.', this.isRateLimited(keyOf(target)) ? 'rate-limited' : 'credential-mismatch');
     this.unlocked.add(keyOf(target));
     return { ok: true, state: this.lockState(), message: 'Unlocked for this app session. Use Lock again when you want the UX speed bump back.' };
   }
@@ -145,7 +170,7 @@ export class LockSupportService {
     if (!this.locks.some((record) => keyOf(record) === key)) return this.lockFailure('That lock does not exist.', 'not-found');
     if (!this.vaultAvailable()) return this.lockFailure('The operating-system credential vault is unavailable; the lock was not removed.', this.vaultReadFailed ? 'credential-store-read-failed' : 'credential-store-unavailable');
     const vault = await this.readVault();
-    if (!vault || !this.matches(parsed.data.credential, vault[key])) return this.lockFailure('The credential did not match; the lock was not removed.', 'credential-mismatch');
+    if (!vault || !this.verifyCredential(key, parsed.data.credential, this.normalizeVaultEntry(vault[key]))) return this.lockFailure('The credential did not match; the lock was not removed.', 'credential-mismatch');
     const nextVault = { ...vault };
     delete nextVault[key];
     const nextLocks = this.locks.filter((record) => keyOf(record) !== key);
@@ -251,7 +276,7 @@ export class LockSupportService {
       const encrypted = await readFile(this.vaultPath);
       const parsed = vaultSchema.safeParse(JSON.parse(safeStorage.decryptString(encrypted)) as unknown);
       if (!parsed.success) { this.vaultReadFailed = true; return null; }
-      return parsed.data;
+      return Object.fromEntries(Object.entries(parsed.data).map(([key, entry]) => [key, this.normalizeVaultEntry(entry)!]));
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return {};
       this.vaultReadFailed = true;
@@ -268,13 +293,54 @@ export class LockSupportService {
     await rename(temporary, this.vaultPath);
   }
 
-  private makeVerifier(secret: string): VaultEntry {
+  private makeVerifier(secret: string): { salt: string; verifier: string } {
     const salt = randomBytes(16);
     return { salt: encode(salt), verifier: encode(scryptSync(secret, salt, 32, { N: 16_384, r: 8, p: 1, maxmem: 32 * 1024 * 1024 })) };
   }
 
+  private normalizeVaultEntry(entry: VaultEntry | z.infer<typeof legacyVaultEntrySchema> | undefined): VaultEntry | undefined {
+    if (!entry) return undefined;
+    if ('kind' in entry) return entry;
+    return { kind: 'password', salt: entry.salt, verifier: entry.verifier };
+  }
+
+  private verifyTotpSecret(secret: string, code: string): boolean {
+    try { return generateTotp({ secret, algorithm: 'sha1', digits: 6, periodSeconds: 30 }).code === code; } catch { return false; }
+  }
+
+  private verifyCredential(key: string, credential: string, entry: VaultEntry | undefined): boolean {
+    if (!entry || this.isRateLimited(key)) return false;
+    const allowed = entry.kind === 'totp' ? this.verifyTotpSecret(entry.secret, credential) : this.matches(credential, entry);
+    if (!allowed) this.noteAttempt(key); else this.attempts.delete(key);
+    return allowed;
+  }
+
+  private isRateLimited(key: string): boolean {
+    const attempt = this.attempts.get(key);
+    if (!attempt) return false;
+    if (Date.now() - attempt.windowStartedAt >= 30_000) { this.attempts.delete(key); return false; }
+    return attempt.count >= 5;
+  }
+
+  private noteAttempt(key: string): void {
+    const now = Date.now();
+    const current = this.attempts.get(key);
+    if (!current || now - current.windowStartedAt >= 30_000) this.attempts.set(key, { count: 1, windowStartedAt: now });
+    else this.attempts.set(key, { ...current, count: current.count + 1 });
+  }
+
+  async assertAppearanceMutation(key: ElementKey, next: Record<string, unknown>, current: Record<string, unknown>): Promise<void> {
+    await this.ensureLocksLoaded();
+    for (const token of TOKEN_IDS) {
+      const target = { targetKind: 'appearance-property' as const, targetId: `${key}:${token}` };
+      if (this.isLocked(target) && JSON.stringify(next[token]) !== JSON.stringify(current[token])) throw new Error('This appearance property is locked. Unlock it in Settings → Locks & Support before changing it.');
+    }
+  }
+
+  isLocked(target: LockTarget): boolean { return this.locks.some((record) => keyOf(record) === keyOf(target) && !this.unlocked.has(keyOf(target))); }
+
   private matches(secret: string, entry: VaultEntry | undefined): boolean {
-    if (!entry) return false;
+    if (!entry || entry.kind === 'totp') return false;
     try {
       const expected = decode(entry.verifier);
       const actual = scryptSync(secret, decode(entry.salt), expected.length, { N: 16_384, r: 8, p: 1, maxmem: 32 * 1024 * 1024 });
@@ -288,7 +354,7 @@ export class LockSupportService {
       schemaVersion: 1,
       vaultAvailable,
       unavailableReason: vaultAvailable ? null : this.vaultReadFailed ? 'credential-store-read-failed' : 'credential-store-unavailable',
-      records: this.locks.map((record) => ({ ...record, credentialKind: 'password' as const, locked: !this.unlocked.has(keyOf(record)) })),
+      records: this.locks.map((record) => ({ ...record, credentialKind: record.credentialKind ?? 'password', locked: !this.unlocked.has(keyOf(record)) })),
       recoveryPath: this.recoveryPath,
     };
   }
