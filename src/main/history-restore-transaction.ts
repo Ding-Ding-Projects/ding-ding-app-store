@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { lstat, mkdir, open, readFile, rename, rm, stat } from 'node:fs/promises';
+import { lstat, mkdir, open, readFile, readdir, rename, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { writeJsonAtomic } from './json-store.js';
 
@@ -31,7 +31,7 @@ export interface RestoreTransactionInput {
 
 /** Optional non-file participant for the fixed authenticator snapshot slot. */
 export interface RestoreTransactionParticipant {
-  restore(content: string, options?: { shouldCommit?: () => boolean }): Promise<void>;
+  restore(content: string, options?: { shouldCommit?: () => boolean; recovery?: boolean }): Promise<void>;
 }
 
 const MANIFEST_NAME = 'manifest.json';
@@ -168,6 +168,16 @@ export async function prepareRestoreTransaction(transactionRoot: string, files: 
   if (!new Set<number>([LEGACY_RESTORE_FILE_COUNT, CURRENT_RESTORE_FILE_COUNT]).has(files.length)) throw new Error('The restore transaction must contain the legacy seven files or the current seven files plus its fixed authenticator participant.');
   const expectedTargets = files.length === LEGACY_RESTORE_FILE_COUNT ? CORE_RESTORE_TARGET_NAMES : RESTORE_TARGET_NAMES;
   if (files.some((file, index) => !safeBasename(file.targetName) || file.targetName !== expectedTargets[index])) throw new Error('The restore transaction targets were invalid or out of order.');
+  try {
+    const existing = await readdir(transactionRoot);
+    if (existing.length > 0) {
+      const integrity = new Error('An unfinished restore transaction is retained for startup recovery.') as NodeJS.ErrnoException;
+      integrity.code = 'EINTEGRITY';
+      throw integrity;
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+  }
   await rm(transactionRoot, { recursive: true, force: true });
   await mkdir(transactionRoot, { recursive: true });
   const manifestFiles: RestoreTransactionFile[] = [];
@@ -227,7 +237,7 @@ export async function rollbackRestoreTransaction(transactionRoot: string, target
       if (!participant) throw new Error('The authenticator restore participant was unavailable.');
       if (file.previousName === null) throw new Error('The authenticator restore participant had no rollback snapshot.');
       await verifyDurable(path.join(transactionRoot, file.previousName), file.previousBytes as number, file.previousSha256 as string);
-      await participant.restore(await readFile(path.join(transactionRoot, file.previousName), 'utf8'));
+      await participant.restore(await readFile(path.join(transactionRoot, file.previousName), 'utf8'), { recovery: true });
     } else if (file.previousName === null) await rm(target, { force: true });
     else {
       await verifyDurable(path.join(transactionRoot, file.previousName), file.previousBytes as number, file.previousSha256 as string);

@@ -274,13 +274,17 @@ export function App() {
       // back without registry discovery so the refresh cannot immediately
       // replace the restored bytes with the current machine projection.
       loadInstalled(false),
+      // A protected history restore replaces authenticator metadata and
+      // ciphertext in the main process. Refresh the renderer cache in the
+      // same barrier instead of waiting for the page's periodic refresh.
+      authenticator.refresh(),
       reloadSettings(),
       workspace.reload(),
       appearance.reload(),
       schedule.reload(),
     ]);
     setSettingsReloadKey((value) => value + 1);
-  }, [appearance, loadHistory, loadInstalled, reloadSettings, schedule, workspace]);
+  }, [appearance, authenticator, loadHistory, loadInstalled, reloadSettings, schedule, workspace]);
 
   const refreshSourceIsolation = useCallback(async () => {
     setSourceIsolationLoading(true);

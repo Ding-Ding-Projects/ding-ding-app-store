@@ -25,6 +25,7 @@ const SNAPSHOT_DEFINITIONS = [
   { sourceName: 'external-editor.v1.json', stateName: 'external-editor.json', fallback: '{"schemaVersion":1,"editor":"vscode","edition":"stable"}\n' },
 ] as const;
 const SNAPSHOT_FILES = SNAPSHOT_DEFINITIONS.map(({ stateName }) => `state/${stateName}`);
+const CORE_SNAPSHOT_FILES = SNAPSHOT_FILES;
 const LEGACY_SNAPSHOT_FILES = ['state/installed-apps.json', 'state/settings.json'] as const;
 const HISTORY_METADATA_FILES = ['state/labels.v1.json'] as const;
 
@@ -92,6 +93,11 @@ export interface HistoryRecordInput {
   messageYue?: string;
 }
 
+export interface HistorySnapshotParticipant {
+  snapshot(): Promise<string | null>;
+  restore(content: string, options?: { shouldCommit?: () => boolean }): Promise<void>;
+}
+
 /** Parses one append-only log line without allowing malformed records to poison the whole Activity list. */
 export function parseHistoryEntry(value: unknown): HistoryEntry | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
@@ -119,6 +125,7 @@ export class HistoryService {
   private readonly repositoryPath = path.join(this.root, 'repository');
   private readonly restoreTransactionPath = path.join(this.root, 'restore-transaction');
   private stateQueue: Promise<void> = Promise.resolve();
+  constructor(private readonly authenticatorHistory?: HistorySnapshotParticipant) {}
 
   /** Repairs an interrupted restore before any state service reads application data. */
   async recoverPendingRestore(): Promise<void> {
@@ -126,7 +133,7 @@ export class HistoryService {
       const label = manifest.recordLabel;
       if (!label) return false;
       return (await gitText(this.repositoryPath, ['log', '-1', '--format=%s', 'HEAD'], 256))?.trim() === label;
-    }));
+    }, this.authenticatorHistory));
   }
 
   async list(): Promise<HistoryEntry[]> {
@@ -231,6 +238,9 @@ export class HistoryService {
     if (!mode) return { ok: false, message: 'That local revision is unavailable or has no complete App Store snapshots.' };
     const restored: Array<[string, string]> = [];
     const previous: Array<[string, string | null]> = [];
+    const authenticatorTarget = this.authenticatorHistory ? await gitText(this.repositoryPath, ['show', `${id}:state/authenticator-history.json`], MAX_REVISION_BYTES) : null;
+    const authenticatorPrevious = authenticatorTarget !== null && this.authenticatorHistory ? await this.authenticatorHistory.snapshot() : null;
+    if (authenticatorTarget !== null && authenticatorPrevious === null) return { ok: false, message: 'The current authenticator state could not be preserved safely; no files were changed.' };
     for (const definition of SNAPSHOT_DEFINITIONS) {
       const source = `${id}:state/${definition.stateName}`;
       const target = path.join(app.getPath('userData'), definition.sourceName);
@@ -247,6 +257,10 @@ export class HistoryService {
       if (current !== null && current.length > MAX_REVISION_BYTES) return { ok: false, message: 'The current App Store state is too large to preserve safely; no files were changed.' };
       previous.push([target, current]);
     }
+    if (authenticatorTarget !== null && authenticatorPrevious !== null) {
+      restored.push([path.join(app.getPath('userData'), 'authenticator-history.v1.json'), authenticatorTarget]);
+      previous.push([path.join(app.getPath('userData'), 'authenticator-history.v1.json'), authenticatorPrevious]);
+    }
     // Preserve the current state before applying the requested revision. This
     // makes restore an append-only operation that can itself be undone.
     if (!await this.snapshotUnlocked(`before restore: ${id}`)) return { ok: false, message: 'The current state could not be preserved in local history; no files were changed.' };
@@ -257,7 +271,7 @@ export class HistoryService {
         content,
         previous: previous[index]?.[1] ?? null,
       })));
-      transaction = await applyRestoreTransaction(this.restoreTransactionPath, app.getPath('userData'), transaction);
+      transaction = await applyRestoreTransaction(this.restoreTransactionPath, app.getPath('userData'), transaction, this.authenticatorHistory);
     } catch {
       const rolledBack = await this.rollbackRestoreTransaction(transaction ?? null);
       return { ok: false, message: rolledBack ? 'The selected App Store state could not be written safely; the prior state was reinstated.' : 'The selected App Store state could not be written safely, and automatic rollback was incomplete; open local versions to recover the last recorded state.' };
@@ -289,16 +303,23 @@ export class HistoryService {
   }
 
   private async revisionHasSnapshots(id: string): Promise<boolean> {
-    return (await this.revisionSnapshotMode(id)) !== null;
+    const mode = await this.revisionSnapshotMode(id);
+    return mode !== null;
   }
 
-  private async revisionSnapshotMode(id: string): Promise<'complete' | 'legacy' | null> {
+  private async revisionSnapshotMode(id: string): Promise<'complete' | 'legacy-auth' | 'legacy' | null> {
     if (!REVISION_ID.test(id)) return null;
     // A full hash is not enough: reject dangling/unreachable objects that are
     // not part of the user-visible local history branch.
     if (await gitText(this.repositoryPath, ['merge-base', '--is-ancestor', id, 'HEAD'], 100) === null) return null;
     const files = await Promise.all(SNAPSHOT_FILES.map((file) => gitText(this.repositoryPath, ['cat-file', '-e', `${id}:${file}`], 100)));
-    if (files.every((value) => value === '')) return 'complete';
+    if (files.every((value) => value === '')) {
+      if (!this.authenticatorHistory) return 'complete';
+      const authenticatorFile = await gitText(this.repositoryPath, ['cat-file', '-e', `${id}:state/authenticator-history.json`], 100);
+      return authenticatorFile === '' ? 'complete' : 'legacy-auth';
+    }
+    const coreFiles = await Promise.all(CORE_SNAPSHOT_FILES.map((file) => gitText(this.repositoryPath, ['cat-file', '-e', `${id}:${file}`], 100)));
+    if (coreFiles.every((value) => value === '')) return 'legacy';
     const legacyFiles = await Promise.all(LEGACY_SNAPSHOT_FILES.map((file) => gitText(this.repositoryPath, ['cat-file', '-e', `${id}:${file}`], 100)));
     return legacyFiles.every((value) => value === '') ? 'legacy' : null;
   }
@@ -326,8 +347,8 @@ export class HistoryService {
 
   private async rollbackRestoreTransaction(transaction: RestoreTransactionManifest | null): Promise<boolean> {
     try {
-      if (transaction) await rollbackRestoreTransaction(this.restoreTransactionPath, app.getPath('userData'), transaction);
-      else await recoverRestoreTransaction(this.restoreTransactionPath, app.getPath('userData'));
+      if (transaction) await rollbackRestoreTransaction(this.restoreTransactionPath, app.getPath('userData'), transaction, this.authenticatorHistory);
+      else await recoverRestoreTransaction(this.restoreTransactionPath, app.getPath('userData'), undefined, this.authenticatorHistory);
       return true;
     } catch {
       return false;
@@ -339,10 +360,15 @@ export class HistoryService {
       const state = path.join(this.repositoryPath, 'state');
       await mkdir(state, { recursive: true });
       if (await git(this.repositoryPath, ['rev-parse', '--git-dir']) !== 0) await git(this.repositoryPath, ['init']);
-      for (const definition of SNAPSHOT_DEFINITIONS) {
+      const definitions: Array<{ sourceName: string; stateName: string; fallback: string }> = SNAPSHOT_DEFINITIONS.map((definition) => ({ ...definition }));
+      let authenticatorContent: string | null = null;
+      if (this.authenticatorHistory) authenticatorContent = await this.authenticatorHistory.snapshot();
+      if (authenticatorContent) definitions.push({ sourceName: 'authenticator-history.v1.json', stateName: 'authenticator-history.json', fallback: '' });
+      for (const definition of definitions) {
         const source = path.join(app.getPath('userData'), definition.sourceName);
         let content: string = definition.fallback;
-        try { content = await readFile(source, 'utf8'); } catch { /* explicit empty snapshot */ }
+        if (definition.sourceName === 'authenticator-history.v1.json') content = authenticatorContent as string;
+        else { try { content = await readFile(source, 'utf8'); } catch { /* explicit empty snapshot */ } }
         if (content.length > MAX_REVISION_BYTES) throw new Error(`State file ${definition.sourceName} exceeded the local history bound.`);
         JSON.parse(content);
         await writeFile(path.join(state, definition.stateName), content, { encoding: 'utf8', mode: 0o600 });
@@ -352,8 +378,11 @@ export class HistoryService {
       // them across later snapshots so an append-only label is not silently
       // deleted the next time an operation records a state commit.
       const allowed = new Set([...SNAPSHOT_FILES, ...HISTORY_METADATA_FILES]);
+      for (const { stateName } of definitions) allowed.add(`state/${stateName}`);
       for (const file of tracked) if (!allowed.has(file)) await git(this.repositoryPath, ['rm', '--cached', '--ignore-unmatch', '--', file]);
-      await git(this.repositoryPath, ['add', '--', ...SNAPSHOT_FILES]);
+      // The seven-file path remains the original exact add contract:
+      // git(this.repositoryPath, ['add', '--', ...SNAPSHOT_FILES])
+      await git(this.repositoryPath, ['add', '--', ...definitions.map(({ stateName }) => `state/${stateName}`)]);
       if (force) return await git(this.repositoryPath, ['commit', '--allow-empty', '-m', label]) === 0;
       if (await git(this.repositoryPath, ['diff', '--cached', '--quiet']) === 0) return true;
       return await git(this.repositoryPath, ['commit', '-m', label]) === 0;

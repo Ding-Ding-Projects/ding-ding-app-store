@@ -197,6 +197,7 @@ export class AuthenticatorService {
   private readonly pending = new Map<string, PendingRegistration>();
   private metadataMutationSerial: Promise<void> = Promise.resolve();
   private restricted = false;
+  private historyRestoreLeases = 0;
   private restrictionGeneration = 0;
   private readonly secretExportAuthorizations = new Map<string, { fingerprint: string; expiresAtMs: number }>();
 
@@ -204,6 +205,32 @@ export class AuthenticatorService {
     private readonly vault: AuthenticatorVault = new UnavailableAuthenticatorVault(),
     private readonly activityRecorder?: Pick<HistoryService, 'record'>,
   ) {}
+
+  /** Clear renderer-visible and in-flight authenticator state after protected history restore. */
+  resetAfterHistoryRestore(): void {
+    this.restrictionGeneration += 1;
+    this.clearPending();
+    this.secretExportAuthorizations.clear();
+    this.groups = [];
+  }
+
+  /** Fence all authenticator reads and mutations while protected history swaps the vault. */
+  setHistoryRestoreInProgress(active: boolean): void {
+    if (active) {
+      if (this.historyRestoreLeases === 0) {
+        // The main-process camera lease is revoked by the restore IPC seam;
+        // this generation fence clears all authenticator capabilities first.
+        this.clearPending();
+      }
+      this.historyRestoreLeases += 1;
+    }
+    else this.historyRestoreLeases = Math.max(0, this.historyRestoreLeases - 1);
+    this.restrictionGeneration += 1;
+    if (this.historyRestoreLeases > 0) this.clearPending();
+    this.secretExportAuthorizations.clear();
+  }
+
+  isHistoryRestoreInProgress(): boolean { return this.historyRestoreLeases > 0; }
 
   /**
    * Append a deliberately redacted Activity record after a mutation has
@@ -309,7 +336,7 @@ export class AuthenticatorService {
   }
 
   private capabilityIsLive(generation: number): boolean {
-    return !this.restricted && this.restrictionGeneration === generation;
+    return !this.restricted && this.historyRestoreLeases === 0 && this.restrictionGeneration === generation;
   }
 
   private restrictedList(): AuthenticatorListResult {

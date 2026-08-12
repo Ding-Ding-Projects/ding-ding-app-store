@@ -32,6 +32,7 @@ import { LockSupportService } from './lock-support-service.js';
 import { StateMutationQueue } from './state-mutation-queue.js';
 import { PersonalVocabularyService } from './personal-vocabulary-service.js';
 import { HistoryAccessService, type HistoryAccessUnlockRequest } from './history-access-service.js';
+import { AuthenticatorHistoryParticipant } from './authenticator-history-participant.js';
 
 const scheduleTaskSchema = z.enum(['self-update', 'catalog-refresh']);
 const PRODUCT_NAME = 'Ding Ding App Store';
@@ -130,10 +131,15 @@ void app.whenReady().then(async () => {
   mainWindow.on('closed', () => { mainWindow = null; });
 
   const catalog = new CatalogService();
-  const history = new HistoryService();
+  const authenticatorVault = new SafeStorageAuthenticatorVault();
+  const authenticatorHistory = new AuthenticatorHistoryParticipant(authenticatorVault, path.join(app.getPath('userData'), 'history', 'authenticator-restore.json'));
+  const history = new HistoryService(authenticatorHistory);
   const historyAccess = new HistoryAccessService();
   // Recover a restore interrupted between per-file replacements before any
   // state service can read the application-data files.
+  // Recover the participant first. A retained inner journal is an integrity
+  // fence: generic transaction recovery must not attempt to overwrite it.
+  await authenticatorHistory.recover();
   await history.recoverPendingRestore();
   const installed = new InstalledService(catalog);
   catalog.setInstalledProvider(async () => await installed.list(true));
@@ -145,7 +151,7 @@ void app.whenReady().then(async () => {
   const settings = new SettingsService(history);
   const personalVocabulary = new PersonalVocabularyService();
   const schoolMode = new SchoolModeService();
-  const authenticator = new AuthenticatorService(new SafeStorageAuthenticatorVault(), history);
+  const authenticator = new AuthenticatorService(authenticatorVault, history);
   const lockSupport = new LockSupportService(history);
   const unsubscribeSchoolMode = schoolMode.subscribe((snapshot) => {
     if (snapshot.sync.status !== 'ready' || snapshot.state?.enabled === true) historyAccess.invalidate();
@@ -216,9 +222,10 @@ void app.whenReady().then(async () => {
   });
   const authenticatorAllowed = async (): Promise<boolean> => {
     try {
+      if (authenticator.isHistoryRestoreInProgress()) return false;
       const restricted = await schoolMode.isRestricted();
       authenticator.setRestricted(restricted);
-      return !restricted;
+      return !restricted && !authenticator.isHistoryRestoreInProgress();
     }
     catch { authenticator.setRestricted(true); return false; }
   };
@@ -321,7 +328,7 @@ void app.whenReady().then(async () => {
   });
   ipcMain.handle('authenticator:camera-start', async (event) => {
     if (event.sender !== mainWindow?.webContents) return Promise.reject(new Error('Blocked authenticator camera request from an unknown renderer.'));
-    if (!(await authenticatorAllowed())) return { ok: false as const, reason: 'restricted' as const, message: 'Camera scanning is unavailable in School mode.', messageYue: 'School mode 開啟時，相機掃描暫時用唔到。' };
+    if (!(await authenticatorAllowed()) || authenticator.isHistoryRestoreInProgress()) return { ok: false as const, reason: 'restricted' as const, message: 'Camera scanning is unavailable while protected history restore is running.', messageYue: '受保護歷史還原進行緊時，相機掃描暫時用唔到。' };
     if (!mainWindow?.isFocused()) return { ok: false as const, reason: 'focus-required' as const, message: 'Focus the App Store before starting its camera.', messageYue: '開始相機前，請先將 App Store 設為目前視窗。' };
     if (authenticatorCameraLease && Date.now() < authenticatorCameraLease.expiresAtMs) return { ok: false as const, reason: 'busy' as const, message: 'Another camera scan is already active.', messageYue: '另一個相機掃描已經進行中。' };
     const sessionId = randomUUID();
@@ -471,7 +478,7 @@ void app.whenReady().then(async () => {
   });
   ipcMain.handle('authenticator:secret-export', async (event, request: unknown): Promise<AuthenticatorSecretExportResult> => {
     if (event.sender !== mainWindow?.webContents) return Promise.reject(new Error('Blocked authenticator secret export request from an unknown renderer.'));
-    if (!(await authenticatorAllowed())) return authenticatorRestrictedSecretExport();
+    if (!(await authenticatorAllowed()) || authenticator.isHistoryRestoreInProgress()) return authenticatorRestrictedSecretExport();
     const parsed = request as AuthenticatorSecretExportRequest;
     if (!parsed || !Array.isArray(parsed.entryIds) || (parsed.format !== 'json' && parsed.format !== 'csv') || typeof parsed.authorizationToken !== 'string') return { ok: false, reason: 'invalid', entryCount: 0, message: 'Secret export requires the native destructive confirmation.', messageYue: '秘密匯出需要原生破壞性確認。' };
     if (authenticatorSecretExportInFlight) return { ok: false, reason: 'busy', entryCount: 0, message: 'Another secret export is already in progress; wait for its truthful result.', messageYue: '另一個秘密匯出已經進行緊；請等候真實結果。' } as AuthenticatorSecretExportResult;
@@ -490,7 +497,7 @@ void app.whenReady().then(async () => {
   });
   ipcMain.handle('authenticator:secret-export-authorize', async (event, request: unknown) => {
     if (event.sender !== mainWindow?.webContents) return Promise.reject(new Error('Blocked authenticator secret export authorization from an unknown renderer.'));
-    if (!(await authenticatorAllowed())) return { ok: false, message: 'Secret export authorization is unavailable in School mode.', messageYue: 'School mode 開啟時，秘密匯出授權暫時用唔到。' };
+    if (!(await authenticatorAllowed()) || authenticator.isHistoryRestoreInProgress()) return { ok: false, message: 'Secret export authorization is unavailable while history restore is running.', messageYue: '歷史還原進行緊時，秘密匯出授權暫時用唔到。' };
     return authenticator.authorizeSecretExport(request as AuthenticatorSecretExportAuthorizationRequest);
   });
   ipcMain.handle('locks:load', (event) => event.sender === mainWindow?.webContents ? lockSupport.loadLocks() : Promise.reject(new Error('Blocked lock request from an unknown renderer.')));
@@ -559,13 +566,21 @@ void app.whenReady().then(async () => {
       return { ok: false, message: 'History restore is paused while an appearance property lock is active. Unlock the affected property before restoring a revision.' };
     }
     const barrier = stateMutationQueue.beginBarrier();
+    authenticatorCameraLease = null;
+    authenticator.setHistoryRestoreInProgress(true);
     return stateMutationQueue.runBarrier(async () => {
       try {
         const result = historyAccess.isSessionCurrent(historySession) ? await history.restore(revisionId) : { ok: false, message: 'Protected local history became unavailable before restore started.' };
-        if (result.ok && !historyAccess.isSessionCurrent(historySession)) return { ok: false, message: 'Protected local history became unavailable while restore was running; refresh the view before retrying.' };
-        if (result.ok) await scheduler.reloadFromDisk();
+        if (result.ok) {
+          // Invalidate pending plaintext and one-shot export authorizations
+          // even when the protected-history session became stale mid-restore.
+          authenticator.resetAfterHistoryRestore();
+          await scheduler.reloadFromDisk();
+          if (!historyAccess.isSessionCurrent(historySession)) return { ok: false, message: 'Protected local history became unavailable while restore was running; refresh the view before retrying.' };
+        }
         return result;
       } finally {
+        authenticator.setHistoryRestoreInProgress(false);
         stateMutationQueue.endBarrier(barrier);
       }
     });
