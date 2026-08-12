@@ -17,6 +17,7 @@ describe('static site changelog boundary', () => {
     expect(() => validateChangelogManifest({ ...SITE_CHANGELOG_MANIFEST, generatedAt: '2026-02-31T01:15:09.000Z' })).toThrow();
     expect(() => validateChangelogManifest({ ...SITE_CHANGELOG_MANIFEST, entries: [{ ...SITE_CHANGELOG_ENTRIES[0], releasedAt: '2026-02-31T01:15:09.000Z' }] })).toThrow();
     expect(() => validateChangelogManifest({ ...SITE_CHANGELOG_MANIFEST, generatedAt: 'not-a-date' })).toThrow();
+    expect(() => validateChangelogManifest({ ...SITE_CHANGELOG_MANIFEST, entries: [{ ...SITE_CHANGELOG_ENTRIES[0], version: 'release-latest' }] })).toThrow();
   });
 
   it('exports validated records without allowing line-leading Markdown injection', () => {

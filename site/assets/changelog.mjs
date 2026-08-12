@@ -26,7 +26,9 @@ let generatedManifest = null;
 try {
   const module = await import('./generated-changelog.mjs');
   generatedManifest = module.GENERATED_SITE_RELEASE_MANIFEST;
-} catch { /* The committed fallback remains the honest local baseline before release generation. */ }
+} catch (error) {
+  if (error?.code !== 'ERR_MODULE_NOT_FOUND') throw error;
+}
 
 export function validateChangelogManifest(manifest) {
   const plain = (value) => value && typeof value === 'object' && !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype;
