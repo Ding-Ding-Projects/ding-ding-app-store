@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { HistoryAccessResult, HistoryAccessStatus, HistoryEntry, HistoryExportFormat, HistoryRevision, OperationKind, UserSettings } from '../../shared/contracts';
+import { HISTORY_7Z_METHODS, type History7zOptions, type HistoryAccessResult, type HistoryAccessStatus, type HistoryEntry, type HistoryExportFormat, type HistoryRevision, type OperationKind, type UserSettings } from '../../shared/contracts';
+import { SearchablePicker } from '../components/SearchablePicker';
 import { SearchBox } from '../components/SearchBox';
 import { el } from '../el';
 import { downloadBase64, downloadText } from '../files';
@@ -14,7 +15,6 @@ import { dateKey, formatHistoryCalendarDay, matchesHistoryDate, presetRange, res
 import { DestructiveConfirmDialog } from '../components/DestructiveConfirmDialog';
 import { exportHistoryRevisions, HISTORY_REVISION_EXPORT_FORMATS, type HistoryRevisionExportFormat } from '../history-revision-export';
 import { clearRevisionSelection, filterHistoryRevisions, historyMutationMessage, invertRevisionSelection, selectRevisionRange } from '../history-revisions';
-import { SearchablePicker } from '../components/SearchablePicker';
 
 type HistoryResult = 'all' | 'ok' | 'failed';
 
@@ -48,6 +48,7 @@ export function ActivityPage({ entries, revisions, loading, settings, openRegex,
   const [calendarMonth, setCalendarMonth] = useState(() => dateKey(new Date()).slice(0, 7));
   const [exportBusy, setExportBusy] = useState<HistoryExportFormat | null>(null);
   const [exportFormat, setExportFormat] = useState<HistoryExportFormat>('json');
+  const [archive7zOptions, setArchive7zOptions] = useState<History7zOptions>({ method: 'LZMA2', level: 'normal', dictionaryBytes: 8 * 1024 * 1024, wordBytes: 64, solid: true, threads: 2, splitBytes: null, encryptContent: false, encryptHeaders: false });
   const [copyBusy, setCopyBusy] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [revisionDiffs, setRevisionDiffs] = useState<Record<string, string>>({});
@@ -135,6 +136,11 @@ export function ActivityPage({ entries, revisions, loading, settings, openRegex,
         notify({ ok: true, message: `Exported ${archive.recordCount} filtered activity records as a re-importable ZIP archive.` });
         return;
       }
+      if (exportFormat === '7z') {
+        const result = await window.dingDingStore.history.archive7z({ entryIds: exportEntries.map((entry) => entry.id), options: archive7zOptions });
+        notify({ ok: false, message: result.message });
+        return;
+      }
       downloadText(`ding-ding-app-store-history.${definition.extension}`, exportHistoryEntries(exportEntries, exportFormat), definition.mime);
       notify({ ok: true, message: `Exported ${exportEntries.length} filtered activity records as ${definition.label}.` });
     } catch (error) {
@@ -154,7 +160,7 @@ export function ActivityPage({ entries, revisions, loading, settings, openRegex,
     }
   };
   const openInCode = async () => {
-    if (exportFormat === 'zip') {
+    if (exportFormat === 'zip' || exportFormat === '7z') {
       try {
         const archive = await window.dingDingStore.history.archive({ entryIds: exportEntries.map((entry) => entry.id) });
         const result = await openArchiveInVsCode({ recordKind: 'activity', suggestedName: archive.filename, mime: archive.mime, base64: archive.base64 });
@@ -367,9 +373,20 @@ export function ActivityPage({ entries, revisions, loading, settings, openRegex,
       <div className="card-actions">
         <button className="text-button" disabled={copyBusy} onClick={() => void copyJson()}><Icon>content_copy</Icon>{copyBusy ? label(settings, 'Copying…', '複製緊…') : label(settings, 'Copy JSON', '複製 JSON')}</button>
         <SearchablePicker labelText={label(settings, 'Export format', '匯出格式')} settings={settings} value={exportFormat} onChange={(next) => setExportFormat(next as HistoryExportFormat)} options={HISTORY_EXPORT_FORMATS.map((format) => ({ value: format.id, en: format.label, yue: format.label }))} />
+        {exportFormat === '7z' && <div className="archive-7z-options" aria-label={label(settings, '7z archive options', '7z 壓縮檔選項')}>
+          <SearchablePicker labelText={label(settings, 'Method', '方法')} settings={settings} value={archive7zOptions.method} onChange={(value) => setArchive7zOptions((current) => ({ ...current, method: value as History7zOptions['method'] }))} options={HISTORY_7Z_METHODS.map((value) => ({ value, en: value, yue: value }))} />
+          <SearchablePicker labelText={label(settings, 'Level', '級別')} settings={settings} value={archive7zOptions.level} onChange={(value) => setArchive7zOptions((current) => ({ ...current, level: value as History7zOptions['level'] }))} options={['store', 'fastest', 'fast', 'normal', 'maximum', 'ultra'].map((value) => ({ value, en: value, yue: value }))} />
+          <label>{label(settings, 'Dictionary bytes', '字典 bytes')}<input type="number" min={4096} max={8388608} step={1024} value={archive7zOptions.dictionaryBytes} onChange={(event) => setArchive7zOptions((current) => ({ ...current, dictionaryBytes: Number(event.target.value) }))} /></label>
+          <label>{label(settings, 'Word bytes', '字組 bytes')}<input type="number" min={8} max={273} value={archive7zOptions.wordBytes} onChange={(event) => setArchive7zOptions((current) => ({ ...current, wordBytes: Number(event.target.value) }))} /></label>
+          <label><input type="checkbox" checked={archive7zOptions.solid} onChange={(event) => setArchive7zOptions((current) => ({ ...current, solid: event.target.checked }))} />{label(settings, 'Solid archive', '固體壓縮檔')}</label>
+          <label>{label(settings, 'Threads', '執行緒')}<input type="number" min={1} max={16} value={archive7zOptions.threads} onChange={(event) => setArchive7zOptions((current) => ({ ...current, threads: Number(event.target.value) }))} /></label>
+          <label><input type="checkbox" checked={archive7zOptions.encryptContent} onChange={(event) => setArchive7zOptions((current) => ({ ...current, encryptContent: event.target.checked, encryptHeaders: event.target.checked ? current.encryptHeaders : false }))} />{label(settings, 'AES-256 content encryption', 'AES-256 內容加密')}</label>
+          <label><input type="checkbox" disabled={!archive7zOptions.encryptContent} checked={archive7zOptions.encryptHeaders} onChange={(event) => setArchive7zOptions((current) => ({ ...current, encryptHeaders: event.target.checked }))} />{label(settings, 'Encrypt headers', '加密標頭')}</label>
+          <p className="supporting">{label(settings, '7z is unavailable in this build until an approved in-process encoder is shipped; ZIP remains the working round-trip archive.', '呢個版本未有已審核嘅內置 7z encoder，所以 7z 暫時未能使用；ZIP 仍然係可重用嘅壓縮檔。')}</p>
+        </div>}
         <span className="supporting" aria-live="polite">UTF-8 · LF · {historyExportFormat(exportFormat).schema}</span>
         <button className="text-button" disabled={exportBusy !== null || !exportEntries.length} onClick={() => void runExport()}><Icon>download</Icon>{label(settings, 'Export', '匯出')}</button>
-        <button className="text-button" disabled={!exportEntries.length || !isExternalEditorBridgeAvailable()} title={isExternalEditorBridgeAvailable() ? undefined : label(settings, 'Unavailable: this build has no reviewed Visual Studio Code adapter.', '未能使用：呢個版本冇已審核嘅 Visual Studio Code adapter。')} onClick={() => void openInCode()}><Icon>code</Icon>{isExternalEditorBridgeAvailable() ? label(settings, 'Open in VS Code', '喺 VS Code 開') : label(settings, 'VS Code unavailable', 'VS Code 未能使用')}</button>
+        <button className="text-button" disabled={!exportEntries.length || exportFormat === 'zip' || exportFormat === '7z' || !isExternalEditorBridgeAvailable()} title={exportFormat === '7z' ? label(settings, '7z archives are unavailable in this build.', '呢個版本嘅 7z 壓縮檔未能使用。') : isExternalEditorBridgeAvailable() ? undefined : label(settings, 'Unavailable: this build has no reviewed Visual Studio Code adapter.', '未能使用：呢個版本冇已審核嘅 Visual Studio Code adapter。')} onClick={() => void openInCode()}><Icon>code</Icon>{exportFormat === '7z' ? label(settings, '7z unavailable', '7z 未能使用') : isExternalEditorBridgeAvailable() ? label(settings, 'Open in VS Code', '喺 VS Code 開') : label(settings, 'VS Code unavailable', 'VS Code 未能使用')}</button>
       </div>
       <div className="bulk-toolbar" aria-label={label(settings, 'Activity bulk actions', '操作記錄批量操作')}><strong aria-live="polite">{label(settings, `${selectedEntries.length} selected · ${filtered.length} shown · ${entries.length} total`, `揀咗 ${selectedEntries.length} · 顯示 ${filtered.length} · 總共 ${entries.length}`)}</strong><button className="text-button" disabled={!filtered.length} onClick={() => setSelected(new Set(filtered.map((entry) => entry.id)))}>{label(settings, 'Select all shown', '揀晒目前顯示')}</button><button className="text-button" disabled={!filtered.length} onClick={() => setSelected((current) => new Set(filtered.filter((entry) => !current.has(entry.id)).map((entry) => entry.id)))}>{label(settings, 'Invert shown', '反轉目前顯示')}</button><button className="text-button" disabled={!selected.size} onClick={() => setSelected(new Set())}>{label(settings, 'Clear', '清除')}</button><button className="text-button" disabled title={label(settings, 'Operation history is append-only and cannot be deleted.', '操作記錄只可追加，唔可以刪除。')}>{label(settings, 'Delete unavailable', '刪除未能使用')}</button></div>
       {filtered.length ? <ul className="history-list">{filtered.map((entry, index) => <li key={entry.id} className={entry.ok ? 'history-row ok' : 'history-row failed'} {...el('history-row')}>

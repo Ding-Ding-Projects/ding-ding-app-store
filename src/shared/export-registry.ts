@@ -33,6 +33,7 @@ export const HISTORY_EXPORT_FORMATS: readonly ExportFormatDefinition[] = Object.
   { id: 'json-schema', label: 'JSON Schema', extension: 'schema.json', mime: 'application/schema+json', encoding: 'UTF-8', lineEndings: 'LF', schema: 'draft 2020-12 HistoryEntry schema' },
   { id: 'protobuf', label: 'Protocol Buffers', extension: 'proto', mime: 'text/x-protobuf', encoding: 'UTF-8', lineEndings: 'LF', schema: 'proto3 HistoryEntry message' },
   { id: 'zip', label: 'ZIP archive', extension: 'zip', mime: 'application/zip', encoding: 'UTF-8', lineEndings: 'LF', schema: 'ding-ding-app-store.history-archive.v1 (manifest + JSON/JSONL)' },
+  { id: '7z', label: '7z archive (unavailable)', extension: '7z', mime: 'application/x-7z-compressed', encoding: 'UTF-8', lineEndings: 'LF', schema: 'bounded 7z options; typed unavailable boundary until an approved in-process encoder exists' },
 ]);
 
 export function historyExportFormat(format: HistoryExportFormat): ExportFormatDefinition {
@@ -111,7 +112,7 @@ export function serializeFlatRecords(records: readonly FlatExportRecord[], forma
     case 'typescript': case 'javascript': case 'python': case 'go': case 'rust': return codeDocument(records, format);
     case 'json-schema': return `${JSON.stringify(HISTORY_ENTRY_SCHEMA, null, 2)}\n`;
     case 'protobuf': return HISTORY_ENTRY_PROTO;
-    case 'zip': throw new Error('ZIP history archives must be created through the typed main-process archive bridge.');
+    case 'zip': case '7z': throw new Error('Binary history archives must be created through the typed main-process archive bridge.');
   }
 }
 

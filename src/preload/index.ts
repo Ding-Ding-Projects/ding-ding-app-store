@@ -41,6 +41,8 @@ import type {
   ExternalEditorPreference,
   HistoryArchiveExport,
   HistoryArchiveRequest,
+  History7zRequest,
+  History7zExportResult,
   HistoryAccessUnlockRequest,
   HistoryAccessResult,
   HistoryAccessStatus,
@@ -86,6 +88,7 @@ import {
   parseSchoolModeVerifyResult,
 } from './school-mode-parser.js';
 import { parseHistoryAccessResult, parseHistoryAccessStatus } from './history-access-parser.js';
+import { parseHistory7zExportResult } from './history-archive-parser.js';
 import { parseLockCredentialRequest, parseLockMutationResult, parseLockSetRequest, parseLockState, parseLockTarget } from './lock-parser.js';
 import { parseSupportState, parseSupportTicketBulkAdvanceRequest, parseSupportTicketBulkAdvanceResult, parseSupportTicketMutationResult } from './support-parser.js';
 const SOURCE_STATES = new Set(['queued', 'preparing', 'running', 'repairing', 'cancelling', 'succeeded', 'failed', 'cancelled']);
@@ -503,6 +506,7 @@ const api: DingDingStoreApi = {
     list: () => ipcRenderer.invoke('history:list'),
     export: (format: HistoryExportFormat) => ipcRenderer.invoke('history:export', format),
     archive: (request: HistoryArchiveRequest) => ipcRenderer.invoke('history:archive', request) as Promise<HistoryArchiveExport>,
+    archive7z: async (request: History7zRequest) => parseHistory7zExportResult(await ipcRenderer.invoke('history:archive-7z', request)),
     revisions: () => ipcRenderer.invoke('history:revisions') as Promise<HistoryRevision[]>,
     diff: (revisionId: string) => ipcRenderer.invoke('history:diff', revisionId) as Promise<string>,
     label: (revisionId: string, label: string) => ipcRenderer.invoke('history:label', revisionId, label) as Promise<HistoryMutationResult>,
@@ -614,4 +618,5 @@ export {
   parseAuthenticatorSecretExport,
   parseAuthenticatorSecretExportAuthorization,
   parseAuthenticatorGroupMutation,
+  parseHistory7zExportResult,
 };
