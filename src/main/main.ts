@@ -1,9 +1,10 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { app, BrowserWindow, clipboard, ipcMain, session, shell } from 'electron';
+import { open } from 'node:fs/promises';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, nativeImage, session, shell } from 'electron';
 import squirrelStartup from 'electron-squirrel-startup';
 import { z } from 'zod';
-import { AUTHENTICATOR_MAX_URI_LENGTH, type AuthenticatorBulkDeleteRequest, type AuthenticatorBulkDeleteResult, type AuthenticatorDeleteRequest, type AuthenticatorDeleteResult, type AuthenticatorExportRequest, type AuthenticatorExportResult, type AuthenticatorGroupRequest, type AuthenticatorListResult, type AuthenticatorMutationResult, type AuthenticatorPreviewRequest, type AuthenticatorPreviewResult, type AuthenticatorRegistrationConfirmRequest, type AuthenticatorRegistrationPreviewResult, type AuthenticatorRegistrationRequest, type AuthenticatorRenameRequest, type AuthenticatorReorderRequest, type AuthenticatorStatus, type ElementKey, type ElementOverride, type ExternalEditorOpenRequest, type ExternalEditorPreference, type HistoryExportFormat, type InstallCancelRequest, type LockCredentialRequest, type LockSetRequest, type LockTarget, type OperationRequest, type SchoolModeConfigureRequest, type SchoolModeCredentialChangeRequest, type SchoolModeRenameRequest, type SchoolModeToggleRequest, type SchoolModeVerifyRequest, type SourceJobCancelRequest, type SourceJobRequest, type SupportTicketCreateRequest, type TabWorkspace, type UserSettings } from '../shared/contracts.js';
+import { AUTHENTICATOR_MAX_IMAGE_BYTES, AUTHENTICATOR_MAX_URI_LENGTH, type AuthenticatorBulkDeleteRequest, type AuthenticatorBulkDeleteResult, type AuthenticatorDeleteRequest, type AuthenticatorDeleteResult, type AuthenticatorExportRequest, type AuthenticatorExportResult, type AuthenticatorGroupRequest, type AuthenticatorListResult, type AuthenticatorMutationResult, type AuthenticatorPreviewRequest, type AuthenticatorPreviewResult, type AuthenticatorQrImageImportResult, type AuthenticatorRegistrationConfirmRequest, type AuthenticatorRegistrationPreviewResult, type AuthenticatorRegistrationRequest, type AuthenticatorRenameRequest, type AuthenticatorReorderRequest, type AuthenticatorStatus, type ElementKey, type ElementOverride, type ExternalEditorOpenRequest, type ExternalEditorPreference, type HistoryExportFormat, type InstallCancelRequest, type LockCredentialRequest, type LockSetRequest, type LockTarget, type OperationRequest, type SchoolModeConfigureRequest, type SchoolModeCredentialChangeRequest, type SchoolModeRenameRequest, type SchoolModeToggleRequest, type SchoolModeVerifyRequest, type SourceJobCancelRequest, type SourceJobRequest, type SupportTicketCreateRequest, type TabWorkspace, type UserSettings } from '../shared/contracts.js';
 import { AppearanceService } from './appearance-service.js';
 import { CatalogService } from './catalog-service.js';
 import { HistoryService } from './history-service.js';
@@ -23,6 +24,7 @@ import { ExternalScheduledSettingsService } from './external-scheduled-settings-
 import { HomeAssistantVault } from './home-assistant-vault.js';
 import { SchoolModeService } from './school-mode-service.js';
 import { AuthenticatorService } from './authenticator-service.js';
+import { decodeAuthenticatorQrBitmap, inspectAuthenticatorImageDimensions } from './authenticator-qr-image.js';
 import { SafeStorageAuthenticatorVault } from './authenticator-vault.js';
 import { LockSupportService } from './lock-support-service.js';
 import { StateMutationQueue } from './state-mutation-queue.js';
@@ -299,6 +301,51 @@ void app.whenReady().then(async () => {
       messageYue: '剪貼簿 URI 太大；冇匯入任何內容。',
     };
     return authenticator.prepare({ source: 'otpauth-uri', uri: value, attemptId: normalizedAttemptId });
+  });
+  let qrImageImportInFlight = false;
+  ipcMain.handle('authenticator:qr-image-import', async (event): Promise<AuthenticatorQrImageImportResult> => {
+    if (event.sender !== mainWindow?.webContents) return Promise.reject(new Error('Blocked authenticator QR image request from an unknown renderer.'));
+    if (qrImageImportInFlight) return { ok: false, reason: 'read-failed', message: 'Another QR image import is already in progress.', messageYue: '另一個 QR 圖片匯入正在進行中。' };
+    qrImageImportInFlight = true;
+    try {
+    if (!(await authenticatorAllowed())) return { ok: false, reason: 'cancelled', message: 'Authenticator QR image import is unavailable in School mode.', messageYue: 'School mode 開啟時，驗證器 QR 圖片匯入暫時用唔到。' };
+    const picked = await dialog.showOpenDialog(mainWindow!, { properties: ['openFile'], filters: [{ name: 'QR image', extensions: ['png', 'jpg', 'jpeg', 'bmp'] }] });
+    if (picked.canceled || picked.filePaths.length !== 1) return { ok: false, reason: 'cancelled', message: 'QR image import was cancelled; no file was read.', messageYue: 'QR 圖片匯入已取消；冇讀取檔案。' };
+    if (!(await authenticatorAllowed())) return { ok: false, reason: 'cancelled', message: 'Authenticator QR image import is unavailable in School mode.', messageYue: 'School mode 開啟時，驗證器 QR 圖片匯入暫時用唔到。' };
+    const filePath = picked.filePaths[0];
+    try {
+      const handle = await open(filePath, 'r');
+      let bytes: Buffer;
+      try {
+        const openedInfo = await handle.stat();
+        if (!openedInfo.isFile() || openedInfo.size < 1 || openedInfo.size > AUTHENTICATOR_MAX_IMAGE_BYTES) return { ok: false, reason: 'too-large', message: 'The selected image is empty or larger than the 8 MiB QR import limit.', messageYue: '揀選嘅圖片係空白，或者大過 8 MiB QR 匯入限制。' };
+        const bounded = Buffer.allocUnsafe(AUTHENTICATOR_MAX_IMAGE_BYTES + 1);
+        let received = 0;
+        while (received < bounded.byteLength) {
+          const result = await handle.read(bounded, received, bounded.byteLength - received, received);
+          if (result.bytesRead === 0) break;
+          received += result.bytesRead;
+        }
+        if (received > AUTHENTICATOR_MAX_IMAGE_BYTES) return { ok: false, reason: 'too-large', message: 'The selected image exceeded the 8 MiB QR import limit while reading.', messageYue: '讀取時發現揀選嘅圖片超出 8 MiB QR 匯入限制。' };
+        bytes = bounded.subarray(0, received);
+      } finally {
+        await handle.close();
+      }
+      const declaredSize = inspectAuthenticatorImageDimensions(bytes);
+      if (!declaredSize || !Number.isInteger(declaredSize.width) || !Number.isInteger(declaredSize.height) || declaredSize.width < 1 || declaredSize.height < 1 || declaredSize.width > 4_096 || declaredSize.height > 4_096 || declaredSize.width * declaredSize.height > 16_777_216) return { ok: false, reason: 'unsupported-image', message: 'The selected image format or dimensions are outside the safe QR import limit.', messageYue: '揀選嘅圖片格式或者尺寸超出安全 QR 匯入限制。' };
+      const image = nativeImage.createFromBuffer(bytes, { scaleFactor: 1 });
+      if (image.isEmpty()) return { ok: false, reason: 'unsupported-image', message: 'The selected file is not a decodable local image.', messageYue: '揀選嘅檔案唔係可以喺本機解碼嘅圖片。' };
+      const size = image.getSize();
+      if (!(await authenticatorAllowed())) return { ok: false, reason: 'cancelled', message: 'Authenticator QR image import is unavailable in School mode.', messageYue: 'School mode 開啟時，驗證器 QR 圖片匯入暫時用唔到。' };
+      if (!Number.isInteger(size.width) || !Number.isInteger(size.height) || size.width < 1 || size.height < 1 || size.width > 4_096 || size.height > 4_096 || size.width * size.height > 16_777_216) return { ok: false, reason: 'unsupported-image', message: 'The decoded image is outside the safe QR import limit.', messageYue: '解碼後圖片超出安全 QR 匯入限制。' };
+      const result = decodeAuthenticatorQrBitmap({ width: size.width, height: size.height, data: image.toBitmap() });
+      return result;
+    } catch {
+      return { ok: false, reason: 'read-failed', message: 'The selected image could not be read locally.', messageYue: '揀選嘅圖片未能喺本機讀取。' };
+    }
+    } finally {
+      qrImageImportInFlight = false;
+    }
   });
   ipcMain.handle('authenticator:preview', (event, request: unknown) => {
     if (event.sender !== mainWindow?.webContents) return Promise.reject(new Error('Blocked authenticator preview request from an unknown renderer.'));

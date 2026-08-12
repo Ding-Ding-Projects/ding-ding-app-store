@@ -1253,6 +1253,9 @@ export const AUTHENTICATOR_MAX_ENTRIES = 256;
 export const AUTHENTICATOR_MAX_ISSUER_LENGTH = 128;
 export const AUTHENTICATOR_MAX_ACCOUNT_LENGTH = 256;
 export const AUTHENTICATOR_MAX_URI_LENGTH = 2_048;
+export const AUTHENTICATOR_MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+export const AUTHENTICATOR_MAX_IMAGE_DIMENSION = 4_096;
+export const AUTHENTICATOR_MAX_IMAGE_PIXELS = 16_777_216;
 export const AUTHENTICATOR_MAX_LABEL_LENGTH = 512;
 export const AUTHENTICATOR_MAX_GROUP_LENGTH = 64;
 export const AUTHENTICATOR_MAX_EXPORT_LENGTH = 512_000;
@@ -1316,6 +1319,17 @@ export interface AuthenticatorRegistrationPreviewResult {
 export interface AuthenticatorRegistrationConfirmRequest {
   registrationId: string;
   code: string;
+}
+
+export type AuthenticatorQrImageImportReason = 'cancelled' | 'read-failed' | 'too-large' | 'unsupported-image' | 'no-qr' | 'invalid-otpauth';
+
+/** A one-shot local image import result. The URI is never persisted by this route. */
+export interface AuthenticatorQrImageImportResult {
+  ok: boolean;
+  uri?: string;
+  reason?: AuthenticatorQrImageImportReason;
+  message: string;
+  messageYue: string;
 }
 
 export interface AuthenticatorEntryIdRequest {
@@ -1541,6 +1555,7 @@ export interface DingDingStoreApi {
   };
   authenticator: {
     prepareFromClipboard(attemptId?: string): Promise<AuthenticatorRegistrationPreviewResult>;
+    importQrImage(): Promise<AuthenticatorQrImageImportResult>;
     status(): Promise<AuthenticatorStatus>;
     preview(request: AuthenticatorPreviewRequest): Promise<AuthenticatorPreviewResult>;
     prepare(request: AuthenticatorRegistrationRequest): Promise<AuthenticatorRegistrationPreviewResult>;
