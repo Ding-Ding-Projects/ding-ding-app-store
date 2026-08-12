@@ -1,5 +1,5 @@
 import { ELEMENT_BY_KEY } from '../../shared/contracts';
-import type { ElementKey, TabRailLayout, UserSettings } from '../../shared/contracts';
+import type { ElementKey, LockTarget, TabRailLayout, TokenId, UserSettings } from '../../shared/contracts';
 import { el } from '../el';
 import { downloadText, pickTextFile } from '../files';
 import { isExternalEditorBridgeAvailable, openExportInVsCode } from '../external-editor';
@@ -8,6 +8,7 @@ import { label } from '../i18n';
 import type { Notify } from '../notify';
 import { TAB_META, TOKEN_META } from '../registry';
 import type { AppearanceApi } from '../state/use-appearance';
+import type { LocksApi } from '../state/use-locks';
 import type { WorkspaceApi } from '../state/use-workspace';
 import { SearchablePicker } from '../components/SearchablePicker';
 
@@ -36,12 +37,15 @@ const RAIL_ROWS: readonly RailRow[] = [
   { key: 'width', en: 'Rail width', yue: '導覽闊度', keywords: 'width size rail' },
 ];
 
-export function AppearanceEditor({ settings, workspace, appearance, notify, matcher }: {
+export function AppearanceEditor({ settings, workspace, appearance, notify, matcher, locks, schoolModeEnabled = false, onManageLock }: {
   settings: UserSettings;
   workspace: WorkspaceApi;
   appearance: AppearanceApi;
   notify: Notify;
   matcher(haystack: string): boolean;
+  locks?: LocksApi;
+  schoolModeEnabled?: boolean;
+  onManageLock?(target: LockTarget, returnFocus: HTMLElement | null): void;
 }) {
   const rail = workspace.workspace.rail;
   const rows = RAIL_ROWS.filter((row) => matcher(`${row.en}\n${row.yue}\n${row.keywords}`));
@@ -113,6 +117,12 @@ export function AppearanceEditor({ settings, workspace, appearance, notify, matc
               <li key={entry.key}>
                 <strong>{label(settings, ELEMENT_BY_KEY.get(entry.key)?.en ?? entry.key, ELEMENT_BY_KEY.get(entry.key)?.yue ?? entry.key)}</strong>
                 <span className="supporting">{entry.tokens.map((token) => TOKEN_META[token as keyof typeof TOKEN_META]?.en ?? token).join(', ')}</span>
+                <div className="card-actions">{entry.tokens.map((token) => {
+                  const target = { targetKind: 'appearance-property' as const, targetId: `${entry.key}:${token}` };
+                  const locked = locks?.isLocked(target) ?? false;
+                  const disabled = schoolModeEnabled || locks?.state.vaultAvailable === false || !onManageLock;
+                  return <button key={token} className="text-button" type="button" disabled={disabled} title={disabled ? label(settings, schoolModeEnabled ? 'Appearance locks are unavailable in restricted mode.' : 'Credential vault unavailable; appearance locks are disabled.', schoolModeEnabled ? '限制模式唔支援外觀鎖。' : '憑證庫用唔到；外觀鎖已停用。') : undefined} onClick={(event) => onManageLock?.(target, event.currentTarget)} aria-label={`${locked ? 'Manage' : 'Lock'} ${TOKEN_META[token as TokenId]?.en ?? token} property`}><Icon>{locked ? 'lock' : 'lock_open'}</Icon>{locked ? label(settings, 'Manage property lock', '管理屬性鎖') : label(settings, 'Lock this property', '鎖定呢個屬性')}</button>;
+                })}</div>
                 <button className="text-button" onClick={() => { appearance.select(entry.key); appearance.setEditMode(true); }}>{label(settings, 'Edit this element', '編輯呢個元素')}</button>
                 <button className="text-button" onClick={() => appearance.resetElement(entry.key)}>{label(settings, 'Reset', '重設')}</button>
               </li>

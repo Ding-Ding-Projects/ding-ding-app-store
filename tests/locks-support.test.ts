@@ -175,5 +175,13 @@ describe('tab/group UX locks and local Support Tickets', () => {
     expect(app).toContain('locks={locks} schoolModeEnabled={schoolMode.state.enabled}');
     expect(app).toContain('appearanceReturnFocusRef.current = returnFocus');
     expect(app).toContain('setPanelOpen(false); openLockSupport(target)');
+    const editor = await read('src/renderer/pages/AppearanceEditor.tsx');
+    const settings = await read('src/renderer/pages/SettingsPage.tsx');
+    expect(editor).toContain('targetId: `${entry.key}:${token}`');
+    expect(editor).toContain('Lock this property');
+    expect(editor).toContain('schoolModeEnabled || locks?.state.vaultAvailable === false');
+    expect(editor).toContain('Appearance locks are unavailable in restricted mode.');
+    expect(settings).toContain('onManageLock={onManageLock}');
+    expect(settings).toContain('schoolModeEnabled={schoolRestricted}');
   });
 });
