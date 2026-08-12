@@ -172,7 +172,7 @@ describe('tab/group UX locks and local Support Tickets', () => {
     expect(panel).toContain('onManageLock?.(target, event.currentTarget)');
     expect(panel).not.toContain('currentCredential');
     expect(panel).not.toContain('confirmationCode');
-    expect(app).toContain('locks={locks} schoolModeEnabled={schoolMode.state.enabled}');
+    expect(app).toContain('locks={locks} schoolModeEnabled={schoolMode.restricted}');
     expect(app).toContain('appearanceReturnFocusRef.current = returnFocus');
     expect(app).toContain('setPanelOpen(false); openLockSupport(target)');
     const editor = await read('src/renderer/pages/AppearanceEditor.tsx');
