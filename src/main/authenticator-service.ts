@@ -926,6 +926,8 @@ export class AuthenticatorService {
         } else {
           const headers = ['schemaVersion', 'warning', 'id', 'issuer', 'account', 'label', 'algorithm', 'digits', 'periodSeconds', 'secret'];
           const csvEscape = (value: string | number) => `"${String(value).replace(/"/g, '""')}"`;
+          const formulaRisk = records.some((record) => headers.some((header) => header !== 'schemaVersion' && header !== 'warning' && /^[=+\-@]/.test(String(record[header] ?? ''))));
+          if (formulaRisk) return secretExportFailure('invalid', 'CSV export was refused because a selected field begins with a spreadsheet formula character; choose JSON instead.', 'CSV 匯出已拒絕，因為揀選欄位以試算表公式字元開始；請改用 JSON。', records.length);
           content = `${headers.join(',')}\n${records.map((record) => headers.map((header) => csvEscape(header === 'schemaVersion' ? 1 : header === 'warning' ? warning : record[header] ?? '')).join(',')).join('\n')}\n`;
         }
         if (!this.capabilityIsLive(generation)) return secretExportFailure('restricted', 'Secret export was stopped because the shared restricted mode changed; no file was created.', '共享限制模式改變，所以秘密匯出已停止；冇建立檔案。');
@@ -944,8 +946,8 @@ export class AuthenticatorService {
           await handle.sync();
           await handle.close();
           handle = null;
+          await chmod(temporaryPath, 0o600);
           await rename(temporaryPath, destinationPath);
-          await chmod(destinationPath, 0o600);
           if (!this.capabilityIsLive(generation)) {
             await unlink(destinationPath).catch(() => undefined);
             return secretExportFailure('restricted', 'Secret export was stopped because the shared restricted mode changed; no file was kept.', '共享限制模式改變，所以秘密匯出已停止；冇保留檔案。', records.length);
