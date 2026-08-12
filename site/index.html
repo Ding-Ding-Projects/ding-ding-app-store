@@ -4,14 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <title>Ding Ding App Store — complete documentation</title>
+  <title id="document-title">Ding Ding App Store — complete documentation</title>
   <link rel="stylesheet" href="assets/app.css">
 </head>
 <body>
   <a class="skip-link" href="#article">Skip to article</a>
   <div class="app-shell">
     <aside class="rail" aria-label="Documentation navigation">
-      <div class="brand"><span aria-hidden="true">🥟</span><span>Ding Ding App Store</span></div>
+      <div class="brand"><span aria-hidden="true">🥟</span><span id="site-brand-name">Ding Ding App Store</span></div>
       <div class="tab-list" role="tablist" aria-orientation="vertical" aria-label="Feature articles">
         <button id="home-tab" class="rail-tab active" data-article="home" role="tab" aria-selected="true" aria-controls="article">Home</button>
         <div id="article-tabs"></div>
@@ -53,6 +53,12 @@
           <label data-settings-text="cantonese funny level voice" data-restricted-hide>Cantonese funny level <input id="funny-yue" type="range" min="1" max="5" value="3"><output id="funny-yue-value">3</output></label>
           <label data-settings-text="show emojis dialogs message boxes decoration accessibility" data-restricted-hide><input id="show-emojis-in-dialogs" type="checkbox" aria-describedby="dialog-emoji-help"> <span data-site-copy="dialog-emoji-label">Show emojis in dialogs and message boxes</span></label>
           <p id="dialog-emoji-help" class="supporting" data-settings-text="show emojis dialogs message boxes decoration accessibility" data-site-copy="dialog-emoji-help" data-restricted-hide>Adds a non-semantic emoji to the command palette dialog title while leaving controls and accessible names unchanged.</p>
+          <div id="display-name-card" data-restricted-hide>
+            <label for="site-display-name" data-settings-text="display name rename title brand home status palette reset">Display name</label>
+            <input id="site-display-name" type="text" maxlength="64" autocomplete="off" aria-describedby="display-name-help">
+            <div class="button-row"><button id="site-display-name-save" class="filled-button" type="button">Save display name</button><button id="site-display-name-reset" class="text-button" type="button">Reset to Ding Ding App Store</button></div>
+            <p id="display-name-help" class="supporting" data-settings-text="display name rename title brand home status palette reset">This changes the label shown by this site only. Routes, asset names, URLs, and application identity never change.</p>
+          </div>
           <label data-settings-text="restricted presentation site only school mode equivalent"><input id="site-restricted" type="checkbox"> <span data-site-copy="restricted-label">Restricted presentation (site-only)</span></label>
           <p class="supporting" data-settings-text="restricted presentation site only boundary" data-site-copy="restricted-help">This site-only restricted switch is separate from the desktop app's shared School mode. It forces English and suppresses personal vocabulary on this browser only; it is not a security boundary.</p>
           <section id="personal-vocabulary-card" class="settings-card" aria-labelledby="personal-vocabulary-title">
