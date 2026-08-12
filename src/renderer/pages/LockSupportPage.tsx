@@ -9,6 +9,7 @@ import type { LocksApi } from '../state/use-locks';
 import type { SupportApi } from '../state/use-support';
 import { TAB_META, TOKEN_META } from '../registry';
 import { SearchablePicker } from '../components/SearchablePicker';
+import QRCode from 'qrcode';
 
 const CATEGORY_LABELS: Record<SupportTicketCategory, { en: string; yue: string }> = {
   unlock: { en: 'Forgotten lock credential', yue: '唔記得鎖定憑證' },
@@ -22,6 +23,28 @@ const SEVERITY_LABELS: Record<SupportTicketSeverity, { en: string; yue: string }
 };
 
 function targetKey(target: LockTarget): string { return `${target.targetKind}:${target.targetId}`; }
+
+function localTotpUri(secret: string, algorithm: string, digits: number, period: number): string {
+  const params = new URLSearchParams({ secret: secret.replace(/[\s-]/g, '').toUpperCase(), algorithm: algorithm.toUpperCase(), digits: String(digits), period: String(period) });
+  return `otpauth://totp/Ding%20Ding%20App%20Store%20lock?${params.toString()}`;
+}
+
+function LockTotpQr({ secret, algorithm, digits, period, settings }: { secret: string; algorithm: string; digits: number; period: number; settings: UserSettings }) {
+  const [matrix, setMatrix] = useState<string[] | null>(null);
+  useEffect(() => {
+    let active = true;
+    if (!secret || secret.length < 4 || period < 15 || period > 3600) { setMatrix(null); return () => { active = false; }; }
+    try {
+      const qr = QRCode.create(localTotpUri(secret, algorithm, digits, period), { errorCorrectionLevel: 'M' });
+      const size = qr.modules.size;
+      const next = Array.from({ length: size }, (_, row) => Array.from({ length: size }, (_, column) => qr.modules.data[row * size + column] ? '1' : '0').join(''));
+      if (active) setMatrix(next);
+    } catch { if (active) setMatrix(null); }
+    return () => { active = false; };
+  }, [algorithm, digits, period, secret]);
+  if (!matrix) return null;
+  return <div className="authenticator-qr-wrap"><div className="authenticator-qr" role="img" aria-label={label(settings, 'Local TOTP pairing QR code for this lock', '呢個鎖嘅本機 TOTP 配對 QR code')} style={{ gridTemplateColumns: `repeat(${matrix.length}, 1fr)` }}>{matrix.flatMap((row, rowIndex) => [...row].map((module, columnIndex) => <span aria-hidden="true" key={`${rowIndex}-${columnIndex}`} className={module === '1' ? 'authenticator-qr-module on' : 'authenticator-qr-module'} />))}</div></div>;
+}
 
 export function LockSupportPage({ settings, workspace, locks, support, notify, matcher, initialTarget }: {
   settings: UserSettings;
@@ -132,9 +155,10 @@ export function LockSupportPage({ settings, workspace, locks, support, notify, m
         {selectedRecord && <label htmlFor="lock-current-credential">{label(settings, credentialKind === 'totp' ? 'Current TOTP code (required to change or remove)' : 'Current password (required to change or remove)', credentialKind === 'totp' ? '目前 TOTP 驗證碼（修改或者移除時必須）' : '目前密碼（修改或者移除時必須）')}
           <input id="lock-current-credential" type="password" inputMode={credentialKind === 'totp' ? 'numeric' : undefined} autoComplete={credentialKind === 'totp' ? 'one-time-code' : 'current-password'} value={currentCredential} onChange={(event) => setCurrentCredential(event.target.value)} maxLength={512} />
         </label>}
-        <label htmlFor="lock-new-credential">{label(settings, selectedRecord ? (credentialKind === 'totp' ? 'New TOTP secret' : 'New password') : (credentialKind === 'totp' ? 'TOTP secret' : 'Password'), selectedRecord ? (credentialKind === 'totp' ? '新 TOTP 秘密' : '新密碼') : (credentialKind === 'totp' ? 'TOTP 秘密' : '密碼'))}
+          <label htmlFor="lock-new-credential">{label(settings, selectedRecord ? (credentialKind === 'totp' ? 'New TOTP secret' : 'New password') : (credentialKind === 'totp' ? 'TOTP secret' : 'Password'), selectedRecord ? (credentialKind === 'totp' ? '新 TOTP 秘密' : '新密碼') : (credentialKind === 'totp' ? 'TOTP 秘密' : '密碼'))}
           <input id="lock-new-credential" type="password" autoComplete={credentialKind === 'totp' ? 'off' : 'new-password'} value={credential} onChange={(event) => setCredential(event.target.value)} maxLength={512} />
-        </label>
+          </label>
+        {credentialKind === 'totp' && credential && <><p className="supporting"><code>{credential.replace(/[\s-]/g, '').toUpperCase()}</code></p><button className="text-button" type="button" onClick={() => { void navigator.clipboard.writeText(credential.replace(/[\s-]/g, '').toUpperCase()).catch(() => undefined); }}>{label(settings, 'Copy manual Base32 secret locally', '喺本機複製手動 Base32 秘密')}</button><LockTotpQr secret={credential} algorithm={totpAlgorithm} digits={totpDigits} period={totpPeriodSeconds} settings={settings} /><p className="supporting">{label(settings, 'The QR is generated locally from the entered secret and never sent through IPC. Confirm the current code before saving.', 'QR 由輸入嘅秘密喺本機產生，永遠唔會經 IPC 傳送。儲存前請確認目前驗證碼。')}</p></>}
         {credentialKind === 'totp' && <label htmlFor="lock-totp-confirmation">{label(settings, 'Current TOTP code (pairing confirmation)', '目前 TOTP 驗證碼（配對確認）')}<input id="lock-totp-confirmation" inputMode="numeric" autoComplete="one-time-code" value={confirmationCode} onChange={(event) => setConfirmationCode(event.target.value)} maxLength={8} /></label>}
         {selectedRecord && <label htmlFor="lock-new-credential">{label(settings, 'New password', '新密碼')}<input id="lock-new-credential" type="password" autoComplete="new-password" value={credential} onChange={(event) => setCredential(event.target.value)} maxLength={512} /></label>}
         <div className="settings-actions">
