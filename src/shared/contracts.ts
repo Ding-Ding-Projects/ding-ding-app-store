@@ -236,7 +236,7 @@ export interface HistoryArchiveExport {
 }
 
 export type ExternalEditorId = 'vscode';
-export type ExportRecordKind = 'catalog' | 'installed' | 'activity' | 'history-revisions' | 'notifications' | 'changelog' | 'docs' | 'settings' | 'appearance' | 'tabs' | 'authenticator';
+export type ExportRecordKind = 'catalog' | 'installed' | 'activity' | 'history-revisions' | 'notifications' | 'changelog' | 'docs' | 'settings' | 'appearance' | 'tabs' | 'authenticator' | 'support-tickets';
 export type ExternalEditorEdition = 'stable' | 'insiders' | 'portable' | 'unknown';
 
 export interface ExternalEditorPreference {

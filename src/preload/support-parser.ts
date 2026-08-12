@@ -18,10 +18,16 @@ export function parseSupportTicketBulkAdvanceRequest(value: unknown): SupportTic
   return { ticketIds: input.ticketIds as string[] };
 }
 function baseMutation(value: unknown): Record<string, unknown> { const input = object(value); if (typeof input.ok !== 'boolean' || typeof input.message !== 'string' || input.message.length > 2000 || !input.state) throw new Error('Support mutation response was invalid.'); parseSupportState(input.state); return input; }
-export function parseSupportTicketMutationResult(value: unknown): SupportTicketMutationResult { const input = baseMutation(value); if (input.reason !== undefined && !['invalid', 'storage-failed', 'not-found'].includes(String(input.reason))) throw new Error('Support mutation response was invalid.'); return Object.freeze({ ok: input.ok as boolean, state: parseSupportState(input.state), message: input.message as string, reason: input.reason as SupportTicketMutationResult['reason'] }); }
+export function parseSupportTicketMutationResult(value: unknown): SupportTicketMutationResult { const input = baseMutation(value); const allowed = new Set(['ok', 'state', 'message', 'reason']); if (Object.keys(input).some((key) => !allowed.has(key)) || input.reason !== undefined && !['invalid', 'storage-failed', 'not-found'].includes(String(input.reason))) throw new Error('Support mutation response was invalid.'); return Object.freeze({ ok: input.ok as boolean, state: parseSupportState(input.state), message: input.message as string, reason: input.reason as SupportTicketMutationResult['reason'] }); }
 export function parseSupportTicketBulkAdvanceResult(value: unknown): SupportTicketBulkAdvanceResult {
   const input = baseMutation(value);
+  const allowed = new Set(['ok', 'state', 'message', 'committed', 'skipped', 'uncertain', 'reason']);
+  if (Object.keys(input).some((key) => !allowed.has(key))) throw new Error('Support ticket batch response was invalid.');
   const arrays = ['committed', 'skipped', 'uncertain'] as const;
   if (arrays.some((key) => !Array.isArray(input[key]) || input[key].length > 1000 || input[key].some((id) => typeof id !== 'string' || !/^[0-9a-f-]{36}$/i.test(id))) || input.reason !== undefined && !['invalid', 'storage-failed', 'busy'].includes(String(input.reason))) throw new Error('Support ticket batch response was invalid.');
+  const committed = new Set(input.committed as string[]);
+  const skipped = new Set(input.skipped as string[]);
+  const uncertain = new Set(input.uncertain as string[]);
+  if (committed.size !== (input.committed as string[]).length || skipped.size !== (input.skipped as string[]).length || uncertain.size !== (input.uncertain as string[]).length || [...committed].some((id) => skipped.has(id) || uncertain.has(id)) || [...skipped].some((id) => uncertain.has(id))) throw new Error('Support ticket batch response was invalid.');
   return Object.freeze({ ok: input.ok as boolean, state: parseSupportState(input.state), message: input.message as string, committed: input.committed as string[], skipped: input.skipped as string[], uncertain: input.uncertain as string[], reason: input.reason as SupportTicketBulkAdvanceResult['reason'] });
 }
