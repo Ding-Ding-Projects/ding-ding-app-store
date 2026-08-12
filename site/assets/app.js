@@ -18,7 +18,7 @@ import { readDialogEmojiPreference, shouldShowDialogEmoji, writeDialogEmojiPrefe
 import { DEFAULT_DISPLAY_NAME, displayNameForPresentation, loadDisplayName, resetDisplayName, saveDisplayName } from './display-name.mjs';
 import { EMPTY_SCHEDULE, loadSchedule, resolveSchedule, saveSchedule } from './schedule.mjs';
 import { scheduleRuleMarkup } from './schedule-ui.mjs';
-import { SITE_CHANGELOG_ENTRIES, changelogMarkdown } from './changelog.mjs';
+import { SITE_CHANGELOG_ENTRIES, changelogCommitUrl, changelogMarkdown } from './changelog.mjs';
 
 (() => {
   'use strict';
@@ -457,7 +457,7 @@ import { SITE_CHANGELOG_ENTRIES, changelogMarkdown } from './changelog.mjs';
     const match = matcher('changelog', query);
     const rows = invalid ? [] : SITE_CHANGELOG_ENTRIES.filter((entry) => { const timestamp = Date.parse(entry.releasedAt); if (start !== null && timestamp < start) return false; if (end !== null && timestamp > end) return false; return match(`${entry.version}\n${entry.commit}\n${entry.changes.join('\n')}`); });
     $('changelog-count').textContent = String(rows.length);
-    list.innerHTML = rows.map((entry) => `<li><div><h4>${escapeHtml(entry.version)}</h4><time dateTime="${entry.releasedAt}">${escapeHtml(new Date(entry.releasedAt).toLocaleDateString(effectiveMode() === 'yue' ? 'zh-HK' : 'en-CA', { year: 'numeric', month: 'short', day: 'numeric' }))}</time>${entry.changes.map((change) => `<p>${escapeHtml(change)}</p>`).join('')}<div class="commit-actions"><code>${entry.commit}</code><a class="text-button" href="${entry.releaseUrl}" target="_blank" rel="noreferrer">${escapeHtml(localized('Open release', '開啟版本'))}</a></div></div></li>`).join('');
+    list.innerHTML = rows.map((entry) => `<li><div><h4>${escapeHtml(entry.version)}</h4><time dateTime="${entry.releasedAt}">${escapeHtml(new Date(entry.releasedAt).toLocaleDateString(effectiveMode() === 'yue' ? 'zh-HK' : 'en-CA', { year: 'numeric', month: 'short', day: 'numeric' }))}</time>${entry.changes.map((change) => `<p>${escapeHtml(change)}</p>`).join('')}<div class="commit-actions"><code>${entry.commit}</code><a class="text-button" href="${changelogCommitUrl(entry.commit)}" target="_blank" rel="noreferrer">${escapeHtml(localized('Open commit', '開啟 commit'))}</a><a class="text-button" href="${entry.releaseUrl}" target="_blank" rel="noreferrer">${escapeHtml(localized('Open release', '開啟版本'))}</a></div></div></li>`).join('');
     $('changelog-empty').hidden = rows.length > 0 || invalid;
     return rows;
   }
