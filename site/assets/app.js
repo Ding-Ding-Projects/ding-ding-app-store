@@ -89,6 +89,7 @@ import {
   function restricted() { return state.siteRestricted; }
   function effectiveMode() { return restricted() ? 'en' : state.mode; }
   function copy(value) { return personalizeOwnedText(value, vocabulary.entries, restricted()); }
+  function localized(en, yue) { const mode = effectiveMode(); return mode === 'yue' ? yue : mode === 'both' ? `${en} · ${yue}` : en; }
   function title(article) { const mode = effectiveMode(); const raw = mode === 'en' ? article.title : mode === 'yue' ? article.titleYue : `${article.title} · ${article.titleYue}`; return article.source === 'canonical' ? copy(raw) : raw; }
   function setStatus(message) { $('status').textContent = message; }
   function saveControls() {
@@ -129,34 +130,34 @@ import {
     document.querySelectorAll('[data-restricted-hide]').forEach((node) => { node.hidden = restricted(); });
   }
 
-  function vocabularyStatus(message) {
+  function vocabularyStatus(message, messageYue = message) {
     const status = $('personal-vocabulary-status');
-    if (status) status.textContent = message;
+    if (status) status.textContent = localized(message, messageYue);
   }
   function refreshVocabularyStatus() {
     vocabulary = loadCachedVocabulary();
-    if (vocabulary.corrupt) vocabularyStatus('The cached vocabulary was rejected; original wording is active. Choose a valid local JSON file to replace it.');
-    else if (vocabulary.loaded) vocabularyStatus(`${vocabulary.entries.length} local vocabulary entries are active. Source path and file metadata were not saved.`);
-    else vocabularyStatus('No local JSON file is loaded. Original wording is active.');
+    if (vocabulary.corrupt) vocabularyStatus('The cached vocabulary was rejected; original wording is active. Choose a valid local JSON file to replace it.', '快取詞彙被拒絕；而家使用原本文字。請揀有效本機 JSON 檔案取代。');
+    else if (vocabulary.loaded) vocabularyStatus(`${vocabulary.entries.length} local vocabulary entries are active. Source path and file metadata were not saved.`, `而家本機啟用緊 ${vocabulary.entries.length} 項詞彙；來源路徑同檔案資料冇被儲存。`);
+    else vocabularyStatus('No local JSON file is loaded. Original wording is active.', '未載入本機 JSON 檔案，而家使用原本文字。');
   }
   async function replaceVocabulary() {
     if (restricted()) return;
     const input = $('personal-vocabulary-file');
     const file = input?.files?.[0];
-    if (!file) { vocabularyStatus('Choose one local JSON file before replacing vocabulary.'); return; }
-    if (file.size > 64_000) { vocabularyStatus('The local JSON file is too large; the last valid cache remains active.'); return; }
+    if (!file) { vocabularyStatus('Choose one local JSON file before replacing vocabulary.', '請先揀一個本機 JSON 檔案，先可以取代詞彙。'); return; }
+    if (file.size > 64_000) { vocabularyStatus('The local JSON file is too large; the last valid cache remains active.', '本機 JSON 檔案太大；上一次有效快取會繼續啟用。'); return; }
     try {
       const result = parsePersonalVocabularyJson(new Uint8Array(await file.arrayBuffer()));
-      if (!result.ok) { vocabularyStatus(`The local vocabulary file was rejected (${result.reason}); the last valid cache remains active.`); return; }
+      if (!result.ok) { vocabularyStatus(`The local vocabulary file was rejected (${result.reason}); the last valid cache remains active.`, `本機詞彙檔案被拒絕（${result.reason}）；上一次有效快取會繼續啟用。`); return; }
       vocabulary = saveCachedVocabulary(result.document);
       input.value = '';
       refreshVocabularyStatus();
       openArticle(state.article, false, { addTab: false, route: 'none' });
-    } catch { vocabularyStatus('The local vocabulary file could not be cached; the last valid cache remains active.'); }
+    } catch { vocabularyStatus('The local vocabulary file could not be cached; the last valid cache remains active.', '本機詞彙檔案未能寫入快取；上一次有效快取會繼續啟用。'); }
   }
   function clearVocabulary() {
     if (restricted()) return;
-    try { vocabulary = clearCachedVocabulary(); } catch { vocabularyStatus('The local vocabulary cache could not be cleared; original wording remains active only after browser storage is available.'); return; }
+    try { vocabulary = clearCachedVocabulary(); } catch { vocabularyStatus('The local vocabulary cache could not be cleared; original wording remains active only after browser storage is available.', '未能清除本機詞彙快取；瀏覽器儲存可用後先會恢復原本文字。'); return; }
     const input = $('personal-vocabulary-file'); if (input) input.value = '';
     refreshVocabularyStatus();
     openArticle(state.article, false, { addTab: false, route: 'none' });
@@ -312,7 +313,7 @@ import {
     if (!key) { $('results').innerHTML = ''; return; }
     const match = matcher('docs', query);
     const rows = articles.filter((article) => match([article.title, article.titleYue, article.category, article.status, article.summary, article.body].join('\n')));
-    $('results').innerHTML = rows.length ? `<h2>Search results (${rows.length})</h2>${rows.map((article) => `<button class="result-card" data-open="${article.id}"><strong>${escapeHtml(title(article))}</strong><br>${escapeHtml(article.summary)}</button>`).join('')}` : `<p class="empty">No documentation matches “${escapeHtml(key)}”. Clear the query or adjust the pattern.</p>`;
+    $('results').innerHTML = rows.length ? `<h2>Search results (${rows.length})</h2>${rows.map((article) => `<button class="result-card" data-open="${article.id}"><strong>${escapeHtml(title(article))}</strong><br>${escapeHtml(article.source === 'canonical' ? copy(article.summary) : article.summary)}</button>`).join('')}` : `<p class="empty">No documentation matches “${escapeHtml(key)}”. Clear the query or adjust the pattern.</p>`;
     bindOpen();
   }
 
@@ -359,7 +360,7 @@ import {
     const panel = $(`settings-panel-${state.settingsTab}`); const match = matcher('settings', $('settings-search').value.trim()); let visible = 0;
     if (!search.settings.regex) search.settings.query = $('settings-search').value.trim();
     saveSearch('settings');
-    panel.querySelectorAll('[data-settings-text]').forEach((row) => { const show = match(`${row.dataset.settingsText} ${row.textContent}`); row.hidden = !show; if (show) visible += 1; });
+    panel.querySelectorAll('[data-settings-text]').forEach((row) => { const inVocabularyCard = Boolean(row.closest('#personal-vocabulary-card')); const show = !((restricted() && inVocabularyCard) || (restricted() && row.hasAttribute('data-restricted-hide'))) && match(`${row.dataset.settingsText} ${row.textContent}`); row.hidden = !show; if (show) visible += 1; });
     $('settings-empty').hidden = visible > 0;
   }
 
@@ -367,7 +368,7 @@ import {
     const value = $('palette-search').value.trim(); const match = matcher('palette', value);
     if (!search.palette.regex) search.palette.query = value;
     saveSearch('palette');
-    const rows = [{ id: 'home', label: 'Home', type: 'Destination' }, ...articles.map((article) => ({ id: article.id, label: title(article), type: `${article.category} · ${article.status}` })), ...['general', 'appearance', 'about'].map((id) => ({ id: `setting-${id}`, label: `${id[0].toUpperCase()}${id.slice(1)} settings`, type: 'Setting destination' })), { id: 'setting-personal-vocabulary-import', label: 'Import personal vocabulary JSON', type: 'Settings control · local upload' }, { id: 'setting-personal-vocabulary-clear', label: 'Clear personal vocabulary', type: 'Settings control · local reset' }, { id: 'setting-site-restricted', label: 'Restricted presentation (site-only)', type: 'Settings control · local mode' }].filter((row) => match(`${row.label} ${row.type}`));
+    const rows = [{ id: 'home', label: 'Home', type: 'Destination' }, ...articles.map((article) => ({ id: article.id, label: title(article), type: `${article.category} · ${article.status}` })), ...['general', 'appearance', 'about'].map((id) => ({ id: `setting-${id}`, label: `${id[0].toUpperCase()}${id.slice(1)} settings`, type: 'Setting destination' })), ...(restricted() ? [] : [{ id: 'setting-personal-vocabulary-import', label: localized('Import personal vocabulary JSON', '匯入本機個人詞彙 JSON'), type: localized('Settings control · local upload', '設定控制 · 本機上載') }, { id: 'setting-personal-vocabulary-clear', label: localized('Clear personal vocabulary', '清除本機個人詞彙'), type: localized('Settings control · local reset', '設定控制 · 本機重設') }]), { id: 'setting-site-restricted', label: localized('Restricted presentation (site-only)', '受限顯示（只限網站）'), type: localized('Settings control · local mode', '設定控制 · 本機模式') }].filter((row) => match(`${row.label} ${row.type}`));
     $('palette-results').innerHTML = rows.length ? rows.map((row) => `<button class="palette-row" data-command="${row.id}" role="option"><strong>${escapeHtml(row.label)}</strong><br><small>${escapeHtml(row.type)}</small></button>`).join('') : '<p class="empty">No command or destination matches.</p>';
     document.querySelectorAll('[data-command]').forEach((button) => button.addEventListener('click', () => { $('palette').close(); const id = button.dataset.command; if (id === 'setting-personal-vocabulary-import') { openSettingsTab('general'); $('personal-vocabulary-file').focus(); $('settings-title').scrollIntoView(); } else if (id === 'setting-personal-vocabulary-clear') { openSettingsTab('general'); $('personal-vocabulary-clear').focus(); $('settings-title').scrollIntoView(); } else if (id === 'setting-site-restricted') { openSettingsTab('general'); $('site-restricted').focus(); $('settings-title').scrollIntoView(); } else if (id.startsWith('setting-')) { openSettingsTab(id.slice(8)); $('settings-title').scrollIntoView(); } else openArticle(id); }));
   }

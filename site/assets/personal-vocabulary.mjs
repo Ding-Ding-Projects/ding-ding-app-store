@@ -118,7 +118,7 @@ export function clearCachedVocabulary(storage) {
   catch { return { loaded: false, entries: [], corrupt: true, reason: 'cache-unavailable' }; }
 }
 
-const TECHNICAL_SEGMENT = /(?:https?:\/\/[^\s]+|(?:[A-Za-z]:\\|\\\\)[^\n<>()]+|(?:[A-Za-z_][\w-]*\/)+[\w.-]+|--[\w-]+|#[0-9a-f]{7,64}\b|\b[\w-]+\.[\w.-]+\b|\b(?:sha256|SHA-256|JSON|URI|IPC|TOTP|Electron|Windows)\b|`[^`]*`)/giu;
+const TECHNICAL_SEGMENT = /(?:https?:\/\/[^\s]+|(?:[A-Za-z]:\\|\\\\)[^\n<>()]*?(?=\s+(?:then|and|or|to|from|is|was)\b|[.,;!?]|$)|(?:[A-Za-z_][\w-]*\/)+[\w.-]+|--[\w-]+|#[0-9a-f]{7,64}\b|\b[\w-]+\.[\w.-]+\b|\b(?:sha256|SHA-256|JSON|URI|IPC|TOTP|Electron|Windows)\b|`[^`]*`)/giu;
 export function personalizeOwnedText(value, entries, restricted = false) {
   if (restricted || !value || !entries?.length) return value;
   const source = String(value);
