@@ -525,7 +525,9 @@ export function AuthenticatorPage({ settings, authenticator, notify, openRegex, 
   const exportSecrets = async () => {
     if (!selectedVisibleIds.length) return;
     try {
-      const result = await authenticator.secretExport({ entryIds: selectedVisibleIds, format: secretExportFormat, confirmed: true });
+      const authorization = await authenticator.authorizeSecretExport({ entryIds: selectedVisibleIds, format: secretExportFormat });
+      if (!authorization.ok || !authorization.authorizationToken) { notify({ ok: false, message: label(viewSettings, authorization.message, authorization.messageYue) }); return; }
+      const result = await authenticator.secretExport({ entryIds: selectedVisibleIds, format: secretExportFormat, authorizationToken: authorization.authorizationToken });
       notify({ ok: result.ok, message: label(viewSettings, result.message, result.messageYue) });
       if (result.ok) { setSecretExportOpen(false); setSelectedEntries(new Set()); }
     } catch { notify({ ok: false, message: label(viewSettings, 'The secret export bridge was unavailable; no file was created.', '秘密匯出橋接暫時用唔到；冇建立檔案。') }); }
