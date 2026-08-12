@@ -32,6 +32,17 @@ export interface RestoreTransactionInput {
 /** Optional non-file participant for the fixed authenticator snapshot slot. */
 export interface RestoreTransactionParticipant {
   restore(content: string, options?: { shouldCommit?: () => boolean; recovery?: boolean }): Promise<void>;
+  restoreAvailable?(): boolean;
+}
+
+function assertParticipantAvailable(participant: RestoreTransactionParticipant): void {
+  if (!participant.restoreAvailable) return;
+  try {
+    if (participant.restoreAvailable() === true) return;
+  } catch { /* fail closed below */ }
+  const unsupported = new Error('Protected authenticator restore is unavailable because atomic no-follow vault operations are unsupported on this platform.') as NodeJS.ErrnoException;
+  unsupported.code = 'EUNSUPPORTED';
+  throw unsupported;
 }
 
 const MANIFEST_NAME = 'manifest.json';
@@ -205,6 +216,10 @@ export async function prepareRestoreTransaction(transactionRoot: string, files: 
 
 export async function applyRestoreTransaction(transactionRoot: string, targetRoot: string, manifest: RestoreTransactionManifest, participant?: RestoreTransactionParticipant): Promise<RestoreTransactionManifest> {
   assertManifest(manifest);
+  if (manifest.files.some((file) => file.targetName === AUTHENTICATOR_RESTORE_TARGET_NAME)) {
+    if (!participant) throw new Error('The authenticator restore participant was unavailable.');
+    assertParticipantAvailable(participant);
+  }
   const applying = { ...manifest, phase: 'applying' as const };
   await writeManifest(transactionRoot, applying);
   for (const file of applying.files) {
@@ -229,6 +244,10 @@ export async function markRestoreTransactionRecording(transactionRoot: string, m
 
 export async function rollbackRestoreTransaction(transactionRoot: string, targetRoot: string, manifest: RestoreTransactionManifest, participant?: RestoreTransactionParticipant): Promise<RestoreTransactionManifest> {
   assertManifest(manifest);
+  if (manifest.files.some((file) => file.targetName === AUTHENTICATOR_RESTORE_TARGET_NAME)) {
+    if (!participant) throw new Error('The authenticator restore participant was unavailable.');
+    assertParticipantAvailable(participant);
+  }
   const rollingBack = { ...manifest, phase: 'rolling-back' as const };
   await writeManifest(transactionRoot, rollingBack);
   for (const file of rollingBack.files) {
