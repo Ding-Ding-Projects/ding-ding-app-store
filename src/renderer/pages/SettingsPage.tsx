@@ -362,7 +362,9 @@ export function SettingsPage({ settings, settingsProvenance, sourceIsolationStat
           </>
         )}
         {subTab === 'settings.support' && counts[subTab] > 0 && (
-          <LockSupportPage settings={viewSettings} workspace={workspace.workspace} locks={locks} support={support} notify={notify} matcher={matcher} initialTarget={lockTargetRequest} />
+          schoolRestricted
+            ? <p className="notice warning" role="status">{label(viewSettings, `${schoolLabel} is active. Lock management is unavailable in restricted mode.`, `${schoolLabel} 已開啟；限制模式唔提供鎖管理。`)}</p>
+            : <LockSupportPage settings={viewSettings} workspace={workspace.workspace} locks={locks} support={support} notify={notify} matcher={matcher} initialTarget={lockTargetRequest} />
         )}
       </div>
     </>

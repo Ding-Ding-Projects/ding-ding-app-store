@@ -152,7 +152,7 @@ void app.whenReady().then(async () => {
   const personalVocabulary = new PersonalVocabularyService();
   const schoolMode = new SchoolModeService();
   const authenticator = new AuthenticatorService(authenticatorVault, history);
-  const lockSupport = new LockSupportService(history);
+  const lockSupport = new LockSupportService(history, () => schoolMode.isRestricted());
   const unsubscribeSchoolMode = schoolMode.subscribe((snapshot) => {
     if (snapshot.sync.status !== 'ready' || snapshot.state?.enabled === true) historyAccess.invalidate();
     authenticator.setRestricted(snapshot.sync.status !== 'ready' || snapshot.state?.enabled === true);

@@ -113,10 +113,11 @@ export class LockSupportService {
   private readonly attempts = new Map<string, { count: number; windowStartedAt: number }>();
   private mutationTail: Promise<void> = Promise.resolve();
 
-  constructor(private readonly history?: Pick<HistoryService, 'record'>) {}
+  constructor(private readonly history?: Pick<HistoryService, 'record'>, private readonly isRestricted: () => Promise<boolean> = async () => false) {}
 
   async loadLocks(): Promise<LockState> {
     await this.ensureLocksLoaded();
+    if (await this.isRestricted()) return this.restrictedState();
     return this.lockState();
   }
 
@@ -124,6 +125,7 @@ export class LockSupportService {
   async setLock(input: LockSetRequest): Promise<LockMutationResult> { return this.enqueue(() => this.setLockImpl(input)); }
   private async setLockImpl(input: LockSetRequest): Promise<LockMutationResult> {
     await this.ensureLocksLoaded();
+    if (await this.isRestricted()) return this.restrictedFailure();
     const parsed = lockSetSchema.safeParse(input);
     if (!parsed.success) return this.lockFailure('Lock details are invalid.', 'invalid');
     if (!this.vaultAvailable()) return this.lockFailure('The operating-system credential vault is unavailable; this local UX lock was not created.', this.vaultReadFailed ? 'credential-store-read-failed' : 'credential-store-unavailable');
@@ -136,6 +138,7 @@ export class LockSupportService {
     const totpDigits = parsed.data.totpDigits ?? existing?.totpDigits ?? 6;
     const totpPeriodSeconds = parsed.data.totpPeriodSeconds ?? existing?.totpPeriodSeconds ?? 30;
     const vault = await this.readVault();
+    if (await this.isRestricted()) return this.restrictedFailure();
     if (!vault) return this.lockFailure('The operating-system credential vault could not be read; no lock change was made.', 'credential-store-read-failed');
     if (existing && (!parsed.data.currentCredential || !this.verifyCredential(keyOf(target), parsed.data.currentCredential, this.normalizeVaultEntry(vault[keyOf(target)])))) return this.lockFailure('The current lock credential did not match; the new credential was not saved.', 'credential-mismatch');
     let vaultEntry: VaultEntry;
@@ -171,6 +174,7 @@ export class LockSupportService {
   async unlock(input: LockCredentialRequest): Promise<LockMutationResult> { return this.enqueue(() => this.unlockImpl(input)); }
   private async unlockImpl(input: LockCredentialRequest): Promise<LockMutationResult> {
     await this.ensureLocksLoaded();
+    if (await this.isRestricted()) return this.restrictedFailure();
     const parsed = lockCredentialSchema.safeParse(input);
     if (!parsed.success) return this.lockFailure('Unlock details are invalid.', 'invalid');
     const target = { targetKind: parsed.data.targetKind, targetId: parsed.data.targetId } as const;
@@ -179,6 +183,7 @@ export class LockSupportService {
     if (!this.locks.some((record) => keyOf(record) === key)) return this.lockFailure('That lock does not exist.', 'not-found');
     if (!this.vaultAvailable()) return this.lockFailure('The operating-system credential vault is unavailable; the lock remains honest and unavailable.', this.vaultReadFailed ? 'credential-store-read-failed' : 'credential-store-unavailable');
     const vault = await this.readVault();
+    if (await this.isRestricted()) return this.restrictedFailure();
     if (!vault || !this.verifyCredential(key, parsed.data.credential, this.normalizeVaultEntry(vault[key]))) return this.lockFailure('The credential did not match. If it is forgotten, use Support Tickets and delete the application-data folder yourself.', this.isRateLimited(key) ? 'rate-limited' : 'credential-mismatch');
     if ((this.unlockGenerations.get(key) ?? 0) !== generation) return this.lockFailure('The lock changed while the credential was being checked; unlock was discarded.', 'invalid');
     const record = this.locks.find((candidate) => keyOf(candidate) === keyOf(target));
@@ -191,6 +196,7 @@ export class LockSupportService {
   async lockAgain(input: LockTarget): Promise<LockMutationResult> { return this.enqueue(() => this.lockAgainImpl(input)); }
   private async lockAgainImpl(input: LockTarget): Promise<LockMutationResult> {
     await this.ensureLocksLoaded();
+    if (await this.isRestricted()) return this.restrictedFailure();
     const parsed = lockTargetSchema.safeParse(input);
     if (!parsed.success) return this.lockFailure('Lock target is invalid.', 'invalid');
     const key = keyOf(parsed.data);
@@ -203,6 +209,7 @@ export class LockSupportService {
   async remove(input: LockCredentialRequest): Promise<LockMutationResult> { return this.enqueue(() => this.removeImpl(input)); }
   private async removeImpl(input: LockCredentialRequest): Promise<LockMutationResult> {
     await this.ensureLocksLoaded();
+    if (await this.isRestricted()) return this.restrictedFailure();
     const parsed = lockCredentialSchema.safeParse(input);
     if (!parsed.success) return this.lockFailure('Lock details are invalid.', 'invalid');
     const target = { targetKind: parsed.data.targetKind, targetId: parsed.data.targetId } as const;
@@ -211,6 +218,7 @@ export class LockSupportService {
     this.unlockGenerations.set(key, (this.unlockGenerations.get(key) ?? 0) + 1);
     if (!this.vaultAvailable()) return this.lockFailure('The operating-system credential vault is unavailable; the lock was not removed.', this.vaultReadFailed ? 'credential-store-read-failed' : 'credential-store-unavailable');
     const vault = await this.readVault();
+    if (await this.isRestricted()) return this.restrictedFailure();
     if (!vault || !this.verifyCredential(key, parsed.data.credential, this.normalizeVaultEntry(vault[key]))) return this.lockFailure('The credential did not match; the lock was not removed.', 'credential-mismatch');
     const nextVault = { ...vault };
     delete nextVault[key];
@@ -229,18 +237,18 @@ export class LockSupportService {
   }
   async bulkLockAgain(inputs: LockTarget[]): Promise<LockBulkMutationResult> { return this.enqueue(() => this.bulkLockAgainImpl(inputs)); }
   private async bulkLockAgainImpl(inputs: LockTarget[]): Promise<LockBulkMutationResult> {
-    await this.ensureLocksLoaded(); const unique = new Map<string, LockTarget>(); for (const input of inputs) { const parsed = lockTargetSchema.safeParse(input); if (!parsed.success) return { ok: false, state: this.lockState(), affectedCount: 0, skippedCount: 0, skippedTargets: [], message: 'The bulk lock selection was invalid; no locks were changed.', reason: 'invalid' }; unique.set(keyOf(parsed.data), parsed.data); }
+    await this.ensureLocksLoaded(); if (await this.isRestricted()) return this.bulkRestrictedFailure(); const unique = new Map<string, LockTarget>(); for (const input of inputs) { const parsed = lockTargetSchema.safeParse(input); if (!parsed.success) return { ok: false, state: this.lockState(), affectedCount: 0, skippedCount: 0, skippedTargets: [], message: 'The bulk lock selection was invalid; no locks were changed.', reason: 'invalid' }; unique.set(keyOf(parsed.data), parsed.data); }
     const skippedTargets: LockTarget[] = []; const affected = [...unique.values()].filter((target) => { if (!this.locks.some((record) => keyOf(record) === keyOf(target))) { skippedTargets.push(target); return false; } return true; });
-    for (const target of affected) { const key = keyOf(target); this.unlockGenerations.set(key, (this.unlockGenerations.get(key) ?? 0) + 1); this.unlocked.delete(key); }
+    if (await this.isRestricted()) return this.bulkRestrictedFailure(); for (const target of affected) { const key = keyOf(target); this.unlockGenerations.set(key, (this.unlockGenerations.get(key) ?? 0) + 1); this.unlocked.delete(key); }
     if (affected.length) await this.recordHistory(`Bulk lock-again changed ${affected.length} selected locks; ${skippedTargets.length} skipped.`);
     return { ok: affected.length > 0, state: this.lockState(), affectedCount: affected.length, skippedCount: skippedTargets.length, skippedTargets, message: `${affected.length} lock${affected.length === 1 ? '' : 's'} locked again${skippedTargets.length ? `; ${skippedTargets.length} skipped` : ''}.`, reason: affected.length ? undefined : 'not-found' };
   }
   async bulkRemove(input: LockBulkRemoveRequest): Promise<LockBulkMutationResult> { return this.enqueue(() => this.bulkRemoveImpl(input)); }
   private async bulkRemoveImpl(input: LockBulkRemoveRequest): Promise<LockBulkMutationResult> {
-    await this.ensureLocksLoaded(); if (!input || input.confirmed !== true || !Array.isArray(input.items) || input.items.length > 64) return { ok: false, state: this.lockState(), affectedCount: 0, skippedCount: 0, skippedTargets: [], message: 'Bulk lock removal requires the completed confirmation.', reason: 'invalid' };
+    await this.ensureLocksLoaded(); if (await this.isRestricted()) return this.bulkRestrictedFailure(); if (!input || input.confirmed !== true || !Array.isArray(input.items) || input.items.length > 64) return { ok: false, state: this.lockState(), affectedCount: 0, skippedCount: 0, skippedTargets: [], message: 'Bulk lock removal requires the completed confirmation.', reason: 'invalid' };
     const unique = new Map<string, LockCredentialRequest>(); for (const item of input.items) { const parsed = lockCredentialSchema.safeParse(item); if (!parsed.success) return { ok: false, state: this.lockState(), affectedCount: 0, skippedCount: 0, skippedTargets: [], message: 'The bulk lock credentials were invalid; no locks were changed.', reason: 'invalid' }; unique.set(keyOf(parsed.data), parsed.data); }
     if (!this.vaultAvailable()) return { ok: false, state: this.lockState(), affectedCount: 0, skippedCount: unique.size, skippedTargets: [...unique.values()].map(({ targetKind, targetId }) => ({ targetKind, targetId })), message: 'The operating-system credential vault is unavailable; no locks were removed.', reason: 'credential-store-unavailable' };
-    const vault = await this.readVault(); if (!vault) return { ok: false, state: this.lockState(), affectedCount: 0, skippedCount: unique.size, skippedTargets: [...unique.values()].map(({ targetKind, targetId }) => ({ targetKind, targetId })), message: 'The credential vault could not be read; no locks were removed.', reason: 'credential-store-read-failed' };
+    const vault = await this.readVault(); if (await this.isRestricted()) return this.bulkRestrictedFailure(); if (!vault) return { ok: false, state: this.lockState(), affectedCount: 0, skippedCount: unique.size, skippedTargets: [...unique.values()].map(({ targetKind, targetId }) => ({ targetKind, targetId })), message: 'The credential vault could not be read; no locks were removed.', reason: 'credential-store-read-failed' };
     const skippedTargets: LockTarget[] = []; const removable: LockCredentialRequest[] = []; for (const request of unique.values()) { const key = keyOf(request); if (!this.locks.some((record) => keyOf(record) === key) || !this.verifyCredential(key, request.credential, this.normalizeVaultEntry(vault[key]))) skippedTargets.push({ targetKind: request.targetKind, targetId: request.targetId }); else removable.push(request); }
     if (!removable.length) return { ok: false, state: this.lockState(), affectedCount: 0, skippedCount: skippedTargets.length, skippedTargets, message: 'No selected locks were removed; each was missing or its credential did not match.', reason: 'credential-mismatch' };
     const keys = new Set(removable.map(keyOf)); const previousLocks = this.locks; const nextLocks = this.locks.filter((record) => !keys.has(keyOf(record))); const nextVault = { ...vault }; for (const key of keys) delete nextVault[key];
@@ -441,6 +449,10 @@ export class LockSupportService {
       recoveryPath: this.recoveryPath,
     };
   }
+
+  private restrictedState(): LockState { return { schemaVersion: 1, vaultAvailable: false, unavailableReason: 'credential-store-unavailable', records: [], recoveryPath: '' }; }
+  private restrictedFailure(): LockMutationResult { return { ok: false, state: this.restrictedState(), message: 'Lock management is unavailable while the shared restricted mode is active.', reason: 'credential-store-unavailable' }; }
+  private bulkRestrictedFailure(): LockBulkMutationResult { return { ok: false, state: this.restrictedState(), affectedCount: 0, skippedCount: 0, skippedTargets: [], message: 'Bulk lock management is unavailable while the shared restricted mode is active.', reason: 'credential-store-unavailable' }; }
 
   async hasLockedAppearanceProperties(): Promise<boolean> {
     await this.ensureLocksLoaded();
