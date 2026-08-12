@@ -15,6 +15,16 @@ describe('static site dialog emoji preference', () => {
     expect(readDialogEmojiPreference(local)).toBe(false);
     expect(readDialogEmojiPreference({ getItem: () => { throw new Error('blocked'); } })).toBe(true);
     expect(writeDialogEmojiPreference(true, { setItem: () => { throw new Error('blocked'); } })).toBe(false);
+    expect(writeDialogEmojiPreference(false, {})).toBe(false);
+    const original = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+    Object.defineProperty(globalThis, 'localStorage', { configurable: true, get: () => { throw new Error('blocked'); } });
+    try {
+      expect(readDialogEmojiPreference()).toBe(true);
+      expect(writeDialogEmojiPreference(false)).toBe(false);
+    } finally {
+      if (original) Object.defineProperty(globalThis, 'localStorage', original);
+      else delete (globalThis as { localStorage?: unknown }).localStorage;
+    }
     expect(SITE_DIALOG_EMOJI_STORAGE_KEY).toBe('ding-ding-docs:showEmojisInDialogs');
   });
 
@@ -28,11 +38,12 @@ describe('static site dialog emoji preference', () => {
     const html = await readFile(new URL('../site/index.html', import.meta.url), 'utf8');
     const app = await readFile(new URL('../site/assets/app.js', import.meta.url), 'utf8');
     expect(html).toContain('id="show-emojis-in-dialogs"');
+    expect(html).toContain('aria-describedby="dialog-emoji-help"');
     expect(html).toContain('id="palette-title-emoji" aria-hidden="true"');
     expect(app).toContain("./dialog-emoji.mjs");
     expect(app).toContain('setting-show-emojis-in-dialogs');
     expect(app).toContain('shouldShowDialogEmoji(state.showEmojisInDialogs, restricted())');
     expect(html).toContain('data-settings-text="show emojis dialogs message boxes decoration accessibility"');
-    expect(app).toContain("writeDialogEmojiPreference(state.showEmojisInDialogs)");
+    expect(app).toContain('writeDialogEmojiPreference(enabled)');
   });
 });
