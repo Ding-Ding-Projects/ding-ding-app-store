@@ -9,6 +9,7 @@ Serve the repository root with any static server and open `site/index.html`. Git
 - Full article text covering behaviour, configuration, failure modes, security considerations, verification, and suggested internal links.
 - Plain-text-first documentation search with its own adjacent guided regex builder, flags, sample, validation, live matches, bounded inputs, and device-local query/pattern persistence. No search state leaves the browser.
 - Browser-style General, Appearance, and About settings tabs; every tab has the settings surface's own search and adjacent full regex builder.
+- General settings always include a local-only personal-vocabulary JSON picker with strict bounded validation, validated browser-local replace/clear/cache states, technical-token-safe canonical article presentation, settings-search and command-palette reachability, and an explicitly site-only restricted presentation switch because this static site cannot observe the desktop app's shared School-mode record.
 - English, Hong Kong Cantonese, and bilingual labels, independent English/Cantonese funny-level sliders, theme, density, and accent preferences stored per visitor.
 - `Ctrl+Shift+F` command palette covering every article and settings destination, with its own adjacent regex builder.
 - Material-style local tokens, visible focus, skip link, semantic tab/tab-panel roles, arrow/Home/End navigation, reduced-motion handling, honest empty states, local hash routes, and no network tracking.
