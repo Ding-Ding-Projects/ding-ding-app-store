@@ -1,5 +1,11 @@
 # Handoff
 
+## 2026-08-12 packaged launch identity and branding repair
+
+- The installed package previously used the default Electron icon because `build.win.icon` was unset and `squirrelWindows.iconUrl` pointed at the generic GitHub favicon. The native BrowserWindow also had no explicit title/icon, so renderer startup failures could present as an Electron or `Error` shell with no product branding.
+- This lane adds checked-in `assets/ding-ding-app-store.ico` and `assets/ding-ding-app-store.svg`, wires the ICO into electron-builder/Squirrel and the SVG into the renderer title bar, sets the native `Ding Ding App Store` identity and App User Model ID, and creates the branded window before restore/migration awaits. Renderer `did-fail-load`, promise rejection, and process exception paths now emit bounded diagnostics while keeping the native product title.
+- `tests/launch-branding.test.ts` covers asset/config/native-title wiring. The local Squirrel package produced `DingDingAppStore-Setup.exe`, `RELEASES`, and a full `.nupkg`; the unpacked executable embedded the ICO and launched with a live `Ding Ding App Store` window. The prior installed build showed `Error` and exited its launcher path; the new artifact's release/runtime proof remains pending until the exact default-branch release is published.
+
 ## 2026-08-11 authenticator registration rejection notifications
 
 - The Authenticator renderer now catches `prepare` and `confirm` bridge, preload-parser, and transport rejections and reports them through the existing non-blocking corner notification path. A typed `response-invalid` / `transport` / `unexpected` reason maps to factual English and Hong Kong Cantonese title/body copy, and the shared language helper renders English, Cantonese, or bilingual mode without echoing raw error text.

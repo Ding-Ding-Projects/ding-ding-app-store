@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Ding Ding App Store</title>
+  <desc id="desc">A blue storefront tile with a white bell.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#155EEF"/>
+      <stop offset="1" stop-color="#0B3D91"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="url(#bg)"/>
+  <path d="M61 111h134v78H61z" fill="#fff" opacity=".96"/>
+  <path d="M52 111h152l-18-34H70z" fill="#B9D4FF"/>
+  <path d="M88 111v78M168 111v78" stroke="#155EEF" stroke-width="10" opacity=".26"/>
+  <path d="M98 101c0-22 13-39 30-39s30 17 30 39v12H98z" fill="#fff"/>
+  <path d="M91 113h74" stroke="#fff" stroke-width="12" stroke-linecap="round"/>
+  <circle cx="128" cy="53" r="7" fill="#FFD166"/>
+  <path d="M119 126v39M137 126v39" stroke="#155EEF" stroke-width="7" stroke-linecap="round"/>
+</svg>

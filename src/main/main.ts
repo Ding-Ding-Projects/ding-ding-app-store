@@ -28,9 +28,14 @@ import { LockSupportService } from './lock-support-service.js';
 import { StateMutationQueue } from './state-mutation-queue.js';
 
 const scheduleTaskSchema = z.enum(['self-update', 'catalog-refresh']);
+const PRODUCT_NAME = 'Ding Ding App Store';
+const PRODUCT_APP_ID = 'org.dingdingprojects.appstore';
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 let mainWindow: BrowserWindow | null = null;
+
+app.setName(PRODUCT_NAME);
+app.setAppUserModelId(PRODUCT_APP_ID);
 
 if (squirrelStartup) app.quit();
 
@@ -56,6 +61,8 @@ function createWindow(): BrowserWindow {
     minWidth: 360,
     minHeight: 640,
     show: false,
+    title: PRODUCT_NAME,
+    icon: path.join(dirname, '..', '..', 'assets', 'ding-ding-app-store.ico'),
     frame: false,
     titleBarStyle: 'hidden',
     backgroundColor: '#F7F2FA',
@@ -79,8 +86,20 @@ function createWindow(): BrowserWindow {
   window.webContents.on('will-navigate', (event, url) => {
     if (url !== window.webContents.getURL()) event.preventDefault();
   });
+  window.webContents.on('page-title-updated', (event) => {
+    event.preventDefault();
+    window.setTitle(PRODUCT_NAME);
+  });
   window.once('ready-to-show', () => window.showInactive());
-  void window.loadFile(path.join(dirname, '..', 'renderer', 'index.html'));
+  window.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+    if (!isMainFrame) return;
+    console.error(`Ding Ding App Store renderer failed to load (${errorCode}): ${errorDescription} — ${validatedURL}`);
+    window.setTitle(PRODUCT_NAME);
+  });
+  void window.loadFile(path.join(dirname, '..', 'renderer', 'index.html')).catch((error: unknown) => {
+    console.error(`Ding Ding App Store renderer load failed: ${(error as Error).message}`);
+    window.setTitle(PRODUCT_NAME);
+  });
   return window;
 }
 
@@ -88,6 +107,11 @@ void app.whenReady().then(async () => {
   if (!hasSingleInstanceLock) return;
   session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
   session.defaultSession.setPermissionCheckHandler(() => false);
+
+  // Paint the branded shell before any recover/migration work. A malformed
+  // local record must never make a launch look like a silent Electron exit.
+  mainWindow = createWindow();
+  mainWindow.on('closed', () => { mainWindow = null; });
 
   const catalog = new CatalogService();
   const history = new HistoryService();
@@ -387,9 +411,7 @@ void app.whenReady().then(async () => {
   });
   ipcMain.on('window:close', () => mainWindow?.close());
 
-  mainWindow = createWindow();
   void stateMutationQueue.run(() => installed.discover()).catch(() => undefined);
-  mainWindow.on('closed', () => { mainWindow = null; });
   // ScheduleService may migrate and persist its file during startup. Keep
   // that write behind the same barrier as history restore and renderer saves.
   await stateMutationQueue.run(() => scheduler.start());
@@ -408,4 +430,12 @@ void app.whenReady().then(async () => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
+});
+
+process.on('uncaughtException', (error) => {
+  console.error(`Ding Ding App Store startup/runtime exception: ${error.message}`);
+});
+process.on('unhandledRejection', (reason) => {
+  const message = reason instanceof Error ? reason.message : String(reason);
+  console.error(`Ding Ding App Store startup/runtime rejection: ${message}`);
 });

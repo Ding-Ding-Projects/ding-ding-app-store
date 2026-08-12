@@ -18,7 +18,8 @@ describe('School mode IPC and renderer completeness guards', () => {
     const startIndex = main.indexOf('await schoolMode.start()');
     const windowIndex = main.indexOf('mainWindow = createWindow()');
     expect(startIndex).toBeGreaterThan(0);
-    expect(windowIndex).toBeGreaterThan(startIndex);
+    expect(windowIndex).toBeGreaterThan(0);
+    expect(windowIndex).toBeLessThan(startIndex);
     expect(main).toContain("contents.send('school-mode:changed', snapshot)");
     expect(main).toContain("ipcMain.handle('school-mode:change-credential'");
     expect(main).toContain("app.once('will-quit'");

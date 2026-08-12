@@ -999,6 +999,7 @@ export function App() {
         {...el('app-shell')}
       >
         <header className="titlebar" {...el('titlebar')}>
+          <img className="titlebar-logo" src="/ding-ding-app-store.svg" alt="" aria-hidden="true" />
           <div className="brand-mark" aria-hidden="true"><Icon>storefront</Icon></div>
           <strong {...el('titlebar-brand')}>{settings.displayName}</strong>
           <span className="dev-badge" {...el('titlebar-badge')}>Preview 0.1.0</span>
