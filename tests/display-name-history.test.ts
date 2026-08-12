@@ -24,7 +24,7 @@ describe('shared display-name history boundary', () => {
     const article = GENERATED_DOCS.find((item) => item.id === 'secret-and-display-name-history');
     expect(article).toMatchObject({ id: 'secret-and-display-name-history', category: 'memory-sync', status: 'limited' });
     expect(article?.body).toContain('Successful authenticator confirmation and metadata mutations append localized redacted');
-    expect(article?.body).toContain('Authenticator metadata and OS-bound encrypted ciphertext are now included only in protected local-history snapshots');
+    expect(article?.body).toContain('Protected authenticator metadata/ciphertext restore is explicitly unavailable on the production host');
     expect(article?.body).toContain('authenticator');
 
     const registry = buildRegistry({
