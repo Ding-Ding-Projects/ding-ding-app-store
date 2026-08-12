@@ -86,6 +86,24 @@
         </div>
         <div id="settings-panel-about" role="tabpanel" aria-labelledby="settings-tab-about" data-settings-panel="about" hidden>
           <p data-settings-text="offline generated canonical wiki site bundle">All articles are generated from the canonical categorized Markdown and bundled locally. No analytics, remote fonts, or CDN assets are used.</p>
+          <section id="changelog-card" class="settings-card" aria-labelledby="changelog-title" data-settings-text="changelog releases versions dates commits search export copy">
+            <div class="dialog-head"><div><h3 id="changelog-title" data-site-copy="changelog-title">Changelog</h3><p class="supporting" data-site-copy="changelog-source">Published release records are bundled from the canonical release manifest; this static site never fetches release data at runtime.</p></div><span id="changelog-count" class="tag">0</span></div>
+            <div class="search-wrap">
+              <label class="sr-only" for="changelog-search" data-site-copy="changelog-search-label">Search releases</label>
+              <input id="changelog-search" type="search" maxlength="256" placeholder="Search versions, changes, and commit SHAs">
+              <button id="changelog-regex-toggle" class="icon-button" aria-expanded="false" aria-controls="changelog-regex-panel" title="Open full regex builder">.*</button>
+              <div id="changelog-regex-panel" class="regex-panel" hidden></div>
+            </div>
+            <div class="changelog-filters" role="group" aria-label="Changelog date filters">
+              <label><span data-site-copy="changelog-start">Start date</span><input id="changelog-start" type="date"></label>
+              <label><span data-site-copy="changelog-end">End date</span><input id="changelog-end" type="date"></label>
+              <button id="changelog-clear-dates" class="text-button" type="button" data-site-copy="changelog-clear">Clear dates</button>
+            </div>
+            <p id="changelog-error" class="empty" role="alert" hidden></p>
+            <div class="button-row"><button id="changelog-copy" class="text-button" type="button" data-site-copy="changelog-copy">Copy Markdown</button><button id="changelog-export" class="text-button" type="button" data-site-copy="changelog-export">Export Markdown</button></div>
+            <ol id="changelog-list" class="changelog-list" aria-live="polite"></ol>
+            <p id="changelog-empty" class="empty" data-site-copy="changelog-empty" hidden>No releases match the current filters. Clear search or dates.</p>
+          </section>
         </div>
         <p id="settings-empty" class="empty" hidden>No setting in this tab matches the current query.</p>
       </section>

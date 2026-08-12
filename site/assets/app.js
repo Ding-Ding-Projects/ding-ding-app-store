@@ -18,6 +18,7 @@ import { readDialogEmojiPreference, shouldShowDialogEmoji, writeDialogEmojiPrefe
 import { DEFAULT_DISPLAY_NAME, displayNameForPresentation, loadDisplayName, resetDisplayName, saveDisplayName } from './display-name.mjs';
 import { EMPTY_SCHEDULE, loadSchedule, resolveSchedule, saveSchedule } from './schedule.mjs';
 import { scheduleRuleMarkup } from './schedule-ui.mjs';
+import { SITE_CHANGELOG_ENTRIES, changelogMarkdown } from './changelog.mjs';
 
 (() => {
   'use strict';
@@ -61,7 +62,7 @@ import { scheduleRuleMarkup } from './schedule-ui.mjs';
   let renderedSchedulePresentation = null;
   let currentScheduleStatus = ['No schedule rules are saved. Base settings remain active.', '未儲存任何排程規則；而家使用基本設定。'];
   let vocabulary = loadCachedVocabulary();
-  const search = { docs: readStoredSearch('docs'), settings: readStoredSearch('settings'), palette: readStoredSearch('palette') };
+  const search = { docs: readStoredSearch('docs'), settings: readStoredSearch('settings'), palette: readStoredSearch('palette'), changelog: readStoredSearch('changelog') };
 
   const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
   const articleId = (href) => href.match(/(?:^|\/)([a-z0-9-]+)\.md(?:#.*)?$/i)?.[1] || null;
@@ -166,6 +167,15 @@ import { scheduleRuleMarkup } from './schedule-ui.mjs';
         'schedule-save': ['Save schedule', '儲存排程'],
         'schedule-boundary': ['This static site intentionally supports local browser data only. It does not read an operating-system vault, Home Assistant, or an external API; those sources belong to the desktop app and are not silently emulated here.', '呢個靜態網站刻意只支援本機瀏覽器資料。佢唔會讀取作業系統憑證庫、Home Assistant 或外部 API；嗰啲來源屬於桌面 app，呢度唔會靜雞雞扮到有。'],
         'schedule-empty': ['No valid schedule rules are present.', '而家冇有效排程規則。'],
+        'changelog-title': ['Changelog', '更新記錄'],
+        'changelog-source': ['Published release records are bundled from the canonical release manifest; this static site never fetches release data at runtime.', '已發佈版本記錄由標準 release manifest 隨網站打包；呢個靜態網站唔會喺執行時下載版本資料。'],
+        'changelog-search-label': ['Search releases', '搜尋版本'],
+        'changelog-start': ['Start date', '開始日期'],
+        'changelog-end': ['End date', '結束日期'],
+        'changelog-clear': ['Clear dates', '清除日期'],
+        'changelog-copy': ['Copy Markdown', '複製 Markdown'],
+        'changelog-export': ['Export Markdown', '匯出 Markdown'],
+        'changelog-empty': ['No releases match the current filters. Clear search or dates.', '冇版本符合目前篩選；請清除搜尋或日期。'],
       };
       if (labels[source]) node.textContent = restricted() ? labels[source][0] : localized(copy(labels[source][0]), copy(labels[source][1]));
     });
@@ -429,6 +439,35 @@ import { scheduleRuleMarkup } from './schedule-ui.mjs';
     bindOpen();
   }
 
+  function parseSiteDate(value, end = false) {
+    if (!value) return null;
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (!match) return Number.NaN;
+    const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), end ? 23 : 0, end ? 59 : 0, end ? 59 : 0, end ? 999 : 0);
+    return date.getFullYear() === Number(match[1]) && date.getMonth() === Number(match[2]) - 1 && date.getDate() === Number(match[3]) ? date.getTime() : Number.NaN;
+  }
+
+  function renderChangelog() {
+    const list = $('changelog-list'); if (!list) return;
+    const query = $('changelog-search').value.trim(); const mode = search.changelog; const key = mode.regex ? mode.pattern : query;
+    if (!mode.regex) mode.query = query; saveSearch('changelog');
+    const start = parseSiteDate($('changelog-start').value); const end = parseSiteDate($('changelog-end').value, true);
+    const error = $('changelog-error'); const invalid = Number.isNaN(start) || Number.isNaN(end) || (start !== null && end !== null && start > end);
+    if (error) { error.hidden = !invalid; error.textContent = Number.isNaN(start) ? localized('Start date is invalid; your typed value was kept.', '開始日期無效；你輸入嘅內容保留返。') : Number.isNaN(end) ? localized('End date is invalid; your typed value was kept.', '結束日期無效；你輸入嘅內容保留返。') : localized('Start date must be before the end date; your typed values were kept.', '開始日期要早過結束日期；你輸入嘅內容保留返。'); }
+    const match = matcher('changelog', query);
+    const rows = invalid ? [] : SITE_CHANGELOG_ENTRIES.filter((entry) => { const timestamp = Date.parse(entry.releasedAt); if (start !== null && timestamp < start) return false; if (end !== null && timestamp > end) return false; return match(`${entry.version}\n${entry.commit}\n${entry.changes.join('\n')}`); });
+    $('changelog-count').textContent = String(rows.length);
+    list.innerHTML = rows.map((entry) => `<li><div><h4>${escapeHtml(entry.version)}</h4><time dateTime="${entry.releasedAt}">${escapeHtml(new Date(entry.releasedAt).toLocaleDateString(effectiveMode() === 'yue' ? 'zh-HK' : 'en-CA', { year: 'numeric', month: 'short', day: 'numeric' }))}</time>${entry.changes.map((change) => `<p>${escapeHtml(change)}</p>`).join('')}<div class="commit-actions"><code>${entry.commit}</code><a class="text-button" href="${entry.releaseUrl}" target="_blank" rel="noreferrer">${escapeHtml(localized('Open release', '開啟版本'))}</a></div></div></li>`).join('');
+    $('changelog-empty').hidden = rows.length > 0 || invalid;
+    return rows;
+  }
+
+  function exportChangelog() {
+    const rows = renderChangelog(); if (!rows?.length) return;
+    const body = changelogMarkdown(rows, displayName());
+    try { const blob = new Blob([body], { type: 'text/markdown;charset=utf-8' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = 'ding-ding-app-store-changelog.md'; link.click(); URL.revokeObjectURL(url); setStatus(localized(`Exported ${rows.length} changelog entries.`, `已匯出 ${rows.length} 條更新記錄。`)); } catch { setStatus(localized('The changelog export could not be written.', '未能寫入更新記錄匯出檔。')); }
+  }
+
   function buildRegexPanel(kind, onApply) {
     const panel = $(`${kind}-regex-panel`);
     panel.innerHTML = `<label>Pattern <input data-regex="pattern" maxlength="256" aria-label="Regex pattern"></label><fieldset><legend>Flags</legend>${['i', 'm', 's', 'u'].map((flag) => `<label class="flag"><input type="checkbox" data-flag="${flag}" ${search[kind].flags.includes(flag) ? 'checked' : ''}>${flag}</label>`).join('')}</fieldset><label>Sample text <textarea data-regex="sample" maxlength="2048">Catalog\nInstaller\nAppearance</textarea></label><p data-regex="result" role="status">Plain-text search is active.</p><div class="regex-actions"><button data-token="literal">Literal</button><button data-token="[A-Za-z]">Class</button><button data-token="^">Anchor</button><button data-token="()">Group</button><button data-token="|">Alternation</button><button data-token="{1,3}">Quantifier</button></div><footer><button data-regex="plain" class="text-button">Use plain text</button><button data-regex="apply" class="text-button">Apply regex to search</button></footer>`;
@@ -466,6 +505,7 @@ import { scheduleRuleMarkup } from './schedule-ui.mjs';
     document.querySelectorAll('[data-settings-panel]').forEach((panel) => { panel.hidden = panel.dataset.settingsPanel !== state.settingsTab; });
     $('settings-search').value = search.settings.regex ? search.settings.pattern : search.settings.query;
     filterSettings();
+    if (state.settingsTab === 'about') renderChangelog();
     if (focus) $(`settings-tab-${state.settingsTab}`).focus();
   }
   function visibleSettingsTabs() { return [...document.querySelectorAll('[data-settings-tab]')].filter((tab) => !tab.hidden); }
@@ -508,19 +548,24 @@ import { scheduleRuleMarkup } from './schedule-ui.mjs';
     saveSearch('palette');
     const destinationSettings = ['general', 'appearance', ...(restricted() ? [] : ['schedule']), 'about'].map((id) => ({ id: `setting-${id}`, label: id === 'schedule' ? localized('Schedule settings', '排程設定') : `${id[0].toUpperCase()}${id.slice(1)} settings`, type: id === 'schedule' ? localized('Setting destination', '設定目的地') : 'Setting destination' }));
     const scheduleControls = restricted() ? [] : ['schedule-add', 'schedule-save', 'schedule-reset'].map((id) => ({ id: `setting-${id}`, label: localized(id.replace('schedule-', '').replace('-', ' '), id === 'schedule-add' ? '新增規則' : id === 'schedule-save' ? '儲存排程' : '重設排程'), type: localized('Schedule control', '排程控制') }));
-    const rows = [{ id: 'home', label: displayName(), type: 'Destination' }, ...articles.map((article) => ({ id: article.id, label: title(article), type: `${article.category} · ${article.status}` })), ...destinationSettings, ...scheduleControls, ...schedulePaletteControls(), ...(restricted() ? [] : [{ id: 'setting-display-name', label: localized('Display name', '顯示名稱'), type: localized('Settings control · local label', '設定控制 · 本機標籤') }, { id: 'setting-show-emojis-in-dialogs', label: localized('Show emojis in dialogs and message boxes', '喺對話框同訊息框顯示 emoji'), type: localized('Settings control · dialog decoration', '設定控制 · 對話框裝飾') }, { id: 'setting-personal-vocabulary-import', label: localized('Import personal vocabulary JSON', '匯入本機個人詞彙 JSON'), type: localized('Settings control · local upload', '設定控制 · 本機上載') }, { id: 'setting-personal-vocabulary-clear', label: localized('Clear personal vocabulary', '清除本機個人詞彙'), type: localized('Settings control · local reset', '設定控制 · 本機重設') }, { id: 'setting-schedule', label: localized('Scheduled settings', '設定排程'), type: localized('Settings control · local browser schedule', '設定控制 · 本機瀏覽器排程') }]), { id: 'setting-site-restricted', label: localized('Restricted presentation (site-only)', '受限顯示（只限網站）'), type: localized('Settings control · local mode', '設定控制 · 本機模式') }].filter((row) => match(`${row.label} ${row.type}`));
+    const rows = [{ id: 'home', label: displayName(), type: 'Destination' }, ...articles.map((article) => ({ id: article.id, label: title(article), type: `${article.category} · ${article.status}` })), ...destinationSettings, ...scheduleControls, ...schedulePaletteControls(), { id: 'setting-changelog-search', label: localized('Changelog search', '搜尋更新記錄'), type: localized('About · Changelog', '關於 · 更新記錄') }, ...(restricted() ? [] : [{ id: 'setting-display-name', label: localized('Display name', '顯示名稱'), type: localized('Settings control · local label', '設定控制 · 本機標籤') }, { id: 'setting-show-emojis-in-dialogs', label: localized('Show emojis in dialogs and message boxes', '喺對話框同訊息框顯示 emoji'), type: localized('Settings control · dialog decoration', '設定控制 · 對話框裝飾') }, { id: 'setting-personal-vocabulary-import', label: localized('Import personal vocabulary JSON', '匯入本機個人詞彙 JSON'), type: localized('Settings control · local upload', '設定控制 · 本機上載') }, { id: 'setting-personal-vocabulary-clear', label: localized('Clear personal vocabulary', '清除本機個人詞彙'), type: localized('Settings control · local reset', '設定控制 · 本機模式') }, { id: 'setting-schedule', label: localized('Scheduled settings', '設定排程'), type: localized('Settings control · local browser schedule', '設定控制 · 本機瀏覽器排程') }]), { id: 'setting-site-restricted', label: localized('Restricted presentation (site-only)', '受限顯示（只限網站）'), type: localized('Settings control · local mode', '設定控制 · 本機模式') }].filter((row) => match(`${row.label} ${row.type}`));
     $('palette-results').innerHTML = rows.length ? rows.map((row) => `<button class="palette-row" data-command="${row.id}" role="option"><strong>${escapeHtml(row.label)}</strong><br><small>${escapeHtml(row.type)}</small></button>`).join('') : '<p class="empty">No command or destination matches.</p>';
-    document.querySelectorAll('[data-command]').forEach((button) => button.addEventListener('click', () => { $('palette').close(); const id = button.dataset.command; if (id === 'setting-display-name') { openSettingsTab('general'); $('site-display-name').focus(); $('settings-title').scrollIntoView(); } else if (id === 'setting-show-emojis-in-dialogs') { openSettingsTab('general'); $('show-emojis-in-dialogs').focus(); $('settings-title').scrollIntoView(); } else if (id === 'setting-personal-vocabulary-import') { openSettingsTab('general'); $('personal-vocabulary-file').focus(); $('settings-title').scrollIntoView(); } else if (id === 'setting-personal-vocabulary-clear') { openSettingsTab('general'); $('personal-vocabulary-clear').focus(); $('settings-title').scrollIntoView(); } else if (id === 'setting-site-restricted') { openSettingsTab('general'); $('site-restricted').focus(); $('settings-title').scrollIntoView(); } else if (id.startsWith('setting-schedule-control-')) { focusSettingsControl('schedule', id.slice('setting-schedule-control-'.length)); } else if (id === 'setting-schedule-add' || id === 'setting-schedule-save' || id === 'setting-schedule-reset') { focusSettingsControl('schedule', id.slice(8)); } else if (id.startsWith('setting-')) { openSettingsTab(id.slice(8)); $('settings-title').scrollIntoView(); } else openArticle(id); }));
+    document.querySelectorAll('[data-command]').forEach((button) => button.addEventListener('click', () => { $('palette').close(); const id = button.dataset.command; if (id === 'setting-changelog-search') { openSettingsTab('about'); $('changelog-search').focus(); $('changelog-title').scrollIntoView(); } else if (id === 'setting-display-name') { openSettingsTab('general'); $('site-display-name').focus(); $('settings-title').scrollIntoView(); } else if (id === 'setting-show-emojis-in-dialogs') { openSettingsTab('general'); $('show-emojis-in-dialogs').focus(); $('settings-title').scrollIntoView(); } else if (id === 'setting-personal-vocabulary-import') { openSettingsTab('general'); $('personal-vocabulary-file').focus(); $('settings-title').scrollIntoView(); } else if (id === 'setting-personal-vocabulary-clear') { openSettingsTab('general'); $('personal-vocabulary-clear').focus(); $('settings-title').scrollIntoView(); } else if (id === 'setting-site-restricted') { openSettingsTab('general'); $('site-restricted').focus(); $('settings-title').scrollIntoView(); } else if (id.startsWith('setting-schedule-control-')) { focusSettingsControl('schedule', id.slice('setting-schedule-control-'.length)); } else if (id === 'setting-schedule-add' || id === 'setting-schedule-save' || id === 'setting-schedule-reset') { focusSettingsControl('schedule', id.slice(8)); } else if (id.startsWith('setting-')) { openSettingsTab(id.slice(8)); $('settings-title').scrollIntoView(); } else openArticle(id); }));
   }
 
-  ['docs', 'settings', 'palette'].forEach((kind) => {
+  ['docs', 'settings', 'palette', 'changelog'].forEach((kind) => {
     const input = $(`${kind}-search`);
     input.value = search[kind].regex ? search[kind].pattern : search[kind].query;
   });
   $('docs-search').addEventListener('input', () => { if (search.docs.regex) search.docs.pattern = $('docs-search').value; else search.docs.query = $('docs-search').value; saveSearch('docs'); renderDocsResults(); });
   $('settings-search').addEventListener('input', () => { if (search.settings.regex) search.settings.pattern = $('settings-search').value; else search.settings.query = $('settings-search').value; saveSearch('settings'); filterSettings(); });
   $('palette-search').addEventListener('input', () => { if (search.palette.regex) search.palette.pattern = $('palette-search').value; else search.palette.query = $('palette-search').value; saveSearch('palette'); paletteResults(); });
-  setupBuilder('docs', renderDocsResults); setupBuilder('settings', filterSettings); setupBuilder('palette', paletteResults);
+  $('changelog-search').addEventListener('input', () => { if (search.changelog.regex) search.changelog.pattern = $('changelog-search').value; else search.changelog.query = $('changelog-search').value; saveSearch('changelog'); renderChangelog(); });
+  setupBuilder('docs', renderDocsResults); setupBuilder('settings', filterSettings); setupBuilder('palette', paletteResults); setupBuilder('changelog', renderChangelog);
+  $('changelog-start').addEventListener('change', renderChangelog); $('changelog-end').addEventListener('change', renderChangelog);
+  $('changelog-clear-dates').addEventListener('click', () => { $('changelog-start').value = ''; $('changelog-end').value = ''; renderChangelog(); });
+  $('changelog-copy').addEventListener('click', async () => { const rows = renderChangelog(); if (!rows?.length) return; try { await navigator.clipboard.writeText(changelogMarkdown(rows, displayName())); setStatus(localized(`Copied ${rows.length} changelog entries.`, `已複製 ${rows.length} 條更新記錄。`)); } catch { setStatus(localized('The changelog could not be copied.', '未能複製更新記錄。')); } });
+  $('changelog-export').addEventListener('click', exportChangelog);
 
     document.querySelectorAll('[data-settings-tab]').forEach((tab) => {
     tab.addEventListener('click', () => openSettingsTab(tab.dataset.settingsTab));
