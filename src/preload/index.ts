@@ -73,6 +73,7 @@ import type {
   SourceTerminalEvent,
   SupportState,
   SupportTicketCreateRequest,
+  SupportTicketBulkAdvanceRequest,
   TabWorkspace,
   SettingsProvenance,
   UserSettings,
@@ -86,6 +87,7 @@ import {
 } from './school-mode-parser.js';
 import { parseHistoryAccessResult, parseHistoryAccessStatus } from './history-access-parser.js';
 import { parseLockCredentialRequest, parseLockMutationResult, parseLockSetRequest, parseLockState, parseLockTarget } from './lock-parser.js';
+import { parseSupportState, parseSupportTicketBulkAdvanceRequest, parseSupportTicketBulkAdvanceResult, parseSupportTicketMutationResult } from './support-parser.js';
 const SOURCE_STATES = new Set(['queued', 'preparing', 'running', 'repairing', 'cancelling', 'succeeded', 'failed', 'cancelled']);
 const SOURCE_STREAMS = new Set(['system', 'progress', 'stdout', 'stderr']);
 const SOURCE_EVENT_KEYS = new Set(['jobId', 'appId', 'sequence', 'at', 'stream', 'state', 'text', 'progress', 'final']);
@@ -488,9 +490,10 @@ const api: DingDingStoreApi = {
     remove: async (request: LockCredentialRequest) => parseLockMutationResult(await ipcRenderer.invoke('locks:remove', parseLockCredentialRequest(request))),
   },
   support: {
-    load: () => ipcRenderer.invoke('support:load') as Promise<SupportState>,
-    create: (request: SupportTicketCreateRequest) => ipcRenderer.invoke('support:create', request),
-    advance: (ticketId: string) => ipcRenderer.invoke('support:advance', ticketId),
+    load: async () => parseSupportState(await ipcRenderer.invoke('support:load')),
+    create: async (request: SupportTicketCreateRequest) => parseSupportTicketMutationResult(await ipcRenderer.invoke('support:create', request)),
+    advance: async (ticketId: string) => parseSupportTicketMutationResult(await ipcRenderer.invoke('support:advance', ticketId)),
+    bulkAdvance: async (request: SupportTicketBulkAdvanceRequest) => parseSupportTicketBulkAdvanceResult(await ipcRenderer.invoke('support:bulk-advance', parseSupportTicketBulkAdvanceRequest(request))),
     openRecoveryFolder: () => ipcRenderer.invoke('support:open-recovery-folder'),
   },
   history: {
