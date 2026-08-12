@@ -73,6 +73,7 @@ jobs:
             --released-at $env:WORKFLOW_STARTED `
             --dish release-dish.json `
             --output-ts src/renderer/generated-changelog.ts `
+            --output-site site/assets/generated-changelog.mjs `
             --output-json release-changelog.pending.json
       - name: Prove a production build before packaging
         run: npm run build
@@ -83,6 +84,7 @@ jobs:
           name: release-metadata-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             src/renderer/generated-changelog.ts
+            site/assets/generated-changelog.mjs
             release-changelog.pending.json
             release-dish.json
           if-no-files-found: warn

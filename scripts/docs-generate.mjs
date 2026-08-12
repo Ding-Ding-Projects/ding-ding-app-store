@@ -271,11 +271,13 @@ if (!docsPage.includes('role="tablist"') || !docsPage.includes('role="tab"') || 
 
 const siteIndex = await readFile(path.join(root, 'site/index.html'), 'utf8');
 if (!siteIndex.includes('assets/articles.js')) failures.push('site/index.html does not load the generated article bundle');
-for (const id of ['docs-search', 'docs-regex-toggle', 'settings-search', 'settings-regex-toggle', 'settings-tabs']) if (!siteIndex.includes(`id="${id}"`)) failures.push(`site/index.html missing ${id}`);
+for (const id of ['docs-search', 'docs-regex-toggle', 'settings-search', 'settings-regex-toggle', 'settings-tabs', 'changelog-search', 'changelog-regex-toggle', 'changelog-card']) if (!siteIndex.includes(`id="${id}"`)) failures.push(`site/index.html missing ${id}`);
 for (const id of ['browser-tabs', 'new-doc-tab']) if (!siteIndex.includes(`id="${id}"`)) failures.push(`site/index.html missing persisted site tab control ${id}`);
 if (!siteIndex.includes('<script type="module" src="assets/app.js"></script>')) failures.push('site/index.html must load the module-based site navigation runtime');
 const siteApp = await readFile(path.join(root, 'site/assets/app.js'), 'utf8');
-for (const marker of ['parseTabState', 'localStorage', 'hashchange', 'data-route-tab', 'data-close-tab', 'setupBuilder', 'buildRegexPanel']) if (!siteApp.includes(marker)) failures.push(`site/assets/app.js missing site parity marker ${marker}`);
+for (const marker of ['parseTabState', 'localStorage', 'hashchange', 'data-route-tab', 'data-close-tab', 'setupBuilder', 'buildRegexPanel', 'SITE_CHANGELOG_ENTRIES', 'renderChangelog', 'changelog-start']) if (!siteApp.includes(marker)) failures.push(`site/assets/app.js missing site parity marker ${marker}`);
+const siteChangelog = await readFile(path.join(root, 'site/assets/changelog.mjs'), 'utf8');
+for (const marker of ['validateChangelogManifest', 'SITE_CHANGELOG_MANIFEST', 'changelogMarkdown']) if (!siteChangelog.includes(marker)) failures.push(`site/assets/changelog.mjs missing ${marker}`);
 const siteTabState = await readFile(path.join(root, 'site/assets/tab-state.mjs'), 'utf8');
 for (const marker of ['normalizeTabState', 'closeTab', 'moveTab', 'togglePinned', 'routeHash']) if (!siteTabState.includes(`function ${marker}`) && !siteTabState.includes(`export function ${marker}`)) failures.push(`site/assets/tab-state.mjs missing ${marker}`);
 

@@ -12,6 +12,7 @@ Serve the repository root with any static server and open `site/index.html`. Git
 - General settings always include a local-only personal-vocabulary JSON picker with strict bounded validation, validated browser-local replace/clear/cache states, technical-token-safe canonical article presentation, settings-search and command-palette reachability, and an explicitly site-only restricted presentation switch because this static site cannot observe the desktop app's shared School-mode record.
 - English, Hong Kong Cantonese, and bilingual labels, independent English/Cantonese funny-level sliders, theme, density, and accent preferences stored per visitor.
 - `Ctrl+Shift+F` command palette covering every article and settings destination, with its own adjacent regex builder.
+- A local Changelog destination in About with a strict generated release-manifest boundary, full-SHA release links, plain search plus its adjacent regex builder, typed start/end date filters, bounded copy, and Markdown export. Release automation writes `site/assets/generated-changelog.mjs` from the same validated manifest as the desktop build; before a release-generated file exists, the site uses a clearly bounded checked-in fallback and never makes a runtime network request.
 - Material-style local tokens, visible focus, skip link, semantic tab/tab-panel roles, arrow/Home/End navigation, reduced-motion handling, honest empty states, local hash routes, and no network tracking.
 
 ## Source and completeness
