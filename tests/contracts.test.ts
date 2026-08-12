@@ -125,7 +125,7 @@ describe('desktop security and update contracts', () => {
     expect(manifest.build.win.target[0].target).toBe('squirrel');
     expect(manifest.build.win.forceCodeSigning).toBe(false);
     expect(manifest.build.win.signExecutable).toBe(false);
-    expect(manifest.build.win.signAndEditExecutable).toBe(false);
+    expect(manifest.build.win).not.toHaveProperty('signAndEditExecutable');
     expect(manifest.build.squirrelWindows.msi).toBe(false);
   });
 });

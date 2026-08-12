@@ -135,8 +135,8 @@ function Invoke-ProjectBuild {
 function Assert-UnsignedSquirrelConfiguration {
   param([Parameter(Mandatory = $true)][string]$Root)
   $package = Get-Content -LiteralPath (Join-Path $Root 'package.json') -Raw | ConvertFrom-Json
-  if ($package.build.win.forceCodeSigning -ne $false -or $package.build.win.signExecutable -ne $false -or $package.build.win.signAndEditExecutable -ne $false) {
-    throw 'The package configuration must explicitly disable all signing controls.'
+  if ($package.build.win.forceCodeSigning -ne $false -or $package.build.win.signExecutable -ne $false -or $package.build.win.PSObject.Properties.Name -contains 'signAndEditExecutable') {
+    throw 'The package configuration must disable signing while leaving executable resource editing enabled for branding.'
   }
   $targets = @($package.build.win.target | ForEach-Object { if ($_ -is [string]) { $_ } else { $_.target } })
   if ($targets -notcontains 'squirrel') { throw 'The installer path must use the Squirrel.Windows target.' }
