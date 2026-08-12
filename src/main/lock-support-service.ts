@@ -10,6 +10,7 @@ import type {
   LockSetRequest,
   LockState,
   LockTarget,
+  LockTotpAlgorithm,
   LockUnlockDuration,
   SupportOpenRecoveryResult,
   SupportState,
@@ -18,7 +19,7 @@ import type {
   SupportTicketMutationResult,
   SupportTicketStatus,
 } from '../shared/contracts.js';
-import { ELEMENT_KEYS, TOKEN_IDS } from '../shared/contracts.js';
+import { ELEMENT_KEYS, LOCK_TOTP_ALGORITHMS, LOCK_TOTP_DIGITS, LOCK_TOTP_PERIOD_MAX_SECONDS, LOCK_TOTP_PERIOD_MIN_SECONDS, TOKEN_IDS } from '../shared/contracts.js';
 import type { HistoryService } from './history-service.js';
 import { writeJsonAtomic } from './json-store.js';
 import { generateTotp, normalizeBase32Secret } from './totp.js';
@@ -41,17 +42,26 @@ const lockTargetSchema = z.strictObject({
   }
 });
 const credentialSchema = z.string().min(4).max(MAX_CREDENTIAL);
-const lockSetSchema = lockTargetSchema.extend({ credentialKind: z.enum(['password', 'totp']).optional(), credential: credentialSchema, currentCredential: credentialSchema.optional(), confirmationCode: z.string().regex(/^\d{6,8}$/).optional(), unlockDuration: unlockDurationSchema.optional() }).strict();
+const lockTotpAlgorithmSchema = z.enum(LOCK_TOTP_ALGORITHMS);
+const lockTotpDigitsSchema = z.union(LOCK_TOTP_DIGITS.map((value) => z.literal(value)) as [z.ZodLiteral<6>, z.ZodLiteral<7>, z.ZodLiteral<8>]);
+const lockTotpPeriodSchema = z.number().int().min(LOCK_TOTP_PERIOD_MIN_SECONDS).max(LOCK_TOTP_PERIOD_MAX_SECONDS);
+const lockSetSchema = lockTargetSchema.extend({ credentialKind: z.enum(['password', 'totp']).optional(), totpAlgorithm: lockTotpAlgorithmSchema.optional(), totpDigits: lockTotpDigitsSchema.optional(), totpPeriodSeconds: lockTotpPeriodSchema.optional(), credential: credentialSchema, currentCredential: credentialSchema.optional(), confirmationCode: z.string().regex(/^\d{6,8}$/).optional(), unlockDuration: unlockDurationSchema.optional() }).strict().superRefine((value, context) => {
+  if (value.credentialKind !== 'totp' && (value.totpAlgorithm !== undefined || value.totpDigits !== undefined || value.totpPeriodSeconds !== undefined || value.confirmationCode !== undefined)) context.addIssue({ code: 'custom', path: ['credentialKind'], message: 'TOTP fields require the TOTP credential method.' });
+  if (value.credentialKind === 'totp' && value.confirmationCode !== undefined && value.totpDigits !== undefined && value.confirmationCode.length !== value.totpDigits) context.addIssue({ code: 'custom', path: ['confirmationCode'], message: 'The pairing code length must match the TOTP digit count.' });
+});
 const lockCredentialSchema = lockTargetSchema.extend({ credential: credentialSchema, unlockDuration: unlockDurationSchema.optional() }).strict();
 const lockRecordSchema = lockTargetSchema.extend({
   credentialKind: z.enum(['password', 'totp']).optional(),
+  totpAlgorithm: lockTotpAlgorithmSchema.optional(),
+  totpDigits: lockTotpDigitsSchema.optional(),
+  totpPeriodSeconds: lockTotpPeriodSchema.optional(),
   unlockDuration: unlockDurationSchema.optional(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 }).strict();
 const lockFileSchema = z.strictObject({ schemaVersion: z.literal(1), records: z.array(lockRecordSchema).max(MAX_LOCKS) });
 const passwordVaultEntrySchema = z.strictObject({ kind: z.literal('password'), salt: z.string().base64(), verifier: z.string().base64() });
-const totpVaultEntrySchema = z.strictObject({ kind: z.literal('totp'), secret: z.string().min(1).max(256) });
+const totpVaultEntrySchema = z.strictObject({ kind: z.literal('totp'), secret: z.string().min(1).max(256), algorithm: lockTotpAlgorithmSchema.optional(), digits: lockTotpDigitsSchema.optional(), periodSeconds: lockTotpPeriodSchema.optional() });
 const legacyVaultEntrySchema = z.strictObject({ salt: z.string().base64(), verifier: z.string().base64() });
 const vaultEntrySchema = z.union([passwordVaultEntrySchema, totpVaultEntrySchema, legacyVaultEntrySchema]);
 const vaultSchema = z.record(z.string().regex(/^(?:tab|group):[a-z][a-z0-9-]{0,31}$|^(?:tab|group):grp_[a-z0-9]{8}$|^appearance-property:[a-z0-9-]+:[a-z0-9-]+$/), vaultEntrySchema);
@@ -117,6 +127,9 @@ export class LockSupportService {
     const targetKey = keyOf(target);
     this.unlockGenerations.set(targetKey, (this.unlockGenerations.get(targetKey) ?? 0) + 1);
     const credentialKind = parsed.data.credentialKind ?? existing?.credentialKind ?? 'password';
+    const totpAlgorithm = parsed.data.totpAlgorithm ?? existing?.totpAlgorithm ?? 'sha1';
+    const totpDigits = parsed.data.totpDigits ?? existing?.totpDigits ?? 6;
+    const totpPeriodSeconds = parsed.data.totpPeriodSeconds ?? existing?.totpPeriodSeconds ?? 30;
     const vault = await this.readVault();
     if (!vault) return this.lockFailure('The operating-system credential vault could not be read; no lock change was made.', 'credential-store-read-failed');
     if (existing && (!parsed.data.currentCredential || !this.verifyCredential(keyOf(target), parsed.data.currentCredential, this.normalizeVaultEntry(vault[keyOf(target)])))) return this.lockFailure('The current lock credential did not match; the new credential was not saved.', 'credential-mismatch');
@@ -124,14 +137,14 @@ export class LockSupportService {
     if (credentialKind === 'totp') {
       let normalized: string;
       try { normalized = normalizeBase32Secret(parsed.data.credential); } catch { return this.lockFailure('The TOTP secret is not a valid Base32 value.', 'invalid'); }
-      if (!parsed.data.confirmationCode || !this.verifyTotpSecret(normalized, parsed.data.confirmationCode)) return this.lockFailure('Enter the current six-digit code to confirm this TOTP lock.', 'invalid-otp');
-      vaultEntry = { kind: 'totp', secret: normalized };
+      if (!parsed.data.confirmationCode || !this.verifyTotpSecret(normalized, parsed.data.confirmationCode, { algorithm: totpAlgorithm, digits: totpDigits, periodSeconds: totpPeriodSeconds })) return this.lockFailure(`Enter the current ${totpDigits}-digit code to confirm this TOTP lock.`, 'invalid-otp');
+      vaultEntry = { kind: 'totp', secret: normalized, algorithm: totpAlgorithm, digits: totpDigits, periodSeconds: totpPeriodSeconds };
     } else {
       vaultEntry = { kind: 'password', ...this.makeVerifier(parsed.data.credential) };
     }
     const now = new Date().toISOString();
     const unlockDuration = parsed.data.unlockDuration ?? existing?.unlockDuration ?? DEFAULT_UNLOCK_DURATION;
-    const record: StoredLock = existing ? { ...existing, credentialKind, unlockDuration, updatedAt: now } : { ...target, credentialKind, unlockDuration, createdAt: now, updatedAt: now };
+    const record: StoredLock = existing ? { ...existing, credentialKind, ...(credentialKind === 'totp' ? { totpAlgorithm, totpDigits, totpPeriodSeconds } : {}), unlockDuration, updatedAt: now } : { ...target, credentialKind, ...(credentialKind === 'totp' ? { totpAlgorithm, totpDigits, totpPeriodSeconds } : {}), unlockDuration, createdAt: now, updatedAt: now };
     const nextLocks = existing ? this.locks.map((candidate) => keyOf(candidate) === keyOf(target) ? record : candidate) : [...this.locks, record];
     const nextVault = { ...vault, [keyOf(target)]: vaultEntry };
     const previousLocks = this.locks;
@@ -324,17 +337,21 @@ export class LockSupportService {
 
   private normalizeVaultEntry(entry: VaultEntry | z.infer<typeof legacyVaultEntrySchema> | undefined): VaultEntry | undefined {
     if (!entry) return undefined;
-    if ('kind' in entry) return entry;
+    if ('kind' in entry) return entry.kind === 'totp' ? { kind: 'totp', secret: entry.secret, algorithm: entry.algorithm ?? 'sha1', digits: entry.digits ?? 6, periodSeconds: entry.periodSeconds ?? 30 } : entry;
     return { kind: 'password', salt: entry.salt, verifier: entry.verifier };
   }
 
-  private verifyTotpSecret(secret: string, code: string): boolean {
-    try { return generateTotp({ secret, algorithm: 'sha1', digits: 6, periodSeconds: 30 }).code === code; } catch { return false; }
+  private verifyTotpSecret(secret: string, code: string, parameters: { algorithm: 'sha1' | 'sha256' | 'sha512'; digits: 6 | 7 | 8; periodSeconds: number }): boolean {
+    try {
+      const now = Date.now();
+      const period = parameters.periodSeconds * 1_000;
+      return [-1, 0, 1].some((offset) => generateTotp({ secret, ...parameters, timestampMs: now + offset * period }).code === code);
+    } catch { return false; }
   }
 
   private verifyCredential(key: string, credential: string, entry: VaultEntry | undefined): boolean {
     if (!entry || this.isRateLimited(key)) return false;
-    const allowed = entry.kind === 'totp' ? this.verifyTotpSecret(entry.secret, credential) : this.matches(credential, entry);
+    const allowed = entry.kind === 'totp' ? this.verifyTotpSecret(entry.secret, credential, { algorithm: entry.algorithm ?? 'sha1', digits: entry.digits ?? 6, periodSeconds: entry.periodSeconds ?? 30 }) : this.matches(credential, entry);
     if (!allowed) this.noteAttempt(key); else this.attempts.delete(key);
     return allowed;
   }

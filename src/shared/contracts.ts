@@ -491,6 +491,13 @@ export interface SchoolModeMutationResult {
  * only this projection and never receives a password, salt, or verifier.
  */
 export type LockTargetKind = 'tab' | 'group' | 'appearance-property';
+export const LOCK_TOTP_ALGORITHMS = ['sha1', 'sha256', 'sha512'] as const;
+export type LockTotpAlgorithm = (typeof LOCK_TOTP_ALGORITHMS)[number];
+export const LOCK_TOTP_DIGITS = [6, 7, 8] as const;
+export type LockTotpDigits = (typeof LOCK_TOTP_DIGITS)[number];
+/** Lock TOTP periods are deliberately bounded to keep pairing and skew predictable. */
+export const LOCK_TOTP_PERIOD_MIN_SECONDS = 15;
+export const LOCK_TOTP_PERIOD_MAX_SECONDS = 3_600;
 /** How long an individual UX lock stays unlocked after a credential match. */
 export type LockUnlockDuration = 'session' | '15m' | '60m';
 export interface LockTarget {
@@ -500,6 +507,10 @@ export interface LockTarget {
 export interface LockRecord extends LockTarget {
   /** The credential method is metadata only; the credential itself never crosses this boundary. */
   credentialKind: 'password' | 'totp';
+  /** TOTP parameters are metadata only; the secret remains in the main-process vault. */
+  totpAlgorithm?: LockTotpAlgorithm;
+  totpDigits?: LockTotpDigits;
+  totpPeriodSeconds?: number;
   unlockDuration: LockUnlockDuration;
   locked: boolean;
   /** Null means unlocked until this app process closes; timed values are ISO timestamps. */
@@ -517,6 +528,9 @@ export interface LockState {
 export interface LockSetRequest extends LockTarget {
   /** Legacy callers may omit this and keep the password path. */
   credentialKind?: 'password' | 'totp';
+  totpAlgorithm?: LockTotpAlgorithm;
+  totpDigits?: LockTotpDigits;
+  totpPeriodSeconds?: number;
   credential: string;
   currentCredential?: string;
   /** Required only for a new TOTP lock: one current code confirms pairing. */
