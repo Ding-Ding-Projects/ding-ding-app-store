@@ -595,7 +595,7 @@ export function AuthenticatorPage({ settings, authenticator, notify, openRegex, 
             : authenticator.status ? label(viewSettings, authenticator.status.message, authenticator.status.messageYue) : label(viewSettings, 'Authenticator storage status is unavailable.', '驗證器儲存狀態暫時用唔到。')}
         </p>
         <p>{label(viewSettings, 'Secrets are accepted once for pairing, encrypted by the operating-system credential vault, and never returned in list metadata. QR generation is local and has no network path.', '秘密只喺配對時接收一次，由作業系統憑證庫加密；項目清單 metadata 唔會返回秘密。QR 喺本機產生，冇網絡路徑。')}</p>
-         <p className="supporting">{label(viewSettings, 'This bounded slice supports local camera and QR image import, metadata-only management, groups, selection, export, and a next-code peek. Secret export and authenticator history/restore remain deferred.', '呢個有限功能支援本機相機同 QR 圖片匯入、淨 metadata 管理、分組、揀選、匯出同下一碼預覽。秘密匯出同 authenticator 歷史／還原仍然押後。')}</p>
+         <p className="supporting">{label(viewSettings, 'This bounded slice supports local camera and QR image import, metadata-only management, groups, selection, redacted export, deliberate secret export, and a next-code peek. Protected authenticator history restore is unavailable on this production host until a reviewed native no-follow vault adapter exists.', '呢個有限功能支援本機相機同 QR 圖片匯入、淨 metadata 管理、分組、揀選、淨 metadata 匯出、刻意秘密匯出同下一碼預覽。呢部生產機未有受保護 authenticator 歷史還原，要等已審核嘅 native no-follow 憑證庫配接器先可以用。')}</p>
       </section>
       <section className="settings-card" {...el('settings-card')}>
         <h2>{label(viewSettings, 'Register an authenticator entry', '註冊 authenticator 項目')}</h2>
