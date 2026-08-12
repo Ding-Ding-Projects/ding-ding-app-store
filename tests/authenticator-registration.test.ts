@@ -362,26 +362,26 @@ describe('preload authenticator response boundary', () => {
     expect(preload.parseAuthenticatorMutation({ ok: false, uncertain: true, message: 'uncertain', messageYue: '未能確定' })).toMatchObject({ ok: false, uncertain: true });
     expect(() => preload.parseAuthenticatorMutation({ ok: true, uncertain: true, entry: metadata(), message: 'bad', messageYue: '唔啱' })).toThrow();
     expect(() => preload.parseAuthenticatorList({
-      entries: [{ ...metadata(), code: null, nextCode: null, remainingSeconds: null, expiresAt: null, secret: SECRET }],
+      entries: [{ ...metadata(), groupId: null, code: null, nextCode: null, remainingSeconds: null, expiresAt: null, secret: SECRET }],
       storage: 'os-vault',
       message: 'ok',
       messageYue: '好',
     })).toThrow();
     const listed = preload.parseAuthenticatorList({
-      entries: [{ ...metadata(), code: '123456', nextCode: '654321', remainingSeconds: 12, expiresAt: '2026-08-11T00:00:30.000Z' }],
+      entries: [{ ...metadata(), groupId: null, code: '123456', nextCode: '654321', remainingSeconds: 12, expiresAt: '2026-08-11T00:00:30.000Z' }],
       storage: 'os-vault',
       message: 'ok',
       messageYue: '好',
     });
     expect(listed.entries[0].nextCode).toBe('654321');
     expect(() => preload.parseAuthenticatorList({
-      entries: [{ ...metadata(), code: null, nextCode: '654321', remainingSeconds: 12, expiresAt: '2026-08-11T00:00:30.000Z' }],
+      entries: [{ ...metadata(), groupId: null, code: null, nextCode: '654321', remainingSeconds: 12, expiresAt: '2026-08-11T00:00:30.000Z' }],
       storage: 'os-vault',
       message: 'ok',
       messageYue: '好',
     })).toThrow();
     expect(() => preload.parseAuthenticatorList({
-      entries: [{ ...metadata(), code: '123456', nextCode: null, remainingSeconds: 12, expiresAt: '2026-08-11T00:00:30.000Z' }],
+      entries: [{ ...metadata(), groupId: null, code: '123456', nextCode: null, remainingSeconds: 12, expiresAt: '2026-08-11T00:00:30.000Z' }],
       storage: 'os-vault',
       message: 'ok',
       messageYue: '好',

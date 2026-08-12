@@ -158,7 +158,7 @@ function parseAuthenticatorPreviewResult(value: unknown): AuthenticatorPreviewRe
 function parseAuthenticatorEntryMetadata(value: unknown): AuthenticatorListResult['entries'][number] {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('The authenticator entry response was invalid.');
   const entry = value as Record<string, unknown>;
-  const metadataKeys = new Set(['id', 'issuer', 'account', 'label', 'algorithm', 'digits', 'periodSeconds', 'createdAt', 'updatedAt', 'order', 'group', 'code', 'nextCode', 'remainingSeconds', 'expiresAt']);
+  const metadataKeys = new Set(['id', 'issuer', 'account', 'label', 'algorithm', 'digits', 'periodSeconds', 'createdAt', 'updatedAt', 'order', 'group', 'groupId', 'code', 'nextCode', 'remainingSeconds', 'expiresAt']);
   if (Object.keys(entry).some((key) => !metadataKeys.has(key))) throw new Error('The authenticator entry response was invalid.');
   const transientValues = [entry.code, entry.nextCode, entry.remainingSeconds, entry.expiresAt];
   const transientAbsent = transientValues.every((value) => value === null);
@@ -169,6 +169,7 @@ function parseAuthenticatorEntryMetadata(value: unknown): AuthenticatorListResul
     || typeof entry.account !== 'string' || entry.account.length < 1 || entry.account.length > AUTHENTICATOR_MAX_ACCOUNT_LENGTH
     || typeof entry.label !== 'string' || entry.label.length < 1 || entry.label.length > AUTHENTICATOR_MAX_LABEL_LENGTH
     || (entry.group !== undefined && entry.group !== null && (typeof entry.group !== 'string' || entry.group.length < 1 || entry.group.length > AUTHENTICATOR_MAX_GROUP_LENGTH || entry.group.trim() !== entry.group || /[\u0000-\u001f\u007f]/.test(entry.group)))
+    || (entry.groupId !== undefined && entry.groupId !== null && (typeof entry.groupId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(entry.groupId)))
     || typeof entry.algorithm !== 'string' || !AUTHENTICATOR_ALGORITHM_SET.has(entry.algorithm)
     || typeof entry.digits !== 'number' || !AUTHENTICATOR_DIGIT_SET.has(entry.digits)
     || !Number.isInteger(entry.periodSeconds) || Number(entry.periodSeconds) < 1 || Number(entry.periodSeconds) > 3_600
