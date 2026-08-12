@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ELEMENTS, TOKEN_IDS } from '../../shared/contracts';
-import type { LockTarget, SupportTicketCategory, SupportTicketSeverity, TabId, TabWorkspace, UserSettings } from '../../shared/contracts';
+import type { LockTarget, LockUnlockDuration, SupportTicketCategory, SupportTicketSeverity, TabId, TabWorkspace, UserSettings } from '../../shared/contracts';
 import { el } from '../el';
 import { Icon } from '../icons';
 import { label } from '../i18n';
@@ -37,6 +37,7 @@ export function LockSupportPage({ settings, workspace, locks, support, notify, m
   const [currentCredential, setCurrentCredential] = useState('');
   const [confirmationCode, setConfirmationCode] = useState('');
   const [credentialKind, setCredentialKind] = useState<'password' | 'totp'>('password');
+  const [unlockDuration, setUnlockDuration] = useState<LockUnlockDuration>('session');
   const [category, setCategory] = useState<SupportTicketCategory>('unlock');
   const [severity, setSeverity] = useState<SupportTicketSeverity>('normal');
   const [description, setDescription] = useState('');
@@ -53,8 +54,10 @@ export function LockSupportPage({ settings, workspace, locks, support, notify, m
       setCredential('');
       setCurrentCredential('');
       setConfirmationCode('');
+      setUnlockDuration(initialTarget ? (locks.state.records.find((record) => targetKey(record) === targetKey(initialTarget))?.unlockDuration ?? 'session') : 'session');
+      setCredentialKind(initialTarget ? (locks.state.records.find((record) => targetKey(record) === targetKey(initialTarget))?.credentialKind ?? 'password') : 'password');
     }
-  }, [initialTarget, targets]);
+  }, [initialTarget, targets, locks.state.records]);
   const targetLabel = (value: LockTarget): string => {
     if (value.targetKind === 'tab') return TAB_META[value.targetId as TabId]?.en ?? value.targetId;
     if (value.targetKind === 'appearance-property') {
@@ -73,8 +76,11 @@ export function LockSupportPage({ settings, workspace, locks, support, notify, m
   };
   const visibleTargets = targets.filter((candidate) => matcher(`${targetLabel(candidate)}\n${targetYue(candidate)}\n${candidate.targetKind}\nlock`));
   const selectedRecord = locks.state.records.find((record) => targetKey(record) === targetKey(target));
+  useEffect(() => {
+    if (selectedRecord) setUnlockDuration(selectedRecord.unlockDuration);
+  }, [selectedRecord?.targetKind, selectedRecord?.targetId, selectedRecord?.unlockDuration]);
   const saveLock = async () => {
-    const result = await locks.set({ ...target, credentialKind, credential, confirmationCode: credentialKind === 'totp' ? confirmationCode : undefined, currentCredential: selectedRecord ? currentCredential : undefined });
+    const result = await locks.set({ ...target, credentialKind, credential, unlockDuration, confirmationCode: credentialKind === 'totp' ? confirmationCode : undefined, currentCredential: selectedRecord ? currentCredential : undefined });
     if (result.ok) { setCredential(''); setCurrentCredential(''); setConfirmationCode(''); }
   };
   const unlock = async () => {
@@ -107,6 +113,7 @@ export function LockSupportPage({ settings, workspace, locks, support, notify, m
             if (next) { setTarget(next); setCredential(''); setCurrentCredential(''); }
           }} options={visibleTargets.map((candidate) => ({ value: targetKey(candidate), en: candidate.targetKind === 'tab' ? targetLabel(candidate) : `${label(settings, 'Group', '分組')} · ${targetLabel(candidate)}`, yue: candidate.targetKind === 'tab' ? targetYue(candidate) : `${label(settings, 'Group', '分組')} · ${targetYue(candidate)}` }))} />
         <SearchablePicker id="lock-credential-kind" labelText={label(settings, 'Credential method', '憑證方式')} settings={settings} value={credentialKind} onChange={(value) => setCredentialKind(value as 'password' | 'totp')} options={[{ value: 'password', en: 'Password', yue: '密碼' }, { value: 'totp', en: 'TOTP secret', yue: 'TOTP 秘密' }]} />
+        <SearchablePicker id="lock-unlock-duration" labelText={label(settings, 'Unlock duration', '解鎖時限')} settings={settings} value={unlockDuration} onChange={(value) => setUnlockDuration(value as LockUnlockDuration)} options={[{ value: 'session', en: 'Until this app closes', yue: '直到呢個 app 關閉' }, { value: '15m', en: '15 minutes', yue: '15 分鐘' }, { value: '60m', en: '60 minutes', yue: '60 分鐘' }]} />
         {selectedRecord && <label htmlFor="lock-current-credential">{label(settings, credentialKind === 'totp' ? 'Current TOTP code (required to change or remove)' : 'Current password (required to change or remove)', credentialKind === 'totp' ? '目前 TOTP 驗證碼（修改或者移除時必須）' : '目前密碼（修改或者移除時必須）')}
           <input id="lock-current-credential" type="password" inputMode={credentialKind === 'totp' ? 'numeric' : undefined} autoComplete={credentialKind === 'totp' ? 'one-time-code' : 'current-password'} value={currentCredential} onChange={(event) => setCurrentCredential(event.target.value)} maxLength={512} />
         </label>}
@@ -116,14 +123,14 @@ export function LockSupportPage({ settings, workspace, locks, support, notify, m
         {credentialKind === 'totp' && <label htmlFor="lock-totp-confirmation">{label(settings, 'Current TOTP code (pairing confirmation)', '目前 TOTP 驗證碼（配對確認）')}<input id="lock-totp-confirmation" inputMode="numeric" autoComplete="one-time-code" value={confirmationCode} onChange={(event) => setConfirmationCode(event.target.value)} maxLength={8} /></label>}
         {selectedRecord && <label htmlFor="lock-new-credential">{label(settings, 'New password', '新密碼')}<input id="lock-new-credential" type="password" autoComplete="new-password" value={credential} onChange={(event) => setCredential(event.target.value)} maxLength={512} /></label>}
         <div className="settings-actions">
-          {!selectedRecord && <button className="filled-button" disabled={!locks.state.vaultAvailable || credential.length < 4} onClick={() => void saveLock()}><Icon>lock</Icon>{label(settings, 'Set lock', '設定鎖')}</button>}
-          {selectedRecord?.locked && <button className="filled-button" disabled={!locks.state.vaultAvailable || credential.length < 4} onClick={() => void unlock()}><Icon>lock_open</Icon>{label(settings, 'Unlock for this session', '今次程式工作階段解鎖')}</button>}
+          <button className="filled-button" disabled={!locks.state.vaultAvailable || credential.length < 4 || Boolean(selectedRecord && !currentCredential)} onClick={() => void saveLock()}><Icon>lock</Icon>{label(settings, selectedRecord ? 'Save lock changes' : 'Set lock', selectedRecord ? '儲存鎖更改' : '設定鎖')}</button>
+          {selectedRecord?.locked && <button className="filled-button" disabled={!locks.state.vaultAvailable || credential.length < 4} onClick={() => void unlock()}><Icon>lock_open</Icon>{label(settings, 'Unlock', '解鎖')}</button>}
           {selectedRecord && !selectedRecord.locked && <button className="tonal-button" onClick={() => void locks.lockAgain(target)}><Icon>lock</Icon>{label(settings, 'Lock again', '重新鎖定')}</button>}
           {selectedRecord && <button className="text-button danger" disabled={!locks.state.vaultAvailable || credential.length < 4} onClick={() => void remove()}>{label(settings, 'Remove lock', '移除鎖')}</button>}
         </div>
-        <p className="supporting" role="status">{selectedRecord ? (selectedRecord.locked ? label(settings, 'This target is locked. Activation should ask for its own password before proceeding.', '呢個目標已鎖定；啟用前應該要求自己嗰個密碼。') : label(settings, 'This target is unlocked for this app session.', '呢個目標喺今次程式工作階段已解鎖。')) : label(settings, 'No lock is configured for this target.', '呢個目標未設定鎖。')}</p>
+        <p className="supporting" role="status">{selectedRecord ? (selectedRecord.locked ? label(settings, 'This target is locked. Activation should ask for its own credential before proceeding.', '呢個目標已鎖定；啟用前應該要求自己嗰個憑證。') : selectedRecord.unlockedUntil ? label(settings, `This target is unlocked until ${new Date(selectedRecord.unlockedUntil).toLocaleTimeString()}.`, `呢個目標解鎖到 ${new Date(selectedRecord.unlockedUntil).toLocaleTimeString()}。`) : label(settings, 'This target is unlocked until this app closes.', '呢個目標解鎖直到呢個 app 關閉。')) : label(settings, 'No lock is configured for this target.', '呢個目標未設定鎖。')}</p>
         <div className="ticket-list" aria-label={label(settings, 'Configured locks', '已設定嘅鎖')}>
-          {locks.state.records.filter((record) => matcher(`${targetLabel(record)}\n${targetYue(record)}\n${record.targetKind}\nlock`)).map((record) => <div className="ticket-row" key={targetKey(record)}><span><strong>{label(settings, targetLabel(record), targetYue(record))}</strong><small>{record.targetKind === 'tab' ? label(settings, 'Tab', '分頁') : record.targetKind === 'group' ? label(settings, 'Group', '分組') : label(settings, 'Appearance property', '外觀屬性')} · {label(settings, record.credentialKind === 'totp' ? 'TOTP' : 'Password', record.credentialKind === 'totp' ? 'TOTP' : '密碼')} · {record.locked ? label(settings, 'Locked', '已鎖定') : label(settings, 'Unlocked this session', '今次工作階段已解鎖')}</small></span><button className="text-button" onClick={() => { const next = { targetKind: record.targetKind, targetId: record.targetId } as LockTarget; setTarget(next); setCredential(''); setCurrentCredential(''); setConfirmationCode(''); setCredentialKind(record.credentialKind); }}>{label(settings, 'Select', '選擇')}</button></div>)}
+          {locks.state.records.filter((record) => matcher(`${targetLabel(record)}\n${targetYue(record)}\n${record.targetKind}\nlock`)).map((record) => <div className="ticket-row" key={targetKey(record)}><span><strong>{label(settings, targetLabel(record), targetYue(record))}</strong><small>{record.targetKind === 'tab' ? label(settings, 'Tab', '分頁') : record.targetKind === 'group' ? label(settings, 'Group', '分組') : label(settings, 'Appearance property', '外觀屬性')} · {label(settings, record.credentialKind === 'totp' ? 'TOTP' : 'Password', record.credentialKind === 'totp' ? 'TOTP' : '密碼')} · {label(settings, record.unlockDuration === '15m' ? '15-minute unlock' : record.unlockDuration === '60m' ? '60-minute unlock' : 'Until app closes', record.unlockDuration === '15m' ? '解鎖 15 分鐘' : record.unlockDuration === '60m' ? '解鎖 60 分鐘' : '直到 app 關閉')} · {record.locked ? label(settings, 'Locked', '已鎖定') : record.unlockedUntil ? label(settings, `Unlocked until ${new Date(record.unlockedUntil).toLocaleTimeString()}`, `解鎖到 ${new Date(record.unlockedUntil).toLocaleTimeString()}`) : label(settings, 'Unlocked until app closes', '解鎖直到 app 關閉')}</small></span><button className="text-button" onClick={() => { const next = { targetKind: record.targetKind, targetId: record.targetId } as LockTarget; setTarget(next); setCredential(''); setCurrentCredential(''); setConfirmationCode(''); setCredentialKind(record.credentialKind); setUnlockDuration(record.unlockDuration); }}>{label(settings, 'Select', '選擇')}</button></div>)}
           {!locks.state.records.length && <p className="supporting">{label(settings, 'No locks configured yet.', '暫時未設定鎖。')}</p>}
         </div>
         <p className="supporting">{label(settings, 'Forgotten credentials are recovered only by deleting the application-data folder yourself. This is a UX reset, not a security recovery service.', '唔記得憑證只可以由你自己刪除應用程式資料夾重設。呢個係 UX 重設，唔係安全恢復服務。')}</p>

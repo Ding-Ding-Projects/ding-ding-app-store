@@ -85,6 +85,7 @@ import {
   parseSchoolModeVerifyResult,
 } from './school-mode-parser.js';
 import { parseHistoryAccessResult, parseHistoryAccessStatus } from './history-access-parser.js';
+import { parseLockCredentialRequest, parseLockMutationResult, parseLockSetRequest, parseLockState, parseLockTarget } from './lock-parser.js';
 const SOURCE_STATES = new Set(['queued', 'preparing', 'running', 'repairing', 'cancelling', 'succeeded', 'failed', 'cancelled']);
 const SOURCE_STREAMS = new Set(['system', 'progress', 'stdout', 'stderr']);
 const SOURCE_EVENT_KEYS = new Set(['jobId', 'appId', 'sequence', 'at', 'stream', 'state', 'text', 'progress', 'final']);
@@ -480,11 +481,11 @@ const api: DingDingStoreApi = {
     },
   },
   locks: {
-    load: () => ipcRenderer.invoke('locks:load') as Promise<LockState>,
-    set: (request: LockSetRequest) => ipcRenderer.invoke('locks:set', request),
-    unlock: (request: LockCredentialRequest) => ipcRenderer.invoke('locks:unlock', request),
-    lockAgain: (target: LockTarget) => ipcRenderer.invoke('locks:lock-again', target),
-    remove: (request: LockCredentialRequest) => ipcRenderer.invoke('locks:remove', request),
+    load: async () => parseLockState(await ipcRenderer.invoke('locks:load')),
+    set: async (request: LockSetRequest) => parseLockMutationResult(await ipcRenderer.invoke('locks:set', parseLockSetRequest(request))),
+    unlock: async (request: LockCredentialRequest) => parseLockMutationResult(await ipcRenderer.invoke('locks:unlock', parseLockCredentialRequest(request))),
+    lockAgain: async (target: LockTarget) => parseLockMutationResult(await ipcRenderer.invoke('locks:lock-again', parseLockTarget(target))),
+    remove: async (request: LockCredentialRequest) => parseLockMutationResult(await ipcRenderer.invoke('locks:remove', parseLockCredentialRequest(request))),
   },
   support: {
     load: () => ipcRenderer.invoke('support:load') as Promise<SupportState>,
