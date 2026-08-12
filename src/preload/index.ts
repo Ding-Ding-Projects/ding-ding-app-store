@@ -18,6 +18,7 @@ import type {
   AuthenticatorRegistrationPreviewResult,
   AuthenticatorRegistrationRequest,
   AuthenticatorStatus,
+  AuthenticatorQrImageImportResult,
   DingDingStoreApi,
   DimSumSurprise,
   ElementKey,
@@ -82,6 +83,19 @@ const AUTHENTICATOR_MAX_LABEL_LENGTH = 512;
 const AUTHENTICATOR_MAX_GROUP_LENGTH = 64;
 const AUTHENTICATOR_MAX_EXPORT_LENGTH = 512_000;
 const AUTHENTICATOR_EXPORT_OMITTED_FIELDS = ['secret', 'uri', 'code', 'nextCode', 'remainingSeconds', 'expiresAt'] as const;
+
+function parseAuthenticatorQrImageImport(value: unknown): AuthenticatorQrImageImportResult {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('The authenticator QR image response was invalid.');
+  const result = value as Record<string, unknown>;
+  const keys = new Set(['ok', 'uri', 'reason', 'message', 'messageYue']);
+  const reasons = new Set(['cancelled', 'read-failed', 'too-large', 'unsupported-image', 'no-qr', 'invalid-otpauth']);
+  if (Object.keys(result).some((key) => !keys.has(key)) || typeof result.ok !== 'boolean' || typeof result.message !== 'string' || new TextEncoder().encode(result.message).byteLength > 2_048 || typeof result.messageYue !== 'string' || new TextEncoder().encode(result.messageYue).byteLength > 2_048 || (result.reason !== undefined && (typeof result.reason !== 'string' || !reasons.has(result.reason))) || (result.uri !== undefined && (typeof result.uri !== 'string' || new TextEncoder().encode(result.uri).byteLength < 1 || new TextEncoder().encode(result.uri).byteLength > 2_048 || !/^otpauth:\/\/totp\//i.test(result.uri)))) throw new Error('The authenticator QR image response was invalid.');
+  if (result.ok !== (typeof result.uri === 'string')) throw new Error('The authenticator QR image response was invalid.');
+  if (!result.ok && (typeof result.reason !== 'string' || !reasons.has(result.reason))) throw new Error('The authenticator QR image response was invalid.');
+  if (result.ok && result.reason !== undefined) throw new Error('The authenticator QR image response was invalid.');
+  if (!result.ok && result.uri !== undefined) throw new Error('The authenticator QR image response was invalid.');
+  return Object.freeze({ ok: result.ok, uri: result.uri as string | undefined, reason: result.reason as AuthenticatorQrImageImportResult['reason'], message: result.message, messageYue: result.messageYue });
+}
 
 function parseAuthenticatorStatus(value: unknown): AuthenticatorStatus {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('The authenticator status response was invalid.');
@@ -415,6 +429,7 @@ const api: DingDingStoreApi = {
       if (attemptId !== undefined && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(attemptId)) throw new Error('The authenticator prepare attempt identifier was invalid.');
       return parseAuthenticatorRegistrationPreview(await ipcRenderer.invoke('authenticator:clipboard-prepare', attemptId));
     },
+    importQrImage: async () => parseAuthenticatorQrImageImport(await ipcRenderer.invoke('authenticator:qr-image-import')),
     status: async () => parseAuthenticatorStatus(await ipcRenderer.invoke('authenticator:status')),
     preview: async (request: AuthenticatorPreviewRequest) => parseAuthenticatorPreviewResult(await ipcRenderer.invoke('authenticator:preview', request)),
     prepare: async (request: AuthenticatorRegistrationRequest) => parseAuthenticatorRegistrationPreview(await ipcRenderer.invoke('authenticator:prepare', request)),
@@ -459,6 +474,7 @@ contextBridge.exposeInMainWorld('dingDingStore', Object.freeze(api));
 // the frozen bridge above and cannot import this module directly.
 export {
   parseAuthenticatorEntryMetadata,
+  parseAuthenticatorQrImageImport,
   parseAuthenticatorList,
   parseAuthenticatorMutation,
   parseAuthenticatorPreviewResult,

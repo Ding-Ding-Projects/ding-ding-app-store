@@ -199,6 +199,7 @@ export function AuthenticatorPage({ settings, authenticator, notify, openRegex, 
   const [periodSeconds, setPeriodSeconds] = useState(30);
   const [showSecret, setShowSecret] = useState(false);
   const [importingClipboard, setImportingClipboard] = useState(false);
+  const [importingQrImage, setImportingQrImage] = useState(false);
   const uriInputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<AuthenticatorRegistrationPreviewResult | null>(null);
   const [confirmationCode, setConfirmationCode] = useState('');
@@ -362,6 +363,25 @@ export function AuthenticatorPage({ settings, authenticator, notify, openRegex, 
       notify({ ok: false, category: 'error', title: label(viewSettings, 'Clipboard import needs attention', '剪貼簿匯入要留意'), message: label(viewSettings, error instanceof Error ? error.message : 'The local clipboard could not be imported.', '未能匯入本機剪貼簿內容。') });
     } finally { setImportingClipboard(false); }
   };
+  const importUriFromQrImage = async () => {
+    if (importingQrImage || importingClipboard || preparingRegistration || preview?.ok) return;
+    setImportingQrImage(true);
+    try {
+      const result = await window.dingDingStore.authenticator.importQrImage();
+      if (!result.ok || !result.uri) {
+        notify({ ok: false, category: 'error', title: label(viewSettings, result.reason === 'cancelled' ? 'QR image import cancelled' : 'QR image import needs attention', result.reason === 'cancelled' ? 'QR 圖片匯入已取消' : 'QR 圖片匯入要留意'), message: label(viewSettings, result.message, result.messageYue) });
+        return;
+      }
+      prepareGeneration.current += 1;
+      setSource('otpauth-uri'); setUri(result.uri); setPreview(null); setConfirmationCode(''); setShowSecret(false); setUncertainRegistrationId(null);
+      window.setTimeout(() => uriInputRef.current?.focus(), 0);
+      notify({ ok: true, message: label(viewSettings, 'A local QR image was decoded. Review the otpauth URI before preparing pairing.', '本機 QR 圖片已解碼。準備配對前請先檢查 otpauth URI。') });
+    } catch {
+      notify({ ok: false, category: 'error', title: label(viewSettings, 'QR image import unavailable', 'QR 圖片匯入暫時用唔到'), message: label(viewSettings, 'The local QR image bridge was unavailable; no file or secret was imported.', '本機 QR 圖片橋接暫時用唔到；冇匯入檔案或者秘密。') });
+    } finally {
+      setImportingQrImage(false);
+    }
+  };
 
   const mutationNotice = (result: { ok: boolean; message: string; messageYue: string }) => notify({ ok: result.ok, message: label(viewSettings, result.message, result.messageYue) });
   const renameEntry = async (entryId: string) => {
@@ -473,11 +493,11 @@ export function AuthenticatorPage({ settings, authenticator, notify, openRegex, 
             : authenticator.status ? label(viewSettings, authenticator.status.message, authenticator.status.messageYue) : label(viewSettings, 'Authenticator storage status is unavailable.', '驗證器儲存狀態暫時用唔到。')}
         </p>
         <p>{label(viewSettings, 'Secrets are accepted once for pairing, encrypted by the operating-system credential vault, and never returned in list metadata. QR generation is local and has no network path.', '秘密只喺配對時接收一次，由作業系統憑證庫加密；項目清單 metadata 唔會返回秘密。QR 喺本機產生，冇網絡路徑。')}</p>
-         <p className="supporting">{label(viewSettings, 'This bounded slice supports metadata-only rename, reorder, label-only groups, selection, export, and a local next-code peek. QR image import, camera scanning, secret export, and authenticator history/restore remain deferred.', '呢個有限功能支援淨 metadata 改名、排序、標籤分組、揀選、匯出同本機下一碼預覽。QR 圖片匯入、相機掃描、秘密匯出同 authenticator 歷史／還原仍然押後。')}</p>
+         <p className="supporting">{label(viewSettings, 'This bounded slice supports local QR image import, metadata-only rename, reorder, label-only groups, selection, export, and a local next-code peek. Camera scanning, secret export, stable groups, and authenticator history/restore remain deferred.', '呢個有限功能支援本機 QR 圖片匯入、淨 metadata 改名、排序、標籤分組、揀選、匯出同本機下一碼預覽。相機掃描、秘密匯出、穩定分組同 authenticator 歷史／還原仍然押後。')}</p>
       </section>
       <section className="settings-card" {...el('settings-card')}>
         <h2>{label(viewSettings, 'Register an authenticator entry', '註冊 authenticator 項目')}</h2>
-        <div className="button-row" aria-live="polite"><button className="text-button" type="button" onClick={() => void importUriFromClipboard()} disabled={importingClipboard || preparingRegistration || Boolean(preview?.ok)} aria-busy={importingClipboard}>{importingClipboard ? label(viewSettings, 'Reading local clipboard…', '讀取緊本機剪貼簿…') : label(viewSettings, 'Import otpauth URI from clipboard', '由剪貼簿匯入 otpauth URI')}</button></div>
+        <div className="button-row" aria-live="polite"><button className="text-button" type="button" onClick={() => void importUriFromClipboard()} disabled={importingClipboard || importingQrImage || preparingRegistration || Boolean(preview?.ok)} aria-busy={importingClipboard}>{importingClipboard ? label(viewSettings, 'Reading local clipboard…', '讀取緊本機剪貼簿…') : label(viewSettings, 'Import otpauth URI from clipboard', '由剪貼簿匯入 otpauth URI')}</button><button className="text-button" type="button" onClick={() => void importUriFromQrImage()} disabled={importingQrImage || importingClipboard || preparingRegistration || Boolean(preview?.ok)} aria-busy={importingQrImage}>{importingQrImage ? label(viewSettings, 'Reading local QR image…', '讀取緊本機 QR 圖片…') : label(viewSettings, 'Import otpauth URI from QR image file', '由 QR 圖片檔案匯入 otpauth URI')}</button></div>
         {preview?.ok && <p className="supporting">{label(viewSettings, 'Registration fields are locked while this pairing preview is active, so the QR, code, and metadata cannot drift apart.', '配對預覽進行中會鎖住註冊欄位，避免 QR、驗證碼同 metadata 對唔上。')}</p>}
         <form onSubmit={(event) => void submitRegistration(event)}>
           <AuthenticatorPicker

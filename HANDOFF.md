@@ -1,5 +1,11 @@
 # Handoff
 
+## 2026-08-12 local QR image-file authenticator import
+
+- The Authenticator tab now offers a native local image picker for PNG, JPEG, and BMP QR files. The main process validates the sender and live School mode before opening the picker, enforces one in-flight request, reads through an opened file handle with an 8 MiB byte cap, checks dimensions before native decoding and again after `getSize()`, and bounds decoded pixels to 4096 by 4096 (16,777,216 pixels). The bundled `jsqr` decoder runs locally with no camera, network, path, or secret export route.
+- A successful decode returns only the canonical in-memory `otpauth://totp/` URI for the existing preview and pairing confirmation flow. The preload parser rejects extra fields, malformed results, missing failure reasons, unbounded UTF-8 values, and non-otpauth URIs; failures use generic localized messages and never echo QR payloads or secrets. School mode is rechecked after the picker and before bitmap conversion. The selected path-to-open race is a bounded local boundary: no path or bytes cross preload, and the opened handle is size-checked before reading.
+- Focused verification is recorded in `tests/authenticator-qr-image.test.ts` (4/4), plus the authenticator registration suite, main and renderer TypeScript checks, documentation generation/checks, and `git diff --check` before the finished commit. The seam tests remain source/decoder evidence rather than a packaged runtime IPC claim. Camera scanning, deliberate secret export, stable group entities, and protected authenticator history/restore remain deferred.
+
 ## 2026-08-12 packaged launch identity and branding repair
 
 - The installed package previously used the default Electron icon because `build.win.icon` was unset and `squirrelWindows.iconUrl` pointed at the generic GitHub favicon. The native BrowserWindow also had no explicit title/icon, so renderer startup failures could present as an Electron or `Error` shell with no product branding.
