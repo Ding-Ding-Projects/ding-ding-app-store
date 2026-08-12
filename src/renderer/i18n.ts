@@ -1,12 +1,24 @@
 import type { UserSettings } from '../shared/contracts';
+import type { PersonalVocabularyEntry } from '../shared/personal-vocabulary';
 
 export interface LabelPair { en: string; yue: string }
 
+let personalVocabulary: readonly PersonalVocabularyEntry[] = [];
+let personalVocabularyRestricted = false;
+export function setPersonalVocabulary(entries: readonly PersonalVocabularyEntry[], restricted = false): void {
+  personalVocabulary = entries.map((entry) => ({ ...entry }));
+  personalVocabularyRestricted = restricted;
+}
+export function personalizeText(value: string): string {
+  if (personalVocabularyRestricted || !value || /(?:https?:\/\/|^[A-Za-z]:\\|^\\\\|[\\/]src[\\/]|`[^`]+`|\b(?:sha256|SHA-256|JSON|URI|IPC|TOTP|Electron|Windows)\b)/.test(value)) return value;
+  return personalVocabulary.reduce((current, entry) => current.split(entry.source).join(entry.replacement), value);
+}
+
 /** The one bilingual label helper. English, Cantonese, or both, exactly as the language mode asks. */
 export function label(settings: UserSettings, en: string, yue: string): string {
-  if (settings.language === 'en') return en;
-  if (settings.language === 'yue') return yue;
-  return `${en} · ${yue}`;
+  if (settings.language === 'en') return personalizeText(en);
+  if (settings.language === 'yue') return personalizeText(yue);
+  return personalizeText(`${en} · ${yue}`);
 }
 
 export const labelOf = (settings: UserSettings, value: LabelPair): string => label(settings, value.en, value.yue);

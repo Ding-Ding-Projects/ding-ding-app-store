@@ -569,6 +569,18 @@ export interface SettingsProvenance {
   fallback: UserSettings;
 }
 
+export interface PersonalVocabularyStatus {
+  loaded: boolean;
+  entryCount: number;
+  entries: Array<{ source: string; replacement: string }>;
+  message: string;
+  messageYue: string;
+}
+
+export interface PersonalVocabularyImportResult extends PersonalVocabularyStatus {
+  ok: boolean;
+}
+
 export const TAB_IDS = ['catalog', 'installed', 'updates', 'authenticator', 'docs', 'activity', 'settings'] as const;
 export type TabId = (typeof TAB_IDS)[number];
 export const tabIdSchema = z.enum(TAB_IDS);
@@ -1500,6 +1512,11 @@ export interface DingDingStoreApi {
     load(): Promise<UserSettings>;
     save(settings: UserSettings): Promise<UserSettings>;
     provenance(): Promise<SettingsProvenance>;
+  };
+  personalVocabulary: {
+    status(): Promise<PersonalVocabularyStatus>;
+    importFromFile(): Promise<PersonalVocabularyImportResult>;
+    clear(): Promise<PersonalVocabularyStatus>;
   };
   schoolMode: {
     load(): Promise<SchoolModeSnapshot>;

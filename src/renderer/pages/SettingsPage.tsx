@@ -88,8 +88,11 @@ export function SettingsPage({ settings, settingsProvenance, sourceIsolationStat
   const [schoolNextCredentialConfirm, setSchoolNextCredentialConfirm] = useState('');
   const [schoolUnlockKind, setSchoolUnlockKind] = useState<SchoolSupportedUnlockKind>(schoolMode.state.unlockKind === 'password' ? 'password' : 'pin');
   const [schoolBusy, setSchoolBusy] = useState(false);
+  const [vocabulary, setVocabulary] = useState({ loaded: false, entryCount: 0, entries: [] as Array<{ source: string; replacement: string }>, message: 'No personal vocabulary file is loaded.', messageYue: '未載入個人詞彙檔案。' });
+  const [vocabularyBusy, setVocabularyBusy] = useState(false);
   const schoolBusyRef = useRef(false);
   useEffect(() => setDraft(settings), [settings]);
+  useEffect(() => { void window.dingDingStore.personalVocabulary.status().then(setVocabulary).catch(() => undefined); }, []);
   useEffect(() => {
     setSchoolName(schoolMode.state.displayName);
     setSchoolUnlockKind(schoolMode.state.unlockKind === 'password' ? 'password' : 'pin');
@@ -122,7 +125,8 @@ export function SettingsPage({ settings, settingsProvenance, sourceIsolationStat
   const counts = useMemo(() => ({
     'settings.general': SETTING_FIELDS.filter((field) => !isSchoolHidden(field) && field.section === 'general' && matcher(`${field.en}\n${field.yue}\n${field.keywords.join(' ')}`)).length
       + (matcher(`${schoolLabel} shared mode name unlock credential PIN password local reset`) ? 1 : 0)
-      + (matcher('automatic source repair isolation consent status') ? 1 : 0),
+      + (matcher('automatic source repair isolation consent status') ? 1 : 0)
+      + (matcher('personal vocabulary private wording json upload file clear reset local cache') ? 1 : 0),
     'settings.appearance': SETTING_FIELDS.filter((field) => field.section === 'appearance' && matcher(`${field.en}\n${field.yue}\n${field.keywords.join(' ')}`)).length
       + (matcher('rail tabs layout appearance element override') ? 1 : 0),
     'settings.schedule': SCHEDULE_FIELDS.filter((field) => matcher(`${field.en}\n${field.yue}\n${schoolRestricted && field.key === 'rules' ? field.keywords.filter((keyword) => keyword !== 'language').join(' ') : field.keywords.join(' ')}`)).length,
@@ -179,6 +183,28 @@ export function SettingsPage({ settings, settingsProvenance, sourceIsolationStat
   const toggleSchoolMode = async () => {
     const result = await runSchoolMutation(() => schoolMode.setEnabled({ enabled: !schoolEnabled, credential: schoolEnabled ? schoolCredential : undefined }));
     if (result?.ok) setSchoolCredential('');
+  };
+  const importVocabulary = async () => {
+    if (vocabularyBusy || schoolRestricted) return;
+    setVocabularyBusy(true);
+    try {
+      const result = await window.dingDingStore.personalVocabulary.importFromFile();
+      setVocabulary(result);
+      window.dispatchEvent(new Event('personal-vocabulary-changed'));
+      notify({ ok: result.ok, message: label(viewSettings, result.message, result.messageYue) });
+    } catch (error) { notify({ ok: false, message: (error as Error).message }); }
+    finally { setVocabularyBusy(false); }
+  };
+  const clearVocabulary = async () => {
+    if (vocabularyBusy || schoolRestricted) return;
+    setVocabularyBusy(true);
+    try {
+      const result = await window.dingDingStore.personalVocabulary.clear();
+      setVocabulary(result);
+      window.dispatchEvent(new Event('personal-vocabulary-changed'));
+      notify({ ok: true, message: label(viewSettings, result.message, result.messageYue) });
+    } catch (error) { notify({ ok: false, message: (error as Error).message }); }
+    finally { setVocabularyBusy(false); }
   };
   const changeSchoolCredential = async () => {
     if (schoolNextCredential !== schoolNextCredentialConfirm) { notify({ ok: false, message: label(viewSettings, `The two new ${schoolLabel} credentials do not match.`, `${schoolLabel} 兩次新憑證唔一致。`) }); return; }
@@ -258,6 +284,15 @@ export function SettingsPage({ settings, settingsProvenance, sourceIsolationStat
               {!schoolRestricted && <p className="supporting">Spoken narrator is optional and off by default. It uses this device’s browser speech service only; it never sends notification text over the network. It yields to a connected accessibility integration, stays quiet during quiet hours or reduced-sound mode, and may be unavailable when the platform has no speech service.</p>}
               <p className="supporting">{label(viewSettings, 'Automatic source repair gives OpenCode blanket tool approval only inside an attested disposable environment with no host mounts, user profile, credentials, secrets, or Git metadata. The app fails closed when that isolation is unavailable. This consent is persisted and can be revoked here; ordinary release installation never invokes OpenCode.', '自動 source 修正只會喺驗證過嘅一次性隔離環境入面畀 OpenCode 完整工具批准；冇 host mount、user profile、憑證、秘密或者 Git metadata。冇隔離就安全停低；呢個同意可以喺呢度撤回，普通 release 安裝永遠唔會叫 OpenCode。')}</p>
               <SourceIsolationStatusCard settings={viewSettings} status={sourceIsolationStatus} loading={sourceIsolationLoading} onRefresh={onRefreshSourceIsolation} />
+              {!schoolRestricted && matcher('personal vocabulary private wording json upload file clear reset local cache') && <section className="settings-card" aria-labelledby="personal-vocabulary-title">
+                <h2 id="personal-vocabulary-title">{label(viewSettings, 'Personal vocabulary', '個人詞彙')}</h2>
+                <p className="supporting">{label(viewSettings, 'Choose a local JSON file to apply private wording replacements. The file is validated before use, stays on this device, and is never included in logs, history, exports, telemetry, or network requests.', '揀一個本機 JSON 檔案套用私人文字替換。檔案會先驗證，只留喺呢部機，唔會放入記錄、歷史、匯出、遙測或者網絡要求。')}</p>
+                <p className="supporting" role="status">{label(viewSettings, vocabulary.message, vocabulary.messageYue)}</p>
+                <div className="settings-actions">
+                  <button id="personal-vocabulary-import" className="filled-button" disabled={vocabularyBusy} onClick={() => void importVocabulary()}><Icon>upload</Icon>{label(viewSettings, 'Choose local JSON', '揀本機 JSON')}</button>
+                  <button id="personal-vocabulary-clear" className="text-button" disabled={vocabularyBusy || !vocabulary.loaded} onClick={() => void clearVocabulary()}><Icon>delete</Icon>{label(viewSettings, 'Clear vocabulary', '清除詞彙')}</button>
+                </div>
+              </section>}
             </div>
             {matcher(`${schoolLabel} shared mode name unlock credential PIN password local reset`) && <section className="settings-card" aria-labelledby="school-mode-title" aria-busy={schoolBusy}>
               <h2 id="school-mode-title">{schoolLabel}</h2>
