@@ -1,20 +1,23 @@
-import type { AuthenticatorEntryMetadata } from '../shared/contracts.js';
+import type { AuthenticatorEntryMetadata, AuthenticatorGroup } from '../shared/contracts.js';
 
 export type AuthenticatorVaultStatus = 'unavailable' | 'os-credential-vault';
-
-export interface AuthenticatorVaultSaveOptions {
-  /** A capability fence checked before and after publication. */
-  shouldCommit?: () => boolean;
-}
 
 export interface AuthenticatorVaultMetadataWriteOptions {
   /** Capability fence checked before publication and again after it settles. */
   shouldCommit?: () => boolean;
+  groups?: readonly AuthenticatorGroup[];
+}
+
+export interface AuthenticatorVaultSaveOptions {
+  /** A capability fence checked before and after publication. */
+  shouldCommit?: () => boolean;
+  groups?: readonly AuthenticatorGroup[];
 }
 
 export interface AuthenticatorVault {
   status(): Promise<AuthenticatorVaultStatus>;
   listMetadata(): Promise<AuthenticatorEntryMetadata[]>;
+  listGroups?(): Promise<AuthenticatorGroup[]>;
   writeMetadata(entries: readonly AuthenticatorEntryMetadata[], options?: AuthenticatorVaultMetadataWriteOptions): Promise<void>;
   save(entry: AuthenticatorEntryMetadata, secret: string, options?: AuthenticatorVaultSaveOptions): Promise<void>;
   remove(entryId: string, options?: AuthenticatorVaultSaveOptions): Promise<void>;

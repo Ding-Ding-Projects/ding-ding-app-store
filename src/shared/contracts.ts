@@ -1288,6 +1288,7 @@ export const AUTHENTICATOR_MAX_IMAGE_DIMENSION = 4_096;
 export const AUTHENTICATOR_MAX_IMAGE_PIXELS = 16_777_216;
 export const AUTHENTICATOR_MAX_LABEL_LENGTH = 512;
 export const AUTHENTICATOR_MAX_GROUP_LENGTH = 64;
+export const AUTHENTICATOR_MAX_GROUPS = 64;
 export const AUTHENTICATOR_MAX_EXPORT_LENGTH = 512_000;
 
 export interface AuthenticatorEntryMetadata {
@@ -1303,6 +1304,16 @@ export interface AuthenticatorEntryMetadata {
   order: number;
   /** User-managed group membership; null means ungrouped. */
   group: string | null;
+  /** Stable group entity membership. Legacy v1/v2 records may omit this during read migration. */
+  groupId?: string | null;
+}
+
+export interface AuthenticatorGroup {
+  id: string;
+  name: string;
+  color: string;
+  order: number;
+  collapsed: boolean;
 }
 
 export interface AuthenticatorEntry extends AuthenticatorEntryMetadata {
@@ -1371,7 +1382,36 @@ export interface AuthenticatorRenameRequest extends AuthenticatorEntryIdRequest 
 }
 
 export interface AuthenticatorGroupRequest extends AuthenticatorEntryIdRequest {
-  group: string | null;
+  /** Stable group id; null removes membership. */
+  groupId?: string | null;
+  /** Legacy label input is accepted only as a migration bridge and is converted to an entity. */
+  group?: string | null;
+}
+
+export interface AuthenticatorGroupCreateRequest { name: string; color?: string; }
+export interface AuthenticatorGroupIdRequest { groupId: string; }
+export interface AuthenticatorGroupRenameRequest extends AuthenticatorGroupIdRequest { name: string; }
+export interface AuthenticatorGroupReorderRequest extends AuthenticatorGroupIdRequest { order: number; }
+export interface AuthenticatorGroupDeleteRequest extends AuthenticatorGroupIdRequest { confirmed: true; }
+export interface AuthenticatorGroupBulkMoveRequest { entryIds: string[]; groupId: string | null; }
+
+export interface AuthenticatorGroupMutationResult {
+  ok: boolean;
+  group?: AuthenticatorGroup;
+  message: string;
+  messageYue: string;
+}
+export interface AuthenticatorGroupListResult {
+  groups: AuthenticatorGroup[];
+  message: string;
+  messageYue: string;
+}
+export interface AuthenticatorGroupBulkMoveResult {
+  ok: boolean;
+  movedIds: string[];
+  skippedIds: string[];
+  message: string;
+  messageYue: string;
 }
 
 export interface AuthenticatorReorderRequest extends AuthenticatorEntryIdRequest {
@@ -1438,6 +1478,7 @@ export type AuthenticatorExportOmittedField = 'secret' | 'uri' | 'code' | 'nextC
 
 export interface AuthenticatorListResult {
   entries: AuthenticatorEntry[];
+  groups: AuthenticatorGroup[];
   storage: 'memory-only' | 'os-vault';
   message: string;
   messageYue: string;
@@ -1601,6 +1642,11 @@ export interface DingDingStoreApi {
     confirm(request: AuthenticatorRegistrationConfirmRequest): Promise<AuthenticatorMutationResult>;
     cancel(registrationId: string): Promise<void>;
     list(): Promise<AuthenticatorListResult>;
+    createGroup(request: AuthenticatorGroupCreateRequest): Promise<AuthenticatorGroupMutationResult>;
+    renameGroup(request: AuthenticatorGroupRenameRequest): Promise<AuthenticatorGroupMutationResult>;
+    reorderGroup(request: AuthenticatorGroupReorderRequest): Promise<AuthenticatorGroupMutationResult>;
+    deleteGroup(request: AuthenticatorGroupDeleteRequest): Promise<AuthenticatorGroupMutationResult>;
+    moveToGroup(request: AuthenticatorGroupBulkMoveRequest): Promise<AuthenticatorGroupBulkMoveResult>;
     rename(request: AuthenticatorRenameRequest): Promise<AuthenticatorMutationResult>;
     setGroup(request: AuthenticatorGroupRequest): Promise<AuthenticatorMutationResult>;
     reorder(request: AuthenticatorReorderRequest): Promise<AuthenticatorMutationResult>;

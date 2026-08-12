@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { app, safeStorage } from 'electron';
@@ -6,7 +6,8 @@ import { AUTHENTICATOR_MAX_ENTRIES } from '../shared/contracts.js';
 import type { AuthenticatorEntryMetadata } from '../shared/contracts.js';
 import { writeJsonAtomic } from './json-store.js';
 import type { AuthenticatorVault, AuthenticatorVaultMetadataWriteOptions, AuthenticatorVaultSaveOptions, AuthenticatorVaultStatus } from './authenticator-vault-contract.js';
-import { entryMetadataSchema, metadataDocumentSchema } from './authenticator-metadata.js';
+import { authenticatorGroupSchema, entryMetadataSchema, metadataDocumentSchema, normalizeAuthenticatorGroups } from './authenticator-metadata.js';
+import type { AuthenticatorGroup } from '../shared/contracts.js';
 
 export interface SafeStorageAuthenticatorVaultOptions {
   metadataPath?: string;
@@ -49,6 +50,7 @@ export class SafeStorageAuthenticatorVault implements AuthenticatorVault {
   private readonly decryptString: (value: Buffer) => string;
   private readonly writeMetadataFile: (filePath: string, value: unknown, options?: { shouldPublish?: () => boolean }) => Promise<void>;
   private readonly renameSecret: (from: string, to: string) => Promise<void>;
+  private groups: AuthenticatorGroup[] = [];
   constructor(options: SafeStorageAuthenticatorVaultOptions = {}) {
     const userData = options.metadataPath && options.secretsDirectory ? '' : app.getPath('userData');
     this.metadataPath = options.metadataPath ?? path.join(userData, 'authenticator.v1.json');
@@ -74,12 +76,29 @@ export class SafeStorageAuthenticatorVault implements AuthenticatorVault {
     }
     const parsed = metadataDocumentSchema.safeParse(value);
     if (!parsed.success) throw new Error('The authenticator metadata file was invalid.');
+    this.groups = normalizeAuthenticatorGroups('groups' in parsed.data ? (parsed.data.groups ?? []) : []);
+    const byLabel = new Map<string, AuthenticatorGroup>();
+    for (const entry of parsed.data.entries) {
+      const label = 'group' in entry ? (entry.group ?? null) : null;
+      if (label && !byLabel.has(label)) {
+        const hex = createHash('sha256').update(`ding-ding-authenticator-group:${label}`, 'utf8').digest('hex').slice(0, 32) + '0000';
+        const id = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-${((parseInt(hex.slice(16, 18), 16) & 0x3f) | 0x80).toString(16).padStart(2, '0')}${hex.slice(18, 20)}-${hex.slice(20, 32)}`;
+        byLabel.set(label, { id, name: label, color: '#6750A4', order: byLabel.size, collapsed: false });
+      }
+    }
+    if (byLabel.size && !this.groups.length) this.groups = normalizeAuthenticatorGroups([...byLabel.values()]);
+    const labelToId = new Map(this.groups.map((group) => [group.name, group.id]));
     const entries = parsed.data.entries
-      .map((entry) => ({ ...entry, group: 'group' in entry ? (entry.group ?? null) : null }))
+      .map((entry) => ({ ...entry, group: 'group' in entry ? (entry.group ?? null) : null, groupId: 'groupId' in entry && entry.groupId ? entry.groupId : ('group' in entry && entry.group ? labelToId.get(entry.group) ?? null : null) }))
       .slice()
       .sort((left, right) => left.order - right.order || left.createdAt.localeCompare(right.createdAt)) as AuthenticatorEntryMetadata[];
     assertMetadataInvariants(entries);
     return entries;
+  }
+
+  async listGroups(): Promise<AuthenticatorGroup[]> {
+    await this.listMetadata();
+    return this.groups.map((group) => ({ ...group }));
   }
 
   async writeMetadata(entries: readonly AuthenticatorEntryMetadata[], options: AuthenticatorVaultMetadataWriteOptions = {}): Promise<void> {
@@ -87,8 +106,9 @@ export class SafeStorageAuthenticatorVault implements AuthenticatorVault {
       if (await this.status() === 'unavailable') throw new Error('The operating-system credential vault is unavailable.');
       const parsed = entries.map((entry) => entryMetadataSchema.parse(entry) as AuthenticatorEntryMetadata);
       assertMetadataInvariants(parsed);
-      const document = metadataDocumentSchema.parse({ schemaVersion: 2, entries: parsed });
-      const documentBefore = { schemaVersion: 2, entries: await this.listMetadata() };
+      const groups = normalizeAuthenticatorGroups(options.groups ?? await this.listGroups());
+      const document = metadataDocumentSchema.parse(groups.length ? { schemaVersion: 3, entries: parsed, groups } : { schemaVersion: 2, entries: parsed });
+      const documentBefore = { schemaVersion: 3, entries: await this.listMetadata(), groups: await this.listGroups() };
       const metadataBeforeBytes = await this.readMetadataBytes();
       let metadataPublished = false;
       let metadataWriteAttempted = false;
@@ -104,6 +124,7 @@ export class SafeStorageAuthenticatorVault implements AuthenticatorVault {
         // rollback is required.
         metadataWriteAttempted = true;
         await this.writeMetadataFile(this.metadataPath, document, { shouldPublish: options.shouldCommit });
+        this.groups = groups;
         metadataPublished = true;
         if (options.shouldCommit && !options.shouldCommit()) {
           const cancelled = new Error('Authenticator metadata publication was cancelled.') as NodeJS.ErrnoException;
@@ -139,7 +160,7 @@ export class SafeStorageAuthenticatorVault implements AuthenticatorVault {
     const encrypted = this.encryptString(secret);
     await mkdir(this.secretsDirectory, { recursive: true });
     const entriesBefore = (await this.listMetadata()).map((entry, index) => ({ ...entry, order: index }));
-    const documentBefore = { schemaVersion: 2, entries: entriesBefore };
+    const documentBefore = { schemaVersion: 3, entries: entriesBefore, groups: await this.listGroups() };
     const metadataBeforeBytes = await this.readMetadataBytes();
     const secretPath = this.secretPath(metadata.id);
     let previousSecret: Buffer | null = null;
@@ -160,7 +181,7 @@ export class SafeStorageAuthenticatorVault implements AuthenticatorVault {
       entries.push({ ...metadata, order: entries.length });
       this.ensureCommit(options);
       metadataWriteAttempted = true;
-      await this.writeMetadataFile(this.metadataPath, { schemaVersion: 2, entries }, { shouldPublish: options.shouldCommit });
+      await this.writeMetadataFile(this.metadataPath, { schemaVersion: 3, entries, groups: await this.listGroups() }, { shouldPublish: options.shouldCommit });
       metadataPublished = true;
       this.ensureCommit(options);
     } catch (error) {
@@ -203,7 +224,7 @@ export class SafeStorageAuthenticatorVault implements AuthenticatorVault {
       return;
     }
     this.ensureCommit(options);
-    const documentBefore = { schemaVersion: 2, entries: entriesBefore };
+    const documentBefore = { schemaVersion: 3, entries: entriesBefore, groups: await this.listGroups() };
     const metadataBeforeBytes = await this.readMetadataBytes();
     let metadataPublished = false;
     let metadataWriteAttempted = false;
@@ -217,7 +238,7 @@ export class SafeStorageAuthenticatorVault implements AuthenticatorVault {
       }
       this.ensureCommit(options);
       metadataWriteAttempted = true;
-      await this.writeMetadataFile(this.metadataPath, { schemaVersion: 2, entries: entriesBefore.filter((entry) => entry.id !== entryId).map((entry, index) => ({ ...entry, order: index })) }, { shouldPublish: options.shouldCommit });
+      await this.writeMetadataFile(this.metadataPath, { schemaVersion: 3, entries: entriesBefore.filter((entry) => entry.id !== entryId).map((entry, index) => ({ ...entry, order: index })), groups: await this.listGroups() }, { shouldPublish: options.shouldCommit });
       metadataPublished = true;
       this.ensureCommit(options);
     } catch (error) {

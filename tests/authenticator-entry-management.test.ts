@@ -191,4 +191,33 @@ describe('saved authenticator-entry management boundary', () => {
     expect(page).toContain('aria-keyshortcuts="Shift+Space"');
     expect(page).toContain('setSelectionAnchorId(null)');
   });
+
+  it('creates, renames, reorders, moves, and deletes stable groups without leaking secrets', async () => {
+    const vault = new ManagementVault();
+    vault.records.set(ID_A, { metadata: metadata(ID_A, 0), secret: 'JBSWY3DPEHPK3PXP' });
+    const service = new AuthenticatorService(vault);
+    const created = await service.createGroup({ name: 'Work', color: '#6750A4' });
+    expect(created.ok).toBe(true);
+    const groupId = created.group!.id;
+    expect((await service.moveToGroup({ entryIds: [ID_A], groupId })).movedIds).toEqual([ID_A]);
+    expect((await vault.listMetadata())[0]).toMatchObject({ groupId, group: 'Work' });
+    expect((await service.renameGroup({ groupId, name: 'Workday' })).ok).toBe(true);
+    expect((await vault.listMetadata())[0].group).toBe('Workday');
+    expect((await service.reorderGroup({ groupId, order: 0 })).ok).toBe(true);
+    expect((await service.deleteGroup({ groupId, confirmed: true })).ok).toBe(true);
+    expect((await vault.listMetadata())[0]).toMatchObject({ groupId: null, group: null });
+    expect(JSON.stringify(vault.records)).not.toContain('JBSWY3DPEHPK3PXP');
+  });
+
+  it('does not report moves when metadata publication fails', async () => {
+    const vault = new ManagementVault();
+    vault.records.set(ID_A, { metadata: metadata(ID_A, 0), secret: 'JBSWY3DPEHPK3PXP' });
+    const service = new AuthenticatorService(vault);
+    const group = await service.createGroup({ name: 'Work' });
+    const original = vault.writeMetadata.bind(vault);
+    vault.writeMetadata = async () => { throw new Error('write failed'); };
+    const moved = await service.moveToGroup({ entryIds: [ID_A], groupId: group.group!.id });
+    expect(moved).toMatchObject({ ok: false, movedIds: [] });
+    vault.writeMetadata = original;
+  });
 });
