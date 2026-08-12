@@ -1392,6 +1392,7 @@ export interface AuthenticatorGroupCreateRequest { name: string; color?: string;
 export interface AuthenticatorGroupIdRequest { groupId: string; }
 export interface AuthenticatorGroupRenameRequest extends AuthenticatorGroupIdRequest { name: string; }
 export interface AuthenticatorGroupReorderRequest extends AuthenticatorGroupIdRequest { order: number; }
+export interface AuthenticatorGroupCollapseRequest extends AuthenticatorGroupIdRequest { collapsed: boolean; }
 export interface AuthenticatorGroupDeleteRequest extends AuthenticatorGroupIdRequest { confirmed: true; }
 export interface AuthenticatorGroupBulkMoveRequest { entryIds: string[]; groupId: string | null; }
 
@@ -1645,6 +1646,7 @@ export interface DingDingStoreApi {
     createGroup(request: AuthenticatorGroupCreateRequest): Promise<AuthenticatorGroupMutationResult>;
     renameGroup(request: AuthenticatorGroupRenameRequest): Promise<AuthenticatorGroupMutationResult>;
     reorderGroup(request: AuthenticatorGroupReorderRequest): Promise<AuthenticatorGroupMutationResult>;
+    collapseGroup(request: AuthenticatorGroupCollapseRequest): Promise<AuthenticatorGroupMutationResult>;
     deleteGroup(request: AuthenticatorGroupDeleteRequest): Promise<AuthenticatorGroupMutationResult>;
     moveToGroup(request: AuthenticatorGroupBulkMoveRequest): Promise<AuthenticatorGroupBulkMoveResult>;
     rename(request: AuthenticatorRenameRequest): Promise<AuthenticatorMutationResult>;

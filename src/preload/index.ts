@@ -15,6 +15,7 @@ import type {
   AuthenticatorGroupReorderRequest,
   AuthenticatorGroupDeleteRequest,
   AuthenticatorGroupBulkMoveRequest,
+  AuthenticatorGroupCollapseRequest,
   AuthenticatorGroupMutationResult,
   AuthenticatorRenameRequest,
   AuthenticatorReorderRequest,
@@ -112,6 +113,7 @@ const AUTHENTICATOR_MAX_ISSUER_LENGTH = 128;
 const AUTHENTICATOR_MAX_ACCOUNT_LENGTH = 256;
 const AUTHENTICATOR_MAX_LABEL_LENGTH = 512;
 const AUTHENTICATOR_MAX_GROUP_LENGTH = 64;
+const AUTHENTICATOR_MAX_GROUPS = 64;
 const AUTHENTICATOR_MAX_EXPORT_LENGTH = 512_000;
 const AUTHENTICATOR_EXPORT_OMITTED_FIELDS = ['secret', 'uri', 'code', 'nextCode', 'remainingSeconds', 'expiresAt'] as const;
 
@@ -192,6 +194,7 @@ function parseAuthenticatorEntryMetadata(value: unknown): AuthenticatorListResul
      updatedAt: entry.updatedAt,
      order: Number(entry.order),
     group: entry.group === undefined || entry.group === null ? null : String(entry.group),
+    groupId: entry.groupId === undefined || entry.groupId === null ? null : String(entry.groupId),
     code: entry.code as string | null,
     nextCode: entry.nextCode as string | null,
     remainingSeconds: entry.remainingSeconds as number | null,
@@ -241,7 +244,7 @@ function parseAuthenticatorGroupMutation(value: unknown): AuthenticatorGroupMuta
   if (Object.keys(result).some((key) => !['ok', 'group', 'message', 'messageYue'].includes(key)) || typeof result.ok !== 'boolean' || typeof result.message !== 'string' || typeof result.messageYue !== 'string') throw new Error('The authenticator group mutation response was invalid.');
   if (result.ok) {
     const group = result.group as Record<string, unknown> | undefined;
-    if (!group || typeof group.id !== 'string' || typeof group.name !== 'string' || typeof group.color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(group.color) || typeof group.order !== 'number' || !Number.isInteger(group.order) || typeof group.collapsed !== 'boolean') throw new Error('The authenticator group mutation response was invalid.');
+    if (!group || typeof group.id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(group.id) || typeof group.name !== 'string' || group.name.length < 1 || group.name.length > AUTHENTICATOR_MAX_GROUP_LENGTH || group.name.trim() !== group.name || /[\u0000-\u001f\u007f]/.test(group.name) || typeof group.color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(group.color) || typeof group.order !== 'number' || !Number.isInteger(group.order) || group.order < 0 || group.order >= AUTHENTICATOR_MAX_GROUPS || typeof group.collapsed !== 'boolean') throw new Error('The authenticator group mutation response was invalid.');
     return Object.freeze({ ok: true, group: Object.freeze({ id: group.id, name: group.name, color: group.color, order: group.order, collapsed: group.collapsed }), message: result.message, messageYue: result.messageYue });
   }
   if (result.group !== undefined) throw new Error('The authenticator group mutation response was invalid.');
@@ -288,13 +291,16 @@ function parseAuthenticatorList(value: unknown): AuthenticatorListResult {
   const keys = new Set(['entries', 'groups', 'storage', 'message', 'messageYue']);
   if (Object.keys(result).some((key) => !keys.has(key)) || !Array.isArray(result.entries) || result.entries.length > AUTHENTICATOR_MAX_ENTRIES || !AUTHENTICATOR_STORAGE_SET.has(String(result.storage)) || typeof result.message !== 'string' || result.message.length > 512 || typeof result.messageYue !== 'string' || result.messageYue.length > 512) throw new Error('The authenticator list response was invalid.');
   const entries = result.entries.map(parseAuthenticatorEntryMetadata);
-  const groups = Array.isArray(result.groups) ? result.groups.map((group) => {
+  if (result.groups !== undefined && !Array.isArray(result.groups) || Array.isArray(result.groups) && result.groups.length > AUTHENTICATOR_MAX_GROUPS) throw new Error('The authenticator group response was invalid.');
+  const groups = (Array.isArray(result.groups) ? result.groups : []).map((group) => {
     if (!group || typeof group !== 'object' || Array.isArray(group)) throw new Error('The authenticator group response was invalid.');
     const value = group as Record<string, unknown>;
-    if (Object.keys(value).some((key) => !['id', 'name', 'color', 'order', 'collapsed'].includes(key)) || typeof value.id !== 'string' || typeof value.name !== 'string' || value.name.length < 1 || value.name.length > AUTHENTICATOR_MAX_GROUP_LENGTH || typeof value.color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(value.color) || typeof value.order !== 'number' || !Number.isInteger(value.order) || value.order < 0 || typeof value.collapsed !== 'boolean') throw new Error('The authenticator group response was invalid.');
+    if (Object.keys(value).some((key) => !['id', 'name', 'color', 'order', 'collapsed'].includes(key)) || typeof value.id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.id) || typeof value.name !== 'string' || value.name.length < 1 || value.name.length > AUTHENTICATOR_MAX_GROUP_LENGTH || value.name.trim() !== value.name || /[\u0000-\u001f\u007f]/.test(value.name) || typeof value.color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(value.color) || typeof value.order !== 'number' || !Number.isInteger(value.order) || value.order < 0 || value.order >= AUTHENTICATOR_MAX_GROUPS || typeof value.collapsed !== 'boolean') throw new Error('The authenticator group response was invalid.');
     return Object.freeze({ id: value.id, name: value.name, color: value.color, order: Number(value.order), collapsed: value.collapsed });
-  }) : [];
-  if (new Set(entries.map((entry) => entry.id)).size !== entries.length) throw new Error('The authenticator list response was invalid.');
+  });
+  if (new Set(entries.map((entry) => entry.id)).size !== entries.length || new Set(entries.map((entry) => entry.order)).size !== entries.length || entries.some((entry, index) => entry.order !== index)) throw new Error('The authenticator list response was invalid.');
+  const groupIds = new Set(groups.map((group) => group.id));
+  if (groupIds.size !== groups.length || new Set(groups.map((group) => group.name)).size !== groups.length || new Set(groups.map((group) => group.order)).size !== groups.length || groups.some((group, index) => group.order !== index) || entries.some((entry) => typeof entry.groupId === 'string' && !groupIds.has(entry.groupId))) throw new Error('The authenticator list response was invalid.');
   return Object.freeze({ entries, groups, storage: result.storage as AuthenticatorListResult['storage'], message: result.message, messageYue: result.messageYue });
 }
 function parseSourceIsolationStatus(value: unknown): SourceIsolationStatus {
@@ -505,10 +511,12 @@ const api: DingDingStoreApi = {
     createGroup: async (request: AuthenticatorGroupCreateRequest) => parseAuthenticatorGroupMutation(await ipcRenderer.invoke('authenticator:create-group', request)),
     renameGroup: async (request: AuthenticatorGroupRenameRequest) => parseAuthenticatorGroupMutation(await ipcRenderer.invoke('authenticator:rename-group', request)),
     reorderGroup: async (request: AuthenticatorGroupReorderRequest) => parseAuthenticatorGroupMutation(await ipcRenderer.invoke('authenticator:reorder-group', request)),
+    collapseGroup: async (request: AuthenticatorGroupCollapseRequest) => parseAuthenticatorGroupMutation(await ipcRenderer.invoke('authenticator:collapse-group', request)),
     deleteGroup: async (request: AuthenticatorGroupDeleteRequest) => parseAuthenticatorGroupMutation(await ipcRenderer.invoke('authenticator:delete-group', request)),
     moveToGroup: async (request: AuthenticatorGroupBulkMoveRequest) => {
       const value = await ipcRenderer.invoke('authenticator:move-to-group', request);
-      if (!value || typeof value !== 'object' || !Array.isArray(value.movedIds) || !Array.isArray(value.skippedIds) || typeof value.ok !== 'boolean' || typeof value.message !== 'string' || typeof value.messageYue !== 'string') throw new Error('The authenticator group move response was invalid.');
+      const uuid = (id: unknown) => typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+      if (!value || typeof value !== 'object' || Object.keys(value).some((key) => !['ok', 'movedIds', 'skippedIds', 'message', 'messageYue'].includes(key)) || !Array.isArray(value.movedIds) || !Array.isArray(value.skippedIds) || value.movedIds.length > AUTHENTICATOR_MAX_ENTRIES || value.skippedIds.length > AUTHENTICATOR_MAX_ENTRIES || value.movedIds.some((id: unknown) => !uuid(id)) || value.skippedIds.some((id: unknown) => !uuid(id)) || new Set([...value.movedIds, ...value.skippedIds]).size !== value.movedIds.length + value.skippedIds.length || typeof value.ok !== 'boolean' || (value.ok && value.skippedIds.length !== 0) || typeof value.message !== 'string' || value.message.length > 512 || typeof value.messageYue !== 'string' || value.messageYue.length > 512) throw new Error('The authenticator group move response was invalid.');
       return Object.freeze({ ok: value.ok, movedIds: [...value.movedIds] as string[], skippedIds: [...value.skippedIds] as string[], message: value.message, messageYue: value.messageYue });
     },
     rename: async (request: AuthenticatorRenameRequest) => parseAuthenticatorMutation(await ipcRenderer.invoke('authenticator:rename', request)),
@@ -552,4 +560,5 @@ export {
   parseAuthenticatorDelete,
   parseAuthenticatorBulkDelete,
   parseAuthenticatorExport,
+  parseAuthenticatorGroupMutation,
 };

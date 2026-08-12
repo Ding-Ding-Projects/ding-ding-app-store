@@ -23,6 +23,7 @@ import {
   type AuthenticatorGroup,
   type AuthenticatorGroupBulkMoveRequest,
   type AuthenticatorGroupBulkMoveResult,
+  type AuthenticatorGroupCollapseRequest,
   type AuthenticatorGroupCreateRequest,
   type AuthenticatorGroupDeleteRequest,
   type AuthenticatorGroupMutationResult,
@@ -88,6 +89,7 @@ const groupCreateSchema = z.strictObject({ name: z.string().min(1).max(AUTHENTIC
 const groupIdSchema = z.strictObject({ groupId: uuidSchema });
 const groupRenameSchema = z.strictObject({ groupId: uuidSchema, name: z.string().min(1).max(AUTHENTICATOR_MAX_GROUP_LENGTH) });
 const groupReorderSchema = z.strictObject({ groupId: uuidSchema, order: z.number().int().min(0).max(63) });
+const groupCollapseSchema = z.strictObject({ groupId: uuidSchema, collapsed: z.boolean() });
 const groupDeleteSchema = z.strictObject({ groupId: uuidSchema, confirmed: z.literal(true) });
 const groupMoveSchema = z.strictObject({ entryIds: z.array(uuidSchema).min(1).max(AUTHENTICATOR_MAX_ENTRIES).refine(uniqueIds), groupId: uuidSchema.nullable() });
 
@@ -305,7 +307,7 @@ export class AuthenticatorService {
 
   private async readGroups(): Promise<AuthenticatorGroup[]> {
     if (this.vault.listGroups) {
-      try { this.groups = normalizeAuthenticatorGroups(await this.vault.listGroups()); } catch { this.groups = []; }
+      this.groups = normalizeAuthenticatorGroups(await this.vault.listGroups());
     }
     return this.groups.map((group) => ({ ...group }));
   }
@@ -722,6 +724,29 @@ export class AuthenticatorService {
   async reorderGroup(request: AuthenticatorGroupReorderRequest): Promise<import('../shared/contracts.js').AuthenticatorGroupMutationResult> {
     const parsed = groupReorderSchema.safeParse(request); if (!parsed.success || this.restricted) return { ok: false, message: 'The authenticator group reorder request was invalid or unavailable.', messageYue: 'Authenticator 分組排序要求無效或者暫時用唔到。' };
     return this.withMetadataSerial(async () => { const generation = this.restrictionGeneration; const before = await this.readMutableMetadata(generation); if (!before) return { ok: false, message: 'Authenticator metadata is unavailable or restricted.', messageYue: 'Authenticator metadata 暫時用唔到或者受到限制。' }; const groups = await this.readGroups(); const current = groups.find((group) => group.id === parsed.data.groupId); if (!current) return { ok: false, message: 'That authenticator group no longer exists.', messageYue: '嗰個 authenticator 分組已經唔存在。' }; const ordered = groups.filter((group) => group.id !== current.id); ordered.splice(Math.min(parsed.data.order, ordered.length), 0, current); const nextGroups = ordered.map((group, order) => ({ ...group, order })); const published = await this.publishMetadataMutation(before, before, generation, nextGroups); if (published !== true) return { ok: false, message: 'The authenticator group reorder could not be published safely.', messageYue: '未能安全發佈 authenticator 分組排序。' }; this.groups = nextGroups; await this.recordActivity('group-reordered'); return { ok: true, group: nextGroups.find((group) => group.id === current.id), message: 'Authenticator group order updated.', messageYue: 'Authenticator 分組次序已更新。' }; });
+  }
+
+  async collapseGroup(request: AuthenticatorGroupCollapseRequest): Promise<AuthenticatorGroupMutationResult> {
+    const parsed = groupCollapseSchema.safeParse(request);
+    if (!parsed.success || this.restricted) return { ok: false, message: 'The authenticator group collapse request was invalid or unavailable.', messageYue: 'Authenticator 分組收合要求無效或者暫時用唔到。' };
+    return this.withMetadataSerial(async () => {
+      const generation = this.restrictionGeneration;
+      const before = await this.readMutableMetadata(generation);
+      if (!before) return { ok: false, message: 'Authenticator metadata is unavailable or restricted.', messageYue: 'Authenticator metadata 暫時用唔到或者受到限制。' };
+      try {
+        const groups = await this.readGroups();
+        const current = groups.find((group) => group.id === parsed.data.groupId);
+        if (!current) return { ok: false, message: 'That authenticator group no longer exists.', messageYue: '嗰個 authenticator 分組已經唔存在。' };
+        const nextGroups = groups.map((group) => group.id === current.id ? { ...group, collapsed: parsed.data.collapsed } : group);
+        const published = await this.publishMetadataMutation(before, before, generation, nextGroups);
+        if (published !== true) return { ok: false, message: 'The authenticator group collapse state could not be published safely.', messageYue: '未能安全發佈 authenticator 分組收合狀態。' };
+        this.groups = nextGroups;
+        await this.recordActivity('group-reordered');
+        return { ok: true, group: nextGroups.find((group) => group.id === current.id), message: parsed.data.collapsed ? 'Authenticator group collapsed.' : 'Authenticator group expanded.', messageYue: parsed.data.collapsed ? 'Authenticator 分組已收合。' : 'Authenticator 分組已展開。' };
+      } catch {
+        return { ok: false, message: 'Authenticator group metadata was invalid; no collapse state was changed.', messageYue: 'Authenticator 分組 metadata 無效；冇改動收合狀態。' };
+      }
+    });
   }
 
   async deleteGroup(request: AuthenticatorGroupDeleteRequest): Promise<import('../shared/contracts.js').AuthenticatorGroupMutationResult> {

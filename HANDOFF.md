@@ -1,5 +1,11 @@
 # Handoff
 
+## 2026-08-12 stable authenticator group completion
+
+- Stable UUID-backed groups now preserve colour, contiguous order, and collapsed state. The renderer exposes collapse/expand and both reorder directions, while the preload rejects malformed UUIDs, excessive/duplicate/non-contiguous groups or entries, dangling memberships, contradictory bulk-move outcomes, and no longer drops `groupId`.
+- Group deletion now uses the app-native two-key plus full-slider destructive confirmation and names the exact group and affected entry count. Selected entries move through an anchored keyboard picker with independent plain-text/regex state, result/member counts, an explicit Ungrouped target, Escape focus return, and no hard-coded first-match shortcut.
+- Canonical, offline, site, and wiki documentation describe this stable-group boundary. Camera scanning, deliberate secret export, and protected authenticator history/restore remain deferred.
+
 ## 2026-08-12 local QR image-file authenticator import
 
 - Implementation commit: `66e9e350ca33c017260bf22a0443553f46b0a50f` on `codex/authenticator-qr-image-import`; this handoff follow-up records the exact dewed ref without rewriting it.
