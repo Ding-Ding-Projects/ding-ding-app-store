@@ -546,6 +546,10 @@ export function buildRegistry(context: RegistryContext): Entry[] {
     command('open-source-details', 'Open source execution isolation details', '開 source 執行隔離詳情', 'info', ['source', 'repair', 'OpenCode', 'isolation', 'guest', 'transport', 'sandbox', 'status'], 'Settings', { surface: 'settings.general', focusId: 'source-isolation-title' }),
   );
   if (!schoolModeEnabled) entries.push(
+    command('personal-vocabulary-import', 'Import personal vocabulary JSON', '匯入個人詞彙 JSON', 'upload', ['personal', 'vocabulary', 'json', 'import', 'local', 'settings'], 'Settings', { surface: 'settings.general', focusId: 'personal-vocabulary-import' }),
+    command('personal-vocabulary-clear', 'Clear personal vocabulary', '清除個人詞彙', 'delete', ['personal', 'vocabulary', 'clear', 'reset', 'local', 'settings'], 'Settings', { surface: 'settings.general', focusId: 'personal-vocabulary-clear' }),
+  );
+  if (!schoolModeEnabled) entries.push(
     command('authenticator-rename', 'Rename an authenticator entry', '改名 authenticator 項目', 'edit', ['authenticator', 'rename', 'name'], 'Pages', { surface: 'authenticator', focusId: 'authenticator-entry-management' }),
     command('authenticator-group', 'Edit authenticator group labels', '編輯 authenticator 分組標籤', 'folder', ['authenticator', 'group', 'label'], 'Pages', { surface: 'authenticator', focusId: 'authenticator-entry-management' }),
     command('authenticator-reorder', 'Reorder authenticator entries', '重新排列 authenticator 項目', 'swap_vert', ['authenticator', 'reorder', 'move'], 'Pages', { surface: 'authenticator', focusId: 'authenticator-entry-management' }),

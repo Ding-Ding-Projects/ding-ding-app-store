@@ -5,13 +5,25 @@ export interface LabelPair { en: string; yue: string }
 
 let personalVocabulary: readonly PersonalVocabularyEntry[] = [];
 let personalVocabularyRestricted = false;
+const TECHNICAL_SPAN = /https?:\/\/[^\s]+|(?:[A-Za-z]:\\|\\\\)[^\s]+|\b[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)+\b|`[^`]+`|\b(?:SHA-(?:1|256|512)|sha(?:1|256|512)|JSON|URI|IPC|TOTP|Electron|Windows)\b/g;
+
 export function setPersonalVocabulary(entries: readonly PersonalVocabularyEntry[], restricted = false): void {
   personalVocabulary = entries.map((entry) => ({ ...entry }));
   personalVocabularyRestricted = restricted;
 }
+
 export function personalizeText(value: string): string {
-  if (personalVocabularyRestricted || !value || /(?:https?:\/\/|^[A-Za-z]:\\|^\\\\|[\\/]src[\\/]|`[^`]+`|\b(?:sha256|SHA-256|JSON|URI|IPC|TOTP|Electron|Windows)\b)/.test(value)) return value;
-  return personalVocabulary.reduce((current, entry) => current.split(entry.source).join(entry.replacement), value);
+  if (personalVocabularyRestricted || !value) return value;
+  const replace = (segment: string) => personalVocabulary.reduce((current, entry) => current.split(entry.source).join(entry.replacement), segment);
+  let output = '';
+  let cursor = 0;
+  for (const match of value.matchAll(TECHNICAL_SPAN)) {
+    const start = match.index ?? cursor;
+    output += replace(value.slice(cursor, start));
+    output += match[0];
+    cursor = start + match[0].length;
+  }
+  return output + replace(value.slice(cursor));
 }
 
 /** The one bilingual label helper. English, Cantonese, or both, exactly as the language mode asks. */
