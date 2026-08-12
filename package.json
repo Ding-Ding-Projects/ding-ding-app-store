@@ -79,8 +79,7 @@
         }
       ],
       "forceCodeSigning": false,
-      "signExecutable": false,
-      "signAndEditExecutable": false
+      "signExecutable": false
     },
     "squirrelWindows": {
       "name": "DingDingAppStore",

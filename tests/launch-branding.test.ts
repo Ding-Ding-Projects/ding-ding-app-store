@@ -13,6 +13,7 @@ describe('packaged launch and branding contract', () => {
     expect(packageJson.build.win.icon).toBe('assets/ding-ding-app-store.ico');
     expect(packageJson.build.squirrelWindows.iconUrl).toMatch(/ding-ding-app-store\.ico$/);
     expect(packageJson.build.squirrelWindows.iconUrl).not.toContain('favicon.ico');
+    expect(packageJson.build.win).not.toHaveProperty('signAndEditExecutable');
   });
 
   it('sets a native product identity and diagnoses renderer load failure', async () => {
