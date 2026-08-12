@@ -88,7 +88,10 @@ describe('source job contracts', () => {
     const challenge = createIsolationAttestationChallenge(crypto.randomUUID(), 60_000, { brokerId: 'test-broker', transportId: 'test-transport' }, Date.parse('2026-08-12T12:00:00.000Z'));
     const lease = { leaseId: crypto.randomUUID(), jobId: challenge.jobId, challengeNonce: challenge.nonce, brokerId: challenge.expectedBrokerId, transportId: challenge.expectedTransportId, issuedAt: '2026-08-12T12:00:00.000Z', executeExpiresAt: challenge.executeExpiresAt, disposeExpiresAt: challenge.leaseExpiresAt, capabilities: ['execute', 'dispose'] as const };
     expect(validateCapabilityLease({ ...lease, issuedAt: '2026-08-12T12:00:00.000Zx' }, challenge, 'execute', Date.parse('2026-08-12T12:00:01.000Z'))).toBe(false);
-    expect(validateCapabilityLease({ ...lease, expiresAt: '2026-08-12T12:00:00.000Zx' }, challenge, 'execute', Date.parse('2026-08-12T12:00:01.000Z'))).toBe(false);
+    expect(validateCapabilityLease({ ...lease, executeExpiresAt: '2026-08-12T12:00:00.000Zx' }, challenge, 'execute', Date.parse('2026-08-12T12:00:01.000Z'))).toBe(false);
+    expect(validateCapabilityLease({ ...lease, disposeExpiresAt: '2026-08-12T12:00:00.000Zx' }, challenge, 'dispose', Date.parse('2026-08-12T12:00:01.000Z'))).toBe(false);
+    expect(validateCapabilityLease(lease, challenge, 'execute', Date.parse(challenge.executeExpiresAt))).toBe(false);
+    expect(validateCapabilityLease(lease, challenge, 'dispose', Date.parse(challenge.executeExpiresAt) + 1_000)).toBe(true);
   });
 
   it('accepts only an app ID plus a typed build/run decision', () => {
