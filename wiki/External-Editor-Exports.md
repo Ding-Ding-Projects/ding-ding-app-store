@@ -2,6 +2,8 @@
 
 > **Status: shipped.** This wiki page is generated from the canonical categorized article.
 
+Support Tickets exports are accepted by the same typed Visual Studio Code bridge as every other text export. JSON and Markdown requests use the `support-tickets` record kind, preserving the visible **Open in VS Code** action through the privileged validation boundary.
+
 ## Behaviour
 
 Every exportable app-store surface keeps its normal download action and also offers **Open in VS Code**: catalog and installed records, activity, notifications, changelog entries, offline documentation articles, settings, appearance, and tab layout. The main process writes the selected UTF-8 document into an app-owned workspace folder and launches the chosen validated VS Code edition with that folder as its workspace root. Activity uses the same selected truthful format for both download and VS Code; nested settings, layout, appearance, catalog, and notification documents deliberately remain JSON so they stay structurally complete and re-importable where an importer exists. Activity ZIP exports are validated and extracted into an app-owned workspace before VS Code opens the folder, so binary archives are first-class editor exports rather than download-only exceptions. Opening an export never blocks the app or replaces the download.

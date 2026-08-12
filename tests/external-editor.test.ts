@@ -60,10 +60,23 @@ describe('external editor and export boundary', () => {
   it('accepts only typed, bounded export metadata', () => {
     expect(externalEditorOpenRequestSchema.safeParse({ editor: 'vscode', recordKind: 'settings', suggestedName: 'settings.json', mime: 'application/json', content: '{"schemaVersion":1}' }).success).toBe(true);
     expect(externalEditorOpenRequestSchema.safeParse({ editor: 'vscode', recordKind: 'history-revisions', suggestedName: 'ding-ding-app-store-history-revisions.json', mime: 'application/json', content: '{"schemaVersion":1,"kind":"history-revisions","records":[]}' }).success).toBe(true);
+    expect(externalEditorOpenRequestSchema.safeParse({ editor: 'vscode', recordKind: 'support-tickets', suggestedName: 'support-tickets.json', mime: 'application/json', content: '{"schemaVersion":1,"tickets":[]}' }).success).toBe(true);
+    expect(externalEditorOpenRequestSchema.safeParse({ editor: 'vscode', recordKind: 'support-tickets', suggestedName: 'support-tickets.md', mime: 'text/markdown', content: '# Support Tickets\n' }).success).toBe(true);
     expect(externalEditorOpenRequestSchema.safeParse({ editor: 'vscode', recordKind: 'history-revision', suggestedName: 'history.json', mime: 'application/json', content: '{}' }).success).toBe(false);
     expect(externalEditorOpenRequestSchema.safeParse({ editor: 'vscode', recordKind: 'settings', suggestedName: '../settings.json', mime: 'application/json', content: '{}' }).success).toBe(false);
     expect(externalEditorOpenRequestSchema.safeParse({ editor: 'vscode', recordKind: 'settings', suggestedName: 'settings.json', mime: 'application/json', content: 'x'.repeat(256_001) }).success).toBe(false);
     expect(externalEditorOpenRequestSchema.safeParse({ editor: 'vscode', recordKind: 'settings', suggestedName: 'settings.json', mime: 'application/json', content: '{}', executable: 'cmd.exe' }).success).toBe(false);
+  });
+
+  it('keeps Support Tickets exports on the typed main-process seam', async () => {
+    const [contracts, main, preload, renderer, page] = await Promise.all([
+      read('src/shared/contracts.ts'), read('src/main/main.ts'), read('src/preload/index.ts'), read('src/renderer/external-editor.ts'), read('src/renderer/pages/LockSupportPage.tsx'),
+    ]);
+    expect(contracts).toContain("'support-tickets'");
+    expect(main).toContain("ipcMain.handle('external-editor:open-export'");
+    expect(preload).toContain("ipcRenderer.invoke('external-editor:open-export', request)");
+    expect(renderer).toContain('openExportInVsCode');
+    expect(page).toContain("recordKind: 'support-tickets'");
   });
 
   it('keeps editor preference bounded to known editions', () => {
@@ -112,6 +125,8 @@ describe('external editor and export boundary', () => {
     try {
       const openedRevision = await service.openExport({ editor: 'vscode', recordKind: 'history-revisions', suggestedName: 'ding-ding-app-store-history-revisions.json', mime: 'application/json', content: '{"schemaVersion":1,"kind":"history-revisions","records":[]}' });
       expect(openedRevision).toEqual({ ok: true, editor: 'vscode' });
+      const openedSupportTickets = await service.openExport({ editor: 'vscode', recordKind: 'support-tickets', suggestedName: 'support-tickets.json', mime: 'application/json', content: '{"schemaVersion":1,"tickets":[]}' });
+      expect(openedSupportTickets).toEqual({ ok: true, editor: 'vscode' });
       const archiveRoot = `${electronDataRoot}\\direct`;
       const { mkdir, writeFile } = await import('node:fs/promises');
       await mkdir(archiveRoot, { recursive: true });
