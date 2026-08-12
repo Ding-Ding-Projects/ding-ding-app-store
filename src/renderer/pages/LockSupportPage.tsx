@@ -37,6 +37,9 @@ export function LockSupportPage({ settings, workspace, locks, support, notify, m
   const [currentCredential, setCurrentCredential] = useState('');
   const [confirmationCode, setConfirmationCode] = useState('');
   const [credentialKind, setCredentialKind] = useState<'password' | 'totp'>('password');
+  const [totpAlgorithm, setTotpAlgorithm] = useState<'sha1' | 'sha256' | 'sha512'>('sha1');
+  const [totpDigits, setTotpDigits] = useState<6 | 7 | 8>(6);
+  const [totpPeriodSeconds, setTotpPeriodSeconds] = useState(30);
   const [unlockDuration, setUnlockDuration] = useState<LockUnlockDuration>('session');
   const [category, setCategory] = useState<SupportTicketCategory>('unlock');
   const [severity, setSeverity] = useState<SupportTicketSeverity>('normal');
@@ -77,10 +80,16 @@ export function LockSupportPage({ settings, workspace, locks, support, notify, m
   const visibleTargets = targets.filter((candidate) => matcher(`${targetLabel(candidate)}\n${targetYue(candidate)}\n${candidate.targetKind}\nlock`));
   const selectedRecord = locks.state.records.find((record) => targetKey(record) === targetKey(target));
   useEffect(() => {
-    if (selectedRecord) setUnlockDuration(selectedRecord.unlockDuration);
-  }, [selectedRecord?.targetKind, selectedRecord?.targetId, selectedRecord?.unlockDuration]);
+    if (selectedRecord) {
+      setUnlockDuration(selectedRecord.unlockDuration);
+      setCredentialKind(selectedRecord.credentialKind);
+      setTotpAlgorithm(selectedRecord.totpAlgorithm ?? 'sha1');
+      setTotpDigits(selectedRecord.totpDigits ?? 6);
+      setTotpPeriodSeconds(selectedRecord.totpPeriodSeconds ?? 30);
+    }
+  }, [selectedRecord?.targetKind, selectedRecord?.targetId, selectedRecord?.unlockDuration, selectedRecord?.credentialKind, selectedRecord?.totpAlgorithm, selectedRecord?.totpDigits, selectedRecord?.totpPeriodSeconds]);
   const saveLock = async () => {
-    const result = await locks.set({ ...target, credentialKind, credential, unlockDuration, confirmationCode: credentialKind === 'totp' ? confirmationCode : undefined, currentCredential: selectedRecord ? currentCredential : undefined });
+    const result = await locks.set({ ...target, credentialKind, credential, totpAlgorithm: credentialKind === 'totp' ? totpAlgorithm : undefined, totpDigits: credentialKind === 'totp' ? totpDigits : undefined, totpPeriodSeconds: credentialKind === 'totp' ? totpPeriodSeconds : undefined, unlockDuration, confirmationCode: credentialKind === 'totp' ? confirmationCode : undefined, currentCredential: selectedRecord ? currentCredential : undefined });
     if (result.ok) { setCredential(''); setCurrentCredential(''); setConfirmationCode(''); }
   };
   const unlock = async () => {
@@ -113,6 +122,12 @@ export function LockSupportPage({ settings, workspace, locks, support, notify, m
             if (next) { setTarget(next); setCredential(''); setCurrentCredential(''); }
           }} options={visibleTargets.map((candidate) => ({ value: targetKey(candidate), en: candidate.targetKind === 'tab' ? targetLabel(candidate) : `${label(settings, 'Group', '分組')} · ${targetLabel(candidate)}`, yue: candidate.targetKind === 'tab' ? targetYue(candidate) : `${label(settings, 'Group', '分組')} · ${targetYue(candidate)}` }))} />
         <SearchablePicker id="lock-credential-kind" labelText={label(settings, 'Credential method', '憑證方式')} settings={settings} value={credentialKind} onChange={(value) => setCredentialKind(value as 'password' | 'totp')} options={[{ value: 'password', en: 'Password', yue: '密碼' }, { value: 'totp', en: 'TOTP secret', yue: 'TOTP 秘密' }]} />
+        {credentialKind === 'totp' && <>
+          <SearchablePicker id="lock-totp-algorithm" labelText={label(settings, 'TOTP algorithm', 'TOTP 演算法')} settings={settings} value={totpAlgorithm} onChange={(value) => setTotpAlgorithm(value as typeof totpAlgorithm)} options={[{ value: 'sha1', en: 'SHA-1', yue: 'SHA-1' }, { value: 'sha256', en: 'SHA-256', yue: 'SHA-256' }, { value: 'sha512', en: 'SHA-512', yue: 'SHA-512' }]} />
+          <SearchablePicker id="lock-totp-digits" labelText={label(settings, 'TOTP digits', 'TOTP 位數')} settings={settings} value={String(totpDigits)} onChange={(value) => setTotpDigits(Number(value) as 6 | 7 | 8)} options={[6, 7, 8].map((value) => ({ value: String(value), en: `${value} digits`, yue: `${value} 位` }))} />
+          <label htmlFor="lock-totp-period">{label(settings, 'TOTP period in seconds (15–3600)', 'TOTP 週期秒數（15–3600）')}<input id="lock-totp-period" type="number" min={15} max={3600} step={1} value={totpPeriodSeconds} onChange={(event) => setTotpPeriodSeconds(Number(event.target.value))} /></label>
+          <p className="supporting">{label(settings, 'Pairing accepts the current code plus one adjacent period for small clock drift. The secret stays in the main-process credential vault.', '配對會接受目前驗證碼同前後一個週期，容許少量時鐘偏差。秘密只留喺主程序憑證庫。')}</p>
+        </>}
         <SearchablePicker id="lock-unlock-duration" labelText={label(settings, 'Unlock duration', '解鎖時限')} settings={settings} value={unlockDuration} onChange={(value) => setUnlockDuration(value as LockUnlockDuration)} options={[{ value: 'session', en: 'Until this app closes', yue: '直到呢個 app 關閉' }, { value: '15m', en: '15 minutes', yue: '15 分鐘' }, { value: '60m', en: '60 minutes', yue: '60 分鐘' }]} />
         {selectedRecord && <label htmlFor="lock-current-credential">{label(settings, credentialKind === 'totp' ? 'Current TOTP code (required to change or remove)' : 'Current password (required to change or remove)', credentialKind === 'totp' ? '目前 TOTP 驗證碼（修改或者移除時必須）' : '目前密碼（修改或者移除時必須）')}
           <input id="lock-current-credential" type="password" inputMode={credentialKind === 'totp' ? 'numeric' : undefined} autoComplete={credentialKind === 'totp' ? 'one-time-code' : 'current-password'} value={currentCredential} onChange={(event) => setCurrentCredential(event.target.value)} maxLength={512} />

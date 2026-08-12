@@ -19,6 +19,9 @@ describe('tab/group UX locks and local Support Tickets', () => {
     expect(contracts).toContain('unlockDuration: LockUnlockDuration;');
     expect(contracts).toContain('unlockedUntil: string | null;');
     expect(contracts).toContain("credentialKind: 'password' | 'totp';");
+    expect(contracts).toContain('LOCK_TOTP_ALGORITHMS');
+    expect(contracts).toContain('totpAlgorithm?: LockTotpAlgorithm;');
+    expect(contracts).toContain('totpPeriodSeconds?: number;');
     expect(contracts).toContain('confirmationCode?: string;');
     expect(contracts).toContain('vaultAvailable: boolean;');
     expect(contracts).toContain('recoveryPath: string;');
@@ -96,7 +99,9 @@ describe('tab/group UX locks and local Support Tickets', () => {
   it('keeps TOTP verification main-only and refuses a locked appearance token', async () => {
     const service = await read('src/main/lock-support-service.ts');
     const appearance = await read('src/main/appearance-service.ts');
-    expect(service).toContain("generateTotp({ secret, algorithm: 'sha1', digits: 6, periodSeconds: 30 })");
+    expect(service).toContain('[-1, 0, 1].some');
+    expect(service).toContain('totpAlgorithm');
+    expect(service).toContain('periodSeconds: number');
     expect(service).toContain('private readonly attempts');
     expect(service).toContain("const unlockDurationSchema = z.enum(['session', '15m', '60m']);");
     expect(service).toContain("duration === 'session' ? null : Date.now()");
@@ -110,6 +115,9 @@ describe('tab/group UX locks and local Support Tickets', () => {
     const page = await read('src/renderer/pages/LockSupportPage.tsx');
     const rail = await read('src/renderer/components/TabRail.tsx');
     expect(page).toContain('Current TOTP code (pairing confirmation)');
+    expect(page).toContain('lock-totp-algorithm');
+    expect(page).toContain('lock-totp-digits');
+    expect(page).toContain('lock-totp-period');
     expect(page).toContain('confirmationCode: credentialKind === \'totp\' ? confirmationCode');
     expect(rail).toContain("lock.credentialKind === 'totp' ? 'Current TOTP code'");
     expect(rail).toContain("autoComplete={lock.credentialKind === 'totp' ? 'one-time-code'");
