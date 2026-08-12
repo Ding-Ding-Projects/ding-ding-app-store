@@ -25,6 +25,7 @@ const fallbackEntries = [
 let generatedManifest = null;
 try {
   const module = await import('./generated-changelog.mjs');
+  if (!module.GENERATED_SITE_RELEASE_MANIFEST) throw new Error('The generated site release manifest export is missing.');
   generatedManifest = module.GENERATED_SITE_RELEASE_MANIFEST;
 } catch (error) {
   if (error?.code !== 'ERR_MODULE_NOT_FOUND') throw error;
