@@ -95,7 +95,7 @@ import { DEFAULT_DISPLAY_NAME, displayNameForPresentation, loadDisplayName, rese
   function copy(value) { return personalizeOwnedText(value, vocabulary.entries, restricted()); }
   function localized(en, yue) { const mode = effectiveMode(); return mode === 'yue' ? yue : mode === 'both' ? `${en} · ${yue}` : en; }
   function title(article) { const mode = effectiveMode(); const raw = mode === 'en' ? article.title : mode === 'yue' ? article.titleYue : `${article.title} · ${article.titleYue}`; return article.source === 'canonical' ? copy(raw) : raw; }
-  function displayName() { return displayNameForPresentation(state.displayName, restricted()); }
+  function displayName() { return displayNameForPresentation(state.displayName); }
   function setStatus(message) { $('status').textContent = message; }
   function saveControls() {
     for (const key of ['mode', 'funnyEn', 'funnyYue', 'theme', 'density', 'accent', 'settingsTab', 'siteRestricted']) localStorage.setItem(storage + key, state[key]);
@@ -129,7 +129,7 @@ import { DEFAULT_DISPLAY_NAME, displayNameForPresentation, loadDisplayName, rese
     const displayInput = $('site-display-name'); if (displayInput) { displayInput.value = state.displayName; displayInput.disabled = restricted(); }
     document.querySelectorAll('[data-site-copy]').forEach((node) => {
       const source = node.dataset.siteCopy;
-      const labels = { 'restricted-label': 'Restricted presentation (site-only)', 'restricted-help': "This site-only restricted switch is separate from the desktop app's shared School mode. It forces English and suppresses personal vocabulary on this browser only; it is not a security boundary.", 'dialog-emoji-label': 'Show emojis in dialogs and message boxes', 'dialog-emoji-help': 'Adds a non-semantic emoji to the command palette dialog title while leaving controls and accessible names unchanged.', 'vocabulary-title': 'Personal vocabulary', 'vocabulary-file-label': 'Choose a local JSON file', 'vocabulary-replace': 'Replace vocabulary', 'vocabulary-clear': 'Clear vocabulary', 'vocabulary-help': 'The file is parsed and cached in this browser only. Its path, metadata, and private values are never sent over the network or included in exports.' };
+      const labels = { 'restricted-label': 'Restricted presentation (site-only)', 'restricted-help': "This site-only restricted switch is separate from the desktop app's shared School mode. It forces English and suppresses personal vocabulary on this browser only; it is not a security boundary.", 'dialog-emoji-label': 'Show emojis in dialogs and message boxes', 'dialog-emoji-help': 'Adds a non-semantic emoji to the command palette dialog title while leaving controls and accessible names unchanged.', 'display-name-label': 'Display name', 'display-name-save': 'Save display name', 'display-name-reset': 'Reset to Ding Ding App Store', 'display-name-help': 'This changes the label shown by this site only. Routes, asset names, URLs, and application identity never change.', 'vocabulary-title': 'Personal vocabulary', 'vocabulary-file-label': 'Choose a local JSON file', 'vocabulary-replace': 'Replace vocabulary', 'vocabulary-clear': 'Clear vocabulary', 'vocabulary-help': 'The file is parsed and cached in this browser only. Its path, metadata, and private values are never sent over the network or included in exports.' };
       if (labels[source]) node.textContent = restricted() ? labels[source] : copy(labels[source]);
     });
     const restrictedInput = $('site-restricted');

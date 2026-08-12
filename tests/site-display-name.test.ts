@@ -36,6 +36,8 @@ describe('static site display name', () => {
     expect(html).toContain('id="site-display-name"');
     expect(html).toContain('maxlength="64"');
     expect(html).toContain('id="site-display-name-reset"');
+    expect(html).toContain('data-site-copy="display-name-label"');
+    expect(html).toContain('data-site-copy="display-name-save"');
     expect(app).toContain("import { DEFAULT_DISPLAY_NAME");
     expect(app).toContain("$('site-brand-name')");
     expect(app).toContain("$('document-title')");
