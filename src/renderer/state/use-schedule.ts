@@ -19,6 +19,7 @@ export interface ScheduleApi {
   discard(): void;
   resetDefaults(): void;
   runNow(task: ScheduleTaskId): Promise<void>;
+  setHomeAssistantToken(key: string, token: string): Promise<boolean>;
   running: ScheduleTaskId | null;
 }
 
@@ -128,5 +129,16 @@ export function useSchedule(notify: Notify): ScheduleApi {
     }
   }, [receive, notify]);
 
-  return { status, draft, dirty, saving, issues, set, setRules, applyNow, save, discard, resetDefaults, runNow, running };
+  const setHomeAssistantToken = useCallback(async (key: string, token: string) => {
+    const result = await window.dingDingStore.schedule.setHomeAssistantToken(key, token);
+    if (!result.ok) {
+      notify({ ok: false, message: result.message.slice(0, 200) });
+      return false;
+    }
+    notify({ ok: true, message: 'Home Assistant token stored in the operating-system credential vault.' });
+    if (status) receive({ ...status, external: status.external.map((entry) => entry.source === 'home-assistant' ? { ...entry, state: 'refreshing', message: 'Token stored; refreshing Home Assistant.' } : entry) });
+    return true;
+  }, [notify, receive, status]);
+
+  return { status, draft, dirty, saving, issues, set, setRules, applyNow, save, discard, resetDefaults, runNow, setHomeAssistantToken, running };
 }

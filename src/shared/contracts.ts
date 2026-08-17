@@ -733,11 +733,15 @@ export const SCHEDULE_BOUNDS = {
   ruleLabelLength: { min: 1, max: 64 },
   ruleDateLength: 10,
   ruleTimeZoneLength: 64,
+  externalUrlLength: 512,
+  externalEntityLength: 128,
+  externalCredentialKeyLength: 64,
+  externalRefreshMinutes: { min: 1, max: 1_440 },
 } as const;
 
 const scheduleDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use an ISO date (YYYY-MM-DD).');
 const scheduleTimeZoneSchema = z.string().trim().min(1).max(SCHEDULE_BOUNDS.ruleTimeZoneLength).regex(/^[A-Za-z0-9_+./-]+$/);
-const scheduledSettingsValuesSchema = z.object({
+export const scheduledSettingsValuesSchema = z.object({
   language: z.enum(['en', 'yue', 'bilingual']).optional(),
   englishFunnyLevel: z.number().int().min(1).max(5).optional(),
   cantoneseFunnyLevel: z.number().int().min(1).max(5).optional(),
@@ -746,6 +750,54 @@ const scheduledSettingsValuesSchema = z.object({
   accent: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
   displayName: z.string().trim().min(1).max(64).optional(),
 }).strict().refine((value) => Object.keys(value).length > 0, 'Choose at least one setting to schedule.');
+
+const externalRefreshMinutesSchema = z.number().int()
+  .min(SCHEDULE_BOUNDS.externalRefreshMinutes.min)
+  .max(SCHEDULE_BOUNDS.externalRefreshMinutes.max);
+const credentialKeySchema = z.string().trim()
+  .min(1).max(SCHEDULE_BOUNDS.externalCredentialKeyLength)
+  .regex(/^ha_[a-z0-9_-]+$/, 'Use a stable Home Assistant credential key beginning with ha_.');
+
+function isPublicHttpsUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.username || url.password) return false;
+    if (url.hostname === 'localhost' || url.hostname.endsWith('.local') || url.hostname.endsWith('.internal')) return false;
+    if (/^(127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[0-1])\.|::1$|fc|fd|fe80)/i.test(url.hostname)) return false;
+    if (/(^|[?&])(token|access_token|api[_-]?key|password|secret)=/i.test(url.search)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isHomeAssistantUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    if (url.username || url.password || url.pathname.includes('..')) return false;
+    if (url.protocol === 'https:') return true;
+    return url.protocol === 'http:' && (url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '::1');
+  } catch {
+    return false;
+  }
+}
+
+export const scheduledSourceSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('local') }).strict(),
+  z.object({
+    kind: z.literal('api'),
+    url: z.string().trim().min(1).max(SCHEDULE_BOUNDS.externalUrlLength).refine(isPublicHttpsUrl, 'API source must be a public HTTPS URL without credentials.'),
+    refreshMinutes: externalRefreshMinutesSchema,
+  }).strict(),
+  z.object({
+    kind: z.literal('home-assistant'),
+    baseUrl: z.string().trim().min(1).max(SCHEDULE_BOUNDS.externalUrlLength).refine(isHomeAssistantUrl, 'Home Assistant must use HTTPS or loopback HTTP.'),
+    entityId: z.string().trim().min(3).max(SCHEDULE_BOUNDS.externalEntityLength).regex(/^[a-z0-9_]+\.[a-z0-9_]+$/i, 'Use an entity id such as input_boolean.night_mode.'),
+    credentialKey: credentialKeySchema,
+    refreshMinutes: externalRefreshMinutesSchema,
+  }).strict(),
+]);
+export type ScheduledSource = z.infer<typeof scheduledSourceSchema>;
 
 export const scheduledSettingRuleSchema = z.object({
   id: z.string().regex(/^rule_[a-z0-9]{8}$/),
@@ -758,6 +810,7 @@ export const scheduledSettingRuleSchema = z.object({
   weekdays: z.array(z.number().int().min(1).max(7)).min(1).max(7),
   timeZone: scheduleTimeZoneSchema,
   priority: z.number().int().min(0).max(100),
+  source: scheduledSourceSchema.default({ kind: 'local' }),
   values: scheduledSettingsValuesSchema,
 }).strict().superRefine((rule, ctx) => {
   if (rule.startDate && rule.endDate && rule.startDate > rule.endDate) ctx.addIssue({ code: 'custom', path: ['endDate'], message: 'End date must be on or after start date.' });
@@ -858,6 +911,18 @@ export interface ScheduleStatus {
   packagedBuild: boolean;
   now: string;
   notice: ScheduleNotice | null;
+  external: ScheduledExternalStatus[];
+  externalValues: Record<string, Partial<Pick<UserSettings, 'language' | 'englishFunnyLevel' | 'cantoneseFunnyLevel' | 'theme' | 'density' | 'accent' | 'displayName'>>>;
+}
+
+export type ScheduledExternalState = 'inactive' | 'refreshing' | 'active' | 'off' | 'failed' | 'missing-token';
+export interface ScheduledExternalStatus {
+  ruleId: string;
+  source: ScheduledSource['kind'];
+  state: ScheduledExternalState;
+  lastRefreshAt: string | null;
+  nextRefreshAt: string | null;
+  message: string;
 }
 
 export interface DimSumSurprise {
@@ -873,6 +938,7 @@ export interface DimSumSurprise {
 export type ScheduleSaveResult =
   | { ok: true; status: ScheduleStatus }
   | { ok: false; message: string; issues: Array<{ field: string; message: string }> };
+export type ScheduleCredentialResult = { ok: true } | { ok: false; message: string };
 
 export interface DingDingStoreApi {
   /** Optional until the privileged adapter validates a 40-hex SHA and constructs the fixed commit URL. */
@@ -949,6 +1015,7 @@ export interface DingDingStoreApi {
     load(): Promise<ScheduleStatus>;
     save(config: ScheduleConfig): Promise<ScheduleSaveResult>;
     runNow(task: ScheduleTaskId): Promise<ScheduleStatus>;
+    setHomeAssistantToken(key: string, token: string): Promise<ScheduleCredentialResult>;
     subscribe(listener: (status: ScheduleStatus) => void): () => void;
   };
   dimSum: {

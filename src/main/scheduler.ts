@@ -12,6 +12,7 @@ import type {
 } from '../shared/contracts.js';
 import { DEFAULT_SCHEDULE } from '../shared/contracts.js';
 import type { ScheduleService } from './schedule-service.js';
+import type { ScheduledSourceService } from './scheduled-source-service.js';
 
 const MAX_DELAY_MS = 2_147_483_000;
 const BACKOFF_BASE_MS = 15 * 60_000;
@@ -39,6 +40,7 @@ interface TaskState {
 export interface SchedulerOptions {
   getWindow: () => BrowserWindow | null;
   service: ScheduleService;
+  external?: ScheduledSourceService;
   tasks: Record<ScheduleTaskId, () => Promise<ScheduleTaskResult>>;
 }
 
@@ -79,6 +81,7 @@ export class Scheduler {
     const loaded = await this.options.service.loadWithProvenance();
     this.config = loaded.config;
     this.configSource = loaded.source;
+    await this.options.external?.sync(this.config);
     const runs = await this.options.service.loadRuns();
     this.tasks['self-update'].lastRun = runs.selfUpdate;
     this.tasks['catalog-refresh'].lastRun = runs.catalogRefresh;
@@ -107,10 +110,16 @@ export class Scheduler {
     return this.status();
   }
 
+  async refreshExternal(): Promise<ScheduleStatus> {
+    await this.options.external?.sync(this.config);
+    this.publish();
+    return this.status();
+  }
+
   async save(input: unknown): Promise<ScheduleSaveResult> {
     const result = await this.options.service.save(input);
     if (!result.ok) return { ok: false, message: result.message, issues: result.issues };
-    this.applyConfig(result.config);
+    await this.applyConfig(result.config);
     return { ok: true, status: this.status() };
   }
 
@@ -133,6 +142,8 @@ export class Scheduler {
       packagedBuild: app.isPackaged,
       now: new Date().toISOString(),
       notice: this.notice,
+      external: this.options.external?.status() ?? [],
+      externalValues: this.options.external?.values() ?? {},
     };
   }
 
@@ -163,7 +174,7 @@ export class Scheduler {
     return id === 'self-update' ? config.selfUpdate.intervalMinutes : config.catalogRefresh.intervalMinutes;
   }
 
-  private applyConfig(next: ScheduleConfig): void {
+  private async applyConfig(next: ScheduleConfig): Promise<void> {
     const previous = this.config;
     this.config = next;
     this.configSource = 'persisted';
@@ -187,6 +198,7 @@ export class Scheduler {
     this.quietWas = this.quietActive();
     if (!this.quietWas) this.heldSinceQuietStart = 0;
     this.armQuietBoundary();
+    await this.options.external?.sync(next);
     this.publish();
   }
 

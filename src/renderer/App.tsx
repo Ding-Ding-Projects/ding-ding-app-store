@@ -67,7 +67,8 @@ export function App() {
     const handle = window.setTimeout(() => setScheduleClock((value) => value + 1), 30_000);
     return () => window.clearTimeout(handle);
   }, [scheduleClock]);
-  const settings = useMemo(() => resolveScheduledSettings(baseSettings, schedule.draft), [baseSettings, schedule.draft, scheduleClock]);
+  const externalResolution = useMemo(() => Object.fromEntries((schedule.status?.external ?? []).map((entry) => [entry.ruleId, { state: entry.state, values: schedule.status?.externalValues?.[entry.ruleId] }])), [schedule.status]);
+  const settings = useMemo(() => resolveScheduledSettings(baseSettings, schedule.draft, undefined, externalResolution), [baseSettings, schedule.draft, scheduleClock, externalResolution]);
   const search = useSearchStates();
   useAppearanceVars(appearance.elements);
 

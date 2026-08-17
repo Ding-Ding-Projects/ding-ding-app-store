@@ -18,6 +18,7 @@ import { UpdateService } from './update-service.js';
 import { ManagedUpdateService } from './managed-update-service.js';
 import { WorkspaceService } from './workspace-service.js';
 import { ExternalEditorService } from './external-editor-service.js';
+import { SafeStorageCredentialVault, ScheduledSourceService } from './scheduled-source-service.js';
 
 const scheduleTaskSchema = z.enum(['self-update', 'catalog-refresh']);
 
@@ -89,11 +90,18 @@ void app.whenReady().then(async () => {
   const workspace = new WorkspaceService();
   const appearance = new AppearanceService();
   const schedule = new ScheduleService();
+  let scheduler: Scheduler;
+  const externalSources = new ScheduledSourceService(
+    new SafeStorageCredentialVault(app.getPath('userData')),
+    undefined,
+    () => scheduler?.publish(),
+  );
   const dimSum = new DimSumService();
   const externalEditor = new ExternalEditorService();
-  const scheduler = new Scheduler({
+  scheduler = new Scheduler({
     getWindow: () => mainWindow,
     service: schedule,
+    external: externalSources,
     tasks: {
       'self-update': () => updates.runScheduled('schedule'),
       'catalog-refresh': async () => {
@@ -156,6 +164,14 @@ void app.whenReady().then(async () => {
   ipcMain.handle('schedule:load', () => scheduler.status());
   ipcMain.handle('schedule:save', (_event, config: unknown) => scheduler.save(config));
   ipcMain.handle('schedule:run-now', (_event, task: unknown) => scheduler.runNow(scheduleTaskSchema.parse(task)));
+  ipcMain.handle('schedule:set-home-assistant-token', (event, value: unknown) => {
+    if (event.sender !== mainWindow?.webContents || !value || typeof value !== 'object' || Array.isArray(value)) return { ok: false, message: 'Blocked credential request from an unknown renderer.' };
+    const request = value as Record<string, unknown>;
+    return externalSources.setHomeAssistantToken(typeof request.key === 'string' ? request.key : '', typeof request.token === 'string' ? request.token : '').then(async (result) => {
+      if (result.ok) await scheduler.refreshExternal();
+      return result;
+    });
+  });
   ipcMain.handle('dim-sum:startup', () => dimSum.startup());
   ipcMain.handle('external-editor:detect', (event) => event.sender === mainWindow?.webContents ? externalEditor.detect() : []);
   ipcMain.handle('external-editor:preference', (event) => event.sender === mainWindow?.webContents ? externalEditor.preference() : { editor: 'vscode', edition: 'unknown' as const });
@@ -183,6 +199,8 @@ void app.whenReady().then(async () => {
       scheduler.publish();
     }
   });
+
+  app.on('before-quit', () => externalSources.stop());
 });
 
 app.on('window-all-closed', () => {

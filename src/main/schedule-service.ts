@@ -54,6 +54,14 @@ export class ScheduleService {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
     const record = value as Record<string, unknown>;
     if (record.schemaVersion === 1) return { ...record, schemaVersion: 2, rules: [] };
+    if (record.schemaVersion === 2 && Array.isArray(record.rules)) {
+      const rules = record.rules.map((rule) => {
+        if (!rule || typeof rule !== 'object' || Array.isArray(rule)) return rule;
+        const item = rule as Record<string, unknown>;
+        return item.source ? item : { ...item, source: { kind: 'local' } };
+      });
+      return { ...record, rules };
+    }
     return value;
   }
 
