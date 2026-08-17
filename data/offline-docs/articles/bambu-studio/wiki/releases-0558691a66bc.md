@@ -7,12 +7,12 @@
 > warm-cache speed, superseded same-branch builds are cancelled in progress, and installers ship a
 > hash-pinned **Mesa llvmpipe software-GL fallback** so the app launches on machines without
 > OpenGL 2.0 (see
-> software-gl-fallback).
+> [software-gl-fallback](app-doc://article/bambu-studio.repository.5e7e8f89925613cc)).
 > Full details in [Discussion #2](https://github.com/Ding-Ding-Projects/BambuStudio/discussions/2).
 
 Canonical documentation:
-Windows CI and release supply chain,
-the releases category index,
+[Windows CI and release supply chain](app-doc://article/bambu-studio.repository.993afdf448022562),
+the [releases category index](app-doc://article/bambu-studio.repository.26ef528775b78eb0),
 and the current CI state in
 HANDOFF.md. This fork
 publishes a **Windows installer only**; automatic WinGet and Homebrew publication is gated to the

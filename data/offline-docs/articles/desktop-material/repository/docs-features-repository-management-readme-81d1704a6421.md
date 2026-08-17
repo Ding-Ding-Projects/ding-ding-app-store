@@ -203,6 +203,10 @@ Material is displaying or how a repository is represented in the application.
 - [Clone queue settings](app-doc://article/desktop-material.repository.ee316b6294a7c2d1) — configure each signed-in
   account's background-clone directory, parallel/sequential mode, and enabled
   state from Settings while retaining the existing bounded recovery journal.
+- [Opt-in post-clone runner provisioning](app-doc://article/desktop-material.repository.f6c1064f42f95384) —
+  create a repository-scoped Windows or dedicated WSL/Linux Actions runner
+  only after a private GitHub repository clone succeeds and the user confirms
+  its workflow authors are trusted.
 - [Patch-series import and export](app-doc://article/desktop-material.repository.c6a70bdc8f5f55de) — preview, validate, export,
   and apply portable patch sequences without silently changing unrelated work.
 - [Repository list transfer and Cheap LFS](app-doc://article/desktop-material.repository.52231b47ad6bd147) — export

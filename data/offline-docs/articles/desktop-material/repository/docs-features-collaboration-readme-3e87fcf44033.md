@@ -25,6 +25,9 @@ and manage collaboration state without leaving Desktop Material.
 - [Offline GitHub Projects workspace](app-doc://article/desktop-material.repository.7bd8362b0d0945f6) — inspect a
   bounded read-only Projects v2 snapshot, with a capability-aware classic
   fallback and a sanitized per-repository cache for offline recovery.
+- [Self-hosted server wizard](app-doc://article/desktop-material.repository.91aa21065b9c2c9e) — provision the
+  bundled Windows Docker server with progress, safe retry boundaries,
+  credential isolation, and truthful local/second-machine diagnostics.
 
 ## API applicability
 

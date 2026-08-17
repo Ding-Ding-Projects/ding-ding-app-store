@@ -50,4 +50,4 @@ Project history uses a private app-local Git repository, never a `.git` next to 
 
 Still deferred: repair/re-enable aggregate and libnest2d coverage, complete dark/Cantonese native smoke and human copy review, add history retention/pruning, and obtain successful hosted release-artifact evidence.
 
-See README, ROADMAP, and HANDOFF.
+See [README](app-doc://article/bambu-studio.repository.b335630551682c19), ROADMAP, and HANDOFF.

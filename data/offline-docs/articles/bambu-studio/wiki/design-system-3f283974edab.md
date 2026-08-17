@@ -1,13 +1,13 @@
 # Design system
 
 Distilled from the canonical in-repo document
-md3-design-system.md;
+[md3-design-system.md](app-doc://article/bambu-studio.repository.6d1e7d6e6182fa27);
 structural-anatomy status is tracked in the
-MD3 parity register.
+[MD3 parity register](app-doc://article/bambu-studio.repository.b17c54511e345f1d).
 Where this page and those documents differ, the repo documents win.
 
 The same visual language now extends to the static Pages and interactive Home surfaces through the
-generated visual showcase:
+[generated visual showcase](app-doc://article/bambu-studio.repository.474a9ac7e1cc6a41):
 eleven original WebP assets cover the hero, all nine feature cards, in-app project thumbnails, and
 social sharing without baking essential UI copy into raster images.
 

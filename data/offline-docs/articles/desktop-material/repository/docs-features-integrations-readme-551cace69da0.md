@@ -20,6 +20,10 @@ credentials or machine-specific state in a repository.
 - [Actions workflow manager](app-doc://article/desktop-material.repository.76b7288b91f30e74) — workflow timing,
   bounded job-log transfer retries, and visible recovery actions for transient
   provider 404 responses.
+- [Self-hosted GitHub Actions runner
+  manager](self-hosted-runner-manager.md) — private-repository-only Windows
+  runner setup with immutable workflow and pending-job audits, exact-account
+  credentials, lifecycle recovery, and fail-closed WSL controls.
 - [Local GitHub Actions runner](app-doc://article/desktop-material.repository.579a715c69d5986b)
 - [Local AI build repair with Codex or
   OpenCode](local-ai-build-fix.md)

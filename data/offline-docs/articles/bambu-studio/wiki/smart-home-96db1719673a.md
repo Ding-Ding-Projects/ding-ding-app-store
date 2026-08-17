@@ -7,8 +7,8 @@ lights, and can hand accessible printers to the companion
 The canonical implementation, security, failure-mode, and verification documentation remains in
 the repository:
 
-- Smart Home feature guide
-- Five-minute printer-discovery API
+- [Smart Home feature guide](app-doc://article/bambu-studio.repository.3f05cdc9f4c54350)
+- [Five-minute printer-discovery API](app-doc://article/bambu-studio.repository.9e9e3319552f3f14)
 - [Issue #16 evidence and hosted verdicts](https://github.com/Ding-Ding-Projects/BambuStudio/issues/16)
 
 ## Printer handover paths

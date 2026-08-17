@@ -1,9 +1,9 @@
 # Build from source (Windows installer)
 
 Distilled from the canonical in-repo document
-windows-build-from-source.md;
+[windows-build-from-source.md](app-doc://article/bambu-studio.repository.8132b41cb4bb04d6);
 shared ownership/uninstall semantics are in
-windows-native-installer.md.
+[windows-native-installer.md](app-doc://article/bambu-studio.repository.3480a21e157dfff4).
 Where this page and those documents differ, the repo documents win.
 
 ## Overview
