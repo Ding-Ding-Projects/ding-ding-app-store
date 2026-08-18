@@ -61,7 +61,7 @@ export interface PortableZipInstallAdapter extends AdapterBase {
 export interface UnsupportedInstallAdapter extends AdapterBase {
   readonly supported: false;
   readonly family: 'unsupported';
-  readonly blockerCode: 'no-release' | 'empty-release' | 'external-target-required';
+  readonly blockerCode: 'no-release' | 'empty-release' | 'external-target-required' | 'no-reviewed-installer';
   readonly blocker: string;
 }
 
