@@ -35,6 +35,8 @@ The App Store's own Squirrel package carries an explicit `Ding Ding App Store` p
 | WimForge | Managed portable ZIP | `WimForge-portable-x64-0.1.42.zip`; self-contained Qt archive with `WimForge.exe`. |
 | Amulet Map Editor | Squirrel | `Setup.exe`; release `0.10.0-dev.567` records pinned Squirrel.Windows packaging and a non-green upstream test report. |
 | Photo Viewer | Unavailable | Public `v0.1.0` release contains zero assets. Its source declares a future NSIS target but no published installer exists. |
+| Material GitLab | Unavailable | Public repository has no reviewed Windows installer asset for this catalog route. |
+| Material Tax Reporting | Unavailable | Public repository has no reviewed Windows installer asset for this catalog route. |
 
 ### Amulet Map Editor release evidence
 
