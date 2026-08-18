@@ -30,6 +30,8 @@ The wiki mirrors the same canonical feature articles bundled into the applicatio
 - [WimForge catalog record](Catalog-App-wimforge) — **limited** — Generated reviewed metadata for WimForge: installable, archive, and adapter wimforge-portable-zip.
 - [Photo Viewer catalog record](Catalog-App-photo-viewer) — **limited** — Generated reviewed metadata for Photo Viewer: unsupported, unsupported, and adapter photo-viewer-empty-release.
 - [Amulet Map Editor catalog record](Catalog-App-material-minecraft-map-editor) — **limited** — Generated reviewed metadata for Amulet Map Editor: installable, squirrel, and adapter material-minecraft-map-editor-squirrel.
+- [Material GitLab catalog record](Catalog-App-material-gitlab) — **limited** — Generated reviewed metadata for Material GitLab: unsupported, unsupported, and adapter material-gitlab-no-reviewed-installer.
+- [Material Tax Reporting catalog record](Catalog-App-material-tax-reporting) — **limited** — Generated reviewed metadata for Material Tax Reporting: unsupported, unsupported, and adapter material-tax-reporting-no-reviewed-installer.
 
 ## Installation and removal
 

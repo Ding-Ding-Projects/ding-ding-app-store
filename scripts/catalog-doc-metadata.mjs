@@ -34,6 +34,8 @@ export const CATALOG_ADAPTER_DOCUMENTATION = Object.freeze({
   wimforge: { adapterId: 'wimforge-portable-zip', status: 'reviewed', family: 'managed portable ZIP' },
   'photo-viewer': { adapterId: 'photo-viewer-empty-release', status: 'blocked', blocker: 'The latest public release exists but contains no assets, so there is no installer byte stream to verify or run.' },
   'material-minecraft-map-editor': { adapterId: 'material-minecraft-map-editor-squirrel', status: 'reviewed', family: 'Squirrel.Windows' },
+  'material-gitlab': { adapterId: 'material-gitlab-no-reviewed-installer', status: 'blocked', blocker: 'The public repository has no reviewed Windows installer asset for this catalog route.' },
+  'material-tax-reporting': { adapterId: 'material-tax-reporting-no-reviewed-installer', status: 'blocked', blocker: 'The public repository has no reviewed Windows installer asset for this catalog route.' },
 });
 
 export function catalogArticleId(appId) {

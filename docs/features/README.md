@@ -32,6 +32,8 @@ Finding reviewed public applications and understanding their release state.
 - [WimForge catalog record](../catalog-apps/catalog-app-wimforge.md) — **limited** — *(generated catalog metadata)* — Generated reviewed metadata for WimForge: installable, archive, and adapter wimforge-portable-zip.
 - [Photo Viewer catalog record](../catalog-apps/catalog-app-photo-viewer.md) — **limited** — *(generated catalog metadata)* — Generated reviewed metadata for Photo Viewer: unsupported, unsupported, and adapter photo-viewer-empty-release.
 - [Amulet Map Editor catalog record](../catalog-apps/catalog-app-material-minecraft-map-editor.md) — **limited** — *(generated catalog metadata)* — Generated reviewed metadata for Amulet Map Editor: installable, squirrel, and adapter material-minecraft-map-editor-squirrel.
+- [Material GitLab catalog record](../catalog-apps/catalog-app-material-gitlab.md) — **limited** — *(generated catalog metadata)* — Generated reviewed metadata for Material GitLab: unsupported, unsupported, and adapter material-gitlab-no-reviewed-installer.
+- [Material Tax Reporting catalog record](../catalog-apps/catalog-app-material-tax-reporting.md) — **limited** — *(generated catalog metadata)* — Generated reviewed metadata for Material Tax Reporting: unsupported, unsupported, and adapter material-tax-reporting-no-reviewed-installer.
 
 ## Installation and removal
 

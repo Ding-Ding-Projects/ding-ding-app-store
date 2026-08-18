@@ -26,6 +26,8 @@
     {"id":"winforge","repository":"WinForge","displayName":"WinForge","availability":"installable","packageType":"archive","adapterId":"winforge-portable-zip","wiki":true,"sourceManifest":"WinForge.sln"},
     {"id":"wimforge","repository":"WimForge","displayName":"WimForge","availability":"installable","packageType":"archive","adapterId":"wimforge-portable-zip","wiki":true,"sourceManifest":"CMakeLists.txt"},
     {"id":"photo-viewer","repository":"Photo-Viewer","displayName":"Photo Viewer","availability":"unsupported","packageType":"unsupported","adapterId":"photo-viewer-empty-release","wiki":true,"sourceManifest":"package.json"},
-    {"id":"material-minecraft-map-editor","repository":"material-minecraft-map-editor","displayName":"Amulet Map Editor","availability":"installable","packageType":"squirrel","adapterId":"material-minecraft-map-editor-squirrel","wiki":true,"sourceManifest":"pyproject.toml"}
+    {"id":"material-minecraft-map-editor","repository":"material-minecraft-map-editor","displayName":"Amulet Map Editor","availability":"installable","packageType":"squirrel","adapterId":"material-minecraft-map-editor-squirrel","wiki":true,"sourceManifest":"pyproject.toml"},
+    {"id":"material-gitlab","repository":"material-gitlab","displayName":"Material GitLab","availability":"unsupported","packageType":"unsupported","adapterId":"material-gitlab-no-reviewed-installer","wiki":true,"sourceManifest":"package.json"},
+    {"id":"material-tax-reporting","repository":"material-tax-reporting","displayName":"Material Tax Reporting","availability":"unsupported","packageType":"unsupported","adapterId":"material-tax-reporting-no-reviewed-installer","wiki":true,"sourceManifest":"package.json"}
   ]
 }
