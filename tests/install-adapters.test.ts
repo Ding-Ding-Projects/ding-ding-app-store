@@ -35,7 +35,7 @@ const EXPECTED_APP_IDS = [
   'qbittorrent-material', 'material-winscp', 'dim-sum-atlas', 'win-ssh-copy-id',
   'material-office', 'minecraft-world-downloader', 'codex-material', 'libreoffice-material',
   'thunderbird-desktop', 'bambu-studio', 'keepassxc', 'jdownloader-material', 'ha-bambulab',
-  'winforge', 'wimforge', 'photo-viewer', 'material-minecraft-map-editor',
+  'winforge', 'wimforge', 'photo-viewer', 'material-minecraft-map-editor', 'material-gitlab', 'material-tax-reporting',
 ] as const;
 
 const LATEST_ASSET_FIXTURES: Readonly<Record<string, string>> = {
@@ -64,9 +64,9 @@ const LATEST_ASSET_FIXTURES: Readonly<Record<string, string>> = {
 };
 
 describe('hand-written universal install adapter coverage', () => {
-  it('enumerates exactly the 25 reviewed catalog IDs', () => {
+  it('enumerates exactly the reviewed catalog IDs', () => {
     expect(CATALOG_APP_IDS).toEqual(EXPECTED_APP_IDS);
-    expect(new Set(INSTALL_ADAPTER_IDS).size).toBe(25);
+    expect(new Set(INSTALL_ADAPTER_IDS).size).toBe(EXPECTED_APP_IDS.length);
     expect(() => validateAdapterCoverage()).not.toThrow();
   });
 
