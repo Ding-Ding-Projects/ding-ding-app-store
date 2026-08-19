@@ -220,6 +220,10 @@ if ($lifecyclePlan) {
     if (-not $candidateCanonical.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) { throw 'The Squirrel path was outside guest LOCALAPPDATA; sibling prefixes are not containment.' }
     $relative = $candidateCanonical.Substring($prefix.Length)
     $cursor = $rootCanonical
+    if (Test-Path -LiteralPath $cursor) {
+      $rootItem = Get-Item -LiteralPath $cursor -Force
+      if (($rootItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'Guest LOCALAPPDATA itself was a reparse point.' }
+    }
     foreach ($part in $relative -split '\\') {
       if (-not $part) { continue }
       $cursor = Join-Path $cursor $part
@@ -1192,6 +1196,7 @@ export class WindowsSandboxGuestTransport implements IsolationBroker {
       if (!stopped.processTreeStopped) throw new Error('Host Sandbox process-tree stop was not proven.');
       this.options.protocol.markProcessTreeStopped?.(jobId);
       await rm(guest.configPath, { force: false });
+      try { await stat(guest.configPath); throw new Error('The Sandbox config recovery handle remained after host disposal.'); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
       this.options.protocol.markGuestDeleted?.(jobId);
       const receipt = sourceDisposalReceiptSchema.parse(await this.options.protocol.dispose(jobId, lease, new AbortController().signal));
       if (receipt.jobId !== jobId || receipt.challengeNonce !== guest.challenge.nonce || receipt.guestId !== guest.guestId || receipt.hostMounts !== 0 || !receipt.processTreeStopped || !receipt.guestDeleted) throw new Error('The guest disposal receipt did not prove complete teardown.');
