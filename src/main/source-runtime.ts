@@ -161,6 +161,32 @@ while (-not $plan -and [DateTimeOffset]::UtcNow -lt $planDeadline) {
 }
 if (-not $plan) { throw 'Runner plan was not published before the bounded handshake deadline.' }
 if ($plan.protocolVersion -ne $protocol -or $plan.jobId -ne $jobId -or $plan.challengeNonce -ne $nonce -or $plan.policy.hostMounts -ne 0 -or $plan.policy.credentialsInjected -ne $false -or $plan.policy.secretsInjected -ne $false -or $plan.policy.shellStringsAllowed -ne $false) { throw 'Runner plan or policy binding was rejected.' }
+$lifecyclePlan = $null
+try { $lifecyclePlan = Invoke-RestMethod -Method Get -Uri "$endpoint/lifecycle-plan/$jobId" -Headers $headers -ErrorAction Stop } catch { }
+if ($lifecyclePlan) {
+  $installer = Join-Path $env:TEMP "ding-ding-$jobId-installer.bin"
+  Invoke-WebRequest -Method Get -Uri "$endpoint/installer/$jobId" -Headers $headers -OutFile $installer -UseBasicParsing
+  $installerHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $installer).Hash.ToLowerInvariant()
+  if ((Get-Item -LiteralPath $installer).Length -ne $lifecyclePlan.installer.bytes -or $installerHash -ne $lifecyclePlan.installer.sha256) { throw 'Installer bytes did not match the reviewed lifecycle plan.' }
+  $family = $lifecyclePlan.installer.format
+  $installIdentity = $lifecyclePlan.installIdentity
+  $installRoot = Join-Path $env:TEMP "ding-ding-$jobId-install"
+  New-Item -ItemType Directory -Force -Path $installRoot | Out-Null
+  # Only fixed, family-derived operations are permitted. Plan data never supplies a command or argument.
+  switch ($family) {
+    'squirrel' { $installerArgs = @('--silent'); $uninstallArgs = @('--uninstall') }
+    'nsis' { $installerArgs = @('/S'); $uninstallArgs = @('/S', '/_?=') }
+    'inno' { $installerArgs = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'); $uninstallArgs = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') }
+    default { throw 'Installer family is not allowlisted.' }
+  }
+  # The fixed guest helper is intentionally conservative: it does not treat the Sandbox wrapper HWND as readiness.
+  $children = @()
+  $installProcess = Start-Process -FilePath $installer -ArgumentList ([string[]]$installerArgs) -WorkingDirectory $installRoot -PassThru -Wait
+  if ($installProcess.ExitCode -ne 0) { throw 'Reviewed installer exited unsuccessfully.' }
+  Send-Runner "/stage-receipt/$jobId" @{ schemaVersion = 1; protocolVersion = $protocol; jobId = $jobId; challengeNonce = $nonce; guestId = "guest-$jobId"; planDigest = $lifecyclePlan.planDigest; sequence = 1; stage = 'installer-bytes'; installerBytes = [int64](Get-Item -LiteralPath $installer).Length; installerSha256 = $installerHash; observedAt = [DateTimeOffset]::UtcNow.ToString('o') } | Out-Null
+  Send-Runner "/stage-receipt/$jobId" @{ schemaVersion = 1; protocolVersion = $protocol; jobId = $jobId; challengeNonce = $nonce; guestId = "guest-$jobId"; planDigest = $lifecyclePlan.planDigest; sequence = 2; stage = 'install'; operation = "$family-install"; observedAt = [DateTimeOffset]::UtcNow.ToString('o') } | Out-Null
+  throw 'Guest lifecycle launch/window discovery is blocked until the reviewed fixed helper is installed; wrapper readiness is never accepted.'
+}
 $workspace = Join-Path $env:TEMP "ding-ding-$jobId"
 New-Item -ItemType Directory -Force -Path $workspace | Out-Null
 try {
