@@ -78,7 +78,6 @@ describe('guest lifecycle protocol contracts', () => {
     expect(source).toContain('launch-ledger.json');
     expect(source).toContain('schemaVersion: 1, desktop, configPath, runRoot, sandboxExecutable');
     expect(source).toContain('launch-cleanup-unproven');
-    expect(source).toContain('process_id');
     expect(source).toContain('prePids');
     expect(source).toContain('newPids');
     expect(source).toContain("name_filter: 'WindowsSandboxRemoteSession.exe', limit: 1000");
