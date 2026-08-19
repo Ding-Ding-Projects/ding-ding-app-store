@@ -160,6 +160,68 @@ function Assert-UnsignedSquirrelConfiguration {
   if ($targets -notcontains 'squirrel') { throw 'The installer path must use the Squirrel.Windows target.' }
 }
 
+function Read-PeBytes {
+  param(
+    [Parameter(Mandatory = $true)][IO.FileStream]$Stream,
+    [Parameter(Mandatory = $true)][UInt64]$Position,
+    [Parameter(Mandatory = $true)][int]$Count,
+    [Parameter(Mandatory = $true)][UInt64]$FileLength
+  )
+  if ($Count -lt 1 -or $Count -gt 4096 -or $Position -gt $FileLength -or [UInt64]$Count -gt ($FileLength - $Position)) {
+    throw "PE read is outside the bounded file: offset $Position, bytes $Count, file length $FileLength."
+  }
+  $null = $Stream.Seek([Int64]$Position, [IO.SeekOrigin]::Begin)
+  $buffer = New-Object byte[] $Count
+  $received = 0
+  while ($received -lt $Count) {
+    $read = $Stream.Read($buffer, $received, $Count - $received)
+    if ($read -le 0) { throw 'PE read ended before the requested bytes were received.' }
+    $received += $read
+  }
+  return $buffer
+}
+
+function Get-PeSignatureStatus {
+  param([Parameter(Mandatory = $true)][string]$LiteralPath)
+  $file = Get-Item -LiteralPath $LiteralPath -ErrorAction Stop
+  $maxPeBytes = [UInt64]1500000000
+  if ($file.PSIsContainer -or $file.Length -lt 64 -or [UInt64]$file.Length -gt $maxPeBytes) {
+    throw "Setup.exe is not a bounded PE file: $LiteralPath."
+  }
+  $stream = $null
+  try {
+    $stream = [IO.File]::Open($LiteralPath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+    $fileLength = [UInt64]$file.Length
+    $dos = Read-PeBytes -Stream $stream -Position 0 -Count 64 -FileLength $fileLength
+    if ($dos[0] -ne 0x4d -or $dos[1] -ne 0x5a) { throw 'Setup.exe does not have a valid DOS header.' }
+    $peOffset = [UInt64][BitConverter]::ToUInt32($dos, 0x3c)
+    $signature = Read-PeBytes -Stream $stream -Position $peOffset -Count 4 -FileLength $fileLength
+    if ($signature[0] -ne 0x50 -or $signature[1] -ne 0x45 -or $signature[2] -ne 0 -or $signature[3] -ne 0) { throw 'Setup.exe does not have a valid PE signature.' }
+    $coff = Read-PeBytes -Stream $stream -Position ($peOffset + 4) -Count 20 -FileLength $fileLength
+    $optionalSize = [int][BitConverter]::ToUInt16($coff, 16)
+    if ($optionalSize -lt 2 -or $optionalSize -gt 4096) { throw "Setup.exe has an unsupported optional-header size: $optionalSize." }
+    $optional = Read-PeBytes -Stream $stream -Position ($peOffset + 24) -Count $optionalSize -FileLength $fileLength
+    $magic = [BitConverter]::ToUInt16($optional, 0)
+    $directoryOffset = if ($magic -eq 0x10b) { 96 } elseif ($magic -eq 0x20b) { 112 } else { throw "Setup.exe has an unsupported PE optional-header magic: $magic." }
+    $securityDirectoryEnd = $directoryOffset + (8 * 5)
+    if ($optionalSize -lt $securityDirectoryEnd) { throw 'Setup.exe optional header is truncated before the security directory.' }
+    # IMAGE_DIRECTORY_ENTRY_SECURITY is data-directory index 4. Its virtual
+    # address is a file offset for PE images, not an RVA.
+    $certificateOffset = [UInt64][BitConverter]::ToUInt32($optional, $directoryOffset + 32)
+    $certificateSize = [UInt64][BitConverter]::ToUInt32($optional, $directoryOffset + 36)
+    if ($certificateOffset -eq 0 -and $certificateSize -eq 0) {
+      return [pscustomobject]@{ Status = 'NotSigned'; CertificateTableOffset = [UInt64]0; CertificateTableSize = [UInt64]0 }
+    }
+    if ($certificateOffset -gt $fileLength -or $certificateSize -gt ($fileLength - $certificateOffset)) {
+      throw 'Setup.exe certificate table is truncated or outside the file.'
+    }
+    return [pscustomobject]@{ Status = 'CertificateTablePresent'; CertificateTableOffset = $certificateOffset; CertificateTableSize = $certificateSize }
+  }
+  finally {
+    if ($stream) { $stream.Dispose() }
+  }
+}
+
 function Invoke-ProjectInstaller {
   param([Parameter(Mandatory = $true)][string]$Root, [Parameter(Mandatory = $true)]$Tools)
   Assert-UnsignedSquirrelConfiguration -Root $Root
@@ -171,7 +233,7 @@ function Invoke-ProjectInstaller {
   $releases = Get-ChildItem -LiteralPath $releaseRoot -Recurse -File -Filter 'RELEASES' | Select-Object -First 1
   $nupkg = Get-ChildItem -LiteralPath $releaseRoot -Recurse -File -Filter '*-full.nupkg' | Select-Object -First 1
   if (-not $releases -or -not $nupkg) { throw 'The installer build did not produce RELEASES and a full .nupkg.' }
-  $signature = Get-AuthenticodeSignature -LiteralPath $setup.FullName
+  $signature = Get-PeSignatureStatus -LiteralPath $setup.FullName
   if ($signature.Status -ne 'NotSigned') { throw "Code signing is prohibited, but Setup.exe reported $($signature.Status)." }
   $identity = Get-SourceIdentity -Root $Root
   $rootPrefix = ([IO.Path]::GetFullPath($Root)).TrimEnd('\') + '\'

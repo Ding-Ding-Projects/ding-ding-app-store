@@ -167,7 +167,8 @@ jobs:
           $expectedPackageName = "DingDingAppStore-$env:RELEASE_VERSION-full.nupkg"
           if ($nupkg.Name -ne $expectedPackageName) { throw "Squirrel produced $($nupkg.Name), expected $expectedPackageName." }
           if (-not (Select-String -LiteralPath $releases.FullName -SimpleMatch $expectedPackageName -Quiet)) { throw "RELEASES does not advertise $expectedPackageName." }
-          $signature = Get-AuthenticodeSignature -FilePath $setup.FullName
+          . ./scripts/build-common.ps1
+          $signature = Get-PeSignatureStatus -LiteralPath $setup.FullName
           if ($signature.Status -ne 'NotSigned') { throw "Code signing is prohibited, but Setup.exe reported $($signature.Status)." }
           New-Item -ItemType Directory -Path release-stage -Force | Out-Null
           Copy-Item -LiteralPath $setup.FullName -Destination 'release-stage/DingDingAppStore-Setup.exe'
