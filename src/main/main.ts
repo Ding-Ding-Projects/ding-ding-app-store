@@ -16,6 +16,7 @@ import { Scheduler } from './scheduler.js';
 import { ScheduleService } from './schedule-service.js';
 import { DimSumService } from './dim-sum-service.js';
 import { SourceJobService } from './source-job-service.js';
+import { WindowsSandboxGuestTransport, WindowsSandboxProtocolPeer } from './source-runtime.js';
 import { SettingsService } from './settings-service.js';
 import { UpdateService } from './update-service.js';
 import { ManagedUpdateService } from './managed-update-service.js';
@@ -252,13 +253,19 @@ void app.whenReady().then(async () => {
     unsubscribeSchoolMode();
     schoolMode.dispose();
   });
+  const sourceProtocolPeer = new WindowsSandboxProtocolPeer();
+  const sourceBroker = new WindowsSandboxGuestTransport({
+    protocol: sourceProtocolPeer,
+    appDataRoot: path.join(app.getPath('userData'), 'source-jobs', 'guests'),
+  });
+  app.once('will-quit', () => { void sourceProtocolPeer.close(); });
   const sourceJobs = new SourceJobService(
     catalog,
     history,
     settings,
     path.join(app.getPath('userData'), 'source-jobs'),
     path.join(app.getAppPath(), 'data', 'source-recipes.v1.json'),
-    undefined,
+    sourceBroker,
     (event) => mainWindow?.webContents.send('source-jobs:event', event),
   );
   const updates = new UpdateService(() => mainWindow);

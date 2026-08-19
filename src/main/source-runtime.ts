@@ -1,11 +1,12 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { createReadStream } from 'node:fs';
 import { lstat, mkdir, realpath, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
 import type { SourceDisposalReceipt, SourceIsolationStatus, SourceJobDecision, SourceJobState, SourceOutputFile, SourceOutputManifest, SourceTerminalEvent, SourceTerminalStream } from '../shared/contracts.js';
-import { sourceDisposalReceiptSchema, sourceOutputManifestSchema } from '../shared/contracts.js';
+import { sourceDisposalReceiptSchema, sourceOutputFileSchema, sourceOutputManifestSchema } from '../shared/contracts.js';
 import { extractZipSafe } from './safe-zip.js';
 
 export const SOURCE_RUNTIME_LIMITS = Object.freeze({
@@ -54,17 +55,22 @@ export const SOURCE_GUEST_POLICY = Object.freeze({
  * nonce-bound loopback/gateway protocol supplied by the transport. */
 export const WINDOWS_SANDBOX_GUEST_BOOTSTRAP = String.raw`$ErrorActionPreference = 'Stop'
 $protocol = 1
-$jobId = $args[0]
-$nonce = $args[1]
-$endpoint = $args[2]
-$token = $args[3]
+$jobId = $runnerArgs[0]
+$nonce = $runnerArgs[1]
+$endpoint = $runnerArgs[2]
+$token = $runnerArgs[3]
 $headers = @{ 'X-Ding-Ding-Runner' = $token; 'X-Ding-Ding-Protocol' = "$protocol" }
 function Send-Runner($route, $body) {
   Invoke-RestMethod -Method Post -Uri "$endpoint$route" -Headers $headers -ContentType 'application/json' -Body ($body | ConvertTo-Json -Depth 12 -Compress)
 }
-$hello = @{ protocolVersion = $protocol; jobId = $jobId; challengeNonce = $nonce; hostMounts = 0; credentialsInjected = $false; secretsInjected = $false; shellStringsAllowed = $false }
-Send-Runner '/hello' $hello | Out-Null
-$plan = Invoke-RestMethod -Method Get -Uri "$endpoint/plan/$jobId" -Headers $headers
+$hello = @{ protocolVersion = $protocol; jobId = $jobId; challengeNonce = $nonce; guestId = "guest-$jobId"; hostMounts = 0; credentialsInjected = $false; secretsInjected = $false; shellStringsAllowed = $false; userProfileMounted = $false }
+Send-Runner "/hello/$jobId" $hello | Out-Null
+$plan = $null
+$planDeadline = [DateTimeOffset]::UtcNow.AddSeconds(30)
+while (-not $plan -and [DateTimeOffset]::UtcNow -lt $planDeadline) {
+  try { $plan = Invoke-RestMethod -Method Get -Uri "$endpoint/plan/$jobId" -Headers $headers -ErrorAction Stop } catch { Start-Sleep -Milliseconds 150 }
+}
+if (-not $plan) { throw 'Runner plan was not published before the bounded handshake deadline.' }
 if ($plan.protocolVersion -ne $protocol -or $plan.jobId -ne $jobId -or $plan.challengeNonce -ne $nonce -or $plan.policy.hostMounts -ne 0 -or $plan.policy.credentialsInjected -ne $false -or $plan.policy.secretsInjected -ne $false -or $plan.policy.shellStringsAllowed -ne $false) { throw 'Runner plan or policy binding was rejected.' }
 $workspace = Join-Path $env:TEMP "ding-ding-$jobId"
 New-Item -ItemType Directory -Force -Path $workspace | Out-Null
@@ -76,14 +82,19 @@ try {
   Remove-Item -LiteralPath $archive -Force
   foreach ($step in $plan.steps) {
     if ($step.arguments -join ' ' -match '[;&|<>\r\n]') { throw 'Shell operators are not permitted in a reviewed step.' }
-    Send-Runner '/event' @{ stream = 'progress'; state = 'running'; text = "Starting $($step.id)"; progress = 10 } | Out-Null
+    Send-Runner "/event/$jobId" @{ stream = 'progress'; state = 'running'; text = "Starting $($step.id)"; progress = 10 } | Out-Null
     $p = Start-Process -FilePath $step.executable -ArgumentList ([string[]]$step.arguments) -WorkingDirectory (Join-Path $workspace $step.cwd) -NoNewWindow -PassThru -Wait
     if ($p.ExitCode -ne 0) { throw "Reviewed step $($step.id) exited with code $($p.ExitCode)." }
   }
   $files = Get-ChildItem -LiteralPath $workspace -File -Recurse | Where-Object { $_.FullName -notlike "$workspace\source.zip" }
   $manifest = @($files | ForEach-Object { $relative = $_.FullName.Substring($workspace.Length + 1).Replace([char]92,'/'); @{ path = $relative; bytes = $_.Length; sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant() } })
-  Send-Runner '/outputs' @{ schemaVersion = 1; jobId = $jobId; files = $manifest } | Out-Null
-  Send-Runner '/complete' @{ jobId = $jobId; ok = $true } | Out-Null
+  foreach ($file in $files) {
+    $relative = $file.FullName.Substring($workspace.Length + 1).Replace([char]92,'/')
+    $bytes = [IO.File]::ReadAllBytes($file.FullName)
+    Send-Runner "/output/$jobId" @{ path = $relative; bytes = $bytes.Length; sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $file.FullName).Hash.ToLowerInvariant(); contentBase64 = [Convert]::ToBase64String($bytes) } | Out-Null
+  }
+  Send-Runner "/outputs/$jobId" @{ schemaVersion = 1; jobId = $jobId; appId = $plan.appId; revision = $plan.revision; decision = $plan.decision; generatedAt = [DateTimeOffset]::UtcNow.ToString('o'); totalBytes = ($manifest | Measure-Object -Property bytes -Sum).Sum; files = $manifest } | Out-Null
+  Send-Runner "/complete/$jobId" @{ jobId = $jobId; ok = $true } | Out-Null
 } finally {
   Remove-Item -LiteralPath $workspace -Recurse -Force -ErrorAction SilentlyContinue
 }`;
@@ -470,19 +481,272 @@ export async function probeWindowsDisposableGuest(options: WindowsSandboxProbeOp
   };
 }
 
-export interface WindowsSandboxProtocolPeer {
+export interface WindowsSandboxProtocolPeerContract {
   attest(challenge: Readonly<IsolationAttestationChallenge>, guestId: string, signal: AbortSignal): Promise<unknown>;
   execute(plan: Readonly<SourceExecutionPlan>, bootstrap: Readonly<SourceGuestBootstrap>, emit: (line: RuntimeLine) => void, signal: AbortSignal): Promise<SourceExecutionResult | void>;
   dispose(jobId: string, lease: Readonly<IsolationCapabilityLease>, signal: AbortSignal): Promise<SourceDisposalReceipt>;
   abort(jobId: string, signal: AbortSignal): Promise<void>;
+  endpoint?(): Promise<string> | string;
+  prepare?(challenge: Readonly<IsolationAttestationChallenge>, guestId: string, token: string): Promise<void> | void;
+  markProcessTreeStopped?(jobId: string): void;
 }
+
+interface ProtocolPeerOptions {
+  listenHost?: string;
+  advertiseAddress?: string;
+  maxBodyBytes?: number;
+  requestTimeoutMs?: number;
+  maxArchiveBytes?: number;
+  fetchArchive?: (url: string, maxBytes: number, signal: AbortSignal) => Promise<Buffer>;
+}
+
+interface ProtocolPeerJob {
+  challenge: IsolationAttestationChallenge;
+  guestId: string;
+  token: string;
+  plan?: SourceExecutionPlan;
+  guestPlan?: SourceExecutionPlan;
+  outputs: Map<string, SourceGuestOutput>;
+  manifest?: SourceOutputManifest;
+  hello: Promise<unknown>;
+  resolveHello: (value: unknown) => void;
+  rejectHello: (error: Error) => void;
+  complete: Promise<SourceExecutionResult>;
+  emit?: (line: RuntimeLine) => void;
+  resolveComplete: (value: SourceExecutionResult) => void;
+  rejectComplete: (error: Error) => void;
+  archive?: Buffer;
+  archiveFetched?: Promise<Buffer>;
+  processTreeStopped: boolean;
+  disposed: boolean;
+  aborted: boolean;
+}
+
+const protocolHelloSchema = z.strictObject({
+  protocolVersion: z.literal(SOURCE_GUEST_PROTOCOL_VERSION),
+  jobId: z.uuid(),
+  challengeNonce: nonceSchema,
+  guestId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/),
+  hostMounts: z.literal(0),
+  credentialsInjected: z.literal(false),
+  secretsInjected: z.literal(false),
+  shellStringsAllowed: z.literal(false),
+  userProfileMounted: z.literal(false),
+});
+const protocolCompleteSchema = z.strictObject({ jobId: z.uuid(), ok: z.boolean(), error: z.string().max(1_024).optional() });
+const protocolOutputSchema = z.strictObject({
+  path: sourceOutputFileSchema.shape.path,
+  bytes: z.number().int().min(0).max(SOURCE_RUNTIME_LIMITS.maxOutputBytes),
+  sha256: z.string().regex(/^[a-f0-9]{64}$/),
+  contentBase64: z.string().max(Math.ceil(SOURCE_RUNTIME_LIMITS.maxOutputBytes * 4 / 3) + 16),
+});
+
+/**
+ * The production host-side peer. It owns one ephemeral HTTP listener and one
+ * opaque bearer token per guest. Every route is job-bound, nonce-bound, strict
+ * schema validated, size bounded, and deadline bounded. It never exposes a
+ * host path: source archives are fetched by the broker and output bytes arrive
+ * as bounded protocol frames.
+ */
+export class WindowsSandboxProtocolPeer implements WindowsSandboxProtocolPeerContract {
+  private readonly server = createServer((request, response) => { void this.route(request, response); });
+  private readonly jobs = new Map<string, ProtocolPeerJob>();
+  private readonly options: Required<Pick<ProtocolPeerOptions, 'listenHost' | 'advertiseAddress' | 'maxBodyBytes' | 'requestTimeoutMs' | 'maxArchiveBytes'>> & ProtocolPeerOptions;
+  private listening?: Promise<void>;
+  private address?: string;
+
+  constructor(options: ProtocolPeerOptions = {}) {
+    this.options = {
+      listenHost: options.listenHost ?? '0.0.0.0',
+      advertiseAddress: options.advertiseAddress ?? 'host.docker.internal',
+      maxBodyBytes: options.maxBodyBytes ?? 8 * 1024 * 1024,
+      requestTimeoutMs: options.requestTimeoutMs ?? 15_000,
+      maxArchiveBytes: options.maxArchiveBytes ?? 200 * 1024 * 1024,
+      ...options,
+    };
+    if (!Number.isInteger(this.options.maxBodyBytes) || this.options.maxBodyBytes < 16 * 1024 || this.options.maxBodyBytes > 16 * 1024 * 1024) throw new Error('Protocol body limit is outside the bounded range.');
+  }
+
+  async endpoint(): Promise<string> {
+    await this.listen();
+    return this.address!;
+  }
+
+  async close(): Promise<void> {
+    for (const jobId of [...this.jobs.keys()]) await this.abort(jobId, new AbortController().signal);
+    if (!this.listening) return;
+    await new Promise<void>((resolve) => this.server.close(() => resolve()));
+    this.listening = undefined;
+    this.address = undefined;
+  }
+
+  private async listen(): Promise<void> {
+    if (this.listening) return this.listening;
+    this.listening = new Promise<void>((resolve, reject) => {
+      const onError = (error: Error) => { this.server.off('listening', onListening); reject(error); };
+      const onListening = () => {
+        this.server.off('error', onError);
+        const address = this.server.address();
+        if (!address || typeof address === 'string') { reject(new Error('The protocol listener did not expose a TCP address.')); return; }
+        this.address = `http://${this.options.advertiseAddress}:${address.port}`;
+        resolve();
+      };
+      this.server.once('error', onError);
+      this.server.once('listening', onListening);
+      this.server.listen(0, this.options.listenHost);
+    });
+    return this.listening;
+  }
+
+  prepare(challenge: Readonly<IsolationAttestationChallenge>, guestId: string, token: string): void {
+    const parsed = isolationAttestationChallengeSchema.parse(challenge);
+    if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(guestId) || !/^[a-f0-9]{48}$/.test(token)) throw new Error('The guest protocol identity or token was malformed.');
+    if (this.jobs.has(parsed.jobId)) throw new Error('A protocol peer is already registered for this job.');
+    let resolveHello!: (value: unknown) => void;
+    let rejectHello!: (error: Error) => void;
+    let resolveComplete!: (value: SourceExecutionResult) => void;
+    let rejectComplete!: (error: Error) => void;
+    const hello = new Promise<unknown>((resolve, reject) => { resolveHello = resolve; rejectHello = reject; });
+    const complete = new Promise<SourceExecutionResult>((resolve, reject) => { resolveComplete = resolve; rejectComplete = reject; });
+    this.jobs.set(parsed.jobId, { challenge: { ...parsed }, guestId, token, outputs: new Map(), hello, resolveHello, rejectHello, complete, resolveComplete, rejectComplete, processTreeStopped: false, disposed: false, aborted: false });
+  }
+
+  async attest(challenge: Readonly<IsolationAttestationChallenge>, guestId: string, signal: AbortSignal): Promise<unknown> {
+    await this.listen();
+    const job = this.jobs.get(challenge.jobId);
+    if (!job || job.guestId !== guestId) throw new Error('The guest protocol registration was not found.');
+    return await this.withAbort(job.hello, signal, 'Guest hello timed out or was cancelled.');
+  }
+
+  async execute(plan: Readonly<SourceExecutionPlan>, bootstrap: Readonly<SourceGuestBootstrap>, emit: (line: RuntimeLine) => void, signal: AbortSignal): Promise<SourceExecutionResult> {
+    const job = this.jobs.get(plan.jobId);
+    if (!job || job.aborted || job.guestId !== bootstrap.guestId || job.challenge.nonce !== bootstrap.challengeNonce) throw new Error('The guest protocol execution binding was rejected.');
+    if (plan.planDigest !== bootstrap.planDigest || plan.protocolVersion !== SOURCE_GUEST_PROTOCOL_VERSION) throw new Error('The guest protocol plan binding was rejected.');
+    job.plan = { ...plan };
+    job.emit = emit;
+    job.guestPlan = { ...plan, sourceArchiveUrl: `${await this.endpoint()}/archive/${plan.jobId}` };
+    const result = await this.withAbort(job.complete, signal, 'The guest protocol execution deadline expired or was cancelled.');
+    if (result.outputManifest && result.outputManifest.jobId !== plan.jobId) throw new Error('The guest output manifest was bound to another job.');
+    return result;
+  }
+
+  markProcessTreeStopped(jobId: string): void {
+    const job = this.jobs.get(jobId);
+    if (job) job.processTreeStopped = true;
+  }
+
+  async dispose(jobId: string, lease: Readonly<IsolationCapabilityLease>, signal: AbortSignal): Promise<SourceDisposalReceipt> {
+    const job = this.jobs.get(jobId);
+    if (!job || job.aborted || job.challenge.nonce !== lease.challengeNonce) throw new Error('The guest protocol disposal binding was rejected.');
+    if (!validateCapabilityLease(lease, job.challenge, 'dispose', Date.now(), true)) throw new Error('The guest protocol disposal lease was invalid.');
+    if (!job.processTreeStopped) throw new Error('Guest disposal is not proven until the process tree has stopped.');
+    job.disposed = true;
+    const receipt = sourceDisposalReceiptSchema.parse({ schemaVersion: 1, jobId, guestId: job.guestId, brokerId: SOURCE_GUEST_IDENTITY.brokerId, transportId: SOURCE_GUEST_IDENTITY.transportId, challengeNonce: job.challenge.nonce, disposedAt: new Date().toISOString(), processTreeStopped: true, guestDeleted: true, hostMounts: 0, credentialsInjected: false, secretsInjected: false });
+    this.jobs.delete(jobId);
+    return await this.withAbort(Promise.resolve(receipt), signal, 'Guest disposal receipt timed out.');
+  }
+
+  async abort(jobId: string, _signal: AbortSignal): Promise<void> {
+    const job = this.jobs.get(jobId);
+    if (!job) return;
+    if (!job.aborted) { job.aborted = true; job.rejectHello(new Error('Guest protocol aborted.')); job.rejectComplete(new Error('Guest protocol aborted.')); }
+    this.jobs.delete(jobId);
+  }
+
+  private async withAbort<T>(work: Promise<T>, signal: AbortSignal, message: string): Promise<T> {
+    if (signal.aborted) throw new DOMException('Cancelled', 'AbortError');
+    let timer: NodeJS.Timeout | undefined;
+    const abort = new Promise<never>((_, reject) => { const onAbort = () => reject(new DOMException('Cancelled', 'AbortError')); signal.addEventListener('abort', onAbort, { once: true }); });
+    try { return await Promise.race([work, abort, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error(message)), this.options.requestTimeoutMs); })]); }
+    finally { if (timer) clearTimeout(timer); }
+  }
+
+  private async route(request: IncomingMessage, response: ServerResponse): Promise<void> {
+    const timer = setTimeout(() => { response.destroy(new Error('Protocol request deadline exceeded.')); }, this.options.requestTimeoutMs);
+    try {
+      const url = new URL(request.url ?? '/', 'http://protocol.invalid');
+      const jobId = url.pathname.split('/')[2];
+      const job = jobId ? this.jobs.get(jobId) : undefined;
+      if (!job || request.headers['x-ding-ding-runner'] !== job.token || request.headers['x-ding-ding-protocol'] !== String(SOURCE_GUEST_PROTOCOL_VERSION)) return this.send(response, 401, { error: 'protocol-unauthorized' });
+      if (request.method === 'POST' && url.pathname === `/hello/${jobId}`) return this.handleHello(request, response, job);
+      if (request.method === 'GET' && url.pathname === `/plan/${jobId}`) return this.handlePlan(response, job);
+      if (request.method === 'GET' && url.pathname === `/archive/${jobId}`) return this.handleArchive(response, job);
+      if (request.method === 'POST' && url.pathname === `/event/${jobId}`) return this.handleEvent(request, response, job);
+      if (request.method === 'POST' && url.pathname === `/output/${jobId}`) return this.handleOutput(request, response, job);
+      if (request.method === 'POST' && url.pathname === `/outputs/${jobId}`) return this.handleManifest(request, response, job);
+      if (request.method === 'POST' && url.pathname === `/complete/${jobId}`) return this.handleComplete(request, response, job);
+      return this.send(response, 404, { error: 'protocol-route-not-found' });
+    } catch (error) { if (!response.headersSent) this.send(response, 400, { error: error instanceof Error ? error.message : 'protocol-request-invalid' }); }
+    finally { clearTimeout(timer); }
+  }
+
+  private async body(request: IncomingMessage): Promise<unknown> {
+    const length = Number(request.headers['content-length'] ?? 0);
+    if (!Number.isSafeInteger(length) || length < 0 || length > this.options.maxBodyBytes) throw new Error('Protocol frame exceeded the bounded body limit.');
+    const chunks: Buffer[] = []; let total = 0;
+    for await (const chunk of request) { const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk); total += bytes.length; if (total > this.options.maxBodyBytes) throw new Error('Protocol frame exceeded the bounded body limit.'); chunks.push(bytes); }
+    if (!total) throw new Error('Protocol frame was empty.');
+    return JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown;
+  }
+
+  private async handleHello(request: IncomingMessage, response: ServerResponse, job: ProtocolPeerJob): Promise<void> {
+    const parsed = protocolHelloSchema.parse(await this.body(request));
+    if (parsed.jobId !== job.challenge.jobId || parsed.challengeNonce !== job.challenge.nonce || parsed.guestId !== job.guestId) throw new Error('Guest hello binding was rejected.');
+    if (Date.now() > Date.parse(job.challenge.expiresAt) + SOURCE_BROKER_LIMITS.clockSkewMs) throw new Error('Guest hello challenge expired.');
+    const now = new Date().toISOString();
+    const lease = isolationCapabilityLeaseSchema.parse({ leaseId: randomUUID(), jobId: job.challenge.jobId, challengeNonce: job.challenge.nonce, brokerId: SOURCE_GUEST_IDENTITY.brokerId, transportId: SOURCE_GUEST_IDENTITY.transportId, issuedAt: now, expiresAt: job.challenge.leaseExpiresAt, capabilities: ['execute', 'dispose'] });
+    const attestation = isolationAttestationSchema.parse({ ...REQUIRED_ISOLATION, version: 1, jobId: job.challenge.jobId, challengeNonce: job.challenge.nonce, brokerId: SOURCE_GUEST_IDENTITY.brokerId, transportId: SOURCE_GUEST_IDENTITY.transportId, attestedAt: now, expiresAt: job.challenge.expiresAt, lease });
+    job.resolveHello(attestation);
+    this.send(response, 200, { ok: true, protocolVersion: SOURCE_GUEST_PROTOCOL_VERSION, jobId: jobIdFrom(job), challengeNonce: job.challenge.nonce });
+  }
+
+  private handlePlan(response: ServerResponse, job: ProtocolPeerJob): void {
+    if (!job.guestPlan) return this.send(response, 425, { error: 'plan-not-ready' });
+    this.send(response, 200, job.guestPlan);
+  }
+
+  private async handleArchive(response: ServerResponse, job: ProtocolPeerJob): Promise<void> {
+    if (!job.plan) return this.send(response, 425, { error: 'plan-not-ready' });
+    if (!job.archiveFetched) job.archiveFetched = this.fetchArchive(job.plan.sourceArchiveUrl, job.plan.sourceArchiveSha256, this.options.maxArchiveBytes);
+    job.archive = await job.archiveFetched;
+    response.writeHead(200, { 'Content-Type': 'application/zip', 'Content-Length': job.archive.length, 'Cache-Control': 'no-store' });
+    response.end(job.archive);
+  }
+
+  private async fetchArchive(url: string, digest: string, maxBytes: number): Promise<Buffer> {
+    const parsed = new URL(url); if (parsed.protocol !== 'https:' || parsed.hostname !== 'github.com' || !/^\/Ding-Ding-Projects\/[A-Za-z0-9_.-]+\/archive\/[a-f0-9]{40}\.zip$/.test(parsed.pathname)) throw new Error('Source archive origin was not allowlisted.');
+    const bytes = this.options.fetchArchive
+      ? await this.options.fetchArchive(url, maxBytes, new AbortController().signal)
+      : await (async () => { const response = await fetch(url, { redirect: 'error' }); if (!response.ok || !response.body) throw new Error(`Source archive fetch failed (${response.status}).`); return Buffer.from(await response.arrayBuffer()); })();
+    if (bytes.length > maxBytes) throw new Error('Source archive exceeded the bounded transfer size.');
+    if (createHash('sha256').update(bytes).digest('hex') !== digest) throw new Error('Source archive SHA-256 did not match the reviewed plan.');
+    return bytes;
+  }
+
+  private async handleEvent(request: IncomingMessage, response: ServerResponse, job: ProtocolPeerJob): Promise<void> { const parsed = runtimeLineSchema.parse(await this.body(request)); job.emit?.(parsed); if (parsed.state === 'failed' || parsed.state === 'cancelled') job.rejectComplete(new Error(parsed.text)); this.send(response, 200, { ok: true }); }
+
+  private async handleOutput(request: IncomingMessage, response: ServerResponse, job: ProtocolPeerJob): Promise<void> {
+    const parsed = protocolOutputSchema.parse(await this.body(request));
+    const content = Buffer.from(parsed.contentBase64, 'base64'); if (content.length !== parsed.bytes || createHash('sha256').update(content).digest('hex') !== parsed.sha256) throw new Error('Guest output bytes did not match the declared manifest entry.');
+    if (content.length > SOURCE_RUNTIME_LIMITS.maxOutputBytes || [...job.outputs.values()].reduce((sum, item) => sum + item.bytes, 0) + content.length > SOURCE_RUNTIME_LIMITS.maxOutputBytes) throw new Error('Guest output exceeded the bounded byte budget.');
+    job.outputs.set(parsed.path, { path: parsed.path, bytes: parsed.bytes, sha256: parsed.sha256, content }); this.send(response, 200, { ok: true });
+  }
+
+  private async handleManifest(request: IncomingMessage, response: ServerResponse, job: ProtocolPeerJob): Promise<void> { const parsed = sourceOutputManifestSchema.parse(await this.body(request)); if (parsed.jobId !== job.challenge.jobId) throw new Error('Guest output manifest job mismatch.'); job.manifest = parsed; this.send(response, 200, { ok: true }); }
+
+  private async handleComplete(request: IncomingMessage, response: ServerResponse, job: ProtocolPeerJob): Promise<void> { const parsed = protocolCompleteSchema.parse(await this.body(request)); if (parsed.jobId !== job.challenge.jobId) throw new Error('Guest completion job mismatch.'); if (!parsed.ok) { job.rejectComplete(new Error(parsed.error ?? 'Guest execution failed.')); } else if (!job.plan || !job.manifest) { job.rejectComplete(new Error('Guest completion omitted the output manifest.')); } else { const outputs = [...job.outputs.values()]; const outputPaths = new Set(outputs.map((file) => file.path)); if (job.plan.finalOutputs.some((file) => !outputPaths.has(file))) throw new Error('Guest completion omitted a reviewed final output.'); const manifest = sourceOutputManifestSchema.parse({ ...job.manifest, appId: job.plan.appId, revision: job.plan.revision, decision: job.plan.decision, totalBytes: outputs.reduce((sum, file) => sum + file.bytes, 0), files: outputs.map(({ content: _content, ...file }) => file) }); job.resolveComplete({ outputManifest: manifest, outputs, guestId: job.guestId }); } this.send(response, 200, { ok: true }); }
+
+  private send(response: ServerResponse, status: number, body: unknown): void { if (response.headersSent) return; const payload = Buffer.from(JSON.stringify(body), 'utf8'); response.writeHead(status, { 'Content-Type': 'application/json', 'Content-Length': payload.length, 'Cache-Control': 'no-store' }); response.end(payload); }
+}
+
+function jobIdFrom(job: ProtocolPeerJob): string { return job.challenge.jobId; }
 
 export interface WindowsSandboxTransportOptions {
   systemRoot?: string;
   appDataRoot?: string;
   platform?: NodeJS.Platform;
   fileExists?: (filePath: string) => Promise<boolean>;
-  protocol?: WindowsSandboxProtocolPeer;
+  protocol?: WindowsSandboxProtocolPeerContract;
   /** Ephemeral host endpoint created by the protocol adapter; never persisted. */
   endpoint?: string;
   launch?: (executable: string, configPath: string, signal: AbortSignal) => Promise<{ stop(): Promise<void> }>;
@@ -530,7 +794,8 @@ export class WindowsSandboxGuestTransport implements IsolationBroker {
   async diagnose(): Promise<SourceIsolationStatus> {
     const base = await probeWindowsDisposableGuest(this.options);
     if (!base.evidence || base.reason !== 'guest-transport-not-connected') return base;
-    if (!this.options.protocol || !this.options.endpoint || !/^https?:\/\/[^\s/]+(?::\d{1,5})?$/.test(this.options.endpoint)) return base;
+    const endpoint = this.options.endpoint ?? (this.options.protocol?.endpoint ? await this.options.protocol.endpoint() : undefined);
+    if (!this.options.protocol || !endpoint || !/^https?:\/\/[^\s/]+(?::\d{1,5})?$/.test(endpoint)) return base;
     return { available: true, provider: 'windows-sandbox', reason: 'ready', checkedAt: base.checkedAt, evidence: [...base.evidence, 'The fixed zero-host-mount guest protocol peer is configured.', 'The guest bootstrap refuses host mounts, credentials, secrets and shell strings.'], remediation: 'Source execution may proceed only after the per-job guest attestation and disposal receipt validate.' };
   }
 
@@ -540,12 +805,17 @@ export class WindowsSandboxGuestTransport implements IsolationBroker {
     const guestId = `guest-${challenge.jobId}`;
     const configPath = path.join(root, `${challenge.jobId}.wsb`);
     const token = randomBytes(24).toString('hex');
-    const encoded = Buffer.from(WINDOWS_SANDBOX_GUEST_BOOTSTRAP, 'utf8').toString('base64');
-    const command = `powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand ${encoded} -- ${challenge.jobId} ${challenge.nonce} ${this.options.endpoint} ${token}`;
+    const endpoint = this.options.endpoint ?? (this.options.protocol?.endpoint ? await this.options.protocol.endpoint() : undefined);
+    if (!endpoint) throw new Error('The zero-mount guest protocol has no ephemeral endpoint.');
+    this.options.protocol?.prepare?.(challenge, guestId, token);
+    const argsPayload = Buffer.from(JSON.stringify([challenge.jobId, challenge.nonce, endpoint, token]), 'utf8').toString('base64');
+    const script = `$runnerArgs = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${argsPayload}')) | ConvertFrom-Json\n${WINDOWS_SANDBOX_GUEST_BOOTSTRAP}`;
+    const encoded = Buffer.from(script, 'utf16le').toString('base64');
+    const command = `powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand ${encoded}`;
     await writeFile(configPath, createZeroMountSandboxConfig(command), { encoding: 'utf8', flag: 'wx' });
     const launch = this.options.launch ?? (async (executable: string, file: string, abortSignal: AbortSignal) => {
       const child = spawn(executable, [file], { windowsHide: true, stdio: 'ignore' });
-      const stop = async () => { if (!child.killed) child.kill(); };
+      const stop = async () => { if (child.pid && process.platform === 'win32') { const killer = spawn('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' }); await new Promise<void>((resolve) => { killer.once('exit', () => resolve()); killer.once('error', () => resolve()); }); } else if (!child.killed) child.kill(); };
       if (abortSignal.aborted) await stop(); else abortSignal.addEventListener('abort', () => { void stop(); }, { once: true });
       return { stop };
     });
@@ -574,10 +844,12 @@ export class WindowsSandboxGuestTransport implements IsolationBroker {
     const guest = this.guests.get(jobId);
     if (!guest || !this.options.protocol) throw new Error('No admitted zero-mount guest is available for disposal.');
     try {
+      await guest.stop();
+      this.options.protocol.markProcessTreeStopped?.(jobId);
       const receipt = sourceDisposalReceiptSchema.parse(await this.options.protocol.dispose(jobId, lease, new AbortController().signal));
       if (receipt.jobId !== jobId || receipt.challengeNonce !== guest.challenge.nonce || receipt.guestId !== guest.guestId || receipt.hostMounts !== 0 || !receipt.processTreeStopped || !receipt.guestDeleted) throw new Error('The guest disposal receipt did not prove complete teardown.');
       return receipt;
-    } finally { await guest.stop(); this.guests.delete(jobId); await rm(guest.configPath, { force: true }); }
+    } finally { this.guests.delete(jobId); await rm(guest.configPath, { force: true }); }
   }
 
   async abort(jobId: string): Promise<void> {
