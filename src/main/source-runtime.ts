@@ -704,6 +704,9 @@ interface ProtocolPeerJob {
   lifecycleInstallerBytes?: Buffer;
   lifecycleReceipts: GuestLifecycleReceipt[];
   lifecycleFinal?: GuestLifecycleFinalReceipt;
+  lifecycleFinalPromise: Promise<GuestLifecycleFinalReceipt>;
+  resolveLifecycleFinal: (value: GuestLifecycleFinalReceipt) => void;
+  rejectLifecycleFinal: (error: Error) => void;
 }
 
 const protocolHelloSchema = z.strictObject({
@@ -792,7 +795,9 @@ export class WindowsSandboxProtocolPeer implements WindowsSandboxProtocolPeerCon
     let rejectComplete!: (error: Error) => void;
     const hello = new Promise<unknown>((resolve, reject) => { resolveHello = resolve; rejectHello = reject; });
     const complete = new Promise<SourceExecutionResult>((resolve, reject) => { resolveComplete = resolve; rejectComplete = reject; });
-    this.jobs.set(parsed.jobId, { challenge: { ...parsed }, guestId, token, outputs: new Map(), lifecycleReceipts: [], hello, resolveHello, rejectHello, complete, resolveComplete, rejectComplete, processTreeStopped: false, disposed: false, aborted: false });
+    let resolveLifecycleFinal!: (value: GuestLifecycleFinalReceipt) => void; let rejectLifecycleFinal!: (error: Error) => void;
+    const lifecycleFinalPromise = new Promise<GuestLifecycleFinalReceipt>((resolve, reject) => { resolveLifecycleFinal = resolve; rejectLifecycleFinal = reject; });
+    this.jobs.set(parsed.jobId, { challenge: { ...parsed }, guestId, token, outputs: new Map(), lifecycleReceipts: [], lifecycleFinalPromise, resolveLifecycleFinal, rejectLifecycleFinal, hello, resolveHello, rejectHello, complete, resolveComplete, rejectComplete, processTreeStopped: false, disposed: false, aborted: false });
   }
 
   /** Publish the separately authenticated installer lifecycle plan. */
@@ -811,6 +816,7 @@ export class WindowsSandboxProtocolPeer implements WindowsSandboxProtocolPeerCon
   }
 
   lifecycleReceipt(jobId: string): GuestLifecycleFinalReceipt | undefined { return this.jobs.get(jobId)?.lifecycleFinal; }
+  async awaitLifecycleFinal(jobId: string, signal: AbortSignal): Promise<GuestLifecycleFinalReceipt> { const job = this.jobs.get(jobId); if (!job) throw new Error('Lifecycle job was not registered.'); return this.withAbort(job.lifecycleFinalPromise, signal, 'Guest lifecycle final receipt timed out.'); }
 
   async attest(challenge: Readonly<IsolationAttestationChallenge>, guestId: string, signal: AbortSignal): Promise<unknown> {
     await this.listen();
@@ -851,7 +857,7 @@ export class WindowsSandboxProtocolPeer implements WindowsSandboxProtocolPeerCon
   async abort(jobId: string, _signal: AbortSignal): Promise<void> {
     const job = this.jobs.get(jobId);
     if (!job) return;
-    if (!job.aborted) { job.aborted = true; job.rejectHello(new Error('Guest protocol aborted.')); job.rejectComplete(new Error('Guest protocol aborted.')); }
+    if (!job.aborted) { job.aborted = true; const error = new Error('Guest protocol aborted.'); job.rejectHello(error); job.rejectComplete(error); job.rejectLifecycleFinal(error); }
     this.jobs.delete(jobId);
   }
 
@@ -961,7 +967,7 @@ export class WindowsSandboxProtocolPeer implements WindowsSandboxProtocolPeerCon
     const expectedStages = ['installer-bytes', 'install', 'launch', 'uninstall', 'absence', 'disposal'];
     if (job.lifecycleReceipts.length !== expectedStages.length || job.lifecycleReceipts.some((receipt, index) => receipt.stage !== expectedStages[index])) throw new Error('Final lifecycle receipt omitted an ordered lifecycle stage.');
     if (!job.lifecycleReceipts.some((receipt) => receipt.stage === 'disposal' && receipt.childProcessesStopped)) throw new Error('Final lifecycle receipt claimed disposal without child-process proof.');
-    job.lifecycleFinal = parsed; this.send(response, 200, { ok: true });
+    job.lifecycleFinal = parsed; job.resolveLifecycleFinal(parsed); this.send(response, 200, { ok: true });
   }
 
   private async handleOutput(request: IncomingMessage, response: ServerResponse, job: ProtocolPeerJob): Promise<void> {
@@ -1077,6 +1083,25 @@ export class WindowsSandboxGuestTransport implements IsolationBroker {
     const bootstrap = createGuestBootstrap(plan, guest.challenge.nonce, guest.guestId);
     if (!validateGuestBootstrap(bootstrap, plan, guest.challenge)) throw new Error('The guest bootstrap binding was rejected.');
     return this.options.protocol.execute(plan, bootstrap, emit, signal);
+  }
+
+  async executeLifecycle(plan: GuestLifecyclePlan, installerBytes: Buffer, signal: AbortSignal): Promise<{ guest: GuestLifecycleFinalReceipt; disposal: SourceDisposalReceipt }> {
+    if (!this.options.protocol || this.options.platform === 'linux' || this.options.platform === 'darwin') throw new Error('Disposable guest lifecycle requires the configured Windows protocol peer.');
+    const now = new Date().toISOString();
+    const challenge = isolationAttestationChallengeSchema.parse({ version: 1, jobId: plan.jobId, nonce: plan.challengeNonce, issuedAt: now, expiresAt: new Date(Date.now() + SOURCE_BROKER_LIMITS.challengeTtlMs).toISOString(), leaseExpiresAt: new Date(Date.now() + SOURCE_RUNTIME_LIMITS.maxJobMs).toISOString(), requestedCapabilities: ['execute', 'dispose'], expectedBrokerId: SOURCE_GUEST_IDENTITY.brokerId, expectedTransportId: SOURCE_GUEST_IDENTITY.transportId });
+    let guest: GuestLifecycleFinalReceipt | undefined;
+    try {
+      const attestation = isolationAttestationSchema.parse(await this.attest(challenge, signal));
+      const peer = this.options.protocol as WindowsSandboxProtocolPeerContract & { publishLifecyclePlan?: (jobId: string, value: GuestLifecyclePlan) => void; publishLifecycleInstaller?: (jobId: string, bytes: Buffer) => void; awaitLifecycleFinal?: (jobId: string, signal: AbortSignal) => Promise<GuestLifecycleFinalReceipt> };
+      peer.publishLifecyclePlan?.(plan.jobId, plan); peer.publishLifecycleInstaller?.(plan.jobId, installerBytes);
+      const final = peer.awaitLifecycleFinal ? await peer.awaitLifecycleFinal(plan.jobId, signal) : (() => { throw new Error('Protocol peer lacks lifecycle final receipt wait.'); })();
+      guest = guestLifecycleFinalReceiptSchema.parse(final);
+      const disposal = await this.dispose(plan.jobId, attestation.lease);
+      return { guest, disposal };
+    } catch (error) {
+      await this.abort(plan.jobId);
+      throw error;
+    }
   }
 
   async dispose(jobId: string, lease: Readonly<IsolationCapabilityLease>): Promise<SourceDisposalReceipt> {
