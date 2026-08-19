@@ -10,6 +10,8 @@ This record describes the reviewed catalog entry `ha-bambulab`. Its public sourc
 
 The current adapter state is: Blocked. The release is a HACS custom-component ZIP. A fresh Windows installation has no canonical local Home Assistant configuration target, and choosing a remote Home Assistant instance requires account/host authorization that this catalog adapter cannot infer.
 
+No icon provenance metadata is declared for this legacy record; the renderer keeps its neutral catalog fallback.
+
 ## Configuration
 
 The catalog record is source-controlled. The renderer may request this application by its typed identifier and a user decision, but it cannot alter the repository, source manifest, package type, adapter, download, command, argument, or local destination. The source manifest marker is `custom_components/bambu_lab/manifest.json`; it is metadata only and is not a source-build recipe.
@@ -24,7 +26,7 @@ This generated record contains only reviewed identifiers and public repository l
 
 ## Verification
 
-The documentation generator checks this article against the hand-written 25-ID catalog and adapter metadata inventories, then includes it in the offline TypeScript bundle, static-site article bundle, wiki mirror, documentation search, and command palette. That proves generated metadata coverage only. It does not claim a clean-Windows installation, update, source build, application launch, or published release verification for this application.
+The documentation generator checks this article against the hand-written catalog and adapter metadata inventories, then includes it in the offline TypeScript bundle, static-site article bundle, wiki mirror, documentation search, and command palette. That proves generated metadata coverage only. It does not claim a clean-Windows installation, update, source build, application launch, or published release verification for this application.
 
 ## Suggested articles
 

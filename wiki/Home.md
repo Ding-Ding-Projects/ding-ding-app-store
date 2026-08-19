@@ -32,6 +32,19 @@ The wiki mirrors the same canonical feature articles bundled into the applicatio
 - [Amulet Map Editor catalog record](Catalog-App-material-minecraft-map-editor) — **limited** — Generated reviewed metadata for Amulet Map Editor: installable, squirrel, and adapter material-minecraft-map-editor-squirrel.
 - [Material GitLab catalog record](Catalog-App-material-gitlab) — **limited** — Generated reviewed metadata for Material GitLab: unsupported, unsupported, and adapter material-gitlab-no-reviewed-installer.
 - [Material Tax Reporting catalog record](Catalog-App-material-tax-reporting) — **limited** — Generated reviewed metadata for Material Tax Reporting: unsupported, unsupported, and adapter material-tax-reporting-no-reviewed-installer.
+- [Sprout Hollow catalog record](Catalog-App-farming-game) — **limited** — Generated reviewed metadata for Sprout Hollow: installable, squirrel, and adapter farming-game-squirrel.
+- [Material Cookie Clicker catalog record](Catalog-App-material-cookie-clicker) — **limited** — Generated reviewed metadata for Material Cookie Clicker: installable, squirrel, and adapter material-cookie-clicker-squirrel.
+- [Material Encryption catalog record](Catalog-App-material-encryption) — **limited** — Generated reviewed metadata for Material Encryption: installable, squirrel, and adapter material-encryption-squirrel.
+- [Material Ollama catalog record](Catalog-App-material-ollama) — **limited** — Generated reviewed metadata for Material Ollama: installable, inno, and adapter material-ollama-inno.
+- [Material Sandbox catalog record](Catalog-App-material-sandbox) — **limited** — Generated reviewed metadata for Material Sandbox: installable, inno, and adapter material-sandbox-inno.
+- [Material Tools catalog record](Catalog-App-material-tools) — **limited** — Generated reviewed metadata for Material Tools: installable, squirrel, and adapter material-tools-squirrel.
+- [Material VirtualBox catalog record](Catalog-App-material-virtualbox) — **limited** — Generated reviewed metadata for Material VirtualBox: installable, nsis, and adapter material-virtualbox-nsis.
+- [Material WinForge catalog record](Catalog-App-material-winforge) — **limited** — Generated reviewed metadata for Material WinForge: installable, squirrel, and adapter material-winforge-squirrel.
+- [Material System Utility catalog record](Catalog-App-material-winutil) — **limited** — Generated reviewed metadata for Material System Utility: installable, squirrel, and adapter material-winutil-squirrel.
+- [Meadowmark catalog record](Catalog-App-meadowmark) — **limited** — Generated reviewed metadata for Meadowmark: installable, squirrel, and adapter meadowmark-squirrel.
+- [Minecraft Server Command Center catalog record](Catalog-App-minecraft-server-command-center) — **limited** — Generated reviewed metadata for Minecraft Server Command Center: installable, squirrel, and adapter minecraft-server-command-center-squirrel.
+- [Minecraft Server Studio catalog record](Catalog-App-minecraft-server-studio) — **limited** — Generated reviewed metadata for Minecraft Server Studio: installable, squirrel, and adapter minecraft-server-studio-squirrel.
+- [Sprout Hollow Valley catalog record](Catalog-App-sprout-hollow-valley) — **limited** — Generated reviewed metadata for Sprout Hollow Valley: installable, squirrel, and adapter sprout-hollow-valley-squirrel.
 
 ## Installation and removal
 

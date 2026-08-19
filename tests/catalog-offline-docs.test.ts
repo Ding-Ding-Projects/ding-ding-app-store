@@ -14,6 +14,9 @@ const CATALOG_APP_IDS = [
   'material-office', 'minecraft-world-downloader', 'codex-material', 'libreoffice-material',
   'thunderbird-desktop', 'bambu-studio', 'keepassxc', 'jdownloader-material', 'ha-bambulab',
   'winforge', 'wimforge', 'photo-viewer', 'material-minecraft-map-editor', 'material-gitlab', 'material-tax-reporting',
+  'farming-game', 'material-cookie-clicker', 'material-encryption', 'material-ollama', 'material-sandbox',
+  'material-tools', 'material-virtualbox', 'material-winforge', 'material-winutil', 'meadowmark',
+  'minecraft-server-command-center', 'minecraft-server-studio', 'sprout-hollow-valley',
 ] as const;
 
 const settings: UserSettings = {
@@ -22,11 +25,11 @@ const settings: UserSettings = {
 };
 
 describe('generated catalog offline documentation', () => {
-  it('bundles all 27 hand-written catalog IDs as metadata-only articles', async () => {
-    expect(CATALOG_APP_IDS).toHaveLength(27);
+  it('bundles all 40 hand-written catalog IDs as metadata-only articles', async () => {
+    expect(CATALOG_APP_IDS).toHaveLength(40);
     expect(catalog.apps.map((app) => app.id)).toEqual(CATALOG_APP_IDS);
     const generated = GENERATED_DOCS.filter((article) => article.source === 'catalog-metadata');
-    expect(generated).toHaveLength(27);
+    expect(generated).toHaveLength(40);
 
     for (const appId of CATALOG_APP_IDS) {
       const article = generated.find((item) => item.catalogAppId === appId);

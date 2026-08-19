@@ -9,6 +9,9 @@ export const CATALOG_APP_IDS = [
   'material-office', 'minecraft-world-downloader', 'codex-material', 'libreoffice-material',
   'thunderbird-desktop', 'bambu-studio', 'keepassxc', 'jdownloader-material', 'ha-bambulab',
   'winforge', 'wimforge', 'photo-viewer', 'material-minecraft-map-editor', 'material-gitlab', 'material-tax-reporting',
+  'farming-game', 'material-cookie-clicker', 'material-encryption', 'material-ollama', 'material-sandbox',
+  'material-tools', 'material-virtualbox', 'material-winforge', 'material-winutil', 'meadowmark',
+  'minecraft-server-command-center', 'minecraft-server-studio', 'sprout-hollow-valley',
 ] as const;
 
 export type CatalogAppId = (typeof CATALOG_APP_IDS)[number];
@@ -23,12 +26,16 @@ export const INSTALL_ADAPTER_IDS = [
   'thunderbird-desktop-mozilla-nsis', 'bambu-studio-nsis', 'keepassxc-msi',
   'jdownloader-material-jpackage', 'ha-bambulab-external-home-assistant', 'winforge-portable-zip',
   'wimforge-portable-zip', 'photo-viewer-empty-release', 'material-minecraft-map-editor-squirrel', 'material-gitlab-no-reviewed-installer', 'material-tax-reporting-no-reviewed-installer',
+  'farming-game-squirrel', 'material-cookie-clicker-squirrel', 'material-encryption-squirrel', 'material-ollama-inno',
+  'material-sandbox-inno', 'material-tools-squirrel', 'material-virtualbox-nsis', 'material-winforge-squirrel',
+  'material-winutil-squirrel', 'meadowmark-squirrel', 'minecraft-server-command-center-squirrel',
+  'minecraft-server-studio-squirrel', 'sprout-hollow-valley-squirrel',
 ] as const;
 
 export type InstallAdapterId = (typeof INSTALL_ADAPTER_IDS)[number];
 export const installAdapterIdSchema = z.enum(INSTALL_ADAPTER_IDS);
 
-export type InstallerFamily = 'squirrel' | 'msi' | 'nsis' | 'mozilla-nsis' | 'jpackage' | 'portable-zip';
+export type InstallerFamily = 'squirrel' | 'msi' | 'nsis' | 'inno' | 'mozilla-nsis' | 'jpackage' | 'portable-zip';
 
 interface AdapterBase {
   readonly id: InstallAdapterId;
@@ -46,6 +53,7 @@ export interface ExecutableInstallAdapter extends AdapterBase {
   readonly checksumAssetPattern?: RegExp;
   readonly installArguments: readonly string[];
   readonly registryDisplayNames: readonly string[];
+  readonly launchExecutableNames?: readonly string[];
   readonly uninstallExecutableNames?: readonly string[];
   readonly uninstallArguments?: readonly string[];
 }
@@ -74,9 +82,10 @@ const squirrel = (
   registryDisplayNames: readonly string[],
   evidence: readonly string[],
   checksumAssetPattern?: RegExp,
+  launchExecutableNames: readonly string[] = [],
 ): ExecutableInstallAdapter => ({
   id, appId, supported: true, family: 'squirrel', packageType: 'squirrel', assetPattern,
-  checksumAssetPattern, installArguments: ['--silent'], registryDisplayNames, evidence,
+  checksumAssetPattern, installArguments: ['--silent'], registryDisplayNames, launchExecutableNames, evidence,
   uninstallExecutableNames: ['Update.exe'], uninstallArguments: ['--uninstall', '-s'],
 });
 
@@ -88,10 +97,28 @@ const nsis = (
   uninstallExecutableNames: readonly string[],
   evidence: readonly string[],
   checksumAssetPattern?: RegExp,
+  launchExecutableNames: readonly string[] = [],
 ): ExecutableInstallAdapter => ({
   id, appId, supported: true, family: 'nsis', packageType: 'nsis', assetPattern,
-  checksumAssetPattern, installArguments: ['/S'], registryDisplayNames, evidence,
+  checksumAssetPattern, installArguments: ['/S'], registryDisplayNames, launchExecutableNames, evidence,
   uninstallExecutableNames, uninstallArguments: ['/S'],
+});
+
+const inno = (
+  id: InstallAdapterId,
+  appId: CatalogAppId,
+  assetPattern: RegExp,
+  registryDisplayNames: readonly string[],
+  launchExecutableNames: readonly string[],
+  evidence: readonly string[],
+  checksumAssetPattern?: RegExp,
+): ExecutableInstallAdapter => ({
+  id, appId, supported: true, family: 'inno', packageType: 'inno', assetPattern,
+  checksumAssetPattern,
+  installArguments: ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-'],
+  registryDisplayNames, launchExecutableNames, evidence,
+  uninstallExecutableNames: ['unins000.exe'],
+  uninstallArguments: ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'],
 });
 
 const msi = (
@@ -148,6 +175,19 @@ export const INSTALL_ADAPTERS: Readonly<Record<CatalogAppId, InstallAdapter>> = 
     ...squirrel('material-minecraft-map-editor-squirrel', 'material-minecraft-map-editor', /^Setup\.exe$/, ['Amulet Map Editor', 'Amulet'], ['installer/amulet.manifest: Amulet assembly identity', 'installer/build-squirrel.ps1: pinned Squirrel.Windows packaging and Amulet.exe validation', 'release 0.10.0-dev.567: unsigned Setup.exe; the release body records a non-green upstream test report']),
     releaseEvidence: AMULET_RELEASE_EVIDENCE,
   },
+  'farming-game': squirrel('farming-game-squirrel', 'farming-game', /^Sprout\.Hollow-Setup-[0-9A-Za-z.+-]+\.exe$/, ['Sprout Hollow', 'Sprout Hollow Valley'], ['package.json: Squirrel.Windows release target and Sprout.Hollow identity'], undefined, ['sprout-hollow.exe']),
+  'material-cookie-clicker': squirrel('material-cookie-clicker-squirrel', 'material-cookie-clicker', /^MaterialCookieClicker-Setup\.exe$/, ['Material Cookie Clicker'], ['package.json: electron-builder Squirrel target and MaterialCookieClicker identity'], undefined, ['MaterialCookieClicker.exe']),
+  'material-encryption': squirrel('material-encryption-squirrel', 'material-encryption', /^MaterialEncryption-Setup-[0-9A-Za-z.+-]+\.exe$/, ['Material Encryption'], ['package.json: Squirrel.Windows release target', 'build/material-encryption.ico: first-party icon and package identity'], undefined, ['MaterialEncryption.exe']),
+  'material-ollama': inno('material-ollama-inno', 'material-ollama', /^OllamaSetup\.exe$/, ['Ollama'], ['ollama app.exe', 'ollama.exe'], ['release v0.0.0-build.17: OllamaSetup.exe', 'app/CMakeLists.txt: bundled Ollama Windows payload'], undefined),
+  'material-sandbox': inno('material-sandbox-inno', 'material-sandbox', /^Sandboxie-Plus-x64-v[0-9A-Za-z.+-]+\.exe$/, ['Sandboxie-Plus'], ['SandMan.exe'], ['Installer/Sandboxie-Plus.iss: AppId Sandboxie-Plus, SandMan.exe launch and unins000.exe uninstall'], undefined),
+  'material-tools': squirrel('material-tools-squirrel', 'material-tools', /^MaterialTools-Setup-[0-9A-Za-z.+-]+\.exe$/, ['Material Tools'], ['package.json: Squirrel.Windows release target'], undefined, ['MaterialTools.exe']),
+  'material-virtualbox': nsis('material-virtualbox-nsis', 'material-virtualbox', /^VirtualBox-[0-9A-Za-z.+-]+-Setup\.exe$/, ['Oracle VM VirtualBox', 'VirtualBox'], ['uninstall.exe'], ['release VirtualBox-7.2.97-Setup.exe: reviewed NSIS-compatible Windows installer', 'src/VBox/Main: VirtualBox application identity'], undefined, ['VirtualBox.exe']),
+  'material-winforge': squirrel('material-winforge-squirrel', 'material-winforge', /^WinForge-Material-3-Preview-Setup-[0-9A-Za-z.+-]+\.exe$/, ['WinForge Material 3 Preview', 'WinForge'], ['main-app-design/package.json: Squirrel.Windows target and WinForge identity'], undefined, ['WinForge.exe']),
+  'material-winutil': squirrel('material-winutil-squirrel', 'material-winutil', /^MaterialSystemUtility-Setup\.exe$/, ['Material System Utility', 'Material WinUtil'], ['package.json: Squirrel.Windows target and MaterialSystemUtility identity'], undefined, ['MaterialSystemUtility.exe']),
+  meadowmark: squirrel('meadowmark-squirrel', 'meadowmark', /^Meadowmark-Setup-[0-9A-Za-z.+-]+\.exe$/, ['Meadowmark'], ['electron-builder.yml: Squirrel.Windows target and Meadowmark identity'], undefined, ['Meadowmark.exe']),
+  'minecraft-server-command-center': squirrel('minecraft-server-command-center-squirrel', 'minecraft-server-command-center', /^Setup\.exe$/, ['Minecraft Server Command Center'], ['electron-builder.yml: Squirrel.Windows release and exact Setup.exe asset'], undefined, ['Minecraft Server Command Center.exe']),
+  'minecraft-server-studio': squirrel('minecraft-server-studio-squirrel', 'minecraft-server-studio', /^Minecraft\.Server\.Studio-[0-9A-Za-z.+-]+-Setup\.exe$/, ['Minecraft Server Studio'], ['package.json: Squirrel.Windows target and Minecraft.Server.Studio identity'], undefined, ['Minecraft Server Studio.exe']),
+  'sprout-hollow-valley': squirrel('sprout-hollow-valley-squirrel', 'sprout-hollow-valley', /^Sprout-Hollow-Valley-Setup-[0-9A-Za-z.+-]+\.exe$/, ['Sprout Hollow Valley'], ['package.json: Squirrel.Windows release target and Sprout Hollow Valley identity'], undefined, ['Sprout Hollow Valley.exe']),
 };
 
 export function adapterFor(appId: string): InstallAdapter {

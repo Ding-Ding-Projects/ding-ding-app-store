@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export type LanguageMode = 'en' | 'yue' | 'bilingual';
 export type ThemeMode = 'system' | 'light' | 'dark';
-export type PackageType = 'squirrel' | 'msi' | 'nsis' | 'jpackage' | 'archive' | 'source' | 'unsupported';
+export type PackageType = 'squirrel' | 'msi' | 'nsis' | 'inno' | 'jpackage' | 'archive' | 'source' | 'unsupported';
 export type Availability = 'installable' | 'source-build' | 'documentation-only' | 'unsupported';
 
 export interface CatalogApp {
