@@ -77,7 +77,9 @@ try {
   foreach ($step in $plan.steps) {
     if ($step.arguments -join ' ' -match '[;&|<>\r\n]') { throw 'Shell operators are not permitted in a reviewed step.' }
     Send-Runner '/event' @{ stream = 'progress'; state = 'running'; text = "Starting $($step.id)"; progress = 10 } | Out-Null
-    $p = Start-Process -FilePath $step.executable -ArgumentList ([string[]]$step.arguments) -WorkingDirectory (Join-Path $workspace $step.cwd) -NoNewWindow -PassThru -Wait
+    $executable = if ($step.executable -match '[/\\]') { Join-Path $workspace $step.executable } else { $step.executable }
+    $arguments = @($step.arguments | ForEach-Object { if ($_ -match '^toolchain/') { Join-Path $workspace $_ } else { $_ } })
+    $p = Start-Process -FilePath $executable -ArgumentList ([string[]]$arguments) -WorkingDirectory (Join-Path $workspace $step.cwd) -NoNewWindow -PassThru -Wait
     if ($p.ExitCode -ne 0) { throw "Reviewed step $($step.id) exited with code $($p.ExitCode)." }
   }
   $files = Get-ChildItem -LiteralPath $workspace -File -Recurse | Where-Object { $_.FullName -notlike "$workspace\source.zip" }
@@ -114,10 +116,19 @@ const argumentSchema = z.string().max(500).refine(
   'Arguments cannot contain shell operators, control characters, or absolute host paths.',
 );
 
+const sourceExecutableSchema = z.string().trim().min(1).max(240).refine((value) => {
+  if (value.toLowerCase() === 'git.exe' || value.toLowerCase() === 'git') return false;
+  if (path.isAbsolute(value) || value.includes('\\') && /^[A-Za-z]:/.test(value)) return false;
+  const normalized = value.replaceAll('\\', '/');
+  if (normalized.split('/').some((segment) => segment === '..' || segment === '' || segment.includes(':'))) return false;
+  return ['node.exe', 'py.exe', 'python.exe', 'cargo.exe', 'cmake.exe', 'ninja.exe', 'dotnet.exe', 'powershell.exe', 'msbuild.exe'].includes(normalized.toLowerCase())
+    || normalized.toLowerCase() === 'toolchain/node/node.exe';
+}, 'Executables must be fixed workspace-relative paths or reviewed tool names; Git and absolute paths are not permitted.');
+
 export const sourceStepSchema = z.strictObject({
   id: z.string().regex(/^[a-z][a-z0-9-]{0,47}$/),
   label: z.string().trim().min(1).max(120),
-  executable: z.enum(['node.exe', 'py.exe', 'python.exe', 'cargo.exe', 'cmake.exe', 'ninja.exe', 'dotnet.exe']),
+  executable: sourceExecutableSchema,
   arguments: z.array(argumentSchema).max(48),
   cwd: relativePathSchema,
   timeoutMs: z.number().int().min(1_000).max(SOURCE_RUNTIME_LIMITS.maxStepMs),
@@ -134,18 +145,27 @@ export const dependencyBootstrapSchema = z.strictObject({
   executable: relativePathSchema,
 });
 
+export const sourceReadinessSchema = z.strictObject({
+  kind: z.enum(['output-files', 'process', 'window']),
+  target: z.string().trim().min(1).max(240),
+  timeoutMs: z.number().int().min(1_000).max(SOURCE_RUNTIME_LIMITS.maxStepMs),
+});
+
 export const sourceRecipeSchema = z.strictObject({
   schemaVersion: z.literal(1),
+  status: z.enum(['ready', 'blocked']).default('ready'),
+  blocker: z.string().trim().min(1).max(500).optional(),
   appId: z.string().regex(/^[a-z0-9][a-z0-9-]{0,127}$/),
   repository: z.string().regex(/^Ding-Ding-Projects\/[A-Za-z0-9_.-]+$/),
   revision: z.string().regex(/^[a-f0-9]{40}$/),
   sourceArchiveSha256: z.string().regex(/^[a-f0-9]{64}$/),
   dependencies: z.array(dependencyBootstrapSchema).max(32),
   prepare: z.array(sourceStepSchema).max(16),
-  validate: z.array(sourceStepSchema).min(1).max(16),
-  build: z.array(sourceStepSchema).min(1).max(24),
+  validate: z.array(sourceStepSchema).max(16),
+  build: z.array(sourceStepSchema).max(24),
   test: z.array(sourceStepSchema).max(24),
   run: z.array(sourceStepSchema).max(8),
+  readiness: sourceReadinessSchema,
   repairableStepIds: z.array(z.string().regex(/^[a-z][a-z0-9-]{0,47}$/)).max(32),
   finalOutputs: z.array(relativePathSchema).min(1).max(32),
   repairAttempts: z.number().int().min(0).max(SOURCE_RUNTIME_LIMITS.maxRepairAttempts),
@@ -164,10 +184,16 @@ export const sourceRecipeCatalogSchema = z.strictObject({
     for (const repairId of recipe.repairableStepIds) {
       if (!stepIds.includes(repairId)) ctx.addIssue({ code: 'custom', path: ['recipes', index, 'repairableStepIds'], message: `Unknown repairable step: ${repairId}` });
     }
+    if (recipe.status === 'ready' && recipe.validate.length === 0) ctx.addIssue({ code: 'custom', path: ['recipes', index, 'validate'], message: 'Ready recipes require at least one validation step.' });
+    if (recipe.status === 'ready' && recipe.build.length === 0) ctx.addIssue({ code: 'custom', path: ['recipes', index, 'build'], message: 'Ready recipes require at least one build step.' });
+    if (recipe.status === 'ready' && recipe.blocker) ctx.addIssue({ code: 'custom', path: ['recipes', index, 'blocker'], message: 'Ready recipes cannot carry a blocker.' });
+    if (recipe.status === 'blocked' && !recipe.blocker) ctx.addIssue({ code: 'custom', path: ['recipes', index, 'blocker'], message: 'Blocked recipes require a precise blocker.' });
+    if (recipe.status === 'blocked' && steps.length > 0) ctx.addIssue({ code: 'custom', path: ['recipes', index], message: 'Blocked recipes cannot expose executable steps.' });
   });
 });
 
 export type SourceStep = z.infer<typeof sourceStepSchema>;
+export type SourceReadiness = z.infer<typeof sourceReadinessSchema>;
 export type SourceRecipe = z.infer<typeof sourceRecipeSchema>;
 export type SourceRecipeCatalog = z.infer<typeof sourceRecipeCatalogSchema>;
 
@@ -349,6 +375,7 @@ export interface SourceExecutionPlan {
   revision: string;
   dependencies: SourceRecipe['dependencies'];
   steps: SourceStep[];
+  readiness: SourceReadiness;
   repairableStepIds: string[];
   finalOutputs: string[];
   repairAttempts: number;
@@ -674,6 +701,7 @@ export function createSourceExecutionPlan(jobId: string, decision: SourceJobDeci
     revision: recipe.revision,
     dependencies: recipe.dependencies,
     steps: selected,
+    readiness: recipe.readiness,
     repairableStepIds: recipe.repairableStepIds,
     finalOutputs: recipe.finalOutputs,
     repairAttempts: recipe.repairAttempts,
