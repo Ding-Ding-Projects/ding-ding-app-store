@@ -1062,6 +1062,7 @@ function jobIdFrom(job: ProtocolPeerJob): string { return job.challenge.jobId; }
 
 export interface WindowsSandboxTransportOptions {
   systemRoot?: string;
+  sandboxExecutable?: string;
   appDataRoot?: string;
   platform?: NodeJS.Platform;
   fileExists?: (filePath: string) => Promise<boolean>;
@@ -1148,7 +1149,7 @@ export class WindowsSandboxGuestTransport implements IsolationBroker {
       if (abortSignal.aborted) await stop(); else abortSignal.addEventListener('abort', () => { void stop(); }, { once: true });
       return { stop };
     });
-    const executable = path.join(this.options.systemRoot ?? process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsSandbox.exe');
+    const executable = this.options.sandboxExecutable ?? path.join(this.options.systemRoot ?? process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsSandbox.exe');
     const processHandle = await launch(executable, configPath, signal);
     const guest = { guestId, challenge: { ...challenge }, configPath, stop: processHandle.stop };
     this.guests.set(challenge.jobId, guest);

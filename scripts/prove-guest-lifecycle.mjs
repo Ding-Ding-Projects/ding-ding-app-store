@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
@@ -9,7 +9,7 @@ import { createGuestLifecyclePlanDigest, WindowsSandboxGuestTransport, WindowsSa
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 2) args.set(process.argv[i], process.argv[i + 1]);
-const setup = args.get('--setup'); const nupkg = args.get('--nupkg'); const output = args.get('--output'); const advertiseAddress = args.get('--advertise-address'); const lowlevelClient = args.get('--lowlevel-client'); const runRootArg = args.get('--run-root');
+const setup = args.get('--setup'); const nupkg = args.get('--nupkg'); const output = args.get('--output'); const advertiseAddress = args.get('--advertise-address'); const lowlevelClient = args.get('--lowlevel-client'); const runRootArg = args.get('--run-root'); const sandboxExecutableArg = args.get('--sandbox-executable');
 if (!setup || !nupkg || !output) throw new Error('Usage: node scripts/prove-guest-lifecycle.mjs --setup <Setup.exe> --nupkg <package.nupkg> --output <receipt.json> --advertise-address <non-loopback IPv4>');
 
 const boundedFile = async (file) => {
@@ -44,9 +44,13 @@ const availableIpv4Candidates = () => {
 if (!advertiseAddress) throw new Error(`An explicit --advertise-address is required; candidates: ${availableIpv4Candidates().join(', ') || 'none'}`);
 if (!lowlevelClient || !path.isAbsolute(lowlevelClient)) throw new Error('An absolute --lowlevel-client path is required; visible desktop or default process spawning is not permitted.');
 if (!runRootArg || !path.isAbsolute(runRootArg)) throw new Error('An absolute --run-root temp child path is required for task-owned Lowlevel state.');
+if (!sandboxExecutableArg || !path.isAbsolute(sandboxExecutableArg)) throw new Error('An absolute --sandbox-executable path is required.');
 const lowlevelClientPath = path.resolve(lowlevelClient); const runRoot = path.resolve(runRootArg); const tempRoot = path.resolve(os.tmpdir());
+const sandboxExecutable = path.resolve(sandboxExecutableArg);
 if (!runRoot.startsWith(`${tempRoot}${path.sep}`)) throw new Error(`--run-root must be a child of the host temp directory: ${tempRoot}`);
 if (!(await stat(lowlevelClientPath).catch(() => null))) throw new Error(`Lowlevel client was not found: ${lowlevelClientPath}`);
+const sandboxInfo = await lstat(sandboxExecutable).catch(() => null);
+if (!sandboxInfo?.isFile() || path.basename(sandboxExecutable) !== 'WindowsSandboxRemoteSession.exe' || !/\\WindowsApps\\MicrosoftWindows\.WindowsSandbox_[^\\]+\\WindowsSandboxRemoteSession\.exe$/i.test(sandboxExecutable)) throw new Error(`Sandbox executable must be the regular WindowsApps MicrosoftWindows.WindowsSandbox WindowsSandboxRemoteSession.exe: ${sandboxExecutable}`);
 await mkdir(runRoot, { recursive: true });
 
 const setupPath = path.resolve(setup); const nupkgPath = path.resolve(nupkg); const outputPath = path.resolve(output);
@@ -85,50 +89,20 @@ try {
   };
   const plan = Object.freeze({ ...unsignedPlan, planDigest: createGuestLifecyclePlanDigest(unsignedPlan) });
   peer = new WindowsSandboxProtocolPeer({ advertiseAddress: hostIpv4, listenHost: '0.0.0.0' });
-  const sandboxExecutable = path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsSandbox.exe');
   let recordedPid;
   const launch = async (executable, configPath) => {
-    if (path.resolve(executable).toLowerCase() !== path.resolve(sandboxExecutable).toLowerCase()) throw new Error(`Lowlevel launch executable mismatch: ${executable}`);
+    if (path.resolve(executable).toLowerCase() !== sandboxExecutable.toLowerCase()) throw new Error(`Lowlevel launch executable mismatch: ${executable}`);
     const desktop = `GuestLifecycle-${jobId.slice(0, 12)}`;
-    let resolvedWindow;
-    const recoverHandoff = async (pid) => {
-      if (Number.isInteger(pid)) { try { await runLowlevelCall('kill_process', { pid, force: true }, 30_000); } catch { /* preserve exact failure for receipt */ } }
-      try { await runLowlevelCall('close_headless_desktop', { name: desktop }, 30_000); } catch { /* preserve exact failure for receipt */ }
-    };
-    try {
-      const handoff = await runLowlevelCall('launch_on_headless_desktop', { name: desktop, command: `"${sandboxExecutable}" "${configPath}"` }, 60_000);
-      if (handoff.client_ok !== true || handoff.ok !== true) throw new Error(`Lowlevel Sandbox alias handoff was not accepted: ${JSON.stringify(handoff)}`);
-      const deadline = Date.now() + 35_000;
-      while (Date.now() < deadline) {
-        const listed = await runLowlevelCall('list_headless_windows', { name: desktop }, 30_000);
-        const windows = Array.isArray(listed.windows) ? listed.windows : [];
-        const candidates = windows.filter((window) => /windows sandbox/i.test(String(window.title ?? window.windowTitle ?? '')) && Number(window.width ?? window.rect?.width ?? 0) > 0 && Number(window.height ?? window.rect?.height ?? 0) > 0 && Number.isInteger(Number(window.pid ?? window.processId)));
-        if (candidates.length === 1) { resolvedWindow = candidates[0]; break; }
-        if (candidates.length > 1) throw new Error(`Ambiguous Windows Sandbox wrapper windows on ${desktop}: ${JSON.stringify(candidates)}`);
-        await new Promise((resolve) => setTimeout(resolve, 250));
-      }
-      if (!resolvedWindow) throw new Error(`Windows Sandbox wrapper did not appear on ${desktop} before the bounded handoff deadline.`);
-      recordedPid = Number(resolvedWindow.pid ?? resolvedWindow.processId);
-      if (!/windows sandbox/i.test(String(resolvedWindow.title ?? resolvedWindow.windowTitle ?? ''))) throw new Error('Windows Sandbox wrapper title was not validated.');
-      await writeFile(lowlevelState, `${JSON.stringify({ desktop, pid: recordedPid, configPath, wrapper: resolvedWindow, handoff: 'WindowsSandbox.exe -> WindowsSandboxRemoteSession.exe' }, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
-    } catch (error) {
-      await recoverHandoff(recordedPid);
-      throw error;
-    }
+    const launchResult = await runLowlevel('launch', { desktop, executable: sandboxExecutable, arguments: [configPath], allowShellWrapper: false, runRoot, outputRoot: lowlevelOutputRoot, cdp: null }, 60_000);
+    if (launchResult.client_ok !== true || launchResult.ok !== true || !Number.isInteger(launchResult.pid)) throw new Error(`Direct Lowlevel Sandbox launch was not verified: ${JSON.stringify(launchResult)}`);
+    recordedPid = launchResult.pid;
     return { stop: async () => {
-      try {
-        const killed = await runLowlevelCall('kill_process', { pid: recordedPid, force: true }, 30_000);
-        const listed = await runLowlevelCall('list_headless_windows', { name: desktop }, 30_000);
-        const closed = await runLowlevelCall('close_headless_desktop', { name: desktop }, 30_000);
-        const processTreeStopped = killed.client_ok === true && killed.ok === true && Array.isArray(listed.windows) && listed.windows.length === 0 && closed.client_ok === true && closed.ok === true && closed.closed === true;
-        if (!processTreeStopped) return { processTreeStopped: false, rootPid: recordedPid };
-        return { processTreeStopped: true, rootPid: recordedPid };
-      } catch (error) {
-        return { processTreeStopped: false, rootPid: recordedPid };
-      }
+      const cleanupResult = await runLowlevel('cleanup', undefined, 60_000).catch((error) => ({ ok: false, client_ok: false, error: error instanceof Error ? error.message : String(error) }));
+      const processTreeStopped = cleanupResult.client_ok === true && cleanupResult.ok === true && cleanupResult.actions?.every((action) => action.ok === true);
+      return { processTreeStopped, rootPid: recordedPid };
     } };
   };
-  transport = new WindowsSandboxGuestTransport({ platform: 'win32', systemRoot: process.env.SystemRoot ?? 'C:\\Windows', appDataRoot: runRoot, advertiseAddress: hostIpv4, protocol: peer, launch });
+  transport = new WindowsSandboxGuestTransport({ platform: 'win32', sandboxExecutable, appDataRoot: runRoot, advertiseAddress: hostIpv4, protocol: peer, launch });
   const startedAt = new Date().toISOString();
   try {
     const result = await transport.executeLifecycle(plan, setupBytes, new AbortController().signal);
