@@ -88,6 +88,7 @@ export const guestLifecyclePlanSchema = z.strictObject({
   registryDisplayName: z.string().min(1).max(240),
   squirrelPackageName: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/),
   executableFileName: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.exe$/i),
+  executableSha256: digestSchema,
   installIdentity: z.string().regex(/^[A-Za-z0-9._:-]{1,240}$/),
   executableRelativeName: z.string().min(1).max(240).refine((value) => !path.isAbsolute(value) && !value.includes('\\') && !value.split('/').some((part) => !part || part === '..'), 'Executable name must be a workspace-relative path.'),
   expectedWindowTitle: z.string().min(1).max(240),
@@ -122,6 +123,9 @@ export const guestLifecycleReceiptSchema = z.strictObject({
   operation: guestInstallerOperationSchema.optional(),
   installerBytes: z.number().int().nonnegative().max(500 * 1024 * 1024).optional(),
   installerSha256: digestSchema.optional(),
+  installedIdentity: z.string().regex(/^[A-Za-z0-9._:-]{1,240}$/).optional(),
+  installedVersion: z.string().regex(/^[A-Za-z0-9.+_-]{1,64}$/).optional(),
+  executableSha256: digestSchema.optional(),
   process: lifecycleProcessFactSchema.optional(),
   uninstallSucceeded: z.boolean().optional(),
   absenceVerified: z.literal(true).optional(),
@@ -158,16 +162,19 @@ function Send-Runner($route, $body) {
 $hello = @{ protocolVersion = $protocol; jobId = $jobId; challengeNonce = $nonce; guestId = "guest-$jobId"; hostMounts = 0; credentialsInjected = $false; secretsInjected = $false; shellStringsAllowed = $false; userProfileMounted = $false }
 Send-Runner "/hello/$jobId" $hello | Out-Null
 $plan = $null
-$planDeadline = [DateTimeOffset]::UtcNow.AddSeconds(30)
-while (-not $plan -and [DateTimeOffset]::UtcNow -lt $planDeadline) {
-  try { $plan = Invoke-RestMethod -Method Get -Uri "$endpoint/plan/$jobId" -Headers $headers -ErrorAction Stop } catch { Start-Sleep -Milliseconds 150 }
-}
-if (-not $plan) { throw 'Runner plan was not published before the bounded handshake deadline.' }
-if ($plan.protocolVersion -ne $protocol -or $plan.jobId -ne $jobId -or $plan.challengeNonce -ne $nonce -or $plan.policy.hostMounts -ne 0 -or $plan.policy.credentialsInjected -ne $false -or $plan.policy.secretsInjected -ne $false -or $plan.policy.shellStringsAllowed -ne $false) { throw 'Runner plan or policy binding was rejected.' }
 $lifecyclePlan = $null
-try { $lifecyclePlan = Invoke-RestMethod -Method Get -Uri "$endpoint/lifecycle-plan/$jobId" -Headers $headers -ErrorAction Stop } catch { }
+$planDeadline = [DateTimeOffset]::UtcNow.AddSeconds(30)
+while (-not $plan -and -not $lifecyclePlan -and [DateTimeOffset]::UtcNow -lt $planDeadline) {
+  try { $plan = Invoke-RestMethod -Method Get -Uri "$endpoint/plan/$jobId" -Headers $headers -ErrorAction Stop } catch { }
+  try { $lifecyclePlan = Invoke-RestMethod -Method Get -Uri "$endpoint/lifecycle-plan/$jobId" -Headers $headers -ErrorAction Stop } catch { }
+  if ($plan -and $lifecyclePlan) { throw 'Runner published both source and lifecycle plans.' }
+  if (-not $plan -and -not $lifecyclePlan) { Start-Sleep -Milliseconds 150 }
+}
+if (-not $plan -and -not $lifecyclePlan) { throw 'Runner plan was not published before the bounded handshake deadline.' }
+if ($lifecyclePlan) { $plan = $lifecyclePlan }
+if ($plan.protocolVersion -ne $protocol -or $plan.jobId -ne $jobId -or $plan.challengeNonce -ne $nonce -or $plan.policy.hostMounts -ne 0 -or $plan.policy.credentialsInjected -ne $false -or $plan.policy.secretsInjected -ne $false -or $plan.policy.shellStringsAllowed -ne $false) { throw 'Runner plan or policy binding was rejected.' }
 if ($lifecyclePlan) {
-  $installer = Join-Path $env:TEMP "ding-ding-$jobId-installer.bin"
+  $installer = Join-Path $env:TEMP "ding-ding-$jobId-installer.exe"
   Invoke-WebRequest -Method Get -Uri "$endpoint/installer/$jobId" -Headers $headers -OutFile $installer -UseBasicParsing
   $installerHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $installer).Hash.ToLowerInvariant()
   if ((Get-Item -LiteralPath $installer).Length -ne $lifecyclePlan.installer.bytes -or $installerHash -ne $lifecyclePlan.installer.sha256) { throw 'Installer bytes did not match the reviewed lifecycle plan.' }
@@ -199,6 +206,8 @@ if ($lifecyclePlan) {
   $versionDirs = @(Get-ChildItem -LiteralPath $installRoot -Directory -Force | Where-Object { $_.Name -match '^app-' -and -not ($_.Attributes.ToString() -match 'ReparsePoint') })
   $exeMatches = @($versionDirs | ForEach-Object { Join-Path $_.FullName $lifecyclePlan.executableFileName } | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })
   if ($exeMatches.Count -ne 1) { throw 'The exact Squirrel executable was absent or ambiguous.' }
+  $exeHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $exeMatches[0]).Hash.ToLowerInvariant()
+  if ($exeHash -ne $lifecyclePlan.executableSha256) { throw 'The exact Squirrel executable digest did not match the reviewed plan.' }
   Add-Type -TypeDefinition @'
 using System; using System.Text; using System.Runtime.InteropServices;
 public static class GuestWindowProbe { [DllImport("user32.dll", SetLastError=true)] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid); [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetClassName(IntPtr hWnd, StringBuilder name, int max); }
@@ -210,7 +219,7 @@ public static class GuestWindowProbe { [DllImport("user32.dll", SetLastError=tru
   $pid = 0; [void][GuestWindowProbe]::GetWindowThreadProcessId($hwnd, [ref]$pid); $class = New-Object Text.StringBuilder 256; [void][GuestWindowProbe]::GetClassName($hwnd, $class, $class.Capacity)
   if ($pid -ne $app.Id -or $class.ToString() -ne $lifecyclePlan.expectedWindowClass -or $class.ToString() -match 'Sandbox|ApplicationFrameHost') { throw 'Wrapper or foreign window readiness was rejected.' }
   Start-Sleep -Milliseconds $lifecyclePlan.stabilityTimeoutMs
-  Send-Runner "/stage-receipt/$jobId" @{ schemaVersion=1; protocolVersion=$protocol; jobId=$jobId; challengeNonce=$nonce; guestId="guest-$jobId"; planDigest=$lifecyclePlan.planDigest; sequence=3; stage='launch'; operation='squirrel-launch'; process=@{ ready=$true; pid=$app.Id; windowTitle=$app.MainWindowTitle; windowClass=$class.ToString(); hwnd=('0x{0:x}' -f $hwnd.ToInt64()) }; observedAt=[DateTimeOffset]::UtcNow.ToString('o') } | Out-Null
+  Send-Runner "/stage-receipt/$jobId" @{ schemaVersion=1; protocolVersion=$protocol; jobId=$jobId; challengeNonce=$nonce; guestId="guest-$jobId"; planDigest=$lifecyclePlan.planDigest; sequence=3; stage='launch'; operation='squirrel-launch'; installedIdentity=$record.DisplayName; installedVersion=$record.DisplayVersion; executableSha256=$exeHash; process=@{ ready=$true; pid=$app.Id; windowTitle=$app.MainWindowTitle; windowClass=$class.ToString(); hwnd=('0x{0:x}' -f $hwnd.ToInt64()) }; observedAt=[DateTimeOffset]::UtcNow.ToString('o') } | Out-Null
   if ($app.HasExited) { throw 'Squirrel child exited before uninstall.' }
   Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
   $update = Join-Path $installRoot 'Update.exe'; if (-not (Test-Path -LiteralPath $update -PathType Leaf)) { throw 'Squirrel Update.exe was absent.' }
@@ -222,6 +231,7 @@ public static class GuestWindowProbe { [DllImport("user32.dll", SetLastError=tru
   Send-Runner "/stage-receipt/$jobId" @{ schemaVersion=1; protocolVersion=$protocol; jobId=$jobId; challengeNonce=$nonce; guestId="guest-$jobId"; planDigest=$lifecyclePlan.planDigest; sequence=6; stage='disposal'; childProcessesStopped=$true; observedAt=[DateTimeOffset]::UtcNow.ToString('o') } | Out-Null
   Send-Runner "/final-receipt/$jobId" @{ schemaVersion=1; protocolVersion=$protocol; jobId=$jobId; challengeNonce=$nonce; guestId="guest-$jobId"; planDigest=$lifecyclePlan.planDigest; lastSequence=6; verdict=$true; installIdentity=$installIdentity; processReady=$true; windowTitle=$lifecyclePlan.expectedWindowTitle; windowClass=$lifecyclePlan.expectedWindowClass; hwnd=('0x{0:x}' -f $hwnd.ToInt64()); uninstallSucceeded=$true; absenceVerified=$true; childProcessesStopped=$true; observedAt=[DateTimeOffset]::UtcNow.ToString('o') } | Out-Null
   Remove-Item -LiteralPath $installer -Force -ErrorAction SilentlyContinue
+  exit 0
 }
 $workspace = Join-Path $env:TEMP "ding-ding-$jobId"
 New-Item -ItemType Directory -Force -Path $workspace | Out-Null
@@ -954,6 +964,7 @@ export class WindowsSandboxProtocolPeer implements WindowsSandboxProtocolPeerCon
     if (!job.lifecyclePlan || parsed.jobId !== job.challenge.jobId || parsed.challengeNonce !== job.challenge.nonce || parsed.guestId !== job.guestId || parsed.planDigest !== job.lifecyclePlan.planDigest) throw new Error('Lifecycle receipt binding was rejected.');
     if (parsed.sequence !== job.lifecycleReceipts.length + 1) throw new Error('Lifecycle receipt sequence was skipped or replayed.');
     if (parsed.stage === 'launch' && !parsed.process) throw new Error('Launch receipt omitted inner-app readiness facts.');
+    if (parsed.stage === 'launch' && (parsed.installedIdentity !== job.lifecyclePlan.installIdentity || parsed.installedVersion !== job.lifecyclePlan.expectedVersion || parsed.executableSha256 !== job.lifecyclePlan.executableSha256)) throw new Error('Launch receipt identity or executable digest did not match the reviewed plan.');
     if (parsed.stage === 'uninstall' && parsed.uninstallSucceeded !== true) throw new Error('Uninstall receipt did not prove success.');
     if (parsed.stage === 'absence' && parsed.absenceVerified !== true) throw new Error('Uninstall absence was not proven.');
     if (parsed.stage === 'disposal' && parsed.childProcessesStopped !== true) throw new Error('Disposal receipt did not prove child-process stop.');
@@ -994,7 +1005,7 @@ export interface WindowsSandboxTransportOptions {
   protocol?: WindowsSandboxProtocolPeerContract;
   /** Ephemeral host endpoint created by the protocol adapter; never persisted. */
   endpoint?: string;
-  launch?: (executable: string, configPath: string, signal: AbortSignal) => Promise<{ stop(): Promise<void> }>;
+  launch?: (executable: string, configPath: string, signal: AbortSignal) => Promise<{ stop(): Promise<{ processTreeStopped: boolean; rootPid?: number }> }>;
   recoverOrphan?: (jobId: string, configPath: string) => Promise<boolean>;
   checkedAt?: () => string;
 }
@@ -1003,7 +1014,7 @@ interface LiveGuest {
   guestId: string;
   challenge: IsolationAttestationChallenge;
   configPath: string;
-  stop(): Promise<void>;
+  stop(): Promise<{ processTreeStopped: boolean; rootPid?: number }>;
 }
 
 /**
@@ -1060,7 +1071,7 @@ export class WindowsSandboxGuestTransport implements IsolationBroker {
     await writeFile(configPath, createZeroMountSandboxConfig(command), { encoding: 'utf8', flag: 'wx' });
     const launch = this.options.launch ?? (async (executable: string, file: string, abortSignal: AbortSignal) => {
       const child = spawn(executable, [file], { windowsHide: true, stdio: 'ignore' });
-      const stop = async () => { if (child.pid && process.platform === 'win32') { const killer = spawn('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' }); await new Promise<void>((resolve) => { killer.once('exit', () => resolve()); killer.once('error', () => resolve()); }); } else if (!child.killed) child.kill(); };
+      const stop = async () => { if (child.pid && process.platform === 'win32') { const killer = spawn('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' }); const code = await new Promise<number>((resolve) => { killer.once('exit', (exitCode) => resolve(exitCode ?? 1)); killer.once('error', () => resolve(1)); }); return { processTreeStopped: code === 0 || code === 128, rootPid: child.pid }; } else if (!child.killed) { child.kill(); return { processTreeStopped: true, rootPid: child.pid }; } return { processTreeStopped: true, rootPid: child.pid }; };
       if (abortSignal.aborted) await stop(); else abortSignal.addEventListener('abort', () => { void stop(); }, { once: true });
       return { stop };
     });
@@ -1108,7 +1119,8 @@ export class WindowsSandboxGuestTransport implements IsolationBroker {
     const guest = this.guests.get(jobId);
     if (!guest || !this.options.protocol) throw new Error('No admitted zero-mount guest is available for disposal.');
     try {
-      await guest.stop();
+      const stopped = await guest.stop();
+      if (!stopped.processTreeStopped) throw new Error('Host Sandbox process-tree stop was not proven.');
       this.options.protocol.markProcessTreeStopped?.(jobId);
       const receipt = sourceDisposalReceiptSchema.parse(await this.options.protocol.dispose(jobId, lease, new AbortController().signal));
       if (receipt.jobId !== jobId || receipt.challengeNonce !== guest.challenge.nonce || receipt.guestId !== guest.guestId || receipt.hostMounts !== 0 || !receipt.processTreeStopped || !receipt.guestDeleted) throw new Error('The guest disposal receipt did not prove complete teardown.');
@@ -1119,7 +1131,7 @@ export class WindowsSandboxGuestTransport implements IsolationBroker {
   async abort(jobId: string): Promise<void> {
     const guest = this.guests.get(jobId); if (!guest) return;
     try { if (this.options.protocol) await this.options.protocol.abort(jobId, new AbortController().signal); }
-    finally { await guest.stop(); this.guests.delete(jobId); await rm(guest.configPath, { force: true }); }
+    finally { try { await guest.stop(); } catch { /* preserve cleanup failure for the caller */ } this.guests.delete(jobId); await rm(guest.configPath, { force: true }); }
   }
 }
 

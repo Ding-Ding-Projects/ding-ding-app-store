@@ -9,7 +9,7 @@ import {
 const base = {
   schemaVersion: 1 as const, protocolVersion: 1 as const,
   jobId: '11111111-1111-4111-8111-111111111111', challengeNonce: 'a'.repeat(64), guestId: 'guest-1', planDigest: 'b'.repeat(64),
-  appId: 'reviewed-app', expectedPackage: 'Reviewed.App', expectedVersion: '1.2.3', registryDisplayName: 'Reviewed App', squirrelPackageName: 'Reviewed.App', executableFileName: 'Reviewed.exe', installIdentity: 'Reviewed.App', executableRelativeName: 'Reviewed.exe', expectedWindowTitle: 'Reviewed App', expectedWindowClass: 'Chrome_WidgetWin_1', readinessTimeoutMs: 10_000, stabilityTimeoutMs: 1_000,
+  appId: 'reviewed-app', expectedPackage: 'Reviewed.App', expectedVersion: '1.2.3', registryDisplayName: 'Reviewed App', squirrelPackageName: 'Reviewed.App', executableFileName: 'Reviewed.exe', executableSha256: 'd'.repeat(64), installIdentity: 'Reviewed.App', executableRelativeName: 'Reviewed.exe', expectedWindowTitle: 'Reviewed App', expectedWindowClass: 'Chrome_WidgetWin_1', readinessTimeoutMs: 10_000, stabilityTimeoutMs: 1_000,
   installer: { format: 'squirrel' as const, bytes: 1024, sha256: 'c'.repeat(64) }, operations: ['squirrel-install', 'squirrel-launch', 'squirrel-uninstall'] as const, maxStageMs: 10_000, maxBodyBytes: 1_048_576,
 };
 
