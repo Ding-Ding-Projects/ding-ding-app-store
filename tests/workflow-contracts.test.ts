@@ -56,13 +56,16 @@ describe('GitHub-hosted workflow and bootstrap contract', () => {
     expect(release).toContain('npx electron-builder --win squirrel --publish never');
   });
 
-  it('runs releases only for main pushes and manual dispatch, with a fresh-main-tip assertion', async () => {
+  it('runs releases only for main pushes and manual dispatch, pinned to each triggering commit and attempt', async () => {
     const workflow = await read('.github/workflows/release.yml');
     expect(workflow).toMatch(/^on:\s*\n\s+push:\s*\n\s+branches:\s*\n\s+- main\s*$/m);
     expect(workflow).toMatch(/^\s*workflow_dispatch:\s*\{\}\s*$/m);
     expect(workflow).not.toMatch(/^\s+tags(?:-ignore)?:/m);
-    expect(workflow.match(/\$mainTip = git rev-parse origin\/main/gm)).toHaveLength(2);
-    expect(workflow.match(/\$mainTip -ne \$env:GITHUB_SHA/gm)).toHaveLength(2);
+    expect(workflow).not.toContain('fresh origin/main tip');
+    expect(workflow.match(/ref: \$\{\{ github\.sha \}\}/gm)).toHaveLength(3);
+    expect(workflow).toContain('$tag = "v$version-$runNumber-$runAttempt"');
+    expect(workflow).toContain('RELEASE_RUN_ATTEMPT: ${{ github.run_attempt }}');
+    expect(workflow).toContain('RELEASE_SHA: ${{ github.sha }}');
   });
 
   it('bootstraps release tooling from a pinned canonical archive with SHA-256 verification', async () => {
@@ -86,17 +89,17 @@ describe('GitHub-hosted workflow and bootstrap contract', () => {
     expect(release).toContain('Public dish photo:');
     expect(release).toContain('$dish.photoUrl');
     expect(release).not.toMatch(/gh release create[^\n]*\$dish\.(?:assetName|photoUrl)/);
-    expect(release).toContain('gh release create $env:RELEASE_TAG $setup $releases $nupkg --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA');
+    expect(release).toContain('gh release create $env:RELEASE_TAG $setup $releases $nupkg --repo $env:GITHUB_REPOSITORY --target $env:RELEASE_SHA');
     expect(release).toContain('scripts/prepare-release-version.mjs');
-    expect(release).toContain('$tag = "v$version"');
+    expect(release).toContain('$tag = "v$version-$runNumber-$runAttempt"');
     expect(release).toContain('$expectedPackageName = "DingDingAppStore-$env:RELEASE_VERSION-full.nupkg"');
     expect(release).toContain("Resolve-Path \"release-stage/DingDingAppStore-$env:RELEASE_VERSION-full.nupkg\"");
-    expect(release).toContain('Assert release source is the fresh origin/main tip');
+    expect(release).not.toContain('Assert release source is the fresh origin/main tip');
     expect(release).toContain('Assert transferred package version matches the release version');
     expect(release).not.toContain('$tagRef = gh api');
     expect(release).not.toContain('if ($tagSha -ne $env:GITHUB_SHA)');
-    expect(release).toContain('if ($publishedSha -ne $env:GITHUB_SHA)');
-    expect(release.indexOf('gh release edit $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --draft=false')).toBeLessThan(release.indexOf('if ($publishedSha -ne $env:GITHUB_SHA)'));
+    expect(release).toContain('if ($publishedSha -ne $env:RELEASE_SHA)');
+    expect(release.indexOf('gh release edit $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --draft=false')).toBeLessThan(release.indexOf('if ($publishedSha -ne $env:RELEASE_SHA)'));
   });
 
   it('generates and reconciles the bounded current-release changelog without a repository loop', async () => {
@@ -114,7 +117,7 @@ describe('GitHub-hosted workflow and bootstrap contract', () => {
     expect(release).toContain('--reconcile');
     expect(release).toContain('release-changelog.json');
     expect(release).not.toMatch(/git\s+(?:add|commit|push)\b/);
-    const initialSource = release.indexOf('"- Source commit: ``$env:GITHUB_SHA``"');
+    const initialSource = release.indexOf('"- Source commit: ``$env:RELEASE_SHA``"');
     const publish = release.indexOf('gh release edit $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --draft=false');
     expect(initialSource).toBeGreaterThan(-1);
     expect(initialSource).toBeLessThan(publish);
