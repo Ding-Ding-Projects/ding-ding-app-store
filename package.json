@@ -26,7 +26,8 @@
     "docs:generate": "node scripts/docs-generate.mjs",
     "docs:check": "node scripts/docs-generate.mjs --check",
     "proof:lifecycle": "node scripts/lifecycle-proof.mjs",
-    "proof:lifecycle:aggregate": "node scripts/aggregate-lifecycle-proof.mjs"
+    "proof:lifecycle:aggregate": "node scripts/aggregate-lifecycle-proof.mjs",
+    "proof:source-lifecycle": "node scripts/source-lifecycle-proof.mjs"
   },
   "dependencies": {
     "electron-squirrel-startup": "^1.0.1",

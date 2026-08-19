@@ -4,7 +4,7 @@
 
 ## Behaviour
 
-`lifecycle-proof.v2` is a bounded, Windows-only evidence harness for exactly thirteen reviewed products. The hand-written matrix is in `scripts/lifecycle-proof-matrix.mjs`; it is intentionally separate from the catalog and installer adapter registries so adding a catalog row cannot silently authorize a disposable run.
+`lifecycle-proof.v2` is a bounded, Windows-only evidence harness for exactly thirteen reviewed source recipes. The hand-written matrix is in `scripts/lifecycle-proof-matrix.mjs`; it carries pinned revision/archive metadata, adapter identity, recipe status, and proof target for the exact recipe/catalog set. A negative regression keeps the matrix, source-recipe catalog, and `blocked-until-proof` catalog rows set-equal, so adding a catalog row cannot silently authorize a disposable run. The recipe-owned companion `scripts/source-lifecycle-proof.mjs` carries those same thirteen recipes through build-from-source, run-from-source, install, launch, uninstall, and disposal receipt slots without changing catalog `proofStatus`.
 
 Each product receives a fresh disposable guest with no host mounts and no user secrets. The receipt records these stages in order:
 
@@ -49,7 +49,7 @@ The default driver performs no source execution, installer launch, process disco
 
 `tests/lifecycle-proof.test.ts` proves the exact thirteen-row matrix, fresh-guest contract, stage ordering, redaction, retry/timeout boundary, injected-driver lifecycle, unavailable-driver fail-closed result, and strict v2 receipt aggregation. The proof is deliberately local: run `npm run proof:lifecycle` or provide a reviewed driver module from a disposable Windows guest, write one receipt per matrix row, then run `npm run proof:lifecycle:aggregate -- --input-dir <receipts> --output lifecycle-proof.v2.json`. GitHub Actions does not run lifecycle proof or any other test gate; its workflows build, package, publish, and collect safe evidence only.
 
-The current isolated lane supplies the harness contract and tests only. The real disposable guest, source-build, process/window, install, uninstall, and absence evidence remain blocked until the sibling source-runner and catalog/adapter lanes provide their reviewed integration modules. No runtime lifecycle success is claimed from these source-level checks.
+The current isolated lane supplies the harness contract, recipe receipt persistence, and attested-driver seam. The integrated protocol peer can transfer source archives/outputs, but it does not provide a guest-side lifecycle agent for installer execution, inner-app launch, process/window inspection, or uninstall; those receipt slots remain `guest-lifecycle-agent-unavailable` unless a separate guest agent proves them. A wrapper HWND is never inner-app evidence, and host install paths are forbidden. No runtime lifecycle success is claimed from source-level checks or from a driver that is not explicitly marked `windows-sandbox-attested`.
 
 ## Suggested articles
 
