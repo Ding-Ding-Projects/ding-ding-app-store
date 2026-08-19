@@ -44,6 +44,8 @@ describe('reviewed source recipe catalog', () => {
       } else {
         expect(recipe.blocker).toBeTruthy();
         expect([...recipe.prepare, ...recipe.validate, ...recipe.build, ...recipe.test, ...recipe.run]).toHaveLength(0);
+        expect(recipe.readiness.target).toBe('not-applicable');
+        expect(recipe.finalOutputs).toEqual([]);
       }
     }
   });
@@ -68,12 +70,29 @@ describe('reviewed source recipe catalog', () => {
         revision: '1'.repeat(40),
         sourceArchiveSha256: '2'.repeat(64),
         dependencies: [], prepare: [], validate: [], build: [], test: [], run: [],
-        readiness: { kind: 'output-files', target: 'dist/app.exe', timeoutMs: 30_000 },
-        repairableStepIds: [], finalOutputs: ['dist/app.exe'], repairAttempts: 0,
+        readiness: { kind: 'output-files', target: 'not-applicable', timeoutMs: 30_000 },
+        repairableStepIds: [], finalOutputs: [], repairAttempts: 0,
       }],
     });
     expect(parsed.recipes[0]?.status).toBe('blocked');
     const ready = { ...parsed.recipes[0], status: 'ready' as const };
     expect(sourceRecipeCatalogSchema.safeParse({ schemaVersion: 1, recipes: [ready] }).success).toBe(false);
+  });
+
+  it('keeps the four native/verification blockers evidence-backed and non-executable', async () => {
+    const parsed = sourceRecipeCatalogSchema.parse(JSON.parse(await readFile(path.join(process.cwd(), 'data', 'source-recipes.v1.json'), 'utf8')));
+    const expected = new Map([
+      ['material-encryption', ['package.json', 'sharp', 'Electron', 'clean-Windows']],
+      ['material-ollama', ['package.json', 'CMakeLists.txt', 'go.mod', 'CMake', 'Go']],
+      ['material-sandbox', ['SandMan-Qt6.qc.pro', 'vcxproj', 'Qt', 'Windows Driver Kit']],
+      ['material-virtualbox', ['build-windows.ps1', 'configure.py', 'kBuild', 'MSVC']],
+    ]);
+    for (const [appId, evidence] of expected) {
+      const recipe = parsed.recipes.find((entry) => entry.appId === appId);
+      expect(recipe?.status).toBe('blocked');
+      expect(recipe?.blocker).toBeTruthy();
+      expect(recipe?.finalOutputs).toEqual([]);
+      for (const needle of evidence) expect(recipe?.blocker).toContain(needle);
+    }
   });
 });
