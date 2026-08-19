@@ -28,6 +28,7 @@ const articles = [
   ['verified-installer-operations', 'Verified installer operations', '已驗證安裝操作', 'installation', 'Verified-Installer-Operations', 'limited', ['catalog-discovery', 'source-build-security', 'uninstall']],
   ['one-click-installation', 'One-click installation and adapter coverage', '一按安裝同配接器覆蓋', 'installation', 'One-Click-Installation', 'limited', ['verified-installer-operations', 'source-build-security', 'uninstall']],
   ['source-build-security', 'Source-build security', '原始碼建置安全', 'installation', 'Source-Build-Security', 'limited', ['verified-installer-operations', 'automatic-repair-and-universal-adapters', 'privacy-and-security']],
+  ['source-build-recipes', 'Reviewed source-build recipes', '已審閱原始碼建置食譜', 'installation', 'Source-Build-Recipes', 'limited', ['source-build-security', 'automatic-repair-and-universal-adapters', 'one-click-installation']],
   ['uninstall', 'Protected uninstall', '安全解除安裝', 'installation', 'Uninstall', 'shipped', ['installed-app-discovery', 'verified-installer-operations', 'activity-history']],
   ['automatic-repair-and-universal-adapters', 'Automatic repair and universal adapters', '自動修復同通用安裝配接器', 'installation', 'Automatic-Repair-and-Universal-Adapters', 'limited', ['verified-installer-operations', 'source-build-security', 'verification']],
   ['installed-app-discovery', 'Installed app discovery', '已安裝 App 偵測', 'installed', 'Installed-App-Discovery', 'shipped', ['uninstall', 'activity-history', 'privacy-and-security']],

@@ -63,11 +63,12 @@ const step = {
 
 const recipe: SourceRecipe = {
   schemaVersion: 1,
+  status: 'ready',
   appId: 'reviewed-app',
   repository: 'Ding-Ding-Projects/reviewed-app',
   revision: '1'.repeat(40),
   sourceArchiveSha256: '2'.repeat(64),
-  dependencies: [], prepare: [], validate: [{ ...step, id: 'validate-app', arguments: ['run', 'check'] }], build: [{ ...step }], test: [], run: [{ ...step, id: 'run-app', arguments: ['run', 'start'] }],
+  dependencies: [], prepare: [], validate: [{ ...step, id: 'validate-app', arguments: ['run', 'check'] }], build: [{ ...step }], test: [], run: [{ ...step, id: 'run-app', arguments: ['run', 'start'] }], readiness: { kind: 'output-files', target: 'dist/app.exe', timeoutMs: 30_000 },
   repairableStepIds: ['build-app', 'run-app'], finalOutputs: ['dist/app.exe'], repairAttempts: 2,
 };
 
@@ -119,6 +120,7 @@ describe('source job contracts', () => {
     expect(sourceRecipeCatalogSchema.parse({ schemaVersion: 1, recipes: [recipe] }).recipes).toHaveLength(1);
     expect(sourceRecipeCatalogSchema.safeParse({ schemaVersion: 1, recipes: [{ ...recipe, extra: true }] }).success).toBe(false);
     expect(sourceRecipeCatalogSchema.safeParse({ schemaVersion: 1, recipes: [{ ...recipe, build: [{ ...step, executable: 'git.exe' }] }] }).success).toBe(false);
+    expect(sourceRecipeCatalogSchema.safeParse({ schemaVersion: 1, recipes: [{ ...recipe, build: [{ ...step, executable: 'arbitrary.exe' }] }] }).success).toBe(false);
     expect(sourceRecipeCatalogSchema.safeParse({ schemaVersion: 1, recipes: [{ ...recipe, build: [{ ...step, arguments: ['run build & whoami'] }] }] }).success).toBe(false);
   });
 

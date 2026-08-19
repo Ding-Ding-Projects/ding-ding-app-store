@@ -117,6 +117,9 @@ export class SourceJobService {
     if (!recipe || recipe.repository !== `Ding-Ding-Projects/${record.repository}`) {
       return { ok: false, appId: request.appId, state: 'failed', message: 'No reviewed pinned source recipe is available for this application. Nothing was executed.' };
     }
+    if (recipe.status === 'blocked') {
+      return { ok: false, appId: request.appId, state: 'failed', message: `This reviewed source recipe is blocked: ${recipe.blocker}` };
+    }
     if (request.decision === 'run' && recipe.run.length === 0) {
       return { ok: false, appId: request.appId, state: 'failed', message: 'This reviewed source recipe does not expose a run operation.' };
     }
