@@ -159,7 +159,9 @@ export async function runSourceRecipeLifecycle(recipe, driver, { clock = Date.no
     }
     try {
       const method = driver[STAGE_METHODS[stageName]];
-      const result = typeof method === 'function' ? await bounded(() => method({ recipe, guest }), timeoutMs, `${recipe.appId} ${stageName}`) : blocked('driver-method-unavailable', `No attested driver method is registered for ${stageName}.`);
+      const result = ['install', 'launch', 'uninstall'].includes(stageName) && driver.guestLifecycleAgent !== true
+        ? blocked('guest-lifecycle-agent-unavailable', 'The integrated protocol peer transfers source outputs but does not expose a guest-side install, launch, process/window, or uninstall agent. A wrapper window is not inner-app evidence, and host install paths are forbidden.')
+        : typeof method === 'function' ? await bounded(() => method({ recipe, guest }), timeoutMs, `${recipe.appId} ${stageName}`) : blocked('driver-method-unavailable', `No attested driver method is registered for ${stageName}.`);
       const normalized = normalize(result);
       stages.push({ name: stageName, status: normalized.status, startedAt: stageStarted, completedAt: nowIso(clock), details: normalized.details });
     } catch (error) {
