@@ -37,6 +37,7 @@ export const SOURCE_BROKER_LIMITS = Object.freeze({
 
 export const SOURCE_GUEST_PROTOCOL_VERSION = 1 as const;
 export const SOURCE_GUEST_IDENTITY = Object.freeze({ brokerId: 'ding-ding-windows-sandbox', transportId: 'windows-sandbox-zero-mount-v1' });
+const nonceSchema = z.string().regex(/^[a-f0-9]{64}$/);
 export const SOURCE_GUEST_POLICY = Object.freeze({
   kind: 'hard-disposable' as const,
   hostMounts: 0,
@@ -49,6 +50,92 @@ export const SOURCE_GUEST_POLICY = Object.freeze({
   protectedClient: true,
   cleanupOnExit: true,
 });
+
+/** Guest-side installer lifecycle is deliberately narrower than source steps.
+ * These are facts and operations the guest agent may report; it cannot submit
+ * an arbitrary command, executable, host path, or installer argument. */
+export const guestInstallerOperationSchema = z.enum([
+  'squirrel-install', 'squirrel-launch', 'squirrel-uninstall',
+  'nsis-install', 'nsis-launch', 'nsis-uninstall',
+  'inno-install', 'inno-launch', 'inno-uninstall',
+]);
+export type GuestInstallerOperation = z.infer<typeof guestInstallerOperationSchema>;
+
+const installerFormatSchema = z.enum(['squirrel', 'nsis', 'inno']);
+const digestSchema = z.string().regex(/^[a-f0-9]{64}$/);
+const lifecycleStageSchema = z.enum(['installer-bytes', 'install', 'launch', 'uninstall', 'absence', 'disposal']);
+const lifecycleProcessFactSchema = z.strictObject({
+  pid: z.number().int().positive().max(4_000_000).optional(),
+  ready: z.literal(true),
+  windowTitle: z.string().max(240).optional(),
+  windowClass: z.string().max(240).optional(),
+  hwnd: z.string().regex(/^0x[0-9a-f]+$/i).optional(),
+}).superRefine((fact, ctx) => {
+  if (fact.windowTitle === undefined || fact.windowClass === undefined) ctx.addIssue({ code: 'custom', message: 'Readiness requires the actual inner-app window title and class.' });
+  if (fact.hwnd === undefined) ctx.addIssue({ code: 'custom', message: 'Readiness requires the actual inner-app HWND.' });
+});
+
+export const guestLifecyclePlanSchema = z.strictObject({
+  schemaVersion: z.literal(1),
+  protocolVersion: z.literal(SOURCE_GUEST_PROTOCOL_VERSION),
+  jobId: z.uuid(),
+  challengeNonce: nonceSchema,
+  guestId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/),
+  planDigest: digestSchema,
+  appId: z.string().regex(/^[a-z0-9][a-z0-9-]{0,127}$/),
+  expectedPackage: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/),
+  expectedVersion: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9.+_-]{0,63}$/),
+  installIdentity: z.string().regex(/^[A-Za-z0-9._:-]{1,240}$/),
+  executableRelativeName: z.string().min(1).max(240).refine((value) => !path.isAbsolute(value) && !value.includes('\\') && !value.split('/').some((part) => !part || part === '..'), 'Executable name must be a workspace-relative path.'),
+  expectedWindowTitle: z.string().min(1).max(240),
+  expectedWindowClass: z.string().min(1).max(240),
+  readinessTimeoutMs: z.number().int().min(1_000).max(SOURCE_RUNTIME_LIMITS.maxStepMs),
+  stabilityTimeoutMs: z.number().int().min(250).max(60_000),
+  installer: z.strictObject({ format: installerFormatSchema, bytes: z.number().int().positive().max(500 * 1024 * 1024), sha256: digestSchema }),
+  operations: z.array(guestInstallerOperationSchema).min(1).max(3).refine((values) => new Set(values).size === values.length, 'Lifecycle operations must be unique.'),
+  maxStageMs: z.number().int().min(1_000).max(SOURCE_RUNTIME_LIMITS.maxStepMs),
+  maxBodyBytes: z.number().int().min(1_024).max(500 * 1024 * 1024),
+}).superRefine((plan, ctx) => {
+  const prefix = `${plan.installer.format}-`;
+  if (plan.operations.some((operation) => !operation.startsWith(prefix))) ctx.addIssue({ code: 'custom', path: ['operations'], message: 'Lifecycle operations must match the installer format.' });
+});
+export type GuestLifecyclePlan = z.infer<typeof guestLifecyclePlanSchema>;
+export function createGuestLifecyclePlanDigest(plan: Omit<GuestLifecyclePlan, 'planDigest'> | GuestLifecyclePlan): string {
+  const { planDigest: _ignored, ...unsigned } = plan as GuestLifecyclePlan;
+  return createHash('sha256').update(stableJson(unsigned)).digest('hex');
+}
+
+export const guestLifecycleReceiptSchema = z.strictObject({
+  schemaVersion: z.literal(1),
+  protocolVersion: z.literal(SOURCE_GUEST_PROTOCOL_VERSION),
+  jobId: z.uuid(),
+  challengeNonce: nonceSchema,
+  guestId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/),
+  planDigest: digestSchema,
+  sequence: z.number().int().min(1).max(64),
+  stage: lifecycleStageSchema,
+  operation: guestInstallerOperationSchema.optional(),
+  installerBytes: z.number().int().nonnegative().max(500 * 1024 * 1024).optional(),
+  installerSha256: digestSchema.optional(),
+  process: lifecycleProcessFactSchema.optional(),
+  uninstallSucceeded: z.boolean().optional(),
+  absenceVerified: z.literal(true).optional(),
+  childProcessesStopped: z.literal(true).optional(),
+  observedAt: z.iso.datetime(),
+  details: z.string().max(1_024).optional(),
+});
+export type GuestLifecycleReceipt = z.infer<typeof guestLifecycleReceiptSchema>;
+
+export const guestLifecycleFinalReceiptSchema = z.strictObject({
+  schemaVersion: z.literal(1), protocolVersion: z.literal(SOURCE_GUEST_PROTOCOL_VERSION),
+  jobId: z.uuid(), challengeNonce: nonceSchema, guestId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/), planDigest: digestSchema,
+  lastSequence: z.number().int().min(1).max(64), verdict: z.literal(true),
+  installIdentity: z.string().regex(/^[A-Za-z0-9._:-]{1,240}$/), processReady: z.literal(true),
+  windowTitle: z.string().min(1).max(240), windowClass: z.string().min(1).max(240), hwnd: z.string().regex(/^0x[0-9a-f]+$/i),
+  uninstallSucceeded: z.literal(true), absenceVerified: z.literal(true), childProcessesStopped: z.literal(true),
+  observedAt: z.iso.datetime(),
+});
+export type GuestLifecycleFinalReceipt = z.infer<typeof guestLifecycleFinalReceiptSchema>;
 
 /** Fixed guest-side bootstrap. It is embedded in the .wsb command so no host
  * folder is mapped into the guest. The only host communication is the
@@ -221,8 +308,6 @@ export type IsolationBrokerIdentity = z.infer<typeof isolationBrokerIdentitySche
 
 export const isolationCapabilitySchema = z.enum(['execute', 'dispose']);
 export type IsolationCapability = z.infer<typeof isolationCapabilitySchema>;
-
-const nonceSchema = z.string().regex(/^[a-f0-9]{64}$/);
 
 export const isolationCapabilityLeaseSchema = z.strictObject({
   leaseId: z.uuid(),
@@ -551,6 +636,10 @@ interface ProtocolPeerJob {
   processTreeStopped: boolean;
   disposed: boolean;
   aborted: boolean;
+  lifecyclePlan?: GuestLifecyclePlan;
+  lifecycleInstallerBytes?: Buffer;
+  lifecycleReceipts: GuestLifecycleReceipt[];
+  lifecycleFinal?: GuestLifecycleFinalReceipt;
 }
 
 const protocolHelloSchema = z.strictObject({
@@ -639,8 +728,25 @@ export class WindowsSandboxProtocolPeer implements WindowsSandboxProtocolPeerCon
     let rejectComplete!: (error: Error) => void;
     const hello = new Promise<unknown>((resolve, reject) => { resolveHello = resolve; rejectHello = reject; });
     const complete = new Promise<SourceExecutionResult>((resolve, reject) => { resolveComplete = resolve; rejectComplete = reject; });
-    this.jobs.set(parsed.jobId, { challenge: { ...parsed }, guestId, token, outputs: new Map(), hello, resolveHello, rejectHello, complete, resolveComplete, rejectComplete, processTreeStopped: false, disposed: false, aborted: false });
+    this.jobs.set(parsed.jobId, { challenge: { ...parsed }, guestId, token, outputs: new Map(), lifecycleReceipts: [], hello, resolveHello, rejectHello, complete, resolveComplete, rejectComplete, processTreeStopped: false, disposed: false, aborted: false });
   }
+
+  /** Publish the separately authenticated installer lifecycle plan. */
+  publishLifecyclePlan(jobId: string, plan: GuestLifecyclePlan): void {
+    const job = this.jobs.get(jobId); if (!job) throw new Error('Lifecycle job was not registered.');
+    const parsed = guestLifecyclePlanSchema.parse(plan);
+    if (parsed.jobId !== jobId || parsed.challengeNonce !== job.challenge.nonce || parsed.guestId !== job.guestId) throw new Error('Lifecycle plan binding was rejected.');
+    if (parsed.planDigest !== createGuestLifecyclePlanDigest(parsed)) throw new Error('Lifecycle plan digest was rejected.');
+    job.lifecyclePlan = parsed;
+  }
+
+  publishLifecycleInstaller(jobId: string, bytes: Buffer): void {
+    const job = this.jobs.get(jobId); if (!job?.lifecyclePlan) throw new Error('Lifecycle plan was not published.');
+    if (bytes.length !== job.lifecyclePlan.installer.bytes || createHash('sha256').update(bytes).digest('hex') !== job.lifecyclePlan.installer.sha256) throw new Error('Installer bytes did not match the lifecycle plan.');
+    job.lifecycleInstallerBytes = Buffer.from(bytes);
+  }
+
+  lifecycleReceipt(jobId: string): GuestLifecycleFinalReceipt | undefined { return this.jobs.get(jobId)?.lifecycleFinal; }
 
   async attest(challenge: Readonly<IsolationAttestationChallenge>, guestId: string, signal: AbortSignal): Promise<unknown> {
     await this.listen();
@@ -671,6 +777,7 @@ export class WindowsSandboxProtocolPeer implements WindowsSandboxProtocolPeerCon
     if (!job || job.aborted || job.challenge.nonce !== lease.challengeNonce) throw new Error('The guest protocol disposal binding was rejected.');
     if (!validateCapabilityLease(lease, job.challenge, 'dispose', Date.now(), true)) throw new Error('The guest protocol disposal lease was invalid.');
     if (!job.processTreeStopped) throw new Error('Guest disposal is not proven until the process tree has stopped.');
+    if (job.lifecyclePlan && !job.lifecycleFinal) throw new Error('Guest lifecycle disposal requires the ordered final lifecycle receipt.');
     job.disposed = true;
     const receipt = sourceDisposalReceiptSchema.parse({ schemaVersion: 1, jobId, guestId: job.guestId, brokerId: SOURCE_GUEST_IDENTITY.brokerId, transportId: SOURCE_GUEST_IDENTITY.transportId, challengeNonce: job.challenge.nonce, disposedAt: new Date().toISOString(), processTreeStopped: true, guestDeleted: true, hostMounts: 0, credentialsInjected: false, secretsInjected: false });
     this.jobs.delete(jobId);
@@ -702,7 +809,11 @@ export class WindowsSandboxProtocolPeer implements WindowsSandboxProtocolPeerCon
       if (request.method === 'POST' && url.pathname === `/hello/${jobId}`) return this.handleHello(request, response, job);
       if (request.method === 'GET' && url.pathname === `/plan/${jobId}`) return this.handlePlan(response, job);
       if (request.method === 'GET' && url.pathname === `/archive/${jobId}`) return this.handleArchive(response, job);
+      if (request.method === 'GET' && url.pathname === `/lifecycle-plan/${jobId}`) return this.handleLifecyclePlan(response, job);
+      if (request.method === 'GET' && url.pathname === `/installer/${jobId}`) return this.handleInstaller(response, job);
       if (request.method === 'POST' && url.pathname === `/event/${jobId}`) return this.handleEvent(request, response, job);
+      if (request.method === 'POST' && url.pathname === `/stage-receipt/${jobId}`) return this.handleStageReceipt(request, response, job);
+      if (request.method === 'POST' && url.pathname === `/final-receipt/${jobId}`) return this.handleFinalReceipt(request, response, job);
       if (request.method === 'POST' && url.pathname === `/output/${jobId}`) return this.handleOutput(request, response, job);
       if (request.method === 'POST' && url.pathname === `/outputs/${jobId}`) return this.handleManifest(request, response, job);
       if (request.method === 'POST' && url.pathname === `/complete/${jobId}`) return this.handleComplete(request, response, job);
@@ -744,6 +855,18 @@ export class WindowsSandboxProtocolPeer implements WindowsSandboxProtocolPeerCon
     response.end(job.archive);
   }
 
+  private handleLifecyclePlan(response: ServerResponse, job: ProtocolPeerJob): void {
+    if (!job.lifecyclePlan) return this.send(response, 425, { error: 'lifecycle-plan-not-ready' });
+    this.send(response, 200, job.lifecyclePlan);
+  }
+
+  private async handleInstaller(response: ServerResponse, job: ProtocolPeerJob): Promise<void> {
+    const plan = job.lifecyclePlan; if (!plan) return this.send(response, 425, { error: 'lifecycle-plan-not-ready' });
+    const bytes = job.lifecycleInstallerBytes;
+    if (!bytes) return this.send(response, 425, { error: 'installer-not-ready' });
+    response.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Content-Length': bytes.length, 'Cache-Control': 'no-store' }); response.end(bytes);
+  }
+
   private async fetchArchive(url: string, digest: string, maxBytes: number): Promise<Buffer> {
     const parsed = new URL(url); if (parsed.protocol !== 'https:' || parsed.hostname !== 'github.com' || !/^\/Ding-Ding-Projects\/[A-Za-z0-9_.-]+\/archive\/[a-f0-9]{40}\.zip$/.test(parsed.pathname)) throw new Error('Source archive origin was not allowlisted.');
     const bytes = this.options.fetchArchive
@@ -755,6 +878,27 @@ export class WindowsSandboxProtocolPeer implements WindowsSandboxProtocolPeerCon
   }
 
   private async handleEvent(request: IncomingMessage, response: ServerResponse, job: ProtocolPeerJob): Promise<void> { const parsed = runtimeLineSchema.parse(await this.body(request)); job.emit?.(parsed); if (parsed.state === 'failed' || parsed.state === 'cancelled') job.rejectComplete(new Error(parsed.text)); this.send(response, 200, { ok: true }); }
+
+  private async handleStageReceipt(request: IncomingMessage, response: ServerResponse, job: ProtocolPeerJob): Promise<void> {
+    const parsed = guestLifecycleReceiptSchema.parse(await this.body(request));
+    if (!job.lifecyclePlan || parsed.jobId !== job.challenge.jobId || parsed.challengeNonce !== job.challenge.nonce || parsed.guestId !== job.guestId || parsed.planDigest !== job.lifecyclePlan.planDigest) throw new Error('Lifecycle receipt binding was rejected.');
+    if (parsed.sequence !== job.lifecycleReceipts.length + 1) throw new Error('Lifecycle receipt sequence was skipped or replayed.');
+    if (parsed.stage === 'launch' && !parsed.process) throw new Error('Launch receipt omitted inner-app readiness facts.');
+    if (parsed.stage === 'uninstall' && parsed.uninstallSucceeded !== true) throw new Error('Uninstall receipt did not prove success.');
+    if (parsed.stage === 'absence' && parsed.absenceVerified !== true) throw new Error('Uninstall absence was not proven.');
+    if (parsed.stage === 'disposal' && parsed.childProcessesStopped !== true) throw new Error('Disposal receipt did not prove child-process stop.');
+    job.lifecycleReceipts.push(parsed); this.send(response, 200, { ok: true, sequence: parsed.sequence });
+  }
+
+  private async handleFinalReceipt(request: IncomingMessage, response: ServerResponse, job: ProtocolPeerJob): Promise<void> {
+    const parsed = guestLifecycleFinalReceiptSchema.parse(await this.body(request));
+    if (!job.lifecyclePlan || parsed.jobId !== job.challenge.jobId || parsed.challengeNonce !== job.challenge.nonce || parsed.guestId !== job.guestId || parsed.planDigest !== job.lifecyclePlan.planDigest) throw new Error('Final lifecycle receipt binding was rejected.');
+    if (parsed.lastSequence !== job.lifecycleReceipts.length || parsed.lastSequence < 1) throw new Error('Final lifecycle receipt sequence was not complete.');
+    const expectedStages = ['installer-bytes', 'install', 'launch', 'uninstall', 'absence', 'disposal'];
+    if (job.lifecycleReceipts.length !== expectedStages.length || job.lifecycleReceipts.some((receipt, index) => receipt.stage !== expectedStages[index])) throw new Error('Final lifecycle receipt omitted an ordered lifecycle stage.');
+    if (!job.lifecycleReceipts.some((receipt) => receipt.stage === 'disposal' && receipt.childProcessesStopped)) throw new Error('Final lifecycle receipt claimed disposal without child-process proof.');
+    job.lifecycleFinal = parsed; this.send(response, 200, { ok: true });
+  }
 
   private async handleOutput(request: IncomingMessage, response: ServerResponse, job: ProtocolPeerJob): Promise<void> {
     const parsed = protocolOutputSchema.parse(await this.body(request));

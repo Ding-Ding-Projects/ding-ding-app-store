@@ -48,6 +48,14 @@ function safeDetails(value) {
   return Object.fromEntries(allowed.filter((key) => Object.hasOwn(details, key)).map((key) => [key, details[key]]));
 }
 
+function assertGuestLifecycleEvidence(value, label = 'lifecycle receipt') {
+  if (!value || value.schemaVersion !== 1 || value.protocolVersion !== 1 || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.jobId ?? '')) fail(`${label} is missing its protocol identity.`);
+  if (!SAFE_DIGEST.test(value.planDigest) || !Number.isInteger(value.lastSequence) || value.lastSequence < 1) fail(`${label} is missing its plan digest or sequence.`);
+  if (value.verdict !== true || value.processReady !== true || typeof value.installIdentity !== 'string' || !value.installIdentity || value.uninstallSucceeded !== true || value.absenceVerified !== true || value.processTreeStopped !== true || value.guestDeleted !== true) fail(`${label} does not prove install, inner-app readiness, uninstall absence, and disposal.`);
+  if (typeof value.windowTitle !== 'string' || typeof value.windowClass !== 'string' || !/^0x[0-9a-f]+$/i.test(value.hwnd ?? '')) fail(`${label} does not prove an inner-app window.`);
+  return value;
+}
+
 function fail(message) { throw new Error(`Source lifecycle recipe catalog invalid: ${message}`); }
 
 export function assertSourceRecipeCatalog(catalog) {
@@ -97,7 +105,10 @@ async function loadDriver(modulePath) {
 }
 
 function normalize(result) {
-  if (result === true || result?.ok === true || result?.status === 'verified') return { status: 'verified', details: safeDetails(result?.details ?? {}) };
+  if (result === true || result?.ok === true || result?.status === 'verified') {
+    if (result?.lifecycleReceipt) assertGuestLifecycleEvidence(result.lifecycleReceipt);
+    return { status: 'verified', details: safeDetails(result?.details ?? {}) };
+  }
   if (result?.status === 'blocked') return { status: 'blocked', details: safeDetails(result.details ?? result) };
   if (result?.status === 'skipped') return { status: 'skipped', details: safeDetails(result.details ?? result) };
   if (result?.status === 'failed') return { status: 'failed', details: safeDetails(result.details ?? result) };
