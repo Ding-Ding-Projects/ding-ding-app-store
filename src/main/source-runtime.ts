@@ -85,6 +85,9 @@ export const guestLifecyclePlanSchema = z.strictObject({
   appId: z.string().regex(/^[a-z0-9][a-z0-9-]{0,127}$/),
   expectedPackage: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/),
   expectedVersion: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9.+_-]{0,63}$/),
+  registryDisplayName: z.string().min(1).max(240),
+  squirrelPackageName: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/),
+  executableFileName: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.exe$/i),
   installIdentity: z.string().regex(/^[A-Za-z0-9._:-]{1,240}$/),
   executableRelativeName: z.string().min(1).max(240).refine((value) => !path.isAbsolute(value) && !value.includes('\\') && !value.split('/').some((part) => !part || part === '..'), 'Executable name must be a workspace-relative path.'),
   expectedWindowTitle: z.string().min(1).max(240),
@@ -185,7 +188,40 @@ if ($lifecyclePlan) {
   if ($installProcess.ExitCode -ne 0) { throw 'Reviewed installer exited unsuccessfully.' }
   Send-Runner "/stage-receipt/$jobId" @{ schemaVersion = 1; protocolVersion = $protocol; jobId = $jobId; challengeNonce = $nonce; guestId = "guest-$jobId"; planDigest = $lifecyclePlan.planDigest; sequence = 1; stage = 'installer-bytes'; installerBytes = [int64](Get-Item -LiteralPath $installer).Length; installerSha256 = $installerHash; observedAt = [DateTimeOffset]::UtcNow.ToString('o') } | Out-Null
   Send-Runner "/stage-receipt/$jobId" @{ schemaVersion = 1; protocolVersion = $protocol; jobId = $jobId; challengeNonce = $nonce; guestId = "guest-$jobId"; planDigest = $lifecyclePlan.planDigest; sequence = 2; stage = 'install'; operation = "$family-install"; observedAt = [DateTimeOffset]::UtcNow.ToString('o') } | Out-Null
-  throw 'Guest lifecycle launch/window discovery is blocked until the reviewed fixed helper is installed; wrapper readiness is never accepted.'
+  if ($family -ne 'squirrel') { throw 'Only the reviewed Squirrel lifecycle helper is enabled; NSIS and Inno remain blocked.' }
+  $uninstallRoots = @('HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*')
+  $records = @(Get-ItemProperty -Path $uninstallRoots -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -eq $lifecyclePlan.registryDisplayName -and $_.DisplayVersion -eq $lifecyclePlan.expectedVersion -and $_.InstallLocation })
+  if ($records.Count -ne 1) { throw 'The exact Squirrel uninstall identity was absent or ambiguous.' }
+  $record = $records[0]
+  $installRoot = [IO.Path]::GetFullPath($record.InstallLocation)
+  $localRoot = [IO.Path]::GetFullPath($env:LOCALAPPDATA)
+  if (-not $installRoot.StartsWith($localRoot, [StringComparison]::OrdinalIgnoreCase) -or (Get-Item -LiteralPath $installRoot).Attributes.ToString() -match 'ReparsePoint') { throw 'The Squirrel install root was outside guest LOCALAPPDATA or was a reparse point.' }
+  $versionDirs = @(Get-ChildItem -LiteralPath $installRoot -Directory -Force | Where-Object { $_.Name -match '^app-' -and -not ($_.Attributes.ToString() -match 'ReparsePoint') })
+  $exeMatches = @($versionDirs | ForEach-Object { Join-Path $_.FullName $lifecyclePlan.executableFileName } | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })
+  if ($exeMatches.Count -ne 1) { throw 'The exact Squirrel executable was absent or ambiguous.' }
+  Add-Type -TypeDefinition @'
+using System; using System.Text; using System.Runtime.InteropServices;
+public static class GuestWindowProbe { [DllImport("user32.dll", SetLastError=true)] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid); [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetClassName(IntPtr hWnd, StringBuilder name, int max); }
+'@
+  $app = Start-Process -FilePath $exeMatches[0] -WorkingDirectory (Split-Path $exeMatches[0]) -PassThru
+  $deadline = [DateTimeOffset]::UtcNow.AddMilliseconds($lifecyclePlan.readinessTimeoutMs); $hwnd = [IntPtr]::Zero
+  while ([DateTimeOffset]::UtcNow -lt $deadline -and $hwnd -eq [IntPtr]::Zero) { $app.Refresh(); $hwnd = $app.MainWindowHandle; if ($hwnd -eq [IntPtr]::Zero) { Start-Sleep -Milliseconds 100 } }
+  if ($hwnd -eq [IntPtr]::Zero -or $app.MainWindowTitle -ne $lifecyclePlan.expectedWindowTitle) { throw 'Squirrel child did not expose the reviewed inner-app window.' }
+  $pid = 0; [void][GuestWindowProbe]::GetWindowThreadProcessId($hwnd, [ref]$pid); $class = New-Object Text.StringBuilder 256; [void][GuestWindowProbe]::GetClassName($hwnd, $class, $class.Capacity)
+  if ($pid -ne $app.Id -or $class.ToString() -ne $lifecyclePlan.expectedWindowClass -or $class.ToString() -match 'Sandbox|ApplicationFrameHost') { throw 'Wrapper or foreign window readiness was rejected.' }
+  Start-Sleep -Milliseconds $lifecyclePlan.stabilityTimeoutMs
+  Send-Runner "/stage-receipt/$jobId" @{ schemaVersion=1; protocolVersion=$protocol; jobId=$jobId; challengeNonce=$nonce; guestId="guest-$jobId"; planDigest=$lifecyclePlan.planDigest; sequence=3; stage='launch'; operation='squirrel-launch'; process=@{ ready=$true; pid=$app.Id; windowTitle=$app.MainWindowTitle; windowClass=$class.ToString(); hwnd=('0x{0:x}' -f $hwnd.ToInt64()) }; observedAt=[DateTimeOffset]::UtcNow.ToString('o') } | Out-Null
+  if ($app.HasExited) { throw 'Squirrel child exited before uninstall.' }
+  Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
+  $update = Join-Path $installRoot 'Update.exe'; if (-not (Test-Path -LiteralPath $update -PathType Leaf)) { throw 'Squirrel Update.exe was absent.' }
+  $uninstall = Start-Process -FilePath $update -ArgumentList @('--uninstall','-s') -WorkingDirectory $installRoot -PassThru -Wait
+  if ($uninstall.ExitCode -ne 0) { throw 'Squirrel uninstall exited unsuccessfully.' }
+  Send-Runner "/stage-receipt/$jobId" @{ schemaVersion=1; protocolVersion=$protocol; jobId=$jobId; challengeNonce=$nonce; guestId="guest-$jobId"; planDigest=$lifecyclePlan.planDigest; sequence=4; stage='uninstall'; operation='squirrel-uninstall'; uninstallSucceeded=$true; observedAt=[DateTimeOffset]::UtcNow.ToString('o') } | Out-Null
+  $remaining = @(Get-ItemProperty -Path $uninstallRoots -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -eq $lifecyclePlan.registryDisplayName -and $_.DisplayVersion -eq $lifecyclePlan.expectedVersion }); if ($remaining.Count -ne 0 -or (Test-Path -LiteralPath $installRoot)) { throw 'Squirrel uninstall absence was not proven.' }
+  Send-Runner "/stage-receipt/$jobId" @{ schemaVersion=1; protocolVersion=$protocol; jobId=$jobId; challengeNonce=$nonce; guestId="guest-$jobId"; planDigest=$lifecyclePlan.planDigest; sequence=5; stage='absence'; absenceVerified=$true; observedAt=[DateTimeOffset]::UtcNow.ToString('o') } | Out-Null
+  Send-Runner "/stage-receipt/$jobId" @{ schemaVersion=1; protocolVersion=$protocol; jobId=$jobId; challengeNonce=$nonce; guestId="guest-$jobId"; planDigest=$lifecyclePlan.planDigest; sequence=6; stage='disposal'; childProcessesStopped=$true; observedAt=[DateTimeOffset]::UtcNow.ToString('o') } | Out-Null
+  Send-Runner "/final-receipt/$jobId" @{ schemaVersion=1; protocolVersion=$protocol; jobId=$jobId; challengeNonce=$nonce; guestId="guest-$jobId"; planDigest=$lifecyclePlan.planDigest; lastSequence=6; verdict=$true; installIdentity=$installIdentity; processReady=$true; windowTitle=$lifecyclePlan.expectedWindowTitle; windowClass=$lifecyclePlan.expectedWindowClass; hwnd=('0x{0:x}' -f $hwnd.ToInt64()); uninstallSucceeded=$true; absenceVerified=$true; childProcessesStopped=$true; observedAt=[DateTimeOffset]::UtcNow.ToString('o') } | Out-Null
+  Remove-Item -LiteralPath $installer -Force -ErrorAction SilentlyContinue
 }
 $workspace = Join-Path $env:TEMP "ding-ding-$jobId"
 New-Item -ItemType Directory -Force -Path $workspace | Out-Null
