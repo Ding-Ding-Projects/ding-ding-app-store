@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import {
   guestLifecycleFinalReceiptSchema,
@@ -53,5 +54,13 @@ describe('guest lifecycle protocol contracts', () => {
     expect(WINDOWS_SANDBOX_GUEST_BOOTSTRAP).toContain('receiptToken');
     expect(WINDOWS_SANDBOX_GUEST_BOOTSTRAP).toContain('Assert-NoReparse');
     expect(WINDOWS_SANDBOX_GUEST_BOOTSTRAP).toContain('sibling prefixes are not containment');
+  });
+
+  it('requires an explicit live advertise address instead of selecting a virtual interface', async () => {
+    const source = await readFile(new URL('../scripts/prove-guest-lifecycle.mjs', import.meta.url), 'utf8');
+    expect(source).toContain("args.get('--advertise-address')");
+    expect(source).toContain('An explicit --advertise-address is required');
+    expect(source).toContain('availableIpv4Candidates');
+    expect(source).not.toContain('chooseHostIpv4');
   });
 });

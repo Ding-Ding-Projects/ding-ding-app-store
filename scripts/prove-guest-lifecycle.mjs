@@ -8,8 +8,8 @@ import { createGuestLifecyclePlanDigest, WindowsSandboxGuestTransport, WindowsSa
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 2) args.set(process.argv[i], process.argv[i + 1]);
-const setup = args.get('--setup'); const nupkg = args.get('--nupkg'); const output = args.get('--output');
-if (!setup || !nupkg || !output) throw new Error('Usage: node scripts/prove-guest-lifecycle.mjs --setup <Setup.exe> --nupkg <package.nupkg> --output <receipt.json>');
+const setup = args.get('--setup'); const nupkg = args.get('--nupkg'); const output = args.get('--output'); const advertiseAddress = args.get('--advertise-address');
+if (!setup || !nupkg || !output) throw new Error('Usage: node scripts/prove-guest-lifecycle.mjs --setup <Setup.exe> --nupkg <package.nupkg> --output <receipt.json> --advertise-address <non-loopback IPv4>');
 
 const boundedFile = async (file) => {
   const info = await stat(file);
@@ -26,13 +26,21 @@ const findFiles = async (root) => {
   };
   await visit(root); return result;
 };
-const chooseHostIpv4 = () => {
-  const interfaces = os.networkInterfaces();
-  for (const entries of Object.values(interfaces)) for (const entry of entries ?? []) {
-    if (entry.family === 'IPv4' && !entry.internal && !/^127\.|^169\.254\./.test(entry.address)) return entry.address;
-  }
-  throw new Error('No explicit non-loopback host IPv4 was available for the live Sandbox advertise address.');
+const validateAdvertiseAddress = (value) => {
+  if (typeof value !== 'string' || !/^(?:\d{1,3}\.){3}\d{1,3}$/.test(value.trim())) throw new Error(`Advertise address must be an explicit IPv4 literal; received ${value ?? '<missing>'}.`);
+  const octets = value.split('.').map(Number);
+  if (octets.some((part) => part < 0 || part > 255) || octets[0] === 0 || octets[0] === 127 || (octets[0] === 169 && octets[1] === 254) || octets[0] >= 224) throw new Error(`Advertise address must be a non-loopback unicast IPv4; received ${value}.`);
+  return value;
 };
+const availableIpv4Candidates = () => {
+  const interfaces = os.networkInterfaces();
+  const candidates = [];
+  for (const entries of Object.values(interfaces)) for (const entry of entries ?? []) {
+    if (entry.family === 'IPv4') candidates.push(`${entry.address}${entry.internal ? ' (internal)' : ''}`);
+  }
+  return candidates;
+};
+if (!advertiseAddress) throw new Error(`An explicit --advertise-address is required; candidates: ${availableIpv4Candidates().join(', ') || 'none'}`);
 
 const setupPath = path.resolve(setup); const nupkgPath = path.resolve(nupkg); const outputPath = path.resolve(output);
 const setupBytes = await boundedFile(setupPath); const packageBytes = await boundedFile(nupkgPath);
@@ -50,7 +58,7 @@ try {
   const version = /<version>\s*([^<]+)\s*<\/version>/i.exec(nuspecText)?.[1]?.trim() ?? 'unknown';
   const executable = files.find((file) => /\.exe$/i.test(file) && !/\\(?:Setup|Update|Squirrel)\.exe$/i.test(file));
   if (!executable) throw new Error('The nupkg did not contain a reviewed application executable.');
-  const executableBytes = await readFile(executable); const executableFileName = path.basename(executable); const hostIpv4 = chooseHostIpv4(); const jobId = randomUUID(); const challengeNonce = randomBytes(32).toString('hex');
+  const executableBytes = await readFile(executable); const executableFileName = path.basename(executable); const hostIpv4 = validateAdvertiseAddress(advertiseAddress); const jobId = randomUUID(); const challengeNonce = randomBytes(32).toString('hex');
   const unsignedPlan = {
     schemaVersion: 1, protocolVersion: 1, jobId, challengeNonce, guestId: `guest-${jobId}`, planDigest: '', appId: 'ding-ding-app-store', expectedPackage: packageId,
     expectedVersion: version, registryDisplayName: 'Ding Ding App Store', squirrelPackageName: packageId, executableFileName, executableSha256: createHash('sha256').update(executableBytes).digest('hex'), installIdentity: packageId,
