@@ -79,7 +79,12 @@ describe('guest lifecycle protocol contracts', () => {
     expect(source).toContain('schemaVersion: 1, desktop, configPath, runRoot, sandboxExecutable');
     expect(source).toContain('launch-cleanup-unproven');
     expect(source).toContain('prePids');
+    expect(source).toContain('baselineVerified: true');
+    expect(source).toContain('launch-baseline-unproven');
+    expect(source).toContain('preProcesses.client_ok !== true');
     expect(source).toContain('newPids');
+    expect(source).toContain('matchingWindows');
+    expect(source).toContain('window.process_id === newPids[0]');
     expect(source).toContain("name_filter: 'WindowsSandboxRemoteSession.exe', limit: 1000");
     expect(source).toContain('!prePids.includes(entry.pid)');
     expect(source).toContain('multiple new Sandbox processes');

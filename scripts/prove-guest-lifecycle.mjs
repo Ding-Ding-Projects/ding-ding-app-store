@@ -93,9 +93,10 @@ try {
   const launch = async (executable, configPath) => {
     if (path.resolve(executable).toLowerCase() !== sandboxExecutable.toLowerCase()) throw new Error(`Lowlevel launch executable mismatch: ${executable}`);
     const desktop = `GuestLifecycle-${jobId.slice(0, 12)}`;
-    const preProcesses = await runLowlevelCall('list_processes', { name_filter: 'WindowsSandboxRemoteSession.exe', limit: 1000 }, 30_000).catch(() => ({ processes: [] }));
+    const preProcesses = await runLowlevelCall('list_processes', { name_filter: 'WindowsSandboxRemoteSession.exe', limit: 1000 }, 30_000);
+    if (preProcesses.client_ok !== true || !Array.isArray(preProcesses.processes)) throw new Error('launch-baseline-unproven: Lowlevel baseline process inventory was unavailable; launch was not attempted.');
     const prePids = (preProcesses.processes ?? []).map((entry) => entry.pid).filter((pid) => Number.isInteger(pid));
-    await writeFile(lowlevelLedger, `${JSON.stringify({ schemaVersion: 1, desktop, configPath, runRoot, sandboxExecutable, startedAt: new Date().toISOString(), statePath: lowlevelState, prePids }, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
+    await writeFile(lowlevelLedger, `${JSON.stringify({ schemaVersion: 1, baselineVerified: true, desktop, configPath, runRoot, sandboxExecutable, startedAt: new Date().toISOString(), statePath: lowlevelState, prePids }, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
     let launchResult;
     try { launchResult = await runLowlevel('launch', { desktop, executable: sandboxExecutable, arguments: [configPath], allowShellWrapper: false, runRoot, outputRoot: lowlevelOutputRoot, cdp: null }, 60_000); }
     catch (error) {
@@ -104,7 +105,8 @@ try {
       const postProcesses = await runLowlevelCall('list_processes', { name_filter: 'WindowsSandboxRemoteSession.exe', limit: 1000 }, 30_000).catch(() => ({ processes: [] }));
       const newPids = (postProcesses.processes ?? []).filter((entry) => entry.name === 'WindowsSandboxRemoteSession.exe' && Number.isInteger(entry.pid) && !prePids.includes(entry.pid)).map((entry) => entry.pid);
       const soleWindow = windows.filter((window) => Number(window.width) > 0 && Number(window.height) > 0 && window.title === 'Windows Sandbox' && window.class === 'WinUIDesktopWin32WindowClass');
-      if (newPids.length === 1 && (soleWindow.length === 0 || soleWindow.length === 1)) { const pid = newPids[0]; const killed = await runLowlevelCall('kill_process', { pid, force: true }, 30_000).catch(() => ({ ok: false, client_ok: false })); const after = await runLowlevelCall('list_processes', { name_filter: 'WindowsSandboxRemoteSession.exe', limit: 1000 }, 30_000).catch(() => ({ processes: [] })); const closed = await runLowlevelCall('close_headless_desktop', { name: desktop }, 30_000).catch(() => ({ ok: false, client_ok: false })); if (killed.ok === true && killed.client_ok === true && !(after.processes ?? []).some((process) => process.pid === pid) && closed.ok === true && closed.client_ok === true) { await rm(configPath, { force: false }); await rm(lowlevelLedger, { force: false }); } else throw new Error('launch-cleanup-unproven: exact process absence or desktop closure was not proven.'); }
+      const matchingWindows = soleWindow.filter((window) => window.process_id === newPids[0]);
+      if (newPids.length === 1 && matchingWindows.length === 1) { const pid = newPids[0]; const killed = await runLowlevelCall('kill_process', { pid, force: true }, 30_000).catch(() => ({ ok: false, client_ok: false })); const after = await runLowlevelCall('list_processes', { name_filter: 'WindowsSandboxRemoteSession.exe', limit: 1000 }, 30_000).catch(() => ({ processes: [] })); const closed = await runLowlevelCall('close_headless_desktop', { name: desktop }, 30_000).catch(() => ({ ok: false, client_ok: false })); if (killed.ok === true && killed.client_ok === true && !(after.processes ?? []).some((process) => process.pid === pid) && closed.ok === true && closed.client_ok === true) { await rm(configPath, { force: false }); await rm(lowlevelLedger, { force: false }); } else throw new Error('launch-cleanup-unproven: exact process absence or desktop closure was not proven.'); }
       else if (newPids.length > 1) throw new Error(`launch-cleanup-unproven: multiple new Sandbox processes appeared on ${desktop}.`);
       else throw new Error(`launch-cleanup-unproven: launch failed before state and no exact Sandbox process proof was available (${error instanceof Error ? error.message : String(error)}).`);
       throw error;
