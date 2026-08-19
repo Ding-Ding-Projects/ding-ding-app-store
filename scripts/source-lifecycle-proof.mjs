@@ -48,6 +48,22 @@ function safeDetails(value) {
   return Object.fromEntries(allowed.filter((key) => Object.hasOwn(details, key)).map((key) => [key, details[key]]));
 }
 
+function assertSourceDisposalReceipt(value, label = 'source disposal receipt') {
+  if (!value || value.schemaVersion !== 1 || !SAFE_DIGEST.test(value.challengeNonce ?? '') || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.jobId ?? '') || typeof value.guestId !== 'string' || typeof value.brokerId !== 'string' || typeof value.transportId !== 'string' || value.processTreeStopped !== true || value.guestDeleted !== true || value.hostMounts !== 0 || value.credentialsInjected !== false || value.secretsInjected !== false) fail(`${label} is not a validated host disposal receipt.`);
+  if (!/^\d{4}-\d{2}-\d{2}T/.test(value.disposedAt ?? '')) fail(`${label} is missing its disposal timestamp.`);
+  return value;
+}
+
+function assertGuestLifecycleEvidence(value, sourceDisposalReceipt, label = 'guest lifecycle final receipt') {
+  if (!value || value.schemaVersion !== 1 || value.protocolVersion !== 1 || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.jobId ?? '')) fail(`${label} is missing its protocol identity.`);
+  if (!SAFE_DIGEST.test(value.planDigest) || !Number.isInteger(value.lastSequence) || value.lastSequence < 1) fail(`${label} is missing its plan digest or sequence.`);
+  if (value.verdict !== true || value.processReady !== true || typeof value.installIdentity !== 'string' || !value.installIdentity || value.uninstallSucceeded !== true || value.absenceVerified !== true || value.childProcessesStopped !== true) fail(`${label} does not prove install, inner-app readiness, uninstall absence, and guest child-process stop.`);
+  if (typeof value.windowTitle !== 'string' || typeof value.windowClass !== 'string' || !/^0x[0-9a-f]+$/i.test(value.hwnd ?? '')) fail(`${label} does not prove an inner-app window.`);
+  assertSourceDisposalReceipt(sourceDisposalReceipt);
+  if (sourceDisposalReceipt.jobId !== value.jobId || sourceDisposalReceipt.challengeNonce !== value.challengeNonce || sourceDisposalReceipt.guestId !== value.guestId) fail(`${label} and host disposal receipt are not bound to the same guest.`);
+  return { guestFinal: value, sourceDisposalReceipt };
+}
+
 function fail(message) { throw new Error(`Source lifecycle recipe catalog invalid: ${message}`); }
 
 export function assertSourceRecipeCatalog(catalog) {
@@ -96,8 +112,14 @@ async function loadDriver(modulePath) {
   return driver;
 }
 
-function normalize(result) {
-  if (result === true || result?.ok === true || result?.status === 'verified') return { status: 'verified', details: safeDetails(result?.details ?? {}) };
+function normalize(result, lifecycleEvidence = false) {
+  if (result === true || result?.ok === true || result?.status === 'verified') {
+    if (lifecycleEvidence) {
+      if (!result?.guestFinal || !result?.sourceDisposalReceipt) fail('Guest lifecycle status was not accompanied by a validated guest final and SourceDisposalReceipt.');
+      assertGuestLifecycleEvidence(result.guestFinal, result.sourceDisposalReceipt);
+    }
+    return { status: 'verified', details: safeDetails(result?.details ?? {}) };
+  }
   if (result?.status === 'blocked') return { status: 'blocked', details: safeDetails(result.details ?? result) };
   if (result?.status === 'skipped') return { status: 'skipped', details: safeDetails(result.details ?? result) };
   if (result?.status === 'failed') return { status: 'failed', details: safeDetails(result.details ?? result) };
@@ -162,7 +184,7 @@ export async function runSourceRecipeLifecycle(recipe, driver, { clock = Date.no
       const result = ['install', 'launch', 'uninstall'].includes(stageName) && driver.guestLifecycleAgent !== true
         ? blocked('guest-lifecycle-agent-unavailable', 'The integrated protocol peer transfers source outputs but does not expose a guest-side install, launch, process/window, or uninstall agent. A wrapper window is not inner-app evidence, and host install paths are forbidden.')
         : typeof method === 'function' ? await bounded(() => method({ recipe, guest }), timeoutMs, `${recipe.appId} ${stageName}`) : blocked('driver-method-unavailable', `No attested driver method is registered for ${stageName}.`);
-      const normalized = normalize(result);
+      const normalized = normalize(result, driver.guestLifecycleAgent === true && ['install', 'launch', 'uninstall', 'disposal'].includes(stageName));
       stages.push({ name: stageName, status: normalized.status, startedAt: stageStarted, completedAt: nowIso(clock), details: normalized.details });
     } catch (error) {
       stages.push({ name: stageName, status: 'failed', startedAt: stageStarted, completedAt: nowIso(clock), details: { reasonCode: 'stage-failed', message: error instanceof Error ? error.message : String(error) } });
