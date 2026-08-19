@@ -59,7 +59,7 @@ if (setupBytes.subarray(0, 2).toString('ascii') !== 'MZ') throw new Error('Setup
 const setupSha256 = createHash('sha256').update(setupBytes).digest('hex');
 const packageSha256 = createHash('sha256').update(packageBytes).digest('hex');
 const extractionRoot = await mkdtemp(path.join(os.tmpdir(), 'ding-ding-guest-artifact-'));
-let peer; let transport; let receipt; const lowlevelState = path.join(runRoot, 'state.json'); const lowlevelOutputRoot = path.join(runRoot, 'output');
+let peer; let transport; let receipt; const lowlevelState = path.join(runRoot, 'state.json'); const lowlevelLedger = path.join(runRoot, 'launch-ledger.json'); const lowlevelOutputRoot = path.join(runRoot, 'output');
 const runLowlevel = (command, input, timeoutMs = 60_000) => new Promise((resolve, reject) => {
   const childArgs = command === 'call' ? ['-3', lowlevelClientPath, 'call', input.tool] : ['-3', lowlevelClientPath, command, '--state', lowlevelState, ...(command === 'cleanup' ? ['--allow-saved-pid-kill'] : [])];
   const child = spawn('py', childArgs, { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
@@ -93,9 +93,21 @@ try {
   const launch = async (executable, configPath) => {
     if (path.resolve(executable).toLowerCase() !== sandboxExecutable.toLowerCase()) throw new Error(`Lowlevel launch executable mismatch: ${executable}`);
     const desktop = `GuestLifecycle-${jobId.slice(0, 12)}`;
-    const launchResult = await runLowlevel('launch', { desktop, executable: sandboxExecutable, arguments: [configPath], allowShellWrapper: false, runRoot, outputRoot: lowlevelOutputRoot, cdp: null }, 60_000);
+    await writeFile(lowlevelLedger, `${JSON.stringify({ schemaVersion: 1, desktop, configPath, runRoot, sandboxExecutable, startedAt: new Date().toISOString(), statePath: lowlevelState }, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
+    let launchResult;
+    try { launchResult = await runLowlevel('launch', { desktop, executable: sandboxExecutable, arguments: [configPath], allowShellWrapper: false, runRoot, outputRoot: lowlevelOutputRoot, cdp: null }, 60_000); }
+    catch (error) {
+      const listed = await runLowlevelCall('list_headless_windows', { name: desktop }, 30_000).catch(() => ({ windows: [] }));
+      const windows = Array.isArray(listed.windows) ? listed.windows : [];
+      const exact = windows.filter((window) => Number.isInteger(Number(window.pid ?? window.processId)) && String(window.commandLine ?? '').includes(configPath) && path.basename(String(window.executablePath ?? window.process ?? '')) === 'WindowsSandboxRemoteSession.exe');
+      if (exact.length === 1) { await runLowlevelCall('kill_process', { pid: Number(exact[0].pid ?? exact[0].processId), force: true }, 30_000).catch(() => undefined); await runLowlevelCall('close_headless_desktop', { name: desktop }, 30_000).catch(() => undefined); await rm(configPath, { force: false }).catch(() => undefined); }
+      else if (exact.length > 1) throw new Error(`launch-cleanup-unproven: ambiguous exact Sandbox processes on ${desktop}.`);
+      else throw new Error(`launch-cleanup-unproven: launch failed before state and no exact Sandbox process proof was available (${error instanceof Error ? error.message : String(error)}).`);
+      throw error;
+    }
     if (launchResult.client_ok !== true || launchResult.ok !== true || !Number.isInteger(launchResult.pid)) throw new Error(`Direct Lowlevel Sandbox launch was not verified: ${JSON.stringify(launchResult)}`);
     recordedPid = launchResult.pid;
+    await writeFile(lowlevelLedger, `${JSON.stringify({ schemaVersion: 1, desktop, configPath, runRoot, sandboxExecutable, startedAt: new Date().toISOString(), statePath: lowlevelState, pid: recordedPid }, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
     return { stop: async () => {
       const cleanupResult = await runLowlevel('cleanup', undefined, 60_000).catch((error) => ({ ok: false, client_ok: false, error: error instanceof Error ? error.message : String(error) }));
       const processTreeStopped = cleanupResult.client_ok === true && cleanupResult.ok === true && cleanupResult.actions?.every((action) => action.ok === true);
@@ -112,15 +124,17 @@ try {
     process.exitCode = 1;
   }
 } finally {
+  const ledger = await readFile(lowlevelLedger, 'utf8').then((value) => JSON.parse(value)).catch(() => null);
   let lowlevelCleanup;
   if (await stat(lowlevelState).catch(() => null)) {
     try { lowlevelCleanup = await runLowlevel('cleanup', undefined, 60_000); } catch (error) { lowlevelCleanup = { ok: false, client_ok: false, error: error instanceof Error ? error.message : String(error) }; }
   }
   const cleanupVerified = lowlevelCleanup?.ok === true && lowlevelCleanup?.client_ok === true && lowlevelCleanup.actions?.every((action) => action.ok === true);
-  if (cleanupVerified || !(await stat(lowlevelState).catch(() => null))) {
+  if (cleanupVerified || (!(await stat(lowlevelState).catch(() => null)) && ledger?.configPath)) {
+    if (ledger?.configPath) await rm(ledger.configPath, { force: false }).catch(() => undefined);
     for (const config of await readdir(runRoot).then((names) => names.filter((name) => name.toLowerCase().endsWith('.wsb'))).catch(() => [])) await rm(path.join(runRoot, config), { force: false });
   }
-  if (receipt && typeof receipt === 'object') receipt.cleanup = { lowlevelCleanup: lowlevelCleanup ?? null, cleanupVerified, runRoot, statePath: lowlevelState, remainingConfigFiles: (await readdir(runRoot).catch(() => [])).filter((name) => name.toLowerCase().endsWith('.wsb')).map((name) => path.join(runRoot, name)) };
+  if (receipt && typeof receipt === 'object') receipt.cleanup = { lowlevelCleanup: lowlevelCleanup ?? null, cleanupVerified, runRoot, statePath: lowlevelState, ledgerPath: lowlevelLedger, remainingConfigFiles: (await readdir(runRoot).catch(() => [])).filter((name) => name.toLowerCase().endsWith('.wsb')).map((name) => path.join(runRoot, name)) };
   await transport?.abort?.(receipt?.guestFinal?.jobId ?? '').catch(() => undefined);
   await peer?.close?.().catch(() => undefined);
   await rm(extractionRoot, { recursive: true, force: true });

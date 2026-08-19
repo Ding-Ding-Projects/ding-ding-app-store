@@ -75,6 +75,11 @@ describe('guest lifecycle protocol contracts', () => {
     expect(source).not.toContain("spawn(executable");
     expect(source).toContain("runLowlevel('launch'");
     expect(source).toContain('sandboxExecutable');
+    expect(source).toContain('launch-ledger.json');
+    expect(source).toContain('schemaVersion: 1, desktop, configPath, runRoot, sandboxExecutable');
+    expect(source).toContain('launch-cleanup-unproven');
+    expect(source).toContain('commandLine');
+    expect(source).not.toContain("kill_process', { name");
     expect(source).toContain('WindowsSandboxRemoteSession.exe');
     expect(source).toContain("runLowlevel('cleanup'");
     expect(source).not.toContain('launch_on_headless_desktop');
