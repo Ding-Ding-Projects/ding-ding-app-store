@@ -393,6 +393,13 @@ export function App() {
     }
   }, [projectRuntimeAppName, projectRuntimeText, reportOperation]);
 
+  const exportSourceOutput = useCallback(async (jobId: string) => {
+    try {
+      const result = await window.dingDingStore.sourceJobs.exportOutput({ jobId, format: 'zip' });
+      notify({ ok: result.ok, message: projectRuntimeText(result.message) });
+    } catch (error) { notify({ ok: false, message: projectRuntimeText((error as Error).message) }); }
+  }, [notify, projectRuntimeText]);
+
   const cancelInstall = useCallback(async (app: CatalogApp, trigger: HTMLButtonElement) => {
     const fallback = trigger.closest('.app-card')?.querySelector<HTMLElement>(`[data-install-action="${app.id}"]`) ?? trigger;
     cancellationFocusTargets.current.set(app.id, fallback);
@@ -1141,6 +1148,7 @@ export function App() {
             onRetry={() => void retrySourceTerminal()}
             onClose={closeSourceTerminal}
             allowRetry={!hiddenSourceTerminal}
+            onExportOutput={(jobId) => void exportSourceOutput(jobId)}
           />
         )}
 

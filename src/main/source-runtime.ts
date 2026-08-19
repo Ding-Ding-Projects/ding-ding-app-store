@@ -1,9 +1,11 @@
 import { createHash, randomBytes } from 'node:crypto';
+import { spawn } from 'node:child_process';
 import { createReadStream } from 'node:fs';
-import { lstat, mkdir, realpath, readdir, readFile, rm, stat } from 'node:fs/promises';
+import { lstat, mkdir, realpath, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
-import type { SourceIsolationStatus, SourceJobDecision, SourceJobState, SourceTerminalEvent, SourceTerminalStream } from '../shared/contracts.js';
+import type { SourceDisposalReceipt, SourceIsolationStatus, SourceJobDecision, SourceJobState, SourceOutputFile, SourceOutputManifest, SourceTerminalEvent, SourceTerminalStream } from '../shared/contracts.js';
+import { sourceDisposalReceiptSchema, sourceOutputManifestSchema } from '../shared/contracts.js';
 import { extractZipSafe } from './safe-zip.js';
 
 export const SOURCE_RUNTIME_LIMITS = Object.freeze({
@@ -31,6 +33,66 @@ export const SOURCE_BROKER_LIMITS = Object.freeze({
   clockSkewMs: 5_000,
   teardownGraceMs: 10_000,
 });
+
+export const SOURCE_GUEST_PROTOCOL_VERSION = 1 as const;
+export const SOURCE_GUEST_IDENTITY = Object.freeze({ brokerId: 'ding-ding-windows-sandbox', transportId: 'windows-sandbox-zero-mount-v1' });
+export const SOURCE_GUEST_POLICY = Object.freeze({
+  kind: 'hard-disposable' as const,
+  hostMounts: 0,
+  userProfileMounted: false,
+  credentialsInjected: false,
+  secretsInjected: false,
+  shellStringsAllowed: false,
+  network: 'recipe-and-opencode-only' as const,
+  clipboardRedirection: false,
+  protectedClient: true,
+  cleanupOnExit: true,
+});
+
+/** Fixed guest-side bootstrap. It is embedded in the .wsb command so no host
+ * folder is mapped into the guest. The only host communication is the
+ * nonce-bound loopback/gateway protocol supplied by the transport. */
+export const WINDOWS_SANDBOX_GUEST_BOOTSTRAP = String.raw`$ErrorActionPreference = 'Stop'
+$protocol = 1
+$jobId = $args[0]
+$nonce = $args[1]
+$endpoint = $args[2]
+$token = $args[3]
+$headers = @{ 'X-Ding-Ding-Runner' = $token; 'X-Ding-Ding-Protocol' = "$protocol" }
+function Send-Runner($route, $body) {
+  Invoke-RestMethod -Method Post -Uri "$endpoint$route" -Headers $headers -ContentType 'application/json' -Body ($body | ConvertTo-Json -Depth 12 -Compress)
+}
+$hello = @{ protocolVersion = $protocol; jobId = $jobId; challengeNonce = $nonce; hostMounts = 0; credentialsInjected = $false; secretsInjected = $false; shellStringsAllowed = $false }
+Send-Runner '/hello' $hello | Out-Null
+$plan = Invoke-RestMethod -Method Get -Uri "$endpoint/plan/$jobId" -Headers $headers
+if ($plan.protocolVersion -ne $protocol -or $plan.jobId -ne $jobId -or $plan.challengeNonce -ne $nonce -or $plan.policy.hostMounts -ne 0 -or $plan.policy.credentialsInjected -ne $false -or $plan.policy.secretsInjected -ne $false -or $plan.policy.shellStringsAllowed -ne $false) { throw 'Runner plan or policy binding was rejected.' }
+$workspace = Join-Path $env:TEMP "ding-ding-$jobId"
+New-Item -ItemType Directory -Force -Path $workspace | Out-Null
+try {
+  $archive = Join-Path $workspace 'source.zip'
+  Invoke-WebRequest -Uri $plan.sourceArchiveUrl -OutFile $archive -UseBasicParsing
+  if ((Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash.ToLowerInvariant() -ne $plan.sourceArchiveSha256) { throw 'Source archive SHA-256 did not match the reviewed plan.' }
+  Expand-Archive -LiteralPath $archive -DestinationPath $workspace -Force
+  Remove-Item -LiteralPath $archive -Force
+  foreach ($step in $plan.steps) {
+    if ($step.arguments -join ' ' -match '[;&|<>\r\n]') { throw 'Shell operators are not permitted in a reviewed step.' }
+    Send-Runner '/event' @{ stream = 'progress'; state = 'running'; text = "Starting $($step.id)"; progress = 10 } | Out-Null
+    $p = Start-Process -FilePath $step.executable -ArgumentList ([string[]]$step.arguments) -WorkingDirectory (Join-Path $workspace $step.cwd) -NoNewWindow -PassThru -Wait
+    if ($p.ExitCode -ne 0) { throw "Reviewed step $($step.id) exited with code $($p.ExitCode)." }
+  }
+  $files = Get-ChildItem -LiteralPath $workspace -File -Recurse | Where-Object { $_.FullName -notlike "$workspace\source.zip" }
+  $manifest = @($files | ForEach-Object { $relative = $_.FullName.Substring($workspace.Length + 1).Replace([char]92,'/'); @{ path = $relative; bytes = $_.Length; sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant() } })
+  Send-Runner '/outputs' @{ schemaVersion = 1; jobId = $jobId; files = $manifest } | Out-Null
+  Send-Runner '/complete' @{ jobId = $jobId; ok = $true } | Out-Null
+} finally {
+  Remove-Item -LiteralPath $workspace -Recurse -Force -ErrorAction SilentlyContinue
+}`;
+
+export function createZeroMountSandboxConfig(command: string): string {
+  if (!command || /[\r\n]/.test(command)) throw new Error('Sandbox logon command must be one bounded command.');
+  const escaped = command.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
+  return `<Configuration><VGpu>Disable</VGpu><Networking>Enable</Networking><ClipboardRedirection>Disable</ClipboardRedirection><AudioInput>Disable</AudioInput><VideoInput>Disable</VideoInput><ProtectedClient>Enable</ProtectedClient><MappedFolders></MappedFolders><LogonCommand><Command>${escaped}</Command></LogonCommand></Configuration>`;
+}
 
 export const PINNED_OPENCODE = Object.freeze({
   version: '1.18.15',
@@ -294,6 +356,31 @@ export interface SourceExecutionPlan {
   openCodeConfig: ReturnType<typeof createOpenCodeConfig>;
   openCodeArguments: readonly ['run', '--auto'];
   forbiddenRepairEntries: readonly string[];
+  protocolVersion: typeof SOURCE_GUEST_PROTOCOL_VERSION;
+  policy: typeof SOURCE_GUEST_POLICY;
+  planDigest: string;
+}
+
+export interface SourceGuestBootstrap {
+  protocolVersion: typeof SOURCE_GUEST_PROTOCOL_VERSION;
+  jobId: string;
+  challengeNonce: string;
+  guestId: string;
+  brokerId: string;
+  transportId: string;
+  planDigest: string;
+  policy: typeof SOURCE_GUEST_POLICY;
+}
+
+export interface SourceGuestOutput extends SourceOutputFile {
+  /** Internal transfer bytes. They never cross the preload boundary. */
+  content?: Buffer;
+}
+
+export interface SourceExecutionResult {
+  outputs?: SourceGuestOutput[];
+  outputManifest?: SourceOutputManifest;
+  guestId?: string;
 }
 
 export interface IsolationBroker {
@@ -302,15 +389,16 @@ export interface IsolationBroker {
    * is expired or the signal is already aborted, and must stop the guest when
    * the signal aborts. The main process validates the same boundary before
    * dispatch; this broker-side rule closes the transport seam. */
-  execute(plan: Readonly<SourceExecutionPlan>, emit: (event: RuntimeLine) => void, signal: AbortSignal, lease: Readonly<IsolationCapabilityLease>): Promise<void>;
+  execute(plan: Readonly<SourceExecutionPlan>, emit: (event: RuntimeLine) => void, signal: AbortSignal, lease: Readonly<IsolationCapabilityLease>): Promise<SourceExecutionResult | void>;
   /** A validated lease is mandatory for an admitted guest teardown. The
    * broker must consume the lease at most once; repeated calls for the same
    * job are idempotent cleanup acknowledgements, never new authority. */
-  dispose(jobId: string, lease: Readonly<IsolationCapabilityLease>): Promise<void>;
+  dispose(jobId: string, lease: Readonly<IsolationCapabilityLease>): Promise<SourceDisposalReceipt | void>;
   /** Pre-attestation abort path for a guest that never received a lease. */
   abort(jobId: string): Promise<void>;
   identity?(): IsolationBrokerIdentity | null;
   diagnose?(): Promise<SourceIsolationStatus>;
+  recoverOrphans?(): Promise<string[]>;
 }
 
 export interface RuntimeLine {
@@ -380,6 +468,123 @@ export async function probeWindowsDisposableGuest(options: WindowsSandboxProbeOp
     ],
     remediation: 'Install and register the reviewed disposable guest transport. Until its attestation and cleanup contract are available, source code and OpenCode stay disabled.',
   };
+}
+
+export interface WindowsSandboxProtocolPeer {
+  attest(challenge: Readonly<IsolationAttestationChallenge>, guestId: string, signal: AbortSignal): Promise<unknown>;
+  execute(plan: Readonly<SourceExecutionPlan>, bootstrap: Readonly<SourceGuestBootstrap>, emit: (line: RuntimeLine) => void, signal: AbortSignal): Promise<SourceExecutionResult | void>;
+  dispose(jobId: string, lease: Readonly<IsolationCapabilityLease>, signal: AbortSignal): Promise<SourceDisposalReceipt>;
+  abort(jobId: string, signal: AbortSignal): Promise<void>;
+}
+
+export interface WindowsSandboxTransportOptions {
+  systemRoot?: string;
+  appDataRoot?: string;
+  platform?: NodeJS.Platform;
+  fileExists?: (filePath: string) => Promise<boolean>;
+  protocol?: WindowsSandboxProtocolPeer;
+  /** Ephemeral host endpoint created by the protocol adapter; never persisted. */
+  endpoint?: string;
+  launch?: (executable: string, configPath: string, signal: AbortSignal) => Promise<{ stop(): Promise<void> }>;
+  recoverOrphan?: (jobId: string, configPath: string) => Promise<boolean>;
+  checkedAt?: () => string;
+}
+
+interface LiveGuest {
+  guestId: string;
+  challenge: IsolationAttestationChallenge;
+  configPath: string;
+  stop(): Promise<void>;
+}
+
+/**
+ * Concrete Windows Sandbox transport. It launches a .wsb document with no
+ * mapped folders, disabled clipboard/audio/video channels and ProtectedClient
+ * enabled. Source bytes and output files cross only the nonce-bound guest
+ * protocol; the host never exposes its profile, secrets or a repository path.
+ * Without a protocol peer this class remains fail-closed.
+ */
+export class WindowsSandboxGuestTransport implements IsolationBroker {
+  private readonly guests = new Map<string, LiveGuest>();
+  constructor(private readonly options: WindowsSandboxTransportOptions = {}) {}
+
+  identity(): IsolationBrokerIdentity | null { return this.options.protocol ? SOURCE_GUEST_IDENTITY : null; }
+
+  async recoverOrphans(): Promise<string[]> {
+    const root = this.options.appDataRoot;
+    if (!root || !this.options.recoverOrphan) return [];
+    const recovered: string[] = [];
+    let entries: string[];
+    try { entries = await readdir(root); } catch { return recovered; }
+    for (const name of entries) {
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.wsb$/i.test(name)) continue;
+      const jobId = name.slice(0, -4);
+      const configPath = path.join(root, name);
+      try {
+        if (await this.options.recoverOrphan(jobId, configPath)) { await rm(configPath, { force: true }); recovered.push(jobId); }
+      } catch { /* Preserve an unproven orphan for the next startup recovery pass. */ }
+    }
+    return recovered;
+  }
+
+  async diagnose(): Promise<SourceIsolationStatus> {
+    const base = await probeWindowsDisposableGuest(this.options);
+    if (!base.evidence || base.reason !== 'guest-transport-not-connected') return base;
+    if (!this.options.protocol || !this.options.endpoint || !/^https?:\/\/[^\s/]+(?::\d{1,5})?$/.test(this.options.endpoint)) return base;
+    return { available: true, provider: 'windows-sandbox', reason: 'ready', checkedAt: base.checkedAt, evidence: [...base.evidence, 'The fixed zero-host-mount guest protocol peer is configured.', 'The guest bootstrap refuses host mounts, credentials, secrets and shell strings.'], remediation: 'Source execution may proceed only after the per-job guest attestation and disposal receipt validate.' };
+  }
+
+  private async launchGuest(challenge: Readonly<IsolationAttestationChallenge>, signal: AbortSignal): Promise<LiveGuest> {
+    const root = this.options.appDataRoot ?? path.join(process.env.LOCALAPPDATA ?? process.env.TEMP ?? '.', 'DingDingAppStore', 'source-jobs');
+    await mkdir(root, { recursive: true });
+    const guestId = `guest-${challenge.jobId}`;
+    const configPath = path.join(root, `${challenge.jobId}.wsb`);
+    const token = randomBytes(24).toString('hex');
+    const encoded = Buffer.from(WINDOWS_SANDBOX_GUEST_BOOTSTRAP, 'utf8').toString('base64');
+    const command = `powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand ${encoded} -- ${challenge.jobId} ${challenge.nonce} ${this.options.endpoint} ${token}`;
+    await writeFile(configPath, createZeroMountSandboxConfig(command), { encoding: 'utf8', flag: 'wx' });
+    const launch = this.options.launch ?? (async (executable: string, file: string, abortSignal: AbortSignal) => {
+      const child = spawn(executable, [file], { windowsHide: true, stdio: 'ignore' });
+      const stop = async () => { if (!child.killed) child.kill(); };
+      if (abortSignal.aborted) await stop(); else abortSignal.addEventListener('abort', () => { void stop(); }, { once: true });
+      return { stop };
+    });
+    const executable = path.join(this.options.systemRoot ?? process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsSandbox.exe');
+    const processHandle = await launch(executable, configPath, signal);
+    const guest = { guestId, challenge: { ...challenge }, configPath, stop: processHandle.stop };
+    this.guests.set(challenge.jobId, guest);
+    return guest;
+  }
+
+  async attest(challenge: Readonly<IsolationAttestationChallenge>, signal: AbortSignal): Promise<unknown> {
+    if (!this.options.protocol || !(await this.diagnose()).available) return null;
+    const guest = await this.launchGuest(challenge, signal);
+    try { return await this.options.protocol.attest(challenge, guest.guestId, signal); } catch (error) { await this.abort(challenge.jobId); throw error; }
+  }
+
+  async execute(plan: Readonly<SourceExecutionPlan>, emit: (line: RuntimeLine) => void, signal: AbortSignal, _lease: Readonly<IsolationCapabilityLease>): Promise<SourceExecutionResult | void> {
+    const guest = this.guests.get(plan.jobId);
+    if (!guest || !this.options.protocol) throw new Error('The zero-mount guest protocol is not connected.');
+    const bootstrap = createGuestBootstrap(plan, guest.challenge.nonce, guest.guestId);
+    if (!validateGuestBootstrap(bootstrap, plan, guest.challenge)) throw new Error('The guest bootstrap binding was rejected.');
+    return this.options.protocol.execute(plan, bootstrap, emit, signal);
+  }
+
+  async dispose(jobId: string, lease: Readonly<IsolationCapabilityLease>): Promise<SourceDisposalReceipt> {
+    const guest = this.guests.get(jobId);
+    if (!guest || !this.options.protocol) throw new Error('No admitted zero-mount guest is available for disposal.');
+    try {
+      const receipt = sourceDisposalReceiptSchema.parse(await this.options.protocol.dispose(jobId, lease, new AbortController().signal));
+      if (receipt.jobId !== jobId || receipt.challengeNonce !== guest.challenge.nonce || receipt.guestId !== guest.guestId || receipt.hostMounts !== 0 || !receipt.processTreeStopped || !receipt.guestDeleted) throw new Error('The guest disposal receipt did not prove complete teardown.');
+      return receipt;
+    } finally { await guest.stop(); this.guests.delete(jobId); await rm(guest.configPath, { force: true }); }
+  }
+
+  async abort(jobId: string): Promise<void> {
+    const guest = this.guests.get(jobId); if (!guest) return;
+    try { if (this.options.protocol) await this.options.protocol.abort(jobId, new AbortController().signal); }
+    finally { await guest.stop(); this.guests.delete(jobId); await rm(guest.configPath, { force: true }); }
+  }
 }
 
 /**
@@ -459,7 +664,7 @@ export function createSourceExecutionPlan(jobId: string, decision: SourceJobDeci
   const selected = decision === 'build'
     ? [...recipe.prepare, ...recipe.validate, ...recipe.build, ...recipe.test]
     : [...recipe.prepare, ...recipe.validate, ...recipe.run];
-  return {
+  const plan = {
     jobId,
     appId: recipe.appId,
     decision,
@@ -474,9 +679,40 @@ export function createSourceExecutionPlan(jobId: string, decision: SourceJobDeci
     repairAttempts: recipe.repairAttempts,
     openCode: PINNED_OPENCODE,
     openCodeConfig: createOpenCodeConfig(),
-    openCodeArguments: ['run', '--auto'],
+    openCodeArguments: ['run', '--auto'] as const,
     forbiddenRepairEntries: ['.git', '.opencode', 'opencode.json', 'opencode.jsonc', 'AGENTS.md', 'CLAUDE.md'],
+    protocolVersion: SOURCE_GUEST_PROTOCOL_VERSION,
+    policy: SOURCE_GUEST_POLICY,
+    planDigest: '',
   };
+  const planDigest = createPlanDigest(plan);
+  return Object.freeze({ ...plan, planDigest });
+}
+
+function stableJson(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  return `{${Object.keys(value as Record<string, unknown>).sort().map((key) => `${JSON.stringify(key)}:${stableJson((value as Record<string, unknown>)[key])}`).join(',')}}`;
+}
+
+export function createPlanDigest(plan: Omit<SourceExecutionPlan, 'planDigest'> | SourceExecutionPlan): string {
+  const { planDigest: _ignored, ...unsigned } = plan as SourceExecutionPlan;
+  return createHash('sha256').update(stableJson(unsigned)).digest('hex');
+}
+
+export function createGuestBootstrap(plan: Readonly<SourceExecutionPlan>, challengeNonce: string, guestId: string): SourceGuestBootstrap {
+  if (!nonceSchema.safeParse(challengeNonce).success) throw new Error('Guest bootstrap requires the attestation nonce.');
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(guestId)) throw new Error('Guest bootstrap requires a bounded guest identity.');
+  if (plan.planDigest !== createPlanDigest(plan)) throw new Error('Guest bootstrap rejected a plan with a stale digest.');
+  return Object.freeze({ protocolVersion: SOURCE_GUEST_PROTOCOL_VERSION, jobId: plan.jobId, challengeNonce, guestId, brokerId: SOURCE_GUEST_IDENTITY.brokerId, transportId: SOURCE_GUEST_IDENTITY.transportId, planDigest: plan.planDigest, policy: SOURCE_GUEST_POLICY });
+}
+
+export function validateGuestBootstrap(input: unknown, plan: Readonly<SourceExecutionPlan>, challenge: Readonly<IsolationAttestationChallenge>): boolean {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return false;
+  const value = input as Record<string, unknown>;
+  if (value.protocolVersion !== SOURCE_GUEST_PROTOCOL_VERSION || value.jobId !== plan.jobId || value.challengeNonce !== challenge.nonce || value.planDigest !== plan.planDigest || value.brokerId !== challenge.expectedBrokerId || value.transportId !== challenge.expectedTransportId) return false;
+  if (!isolationMatches(value.policy as IsolationRequirements) || !value.policy || (value.policy as Record<string, unknown>).clipboardRedirection !== false || (value.policy as Record<string, unknown>).protectedClient !== true) return false;
+  return typeof value.guestId === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value.guestId);
 }
 
 const SECRET_PATTERNS = [

@@ -72,6 +72,9 @@ import type {
   SourceJobRetryRequest,
   SourceJobRequest,
   SourceIsolationStatus,
+  SourceOutputExportRequest,
+  SourceOutputExportResult,
+  SourceOutputManifest,
   SourceTerminalEvent,
   SupportState,
   SupportTicketCreateRequest,
@@ -352,11 +355,33 @@ function parseAuthenticatorList(value: unknown): AuthenticatorListResult {
 function parseSourceIsolationStatus(value: unknown): SourceIsolationStatus {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('The source isolation status response was invalid.');
   const status = value as Record<string, unknown>;
-  if (typeof status.available !== 'boolean' || status.provider !== 'windows-sandbox' || typeof status.reason !== 'string' || (status.reason !== 'unsupported-platform' && status.reason !== 'guest-transport-not-connected' && !status.reason.startsWith('sandbox-'))) throw new Error('The source isolation status response was invalid.');
+  if (typeof status.available !== 'boolean' || status.provider !== 'windows-sandbox' || typeof status.reason !== 'string' || !(status.reason === 'ready' || status.reason === 'unsupported-platform' || status.reason === 'guest-transport-not-connected' || status.reason.startsWith('sandbox-'))) throw new Error('The source isolation status response was invalid.');
   if (typeof status.checkedAt !== 'string' || !Number.isFinite(Date.parse(status.checkedAt))) throw new Error('The source isolation status response was invalid.');
   if (!Array.isArray(status.evidence) || status.evidence.length > 8 || status.evidence.some((entry) => typeof entry !== 'string' || entry.length > 240)) throw new Error('The source isolation status response was invalid.');
   if (typeof status.remediation !== 'string' || status.remediation.length > 600) throw new Error('The source isolation status response was invalid.');
   return Object.freeze({ available: status.available, provider: 'windows-sandbox', reason: status.reason as SourceIsolationStatus['reason'], checkedAt: status.checkedAt, evidence: [...status.evidence] as string[], remediation: status.remediation });
+}
+
+function parseSourceOutputManifest(value: unknown): SourceOutputManifest | null {
+  if (value === null) return null;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('The source output manifest response was invalid.');
+  const manifest = value as Record<string, unknown>;
+  if (manifest.schemaVersion !== 1 || typeof manifest.jobId !== 'string' || typeof manifest.appId !== 'string' || typeof manifest.revision !== 'string' || (manifest.decision !== 'build' && manifest.decision !== 'run') || typeof manifest.generatedAt !== 'string' || !Number.isFinite(Date.parse(manifest.generatedAt)) || !Number.isInteger(manifest.totalBytes) || !Array.isArray(manifest.files) || manifest.files.length > 128) throw new Error('The source output manifest response was invalid.');
+  const files = manifest.files.map((raw) => {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('The source output manifest response was invalid.');
+    const file = raw as Record<string, unknown>;
+    if (typeof file.path !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._/-]{0,239}$/.test(file.path) || !Number.isInteger(file.bytes) || Number(file.bytes) < 0 || Number(file.bytes) > 2_000_000_000 || typeof file.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(file.sha256)) throw new Error('The source output manifest response was invalid.');
+    return Object.freeze({ path: file.path, bytes: Number(file.bytes), sha256: file.sha256 });
+  });
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(manifest.jobId) || !/^[a-z0-9][a-z0-9-]{0,127}$/.test(manifest.appId) || !/^[a-f0-9]{40}$/.test(manifest.revision) || Number(manifest.totalBytes) !== files.reduce((total, file) => total + file.bytes, 0) || new Set(files.map((file) => file.path)).size !== files.length) throw new Error('The source output manifest response was invalid.');
+  return Object.freeze({ schemaVersion: 1, jobId: manifest.jobId, appId: manifest.appId, revision: manifest.revision, decision: manifest.decision, generatedAt: manifest.generatedAt, totalBytes: Number(manifest.totalBytes), files });
+}
+
+function parseSourceOutputExport(value: unknown): SourceOutputExportResult {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('The source output export response was invalid.');
+  const result = value as Record<string, unknown>;
+  if (Object.keys(result).some((key) => !['ok', 'format', 'suggestedName', 'bytes', 'sha256', 'message'].includes(key)) || typeof result.ok !== 'boolean' || (result.format !== 'json' && result.format !== 'zip') || typeof result.suggestedName !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,96}\.(json|zip)$/.test(result.suggestedName) || typeof result.message !== 'string' || result.message.length > 512 || (result.bytes !== undefined && (!Number.isInteger(result.bytes) || Number(result.bytes) < 0 || Number(result.bytes) > 2_000_000_000)) || (result.sha256 !== undefined && (typeof result.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(result.sha256)))) throw new Error('The source output export response was invalid.');
+  return Object.freeze({ ok: result.ok, format: result.format, suggestedName: result.suggestedName, bytes: result.bytes === undefined ? undefined : Number(result.bytes), sha256: result.sha256 as string | undefined, message: result.message });
 }
 
 function isSourceTerminalEvent(value: unknown): value is SourceTerminalEvent {
@@ -428,6 +453,14 @@ const api: DingDingStoreApi = {
     retry: (request: SourceJobRetryRequest) => ipcRenderer.invoke('source-jobs:retry', request),
     status: async (): Promise<SourceIsolationStatus> => {
       return parseSourceIsolationStatus(await ipcRenderer.invoke('source-jobs:status'));
+    },
+    outputs: async (jobId: string): Promise<SourceOutputManifest | null> => {
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(jobId)) throw new Error('The source job identifier was invalid.');
+      return parseSourceOutputManifest(await ipcRenderer.invoke('source-jobs:outputs', jobId));
+    },
+    exportOutput: async (request: SourceOutputExportRequest): Promise<SourceOutputExportResult> => {
+      if (!request || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(request.jobId) || (request.format !== 'json' && request.format !== 'zip')) throw new Error('The source output export request was invalid.');
+      return parseSourceOutputExport(await ipcRenderer.invoke('source-jobs:export-output', request));
     },
     subscribe: (listener: (event: Readonly<SourceTerminalEvent>) => void) => {
       const handler = (_event: Electron.IpcRendererEvent, value: unknown) => {

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef } from 'react';
-import type { SourceIsolationStatus, SourceJobState, SourceTerminalEvent, UserSettings } from '../../shared/contracts';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { SourceIsolationStatus, SourceJobState, SourceOutputManifest, SourceTerminalEvent, UserSettings } from '../../shared/contracts';
 import { el } from '../el';
 import { Icon } from '../icons';
 import { label } from '../i18n';
@@ -19,6 +19,7 @@ export function SourceTerminalPanel({ appName, events, fallbackMessage, isolatio
   onRetry(): void;
   onClose(): void;
   allowRetry?: boolean;
+  onExportOutput?(jobId: string): void;
 }) {
   const output = useRef<HTMLDivElement>(null);
   const panel = useRef<HTMLElement>(null);
@@ -27,6 +28,7 @@ export function SourceTerminalPanel({ appName, events, fallbackMessage, isolatio
   const active = ACTIVE_STATES.has(state);
   const progress = [...events].reverse().find((event) => event.progress !== null)?.progress ?? 0;
   const lastEvent = events.at(-1);
+  const [outputManifest, setOutputManifest] = useState<SourceOutputManifest | null>(null);
   const status = useMemo(() => ({
     queued: label(settings, 'Queued', '排緊隊'),
     preparing: label(settings, 'Preparing isolated workspace', '準備隔離工作區'),
@@ -44,6 +46,11 @@ export function SourceTerminalPanel({ appName, events, fallbackMessage, isolatio
   }, [events]);
 
   useEffect(() => { panel.current?.focus(); }, []);
+  useEffect(() => {
+    const jobId = lastEvent?.jobId;
+    if (!jobId || active) return;
+    void window.dingDingStore.sourceJobs.outputs(jobId).then(setOutputManifest).catch(() => setOutputManifest(null));
+  }, [active, lastEvent?.jobId]);
   const liveProgress = Math.floor(progress / 10) * 10;
   const liveSummary = active ? `${status}. ${liveProgress}%` : `${status}${lastEvent?.text ? `: ${lastEvent.text}` : ''}`;
 
@@ -79,6 +86,7 @@ export function SourceTerminalPanel({ appName, events, fallbackMessage, isolatio
           <button className="text-button danger" disabled={state === 'cancelling'} onClick={onCancel}><Icon>cancel</Icon>{state === 'cancelling' ? label(settings, 'Cancelling…', '取消緊…') : label(settings, 'Cancel source job', '取消 source 工作')}</button>
         ) : (
           <>
+            {outputManifest && <div className="source-output-summary" aria-label={label(settings, 'Source output manifest', 'Source 輸出清單')}><span>{label(settings, `${outputManifest.files.length} output files · ${outputManifest.totalBytes} bytes`, `${outputManifest.files.length} 個輸出檔案 · ${outputManifest.totalBytes} bytes`)}</span>{onExportOutput && <button className="text-button" onClick={() => onExportOutput(outputManifest.jobId)}><Icon>download</Icon>{label(settings, 'Export outputs', '匯出輸出')}</button>}</div>}
             {allowRetry && (state === 'failed' || state === 'cancelled') && <button className="text-button" onClick={onRetry}><Icon>refresh</Icon>{label(settings, 'Retry automatically', '自動再試')}</button>}
             <button className="filled-button" onClick={onClose}><Icon>done</Icon>{label(settings, 'Close', '關閉')}</button>
           </>

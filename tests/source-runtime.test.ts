@@ -7,6 +7,7 @@ import { SourceJobService } from '../src/main/source-job-service.js';
 import {
   PINNED_OPENCODE,
   WindowsSandboxIsolationBroker,
+  WindowsSandboxGuestTransport,
   REQUIRED_ISOLATION,
   SOURCE_RUNTIME_LIMITS,
   TerminalEventBudget,
@@ -14,6 +15,11 @@ import {
   createOpenCodeConfig,
   createRepairPrompt,
   createSourceExecutionPlan,
+  createGuestBootstrap,
+  createZeroMountSandboxConfig,
+  validateGuestBootstrap,
+  SOURCE_GUEST_POLICY,
+  SOURCE_GUEST_IDENTITY,
   isolationMatches,
   createIsolationAttestationChallenge,
   validateCapabilityLease,
@@ -126,6 +132,27 @@ describe('source job contracts', () => {
     expect(plan.steps.map((entry) => entry.id)).toEqual(['validate-app', 'build-app']);
     expect(plan.openCodeArguments).toEqual(['run', '--auto']);
     expect(plan.forbiddenRepairEntries).toContain('.opencode');
+  });
+
+  it('binds the fixed guest bootstrap to the plan digest and emits a zero-mount Sandbox document', () => {
+    const jobId = crypto.randomUUID();
+    const plan = createSourceExecutionPlan(jobId, 'build', recipe);
+    const challenge = createIsolationAttestationChallenge(jobId, 60_000, SOURCE_GUEST_IDENTITY, Date.parse('2026-08-12T12:00:00.000Z'));
+    const bootstrap = createGuestBootstrap(plan, challenge.nonce, `guest-${jobId}`);
+    expect(validateGuestBootstrap(bootstrap, plan, challenge)).toBe(true);
+    expect(validateGuestBootstrap({ ...bootstrap, planDigest: '0'.repeat(64) }, plan, challenge)).toBe(false);
+    const wsb = createZeroMountSandboxConfig('powershell.exe -NoProfile -EncodedCommand AAA=');
+    expect(wsb).toContain('<MappedFolders></MappedFolders>');
+    expect(wsb).toContain('<ClipboardRedirection>Disable</ClipboardRedirection>');
+    expect(wsb).toContain('<ProtectedClient>Enable</ProtectedClient>');
+    expect(wsb).not.toContain('<MappedFolder>');
+    expect(SOURCE_GUEST_POLICY.hostMounts).toBe(0);
+  });
+
+  it('reports a configured protocol peer as ready while preserving the real guest policy', async () => {
+    const transport = new WindowsSandboxGuestTransport({ platform: 'win32', fileExists: async () => true, endpoint: 'http://127.0.0.1:4567', protocol: {} as never, checkedAt: () => '2026-08-12T12:00:00.000Z' });
+    await expect(transport.diagnose()).resolves.toMatchObject({ available: true, reason: 'ready', checkedAt: '2026-08-12T12:00:00.000Z' });
+    expect(transport.identity()).toEqual(SOURCE_GUEST_IDENTITY);
   });
 
   it('reports Windows Sandbox capability without launching a host process', async () => {
