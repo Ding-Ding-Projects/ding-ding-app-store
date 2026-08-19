@@ -181,7 +181,7 @@ export async function runProductLifecycle(product, driver, {
   const verdict = stages.length === 13 && stages.every((stage) => stage.status === 'verified');
   const receipt = {
     schemaVersion: LIFECYCLE_PROOF_SCHEMA,
-    product: { appId: product.appId, displayName: product.displayName, adapterId: product.adapterId, installerFamily: product.installerFamily },
+    product: { appId: product.appId, displayName: product.displayName, adapterId: product.adapterId, installerFamily: product.installerFamily, proofStatus: product.proofStatus, proofTargetId: product.proofTargetId, recipeStatus: product.recipeStatus },
     source: product.source,
     guest: product.guest,
     startedAt,

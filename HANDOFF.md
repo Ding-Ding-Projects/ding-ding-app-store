@@ -1,5 +1,12 @@
 # Handoff
 
+## 2026-08-19 source lifecycle receipt recovery
+
+- The hand-written lifecycle matrix now contains exactly the thirteen source-recipe IDs from `data/source-recipes.v1.json`, with pinned revisions/archive digests, adapter families, recipe status, and clean-Windows proof targets. A negative regression proves the matrix, recipe catalog, and `blocked-until-proof` catalog rows remain exact-set equal.
+- Added `scripts/source-lifecycle-proof.mjs`, which persists one bounded receipt per recipe plus an aggregate. It records build-from-source, run-from-source, install, launch, uninstall, and disposal slots and accepts execution only from a driver explicitly marked `windows-sandbox-attested`; the default path records a blocked guest-transport result and never executes source on the host.
+- The four native rows remain blocked: `material-encryption`, `material-ollama`, `material-sandbox`, and `material-virtualbox`. No native toolchain or dependency vector was guessed. No live Windows Sandbox execution or successful lifecycle receipt is claimed.
+- Focused verification: lifecycle, source lifecycle, recipe, runtime, proof-status, and build-hash suites passed 46/46 tests; `npm run docs:check` passed; `npm run build` passed after materializing the declared Electron and esbuild binaries in the task-owned checkout. The build-hash repair ancestor `545f6bb60dc4adc477b3f6a9bb0cbf2e08debb2c` is preserved.
+
 ## 2026-08-12 packaged Activity and protected-history capture evidence
 
 - Release `v0.1.1004` was launched from exact commit `31c46ee` through the sanctioned hidden-desktop route. The packaged artifact's SHA-256 and Squirrel `.nupkg` provenance were verified against that commit.
