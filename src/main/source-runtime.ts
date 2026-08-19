@@ -879,7 +879,7 @@ export class WindowsSandboxProtocolPeer implements WindowsSandboxProtocolPeerCon
     await this.listen();
     const job = this.jobs.get(challenge.jobId);
     if (!job || job.guestId !== guestId) throw new Error('The guest protocol registration was not found.');
-    return await this.withAbort(job.hello, signal, 'Guest hello timed out or was cancelled.');
+    return await this.withChallengeDeadline(job.hello, signal, challenge.expiresAt, 'Guest hello timed out or was cancelled.');
   }
 
   async execute(plan: Readonly<SourceExecutionPlan>, bootstrap: Readonly<SourceGuestBootstrap>, emit: (line: RuntimeLine) => void, signal: AbortSignal): Promise<SourceExecutionResult> {
@@ -991,6 +991,11 @@ export class WindowsSandboxProtocolPeer implements WindowsSandboxProtocolPeerCon
     job.archive = await job.archiveFetched;
     response.writeHead(200, { 'Content-Type': 'application/zip', 'Content-Length': job.archive.length, 'Cache-Control': 'no-store' });
     response.end(job.archive);
+  }
+
+  private async withChallengeDeadline<T>(work: Promise<T>, signal: AbortSignal, expiresAt: string, message: string): Promise<T> {
+    const timeoutMs = Math.max(1, Date.parse(expiresAt) + SOURCE_BROKER_LIMITS.clockSkewMs - Date.now());
+    return this.withAbort(work, signal, message, timeoutMs);
   }
 
   private handleLifecyclePlan(response: ServerResponse, job: ProtocolPeerJob): void {

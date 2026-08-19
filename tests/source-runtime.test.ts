@@ -260,6 +260,30 @@ describe('source job contracts', () => {
     await expect(transport.executeLifecycle({ jobId, challengeNonce: 'a'.repeat(64) } as never, Buffer.from('installer'), new AbortController().signal)).rejects.toThrow(/final receipt wait/i);
     expect(endpointCalls).toBeGreaterThan(0);
   });
+
+  it('waits for cold guest hello through the challenge deadline, not the HTTP request deadline', async () => {
+    const jobId = crypto.randomUUID();
+    const challenge = createIsolationAttestationChallenge(jobId, 500, SOURCE_GUEST_IDENTITY);
+    const guestId = `guest-${jobId}`; const token = 'c'.repeat(48);
+    const peer = new WindowsSandboxProtocolPeer({ advertiseAddress: '127.0.0.1', requestTimeoutMs: 15 });
+    peer.prepare(challenge, guestId, token);
+    const pending = peer.attest(challenge, guestId, new AbortController().signal);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const endpoint = await peer.endpoint();
+    const response = await fetch(`${endpoint}/hello/${jobId}`, { method: 'POST', headers: { 'X-Ding-Ding-Runner': token, 'X-Ding-Ding-Protocol': '1', 'Content-Type': 'application/json' }, body: JSON.stringify({ protocolVersion: 1, jobId, challengeNonce: challenge.nonce, guestId, hostMounts: 0, credentialsInjected: false, secretsInjected: false, shellStringsAllowed: false, userProfileMounted: false }) });
+    expect(response.ok).toBe(true);
+    await expect(pending).resolves.toMatchObject({ lease: { jobId } });
+    await peer.close();
+  });
+
+  it('rejects a guest hello after the challenge deadline', async () => {
+    const jobId = crypto.randomUUID();
+    const challenge = createIsolationAttestationChallenge(jobId, 30, SOURCE_GUEST_IDENTITY);
+    const peer = new WindowsSandboxProtocolPeer({ advertiseAddress: '127.0.0.1', requestTimeoutMs: 15 });
+    peer.prepare(challenge, `guest-${jobId}`, 'd'.repeat(48));
+    await expect(peer.attest(challenge, `guest-${jobId}`, new AbortController().signal)).rejects.toThrow(/hello timed out/i);
+    await peer.close();
+  });
 });
 
 describe('terminal bounds and redaction', () => {
