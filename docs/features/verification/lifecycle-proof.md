@@ -31,10 +31,10 @@ The receipt also records guest creation as a setup stage, making thirteen stage 
 
 ## Configuration
 
-Run the renderer-less harness through Electron after the main process has been built:
+Run the renderer-less harness locally with Node:
 
 ```text
-npx electron scripts/lifecycle-proof.mjs --output lifecycle-proof.v2.json
+node scripts/lifecycle-proof.mjs --output lifecycle-proof.v2.json
 ```
 
 The default driver is deliberately unavailable and fails closed. A reviewed integration supplies an explicit `--driver-module` object implementing `createGuest`, `sourceArchive`, `sourceDigest`, `sourceBuild`, `sourceOutput`, `sourceRunReadiness`, `releaseInstall`, `rediscoverOwnership`, `installedProcessReadiness`, `installedWindowReadiness`, `exactUninstall`, `absence`, and `disposeGuest`. Driver methods receive only the typed matrix row, an opaque guest handle, a bounded timeout, and an attempt number. They do not receive renderer input, arbitrary commands, installer paths, or credentials. Each method must return `{ status: 'verified' | 'failed' | 'blocked' | 'skipped', details?: object }`.
@@ -53,7 +53,7 @@ The default driver performs no source execution, installer launch, process disco
 
 ## Verification
 
-`tests/lifecycle-proof.test.ts` proves the exact thirteen-row matrix, fresh-guest contract, stage ordering, redaction, retry/timeout boundary, injected-driver lifecycle, and unavailable-driver fail-closed result. The workflow `.github/workflows/lifecycle-proof.yml` runs on a pinned `windows-2022` cloud runner, uploads the bounded receipt even after failure, and validates the all-thirteen aggregate before accepting a verified verdict.
+`tests/lifecycle-proof.test.ts` proves the exact thirteen-row matrix, fresh-guest contract, stage ordering, redaction, retry/timeout boundary, injected-driver lifecycle, unavailable-driver fail-closed result, and strict v2 receipt aggregation. The proof is deliberately local: run `npm run proof:lifecycle` or provide a reviewed driver module from a disposable Windows guest, write one receipt per matrix row, then run `npm run proof:lifecycle:aggregate -- --input-dir <receipts> --output lifecycle-proof.v2.json`. GitHub Actions does not run lifecycle proof or any other test gate; its workflows build, package, publish, and collect safe evidence only.
 
 The current isolated lane supplies the harness contract and tests only. The real disposable guest, source-build, process/window, install, uninstall, and absence evidence remain blocked until the sibling source-runner and catalog/adapter lanes provide their reviewed integration modules. No runtime lifecycle success is claimed from these source-level checks.
 

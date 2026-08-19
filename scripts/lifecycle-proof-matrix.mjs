@@ -23,6 +23,18 @@ export const LIFECYCLE_STAGES = Object.freeze([
   'guest-disposal',
 ]);
 
+export const LIFECYCLE_RECEIPT_STAGES = Object.freeze([
+  'guest-creation',
+  ...LIFECYCLE_STAGES,
+]);
+
+export const LIFECYCLE_STAGE_STATUSES = Object.freeze([
+  'verified',
+  'failed',
+  'blocked',
+  'skipped',
+]);
+
 const product = (appId, displayName, adapterId, installerFamily, sourceManifest) => Object.freeze({
   appId,
   displayName,
@@ -68,6 +80,26 @@ export function assertLifecycleMatrix(matrix = LIFECYCLE_PRODUCTS) {
     }
   }
   return matrix;
+}
+
+export function assertLifecycleReceipt(receipt, matrix = LIFECYCLE_PRODUCTS) {
+  assertLifecycleMatrix(matrix);
+  if (!receipt || typeof receipt !== 'object' || Array.isArray(receipt)) throw new Error('Lifecycle receipt must be an object.');
+  if (receipt.schemaVersion !== LIFECYCLE_PROOF_SCHEMA) throw new Error('Lifecycle receipt schema version is not lifecycle-proof.v2.');
+  const appId = receipt.product?.appId;
+  if (!matrix.some((entry) => entry.appId === appId)) throw new Error(`Lifecycle receipt has an unknown application identifier: ${appId ?? 'missing'}.`);
+  if (receipt.product.displayName !== lifecycleProductFor(appId)?.displayName) throw new Error(`Lifecycle receipt display name does not match matrix row ${appId}.`);
+  if (!Array.isArray(receipt.stages) || receipt.stages.length !== LIFECYCLE_RECEIPT_STAGES.length) throw new Error(`Lifecycle receipt ${appId} must contain exactly ${LIFECYCLE_RECEIPT_STAGES.length} stages.`);
+  const names = receipt.stages.map((stage) => stage?.name);
+  if (names.some((name) => typeof name !== 'string') || new Set(names).size !== names.length || names.some((name, index) => name !== LIFECYCLE_RECEIPT_STAGES[index])) {
+    throw new Error(`Lifecycle receipt ${appId} stages do not match the exact ordered lifecycle contract.`);
+  }
+  if (receipt.stages.some((stage) => !LIFECYCLE_STAGE_STATUSES.includes(stage.status))) throw new Error(`Lifecycle receipt ${appId} contains an invalid stage status.`);
+  if (typeof receipt.verdict !== 'boolean') throw new Error(`Lifecycle receipt ${appId} must carry a boolean verdict.`);
+  const expectedVerdict = receipt.stages.every((stage) => stage.status === 'verified');
+  if (receipt.verdict !== expectedVerdict) throw new Error(`Lifecycle receipt ${appId} verdict disagrees with its stage statuses.`);
+  if (typeof receipt.sourceRuntimeInvoked !== 'boolean') throw new Error(`Lifecycle receipt ${appId} must record sourceRuntimeInvoked.`);
+  return receipt;
 }
 
 assertLifecycleMatrix();

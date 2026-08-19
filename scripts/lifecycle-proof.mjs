@@ -4,6 +4,7 @@ import process from 'node:process';
 import { pathToFileURL } from 'node:url';
 import {
   assertLifecycleMatrix,
+  assertLifecycleReceipt,
   lifecycleProductFor,
   LIFECYCLE_PRODUCTS,
   LIFECYCLE_PROOF_SCHEMA,
@@ -178,7 +179,7 @@ export async function runProductLifecycle(product, driver, {
     stages.push(phaseRecord('guest-disposal', disposal.status, disposalStart, clock, disposal.details));
   }
   const verdict = stages.length === 13 && stages.every((stage) => stage.status === 'verified');
-  return {
+  const receipt = {
     schemaVersion: LIFECYCLE_PROOF_SCHEMA,
     product: { appId: product.appId, displayName: product.displayName, adapterId: product.adapterId, installerFamily: product.installerFamily },
     source: product.source,
@@ -191,6 +192,8 @@ export async function runProductLifecycle(product, driver, {
     stages,
     verdict,
   };
+  assertLifecycleReceipt(receipt);
+  return receipt;
 }
 
 export async function runLifecycleProof({
@@ -209,6 +212,9 @@ export async function runLifecycleProof({
   return {
     schemaVersion: LIFECYCLE_PROOF_SCHEMA,
     matrixVersion: '13-products-v1',
+    product: selected.length === 1
+      ? { appId: selected[0].appId, displayName: selected[0].displayName, adapterId: selected[0].adapterId, installerFamily: selected[0].installerFamily }
+      : null,
     startedAt: receipts[0]?.startedAt ?? nowIso(clock),
     completedAt: nowIso(clock),
     productCount: receipts.length,

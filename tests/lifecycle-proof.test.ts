@@ -1,10 +1,13 @@
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   assertLifecycleMatrix,
+  assertLifecycleReceipt,
   LIFECYCLE_PRODUCTS,
+  LIFECYCLE_PRODUCT_IDS,
   LIFECYCLE_PROOF_SCHEMA,
   LIFECYCLE_STAGES,
 } from '../scripts/lifecycle-proof-matrix.mjs';
@@ -79,6 +82,37 @@ describe('13-product lifecycle proof contract', () => {
       expect(JSON.parse(await readFile(path.join(temp, 'one.json'), 'utf8')).schemaVersion).toBe(LIFECYCLE_PROOF_SCHEMA);
     } finally {
       await rm(temp, { recursive: true, force: true });
+    }
+  });
+
+  it('accepts exactly one validated receipt per matrix row and rejects duplicates', async () => {
+    const temp = await mkdtemp(path.join(os.tmpdir(), 'ding-lifecycle-aggregate-'));
+    const output = path.join(os.tmpdir(), `ding-lifecycle-aggregate-${Date.now()}.json`);
+    try {
+      const driver: Record<string, any> = {
+        async createGuest({ product }: any) { return { status: 'verified', guest: { id: `guest-${product.appId}` } }; },
+        async disposeGuest() { return { status: 'verified' }; },
+      };
+      for (const method of ['sourceArchive', 'sourceDigest', 'sourceBuild', 'sourceOutput', 'sourceRunReadiness', 'releaseInstall', 'rediscoverOwnership', 'installedProcessReadiness', 'installedWindowReadiness', 'exactUninstall', 'absence']) {
+        driver[method] = async () => ({ status: 'verified' });
+      }
+      for (const appId of LIFECYCLE_PRODUCT_IDS) {
+        const one = await runLifecycleProof({ appId, driver, timeoutMs: 1000, retries: 1 });
+        expect(one.productCount).toBe(1);
+        assertLifecycleReceipt(one.receipts[0]);
+        await writeFile(path.join(temp, `${appId}.json`), `${JSON.stringify(one)}\n`, 'utf8');
+      }
+      execFileSync(process.execPath, ['scripts/aggregate-lifecycle-proof.mjs', '--input-dir', temp, '--output', output], { cwd: path.resolve(import.meta.dirname, '..'), encoding: 'utf8' });
+      const aggregate = JSON.parse(await readFile(output, 'utf8'));
+      expect(aggregate.productCount).toBe(13);
+      expect(aggregate.verdict).toBe(true);
+      expect(aggregate.receipts.map((receipt: any) => receipt.product.appId)).toEqual(LIFECYCLE_PRODUCT_IDS);
+
+      await writeFile(path.join(temp, 'duplicate.json'), await readFile(path.join(temp, `${LIFECYCLE_PRODUCT_IDS[0]}.json`), 'utf8'), 'utf8');
+      expect(() => execFileSync(process.execPath, ['scripts/aggregate-lifecycle-proof.mjs', '--input-dir', temp, '--output', output], { cwd: path.resolve(import.meta.dirname, '..'), encoding: 'utf8', stdio: 'pipe' })).toThrow(/exactly 13 unique matrix receipts/);
+    } finally {
+      await rm(temp, { recursive: true, force: true });
+      await rm(output, { force: true });
     }
   });
 });
