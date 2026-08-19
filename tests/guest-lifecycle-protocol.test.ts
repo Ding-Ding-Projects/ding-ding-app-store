@@ -64,7 +64,9 @@ describe('guest lifecycle protocol contracts', () => {
     expect(source).not.toContain('chooseHostIpv4');
     expect(source).toContain("args.get('--lowlevel-client')");
     expect(source).toContain("args.get('--run-root')");
-    expect(source).toContain("spawn('py', ['-3', lowlevelClientPath");
+    expect(source).toContain("['-3', lowlevelClientPath, 'call'");
+    expect(source).toContain("spawn('py', childArgs");
+    expect(source).not.toContain("spawn(executable");
     expect(source).toContain('allowShellWrapper: false');
     expect(source).toContain('WindowsSandbox.exe');
     expect(source).toContain("runLowlevel('cleanup'");
