@@ -173,6 +173,11 @@ if (-not $plan -and -not $lifecyclePlan) { throw 'Runner plan was not published 
 if ($lifecyclePlan) { $plan = $lifecyclePlan }
 if ($plan.protocolVersion -ne $protocol -or $plan.jobId -ne $jobId -or $plan.challengeNonce -ne $nonce -or $plan.policy.hostMounts -ne 0 -or $plan.policy.credentialsInjected -ne $false -or $plan.policy.secretsInjected -ne $false -or $plan.policy.shellStringsAllowed -ne $false) { throw 'Runner plan or policy binding was rejected.' }
 if ($lifecyclePlan) {
+  function Wait-Until([scriptblock]$Predicate, [int]$TimeoutMs) {
+    $deadline = [DateTimeOffset]::UtcNow.AddMilliseconds($TimeoutMs)
+    do { if (& $Predicate) { return $true }; Start-Sleep -Milliseconds 100 } while ([DateTimeOffset]::UtcNow -lt $deadline)
+    return (& $Predicate)
+  }
   $installer = Join-Path $env:TEMP "ding-ding-$jobId-installer.exe"
   Invoke-WebRequest -Method Get -Uri "$endpoint/installer/$jobId" -Headers $headers -OutFile $installer -UseBasicParsing
   $installerHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $installer).Hash.ToLowerInvariant()
@@ -220,12 +225,15 @@ public static class GuestWindowProbe { [DllImport("user32.dll", SetLastError=tru
   Start-Sleep -Milliseconds $lifecyclePlan.stabilityTimeoutMs
   Send-Runner "/stage-receipt/$jobId" @{ schemaVersion=1; protocolVersion=$protocol; jobId=$jobId; challengeNonce=$nonce; guestId="guest-$jobId"; planDigest=$lifecyclePlan.planDigest; sequence=3; stage='launch'; operation='squirrel-launch'; installedIdentity=$record.DisplayName; installedVersion=$record.DisplayVersion; executableSha256=$exeHash; process=@{ ready=$true; pid=$app.Id; windowTitle=$app.MainWindowTitle; windowClass=$class.ToString(); hwnd=('0x{0:x}' -f $hwnd.ToInt64()) }; observedAt=[DateTimeOffset]::UtcNow.ToString('o') } | Out-Null
   if ($app.HasExited) { throw 'Squirrel child exited before uninstall.' }
-  Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
+  $descendantPids = @(Get-CimInstance Win32_Process -Filter "ParentProcessId=$($app.Id)" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty ProcessId)
+  $kill = Start-Process -FilePath 'taskkill.exe' -ArgumentList @('/PID', [string]$app.Id, '/T', '/F') -Wait -PassThru -WindowStyle Hidden
+  if ($kill.ExitCode -ne 0 -and -not $app.HasExited) { throw 'The reviewed child process tree did not accept taskkill.' }
+  if (-not (Wait-Until { $app.HasExited -and @($descendantPids | Where-Object { Get-Process -Id $_ -ErrorAction SilentlyContinue }).Count -eq 0 } $lifecyclePlan.maxStageMs)) { throw 'The reviewed child process tree did not become absent within the bounded stage limit.' }
   $update = Join-Path $installRoot 'Update.exe'; if (-not (Test-Path -LiteralPath $update -PathType Leaf)) { throw 'Squirrel Update.exe was absent.' }
   $uninstall = Start-Process -FilePath $update -ArgumentList @('--uninstall','-s') -WorkingDirectory $installRoot -PassThru -Wait
   if ($uninstall.ExitCode -ne 0) { throw 'Squirrel uninstall exited unsuccessfully.' }
   Send-Runner "/stage-receipt/$jobId" @{ schemaVersion=1; protocolVersion=$protocol; jobId=$jobId; challengeNonce=$nonce; guestId="guest-$jobId"; planDigest=$lifecyclePlan.planDigest; sequence=4; stage='uninstall'; operation='squirrel-uninstall'; uninstallSucceeded=$true; observedAt=[DateTimeOffset]::UtcNow.ToString('o') } | Out-Null
-  $remaining = @(Get-ItemProperty -Path $uninstallRoots -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -eq $lifecyclePlan.registryDisplayName -and $_.DisplayVersion -eq $lifecyclePlan.expectedVersion }); if ($remaining.Count -ne 0 -or (Test-Path -LiteralPath $installRoot)) { throw 'Squirrel uninstall absence was not proven.' }
+  if (-not (Wait-Until { $remaining = @(Get-ItemProperty -Path $uninstallRoots -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -eq $lifecyclePlan.registryDisplayName -and $_.DisplayVersion -eq $lifecyclePlan.expectedVersion }); $remaining.Count -eq 0 -and -not (Test-Path -LiteralPath $installRoot) -and -not (Test-Path -LiteralPath $exeMatches[0]) -and $app.HasExited } $lifecyclePlan.maxStageMs)) { throw 'Squirrel uninstall absence was not proven within the bounded stage limit.' }
   Send-Runner "/stage-receipt/$jobId" @{ schemaVersion=1; protocolVersion=$protocol; jobId=$jobId; challengeNonce=$nonce; guestId="guest-$jobId"; planDigest=$lifecyclePlan.planDigest; sequence=5; stage='absence'; absenceVerified=$true; observedAt=[DateTimeOffset]::UtcNow.ToString('o') } | Out-Null
   Send-Runner "/stage-receipt/$jobId" @{ schemaVersion=1; protocolVersion=$protocol; jobId=$jobId; challengeNonce=$nonce; guestId="guest-$jobId"; planDigest=$lifecyclePlan.planDigest; sequence=6; stage='disposal'; childProcessesStopped=$true; observedAt=[DateTimeOffset]::UtcNow.ToString('o') } | Out-Null
   Send-Runner "/final-receipt/$jobId" @{ schemaVersion=1; protocolVersion=$protocol; jobId=$jobId; challengeNonce=$nonce; guestId="guest-$jobId"; planDigest=$lifecyclePlan.planDigest; lastSequence=6; verdict=$true; installIdentity=$installIdentity; processReady=$true; windowTitle=$lifecyclePlan.expectedWindowTitle; windowClass=$lifecyclePlan.expectedWindowClass; hwnd=('0x{0:x}' -f $hwnd.ToInt64()); uninstallSucceeded=$true; absenceVerified=$true; childProcessesStopped=$true; observedAt=[DateTimeOffset]::UtcNow.ToString('o') } | Out-Null
@@ -1070,7 +1078,7 @@ export class WindowsSandboxGuestTransport implements IsolationBroker {
     await writeFile(configPath, createZeroMountSandboxConfig(command), { encoding: 'utf8', flag: 'wx' });
     const launch = this.options.launch ?? (async (executable: string, file: string, abortSignal: AbortSignal) => {
       const child = spawn(executable, [file], { windowsHide: true, stdio: 'ignore' });
-      const stop = async () => { if (child.pid && process.platform === 'win32') { const killer = spawn('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' }); const code = await new Promise<number>((resolve) => { killer.once('exit', (exitCode) => resolve(exitCode ?? 1)); killer.once('error', () => resolve(1)); }); return { processTreeStopped: code === 0 || code === 128, rootPid: child.pid }; } else if (!child.killed) { child.kill(); return { processTreeStopped: true, rootPid: child.pid }; } return { processTreeStopped: true, rootPid: child.pid }; };
+      const stop = async () => { if (child.pid && process.platform === 'win32') { const killer = spawn('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' }); const code = await new Promise<number>((resolve) => { killer.once('exit', (exitCode) => resolve(exitCode ?? 1)); killer.once('error', () => resolve(1)); }); const exited = child.exitCode !== null || await new Promise<boolean>((resolve) => { const timer = setTimeout(() => resolve(child.exitCode !== null), 10_000); child.once('exit', () => { clearTimeout(timer); resolve(true); }); }); return { processTreeStopped: (code === 0 || child.exitCode !== null) && exited, rootPid: child.pid }; } else if (!child.killed) { child.kill(); return { processTreeStopped: true, rootPid: child.pid }; } return { processTreeStopped: true, rootPid: child.pid }; };
       if (abortSignal.aborted) await stop(); else abortSignal.addEventListener('abort', () => { void stop(); }, { once: true });
       return { stop };
     });
@@ -1122,10 +1130,11 @@ export class WindowsSandboxGuestTransport implements IsolationBroker {
       const stopped = await guest.stop();
       if (!stopped.processTreeStopped) throw new Error('Host Sandbox process-tree stop was not proven.');
       this.options.protocol.markProcessTreeStopped?.(jobId);
+      await rm(guest.configPath, { force: false });
       const receipt = sourceDisposalReceiptSchema.parse(await this.options.protocol.dispose(jobId, lease, new AbortController().signal));
       if (receipt.jobId !== jobId || receipt.challengeNonce !== guest.challenge.nonce || receipt.guestId !== guest.guestId || receipt.hostMounts !== 0 || !receipt.processTreeStopped || !receipt.guestDeleted) throw new Error('The guest disposal receipt did not prove complete teardown.');
       return receipt;
-    } finally { this.guests.delete(jobId); await rm(guest.configPath, { force: true }); }
+    } finally { this.guests.delete(jobId); }
   }
 
   async abort(jobId: string): Promise<void> {
