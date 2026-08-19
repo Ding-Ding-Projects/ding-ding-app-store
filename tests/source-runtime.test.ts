@@ -8,6 +8,7 @@ import {
   PINNED_OPENCODE,
   WindowsSandboxIsolationBroker,
   WindowsSandboxGuestTransport,
+  WindowsSandboxProtocolPeer,
   REQUIRED_ISOLATION,
   SOURCE_RUNTIME_LIMITS,
   TerminalEventBudget,
@@ -15,6 +16,7 @@ import {
   createOpenCodeConfig,
   createRepairPrompt,
   createSourceExecutionPlan,
+  createPlanDigest,
   createGuestBootstrap,
   createZeroMountSandboxConfig,
   validateGuestBootstrap,
@@ -153,6 +155,47 @@ describe('source job contracts', () => {
     const transport = new WindowsSandboxGuestTransport({ platform: 'win32', fileExists: async () => true, endpoint: 'http://127.0.0.1:4567', protocol: {} as never, checkedAt: () => '2026-08-12T12:00:00.000Z' });
     await expect(transport.diagnose()).resolves.toMatchObject({ available: true, reason: 'ready', checkedAt: '2026-08-12T12:00:00.000Z' });
     expect(transport.identity()).toEqual(SOURCE_GUEST_IDENTITY);
+  });
+
+  it('completes a real loopback peer handshake, broker-mediated archive transfer, output frames, and truthful disposal', async () => {
+    const jobId = crypto.randomUUID();
+    const initialPlan = createSourceExecutionPlan(jobId, 'build', recipe);
+    const challenge = createIsolationAttestationChallenge(jobId, 60_000, SOURCE_GUEST_IDENTITY);
+    const guestId = `guest-${jobId}`;
+    const token = 'a'.repeat(48);
+    const archive = Buffer.from('reviewed-source-archive');
+    const archiveDigest = await import('node:crypto').then(({ createHash }) => createHash('sha256').update(archive).digest('hex'));
+    const plan = Object.freeze({ ...initialPlan, sourceArchiveSha256: archiveDigest, planDigest: createPlanDigest({ ...initialPlan, sourceArchiveSha256: archiveDigest, planDigest: '' }) });
+    const peer = new WindowsSandboxProtocolPeer({ advertiseAddress: '127.0.0.1', fetchArchive: async () => archive });
+    peer.prepare(challenge, guestId, token);
+    const endpoint = await peer.endpoint();
+    const headers = { 'X-Ding-Ding-Runner': token, 'X-Ding-Ding-Protocol': '1', 'Content-Type': 'application/json' };
+    const hello = peer.attest(challenge, guestId, new AbortController().signal);
+    const helloResponse = await fetch(`${endpoint}/hello/${jobId}`, { method: 'POST', headers, body: JSON.stringify({ protocolVersion: 1, jobId, challengeNonce: challenge.nonce, guestId, hostMounts: 0, credentialsInjected: false, secretsInjected: false, shellStringsAllowed: false, userProfileMounted: false }) });
+    expect(helloResponse.ok).toBe(true);
+    const attestation = await hello as IsolationAttestation;
+    expect(validateIsolationAttestation(attestation, challenge).ok).toBe(true);
+    const bootstrap = createGuestBootstrap(plan, challenge.nonce, guestId);
+    const output = Buffer.from('built-output');
+    const outputDigest = await import('node:crypto').then(({ createHash }) => createHash('sha256').update(output).digest('hex'));
+    const execute = peer.execute(plan, bootstrap, () => undefined, new AbortController().signal);
+    const planResponse = await fetch(`${endpoint}/plan/${jobId}`, { headers });
+    const guestPlan = await planResponse.json() as { sourceArchiveUrl: string; planDigest: string };
+    expect(guestPlan.planDigest).toBe(plan.planDigest);
+    expect(guestPlan.sourceArchiveUrl).toContain(`/archive/${jobId}`);
+    const archiveResponse = await fetch(guestPlan.sourceArchiveUrl, { headers });
+    expect(Buffer.from(await archiveResponse.arrayBuffer())).toEqual(archive);
+    await fetch(`${endpoint}/output/${jobId}`, { method: 'POST', headers, body: JSON.stringify({ path: 'dist/app.exe', bytes: output.length, sha256: outputDigest, contentBase64: output.toString('base64') }) });
+    const manifest = { schemaVersion: 1, jobId, appId: recipe.appId, revision: recipe.revision, decision: 'build' as const, generatedAt: new Date().toISOString(), totalBytes: output.length, files: [{ path: 'dist/app.exe', bytes: output.length, sha256: outputDigest }] };
+    await fetch(`${endpoint}/outputs/${jobId}`, { method: 'POST', headers, body: JSON.stringify(manifest) });
+    await fetch(`${endpoint}/complete/${jobId}`, { method: 'POST', headers, body: JSON.stringify({ jobId, ok: true }) });
+    const result = await execute;
+    expect(result.outputManifest?.files[0]?.path).toBe('dist/app.exe');
+    expect(result.outputs?.[0]?.content).toEqual(output);
+    peer.markProcessTreeStopped(jobId);
+    const receipt = await peer.dispose(jobId, attestation.lease, new AbortController().signal);
+    expect(receipt).toMatchObject({ jobId, guestId, processTreeStopped: true, guestDeleted: true, hostMounts: 0, credentialsInjected: false, secretsInjected: false });
+    await peer.close();
   });
 
   it('reports Windows Sandbox capability without launching a host process', async () => {
