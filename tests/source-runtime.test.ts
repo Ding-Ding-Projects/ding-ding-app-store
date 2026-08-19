@@ -283,7 +283,7 @@ describe('source job contracts', () => {
     const transport = new WindowsSandboxGuestTransport({ platform: 'win32', appDataRoot: root, fileExists: async () => true, protocol, launch: async () => { throw new Error('injected launch failure'); } });
     const challenge = createIsolationAttestationChallenge(jobId, 60_000, SOURCE_GUEST_IDENTITY);
     await expect(transport.attest(challenge, new AbortController().signal)).rejects.toThrow(/injected launch failure/);
-    expect(abortCalls).toBeGreaterThan(0);
+    expect(abortCalls).toBe(2);
     expect((await readdir(root)).filter((name) => name.endsWith('.wsb'))).toEqual([]);
   });
 
