@@ -11,15 +11,36 @@ const ORG = 'Ding-Ding-Projects';
 const API_ORIGIN = 'https://api.github.com';
 const CACHE_MAX_AGE_MS = 30 * 60 * 1000;
 
+const iconMetadataSchema = z.strictObject({
+  source: z.literal('repository'),
+  path: z.string().regex(/^(?:[A-Za-z0-9_.-]+\/)*[A-Za-z0-9_.-]+\.(?:ico|png|svg)$/),
+  provenance: z.literal('first-party-reviewed'),
+  fallback: z.enum(['generated-monogram', 'catalog-mark']),
+  evidence: z.string().min(1).max(240),
+});
+
+const sourceMetadataSchema = z.strictObject({
+  organization: z.literal(ORG),
+  repository: z.string().regex(/^[A-Za-z0-9_.-]+$/),
+  defaultBranch: z.string().regex(/^[A-Za-z0-9_.-]+$/),
+  public: z.literal(true),
+  sourceKind: z.literal('public-repository'),
+});
+
 const catalogRecordSchema = z.object({
   id: z.string().regex(/^[a-z0-9][a-z0-9-]{1,63}$/),
   repository: z.string().regex(/^[A-Za-z0-9_.-]+$/),
   displayName: z.string().min(1).max(80),
   availability: z.enum(['installable', 'source-build', 'documentation-only', 'unsupported']),
-  packageType: z.enum(['squirrel', 'msi', 'nsis', 'jpackage', 'archive', 'source', 'unsupported']),
+  packageType: z.enum(['squirrel', 'msi', 'nsis', 'inno', 'jpackage', 'archive', 'source', 'unsupported']),
   adapterId: installAdapterIdSchema,
   wiki: z.boolean(),
   sourceManifest: z.string().max(180).nullable(),
+  icon: iconMetadataSchema.optional(),
+  iconProvenance: iconMetadataSchema.optional(),
+  sourceMetadata: sourceMetadataSchema.optional(),
+  proofStatus: z.enum(['not-required', 'blocked-until-proof', 'verified']).optional(),
+  proofTargetId: z.string().regex(/^[a-z0-9][a-z0-9-]{1,127}$/).nullable().optional(),
 }).strict().superRefine((record, context) => {
   const adapter = adapterFor(record.id);
   if (adapter.id !== record.adapterId) context.addIssue({ code: 'custom', path: ['adapterId'], message: 'Adapter ID does not match the application.' });

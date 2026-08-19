@@ -41,7 +41,7 @@ describe('catalog contract', () => {
   it('allows executable installs only through reviewed package kinds', async () => {
     const catalog = JSON.parse(await read('data/catalog.v1.json')) as { apps: Array<{ availability: string; packageType: string; adapterId: string }> };
     for (const app of catalog.apps.filter((record) => record.availability === 'installable')) {
-      expect(['squirrel', 'msi', 'nsis', 'jpackage', 'archive']).toContain(app.packageType);
+      expect(['squirrel', 'msi', 'nsis', 'inno', 'jpackage', 'archive']).toContain(app.packageType);
       expect(app.adapterId).toBeTruthy();
     }
   });
@@ -352,7 +352,7 @@ describe('one-click adapter coverage record', () => {
     const coverage = await read('docs/features/installation/one-click-installation.md');
     for (const app of catalog.apps) expect(coverage).toContain(`| ${app.displayName} |`);
     for (const requirement of [
-      'Twenty-two records',
+      'thirty-five** have reviewed executable',
       'Win SSH Copy ID',
       'Home Assistant Bambu Lab',
       'Photo Viewer',

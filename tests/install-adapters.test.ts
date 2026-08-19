@@ -36,6 +36,9 @@ const EXPECTED_APP_IDS = [
   'material-office', 'minecraft-world-downloader', 'codex-material', 'libreoffice-material',
   'thunderbird-desktop', 'bambu-studio', 'keepassxc', 'jdownloader-material', 'ha-bambulab',
   'winforge', 'wimforge', 'photo-viewer', 'material-minecraft-map-editor', 'material-gitlab', 'material-tax-reporting',
+  'farming-game', 'material-cookie-clicker', 'material-encryption', 'material-ollama', 'material-sandbox',
+  'material-tools', 'material-virtualbox', 'material-winforge', 'material-winutil', 'meadowmark',
+  'minecraft-server-command-center', 'minecraft-server-studio', 'sprout-hollow-valley',
 ] as const;
 
 const LATEST_ASSET_FIXTURES: Readonly<Record<string, string>> = {
@@ -61,6 +64,19 @@ const LATEST_ASSET_FIXTURES: Readonly<Record<string, string>> = {
   winforge: 'WinForge-portable-x64-1.1.326.zip',
   wimforge: 'WimForge-portable-x64-0.1.42.zip',
   'material-minecraft-map-editor': 'Setup.exe',
+  'farming-game': 'Sprout.Hollow-Setup-1.4.3.exe',
+  'material-cookie-clicker': 'MaterialCookieClicker-Setup.exe',
+  'material-encryption': 'MaterialEncryption-Setup-0.1.10.exe',
+  'material-ollama': 'OllamaSetup.exe',
+  'material-sandbox': 'Sandboxie-Plus-x64-v1.18.2.exe',
+  'material-tools': 'MaterialTools-Setup-0.1.0.exe',
+  'material-virtualbox': 'VirtualBox-7.2.97-Setup.exe',
+  'material-winforge': 'WinForge-Material-3-Preview-Setup-1.0.21.exe',
+  'material-winutil': 'MaterialSystemUtility-Setup.exe',
+  meadowmark: 'Meadowmark-Setup-0.1.52.exe',
+  'minecraft-server-command-center': 'Setup.exe',
+  'minecraft-server-studio': 'Minecraft.Server.Studio-0.120.1-x64-Setup.exe',
+  'sprout-hollow-valley': 'Sprout-Hollow-Valley-Setup-1.2.12.exe',
 };
 
 describe('hand-written universal install adapter coverage', () => {
@@ -86,13 +102,28 @@ describe('hand-written universal install adapter coverage', () => {
   });
 
   it('selects exactly one audited current release asset for every supported application', () => {
-    expect(Object.keys(LATEST_ASSET_FIXTURES)).toHaveLength(22);
+    expect(Object.keys(LATEST_ASSET_FIXTURES)).toHaveLength(35);
     for (const [appId, assetName] of Object.entries(LATEST_ASSET_FIXTURES)) {
       const adapter = adapterFor(appId);
       expect(adapter.supported).toBe(true);
       expect(selectInstallerAsset(adapter, [{ name: assetName }]).name).toBe(assetName);
       expect(() => selectInstallerAsset(adapter, [{ name: assetName }, { name: assetName }])).toThrow(/exactly one/);
     }
+  });
+
+  it('keeps the new catalog lane first-party, anchored, and explicitly blocked until lifecycle proof', async () => {
+    const catalog = JSON.parse(await readFile(new URL('../data/catalog.v1.json', import.meta.url), 'utf8')) as { apps: Array<Record<string, unknown>> };
+    const ids = new Set(['farming-game', 'material-cookie-clicker', 'material-encryption', 'material-ollama', 'material-sandbox', 'material-tools', 'material-virtualbox', 'material-winforge', 'material-winutil', 'meadowmark', 'minecraft-server-command-center', 'minecraft-server-studio', 'sprout-hollow-valley']);
+    for (const record of catalog.apps.filter((item) => ids.has(String(item.id)))) {
+      expect(record.proofStatus).toBe('blocked-until-proof');
+      expect(record.proofTargetId).toMatch(/-clean-windows$/);
+      expect(record.sourceMetadata).toMatchObject({ organization: 'Ding-Ding-Projects', public: true, sourceKind: 'public-repository' });
+      expect(record.iconProvenance).toMatchObject({ source: 'repository', provenance: 'first-party-reviewed' });
+      expect(record.iconProvenance).toHaveProperty('fallback');
+    }
+    expect(adapterFor('material-ollama')).toMatchObject({ family: 'inno', packageType: 'inno', installArguments: ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-'] });
+    expect(adapterFor('material-sandbox')).toMatchObject({ family: 'inno', packageType: 'inno', uninstallExecutableNames: ['unins000.exe'] });
+    for (const id of ids) expect(adapterFor(id).assetPattern.source).toMatch(/^\^.*\\\$|^\^/);
   });
 
   it('keeps every unsupported row explicit and evidence-backed', () => {

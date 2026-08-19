@@ -8,6 +8,8 @@ Selecting **Install** or **Reinstall** immediately submits only the catalog appl
 
 The App Store's own Squirrel package carries an explicit `Ding Ding App Store` product identity, a checked-in branded ICO for the installer and native window, and the same local SVG mark in the renderer title bar. The main process creates that branded shell before restore and migration work, pins the native title against renderer title changes, and reports renderer load failures to the application log instead of silently leaving an Electron fallback shell. A package is not launch proof by itself: the packaged smoke path must observe a live window with the product title and a non-default icon. The missing runtime `yazl` dependency that previously crashed the installed app has now been moved into production dependencies, and a clean local launch opens the installed executable as `Ding Ding App Store`.
 
+The catalog now contains **forty records**, of which **thirty-five** have reviewed executable or portable release contracts. The thirteen newly reviewed public products are deliberately marked `blocked-until-proof`: a release asset, icon provenance, launch identity, or uninstall identity is not the same as clean-Windows lifecycle evidence. Their typed proof targets are ready for a later manual dispatch, but no row is promoted to verified merely because the target exists.
+
 | Application | Reviewed route | Current public evidence or blocker |
 | --- | --- | --- |
 | Lowlevel Computer Use MCP | Squirrel | `lowlevel-computer-use-manual-0.1.0-win-x64.exe`; Squirrel target in `electron/package.json`. |
@@ -34,6 +36,19 @@ The App Store's own Squirrel package carries an explicit `Ding Ding App Store` p
 | WinForge | Managed portable ZIP | `WinForge-portable-x64-1.1.326.zip`; workflow validates `WinForge.exe` and archive paths. |
 | WimForge | Managed portable ZIP | `WimForge-portable-x64-0.1.42.zip`; self-contained Qt archive with `WimForge.exe`. |
 | Amulet Map Editor | Squirrel | `Setup.exe`; release `0.10.0-dev.567` records pinned Squirrel.Windows packaging and a non-green upstream test report. |
+| Sprout Hollow | Squirrel | `Sprout.Hollow-Setup-1.4.3.exe`; first-party farm capture and exact Squirrel identity; blocked until clean-Windows proof. |
+| Material Cookie Clicker | Squirrel | `MaterialCookieClicker-Setup.exe`; first-party ICO and exact Squirrel identity; blocked until clean-Windows proof. |
+| Material Encryption | Squirrel | `MaterialEncryption-Setup-0.1.10.exe`; first-party logo and exact Squirrel identity; blocked until clean-Windows proof. |
+| Material Ollama | Inno Setup | `OllamaSetup.exe`; strict Inno switches and bundled Ollama payload; blocked until clean-Windows proof. |
+| Material Sandbox | Inno Setup | `Sandboxie-Plus-x64-v1.18.2.exe`; `Sandboxie-Plus.iss` fixes AppId, `SandMan.exe`, and `unins000.exe`; blocked until clean-Windows proof. |
+| Material Tools | Squirrel | `MaterialTools-Setup-0.1.0.exe`; first-party overview evidence and exact Squirrel identity; blocked until clean-Windows proof. |
+| Material VirtualBox | NSIS | `VirtualBox-7.2.97-Setup.exe`; exact VirtualBox registry and launch identities; blocked until clean-Windows proof. |
+| Material WinForge | Squirrel | `WinForge-Material-3-Preview-Setup-1.0.21.exe`; first-party `app-icon.svg`; blocked until clean-Windows proof. |
+| Material System Utility | Squirrel | `MaterialSystemUtility-Setup.exe`; first-party `build/icon.ico`; blocked until clean-Windows proof. |
+| Meadowmark | Squirrel | `Meadowmark-Setup-0.1.52.exe`; first-party ICO and exact Squirrel identity; blocked until clean-Windows proof. |
+| Minecraft Server Command Center | Squirrel | `Setup.exe`; first-party `app-mark.ico`; blocked until clean-Windows proof. |
+| Minecraft Server Studio | Squirrel | `Minecraft.Server.Studio-0.120.1-x64-Setup.exe`; first-party ICO and exact Squirrel identity; blocked until clean-Windows proof. |
+| Sprout Hollow Valley | Squirrel | `Sprout-Hollow-Valley-Setup-1.2.12.exe`; first-party ICO and exact Squirrel identity; blocked until clean-Windows proof. |
 | Photo Viewer | Unavailable | Public `v0.1.0` release contains zero assets. Its source declares a future NSIS target but no published installer exists. |
 | Material GitLab | Unavailable | Public repository has no reviewed Windows installer asset for this catalog route. |
 | Material Tax Reporting | Unavailable | Public repository has no reviewed Windows installer asset for this catalog route. |

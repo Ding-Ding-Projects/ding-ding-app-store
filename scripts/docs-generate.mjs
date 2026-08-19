@@ -75,7 +75,7 @@ function catalogMetadataArticle(record) {
   const articleId = catalogArticleId(record.id);
   const availability = record.availability === 'installable' ? 'Installable through a reviewed adapter' : 'Unavailable through this catalog';
   const adapterStatus = adapter.status === 'reviewed'
-    ? `Reviewed ${adapter.family} adapter. The adapter has a fixed, application-specific release contract; this article deliberately does not reproduce executable names, arguments, download URLs, or filesystem locations.`
+    ? `Reviewed ${adapter.family} adapter. The adapter has a fixed, application-specific release contract; this article deliberately does not reproduce executable names, arguments, download URLs, or filesystem locations.${adapter.proofStatus === 'blocked-until-proof' ? ' Lifecycle status is **blocked until clean-Windows proof**; the catalog does not claim installation, launch, ownership, or uninstall evidence yet.' : ''}`
     : `Blocked. ${adapter.blocker}`;
   const body = `# ${record.displayName} catalog record
 
@@ -86,6 +86,8 @@ function catalogMetadataArticle(record) {
 This record describes the reviewed catalog entry \`${record.id}\`. Its public source repository is [${record.repository}](https://github.com/Ding-Ding-Projects/${record.repository}). The current availability is **${availability}** and the declared package type is **${record.packageType}**. The closed adapter identifier is \`${record.adapterId}\`.
 
 The current adapter state is: ${adapterStatus}
+
+${record.iconProvenance ? `The icon is first-party reviewed from repository asset \`${record.iconProvenance.path}\`; if that asset is unavailable, the UI uses the declared ${record.iconProvenance.fallback} fallback rather than a remote or guessed image.` : 'No icon provenance metadata is declared for this legacy record; the renderer keeps its neutral catalog fallback.'}
 
 ## Configuration
 
@@ -101,7 +103,7 @@ This generated record contains only reviewed identifiers and public repository l
 
 ## Verification
 
-The documentation generator checks this article against the hand-written 25-ID catalog and adapter metadata inventories, then includes it in the offline TypeScript bundle, static-site article bundle, wiki mirror, documentation search, and command palette. That proves generated metadata coverage only. It does not claim a clean-Windows installation, update, source build, application launch, or published release verification for this application.
+The documentation generator checks this article against the hand-written catalog and adapter metadata inventories, then includes it in the offline TypeScript bundle, static-site article bundle, wiki mirror, documentation search, and command palette. That proves generated metadata coverage only. It does not claim a clean-Windows installation, update, source build, application launch, or published release verification for this application.
 
 ## Suggested articles
 

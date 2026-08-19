@@ -8,6 +8,9 @@ describe('cloud install adapter proof boundary', () => {
   it('keeps the executable proof allowlist closed to one reviewed Squirrel and two reviewed MSI adapters', () => {
     expect(Object.keys(CLOUD_INSTALL_PROOF_TARGETS)).toEqual([
       'dim-sum-atlas', 'winforge', 'wimforge', 'qbittorrent-material', 'keepassxc', 'codex-material',
+      'farming-game', 'material-cookie-clicker', 'material-encryption', 'material-ollama', 'material-sandbox',
+      'material-tools', 'material-virtualbox', 'material-winforge', 'material-winutil', 'meadowmark',
+      'minecraft-server-command-center', 'minecraft-server-studio', 'sprout-hollow-valley',
     ]);
     expect(cloudInstallProofTargetFor('qbittorrent-material')).toEqual({
       appId: 'qbittorrent-material',
@@ -38,6 +41,13 @@ describe('cloud install adapter proof boundary', () => {
     });
     expect(cloudInstallProofTargetFor('material-download-manager')).toBeNull();
     expect(cloudInstallProofTargetFor('../qbittorrent-material')).toBeNull();
+    expect(cloudInstallProofTargetFor('material-ollama')).toMatchObject({
+      adapterId: 'material-ollama-inno', family: 'inno', ownershipKind: 'registry', uninstallKind: 'reviewed-executable',
+      requiresCleanStart: true, requiresDirectSha256: true,
+    });
+    expect(cloudInstallProofTargetFor('material-sandbox')).toMatchObject({
+      adapterId: 'material-sandbox-inno', family: 'inno', ownershipKind: 'registry', uninstallKind: 'reviewed-executable',
+    });
   });
 
   it('uses the real OperationService, records detection and cleanup, and never invokes source runtime', async () => {

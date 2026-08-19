@@ -31,6 +31,19 @@ These records are generated from the reviewed local catalog allowlist and adapte
 - [Amulet Map Editor catalog record](./catalog-app-material-minecraft-map-editor.md) — Generated reviewed metadata for Amulet Map Editor: installable, squirrel, and adapter material-minecraft-map-editor-squirrel.
 - [Material GitLab catalog record](./catalog-app-material-gitlab.md) — Generated reviewed metadata for Material GitLab: unsupported, unsupported, and adapter material-gitlab-no-reviewed-installer.
 - [Material Tax Reporting catalog record](./catalog-app-material-tax-reporting.md) — Generated reviewed metadata for Material Tax Reporting: unsupported, unsupported, and adapter material-tax-reporting-no-reviewed-installer.
+- [Sprout Hollow catalog record](./catalog-app-farming-game.md) — Generated reviewed metadata for Sprout Hollow: installable, squirrel, and adapter farming-game-squirrel.
+- [Material Cookie Clicker catalog record](./catalog-app-material-cookie-clicker.md) — Generated reviewed metadata for Material Cookie Clicker: installable, squirrel, and adapter material-cookie-clicker-squirrel.
+- [Material Encryption catalog record](./catalog-app-material-encryption.md) — Generated reviewed metadata for Material Encryption: installable, squirrel, and adapter material-encryption-squirrel.
+- [Material Ollama catalog record](./catalog-app-material-ollama.md) — Generated reviewed metadata for Material Ollama: installable, inno, and adapter material-ollama-inno.
+- [Material Sandbox catalog record](./catalog-app-material-sandbox.md) — Generated reviewed metadata for Material Sandbox: installable, inno, and adapter material-sandbox-inno.
+- [Material Tools catalog record](./catalog-app-material-tools.md) — Generated reviewed metadata for Material Tools: installable, squirrel, and adapter material-tools-squirrel.
+- [Material VirtualBox catalog record](./catalog-app-material-virtualbox.md) — Generated reviewed metadata for Material VirtualBox: installable, nsis, and adapter material-virtualbox-nsis.
+- [Material WinForge catalog record](./catalog-app-material-winforge.md) — Generated reviewed metadata for Material WinForge: installable, squirrel, and adapter material-winforge-squirrel.
+- [Material System Utility catalog record](./catalog-app-material-winutil.md) — Generated reviewed metadata for Material System Utility: installable, squirrel, and adapter material-winutil-squirrel.
+- [Meadowmark catalog record](./catalog-app-meadowmark.md) — Generated reviewed metadata for Meadowmark: installable, squirrel, and adapter meadowmark-squirrel.
+- [Minecraft Server Command Center catalog record](./catalog-app-minecraft-server-command-center.md) — Generated reviewed metadata for Minecraft Server Command Center: installable, squirrel, and adapter minecraft-server-command-center-squirrel.
+- [Minecraft Server Studio catalog record](./catalog-app-minecraft-server-studio.md) — Generated reviewed metadata for Minecraft Server Studio: installable, squirrel, and adapter minecraft-server-studio-squirrel.
+- [Sprout Hollow Valley catalog record](./catalog-app-sprout-hollow-valley.md) — Generated reviewed metadata for Sprout Hollow Valley: installable, squirrel, and adapter sprout-hollow-valley-squirrel.
 
 ## Boundaries
 

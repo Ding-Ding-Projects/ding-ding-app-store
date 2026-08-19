@@ -1,12 +1,12 @@
 import type { CatalogAppId, InstallAdapterId, InstallerFamily } from './install-adapters.js';
 
 export type InstallProofOwnershipKind = 'portable' | 'registry';
-export type InstallProofUninstallKind = 'portable' | 'squirrel' | 'msi';
+export type InstallProofUninstallKind = 'portable' | 'squirrel' | 'msi' | 'reviewed-executable';
 
 export interface CloudInstallProofTarget {
   readonly appId: CatalogAppId;
   readonly adapterId: InstallAdapterId;
-  readonly family: Extract<InstallerFamily, 'portable-zip' | 'squirrel' | 'msi'>;
+  readonly family: Extract<InstallerFamily, 'portable-zip' | 'squirrel' | 'msi' | 'nsis' | 'inno'>;
   readonly ownershipKind: InstallProofOwnershipKind;
   readonly uninstallKind: InstallProofUninstallKind;
   readonly requiresCleanStart: boolean;
@@ -42,6 +42,58 @@ export const CLOUD_INSTALL_PROOF_TARGETS = {
   'codex-material': {
     appId: 'codex-material', adapterId: 'codex-material-msi', family: 'msi',
     ownershipKind: 'registry', uninstallKind: 'msi', requiresCleanStart: true, requiresDirectSha256: true,
+  },
+  'farming-game': {
+    appId: 'farming-game', adapterId: 'farming-game-squirrel', family: 'squirrel',
+    ownershipKind: 'registry', uninstallKind: 'squirrel', requiresCleanStart: true, requiresDirectSha256: true,
+  },
+  'material-cookie-clicker': {
+    appId: 'material-cookie-clicker', adapterId: 'material-cookie-clicker-squirrel', family: 'squirrel',
+    ownershipKind: 'registry', uninstallKind: 'squirrel', requiresCleanStart: true, requiresDirectSha256: true,
+  },
+  'material-encryption': {
+    appId: 'material-encryption', adapterId: 'material-encryption-squirrel', family: 'squirrel',
+    ownershipKind: 'registry', uninstallKind: 'squirrel', requiresCleanStart: true, requiresDirectSha256: true,
+  },
+  'material-ollama': {
+    appId: 'material-ollama', adapterId: 'material-ollama-inno', family: 'inno',
+    ownershipKind: 'registry', uninstallKind: 'reviewed-executable', requiresCleanStart: true, requiresDirectSha256: true,
+  },
+  'material-sandbox': {
+    appId: 'material-sandbox', adapterId: 'material-sandbox-inno', family: 'inno',
+    ownershipKind: 'registry', uninstallKind: 'reviewed-executable', requiresCleanStart: true, requiresDirectSha256: true,
+  },
+  'material-tools': {
+    appId: 'material-tools', adapterId: 'material-tools-squirrel', family: 'squirrel',
+    ownershipKind: 'registry', uninstallKind: 'squirrel', requiresCleanStart: true, requiresDirectSha256: true,
+  },
+  'material-virtualbox': {
+    appId: 'material-virtualbox', adapterId: 'material-virtualbox-nsis', family: 'nsis',
+    ownershipKind: 'registry', uninstallKind: 'reviewed-executable', requiresCleanStart: true, requiresDirectSha256: true,
+  },
+  'material-winforge': {
+    appId: 'material-winforge', adapterId: 'material-winforge-squirrel', family: 'squirrel',
+    ownershipKind: 'registry', uninstallKind: 'squirrel', requiresCleanStart: true, requiresDirectSha256: true,
+  },
+  'material-winutil': {
+    appId: 'material-winutil', adapterId: 'material-winutil-squirrel', family: 'squirrel',
+    ownershipKind: 'registry', uninstallKind: 'squirrel', requiresCleanStart: true, requiresDirectSha256: true,
+  },
+  meadowmark: {
+    appId: 'meadowmark', adapterId: 'meadowmark-squirrel', family: 'squirrel',
+    ownershipKind: 'registry', uninstallKind: 'squirrel', requiresCleanStart: true, requiresDirectSha256: true,
+  },
+  'minecraft-server-command-center': {
+    appId: 'minecraft-server-command-center', adapterId: 'minecraft-server-command-center-squirrel', family: 'squirrel',
+    ownershipKind: 'registry', uninstallKind: 'squirrel', requiresCleanStart: true, requiresDirectSha256: true,
+  },
+  'minecraft-server-studio': {
+    appId: 'minecraft-server-studio', adapterId: 'minecraft-server-studio-squirrel', family: 'squirrel',
+    ownershipKind: 'registry', uninstallKind: 'squirrel', requiresCleanStart: true, requiresDirectSha256: true,
+  },
+  'sprout-hollow-valley': {
+    appId: 'sprout-hollow-valley', adapterId: 'sprout-hollow-valley-squirrel', family: 'squirrel',
+    ownershipKind: 'registry', uninstallKind: 'squirrel', requiresCleanStart: true, requiresDirectSha256: true,
   },
 } as const satisfies Partial<Record<CatalogAppId, CloudInstallProofTarget>>;
 
