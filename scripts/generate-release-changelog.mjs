@@ -79,7 +79,9 @@ function requirePublishedTag(value, label = 'Published release tag') {
 
 function requireProspectiveTag(value, label = 'Prospective release tag') {
   const tag = requireTag(value, label);
-  if (!EXACT_RELEASE_TAG_PATTERN.test(tag)) throw new Error(`${label} must exactly equal v<effective-version>.`);
+  if (!EXACT_RELEASE_TAG_PATTERN.test(tag) && !LEGACY_RELEASE_TAG_PATTERN.test(tag)) {
+    throw new Error(`${label} must equal v<effective-version> or the attempt-aware v<effective-version>-<run>-<attempt> form.`);
+  }
   return tag;
 }
 

@@ -83,7 +83,9 @@ describe('release changelog generator', () => {
       expect.objectContaining({ version: 'v0.1.42', releaseUrl: `https://github.com/${repository}/releases/tag/v0.1.42`, commit: currentSha }),
     ]));
     expect(renderGeneratedSiteModule(manifest)).toContain('v0.1.0-1002-1');
-    expect(() => generateReleaseManifest(input({ prospective: { version: 'v0.1.42-1', commit: currentSha, releasedAt: '2026-08-08T01:12:15Z' } }))).toThrow(/exactly equal v<effective-version>/i);
+    expect(generateReleaseManifest(input({ prospective: { version: 'v0.1.42-42-1', commit: currentSha, releasedAt: '2026-08-08T01:12:15Z' } }))).toMatchObject({
+      entries: expect.arrayContaining([expect.objectContaining({ version: 'v0.1.42-42-1', publicationState: 'pending' })]),
+    });
   });
 
   it('rejects malformed or misaddressed historical tags and retains their identity through fallback and reconciliation', () => {
