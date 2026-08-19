@@ -48,16 +48,25 @@ describe('source recipe lifecycle proof', () => {
     const catalog = await loadSourceRecipeCatalog();
     const recipe = catalog.recipes.find((entry) => entry.status === 'ready')!;
     const calls: string[] = [];
+    const guestFinal = {
+      schemaVersion: 1, protocolVersion: 1, jobId: crypto.randomUUID(), challengeNonce: 'a'.repeat(64), guestId: 'guest-attested', planDigest: 'b'.repeat(64), lastSequence: 6, verdict: true,
+      installIdentity: 'Reviewed.App', processReady: true, windowTitle: 'Reviewed App', windowClass: 'Chrome_WidgetWin_1', hwnd: '0x1234', uninstallSucceeded: true, absenceVerified: true, childProcessesStopped: true,
+    };
+    const sourceDisposalReceipt = {
+      schemaVersion: 1, jobId: guestFinal.jobId, guestId: guestFinal.guestId, brokerId: 'ding-ding-windows-sandbox', transportId: 'windows-sandbox-zero-mount-v1', challengeNonce: guestFinal.challengeNonce,
+      disposedAt: new Date().toISOString(), processTreeStopped: true, guestDeleted: true, hostMounts: 0, credentialsInjected: false, secretsInjected: false,
+    };
+    const lifecycleEvidence = { status: 'verified', guestFinal, sourceDisposalReceipt };
     const driver = {
       proofBoundary: 'windows-sandbox-attested',
       guestLifecycleAgent: true,
       async createGuest() { calls.push('create'); return { status: 'verified', guest: { id: 'guest-attested' } }; },
       async buildFromSource() { calls.push('build'); return { status: 'verified', details: { sourceRuntimeInvoked: true } }; },
       async runFromSource() { calls.push('run'); return { status: 'verified', details: { sourceRuntimeInvoked: true } }; },
-      async install() { calls.push('install'); return { status: 'verified', details: { ownershipMatch: true } }; },
-      async launch() { calls.push('launch'); return { status: 'verified', details: { processReady: true, windowReady: true } }; },
-      async uninstall() { calls.push('uninstall'); return { status: 'verified', details: { absenceVerified: true } }; },
-      async disposeGuest() { calls.push('dispose'); return { status: 'verified', details: { disposed: true } }; },
+      async install() { calls.push('install'); return { ...lifecycleEvidence, details: { ownershipMatch: true } }; },
+      async launch() { calls.push('launch'); return { ...lifecycleEvidence, details: { processReady: true, windowReady: true } }; },
+      async uninstall() { calls.push('uninstall'); return { ...lifecycleEvidence, details: { absenceVerified: true } }; },
+      async disposeGuest() { calls.push('dispose'); return { ...lifecycleEvidence, details: { disposed: true } }; },
     };
     const receipt = await runSourceRecipeLifecycle(recipe, driver, { timeoutMs: 1000 });
     expect(receipt.verdict).toBe(true);
@@ -75,6 +84,25 @@ describe('source recipe lifecycle proof', () => {
     expect(receipt.verdict).toBe(false);
     expect(receipt.stages.every((stage) => stage.status === 'blocked')).toBe(true);
     expect(receipt.stages[0].details.reasonCode).toBe('recipe-blocked');
+  });
+
+  it('rejects status-only lifecycle stages even when the driver claims a lifecycle agent', async () => {
+    const catalog = await loadSourceRecipeCatalog();
+    const recipe = catalog.recipes.find((entry) => entry.status === 'ready')!;
+    const driver = {
+      proofBoundary: 'windows-sandbox-attested', guestLifecycleAgent: true,
+      async createGuest() { return { status: 'verified', guest: { id: 'guest-status-only' } }; },
+      async buildFromSource() { return { status: 'verified' }; },
+      async runFromSource() { return { status: 'verified' }; },
+      async install() { return { status: 'verified' }; },
+      async launch() { return { status: 'verified' }; },
+      async uninstall() { return { status: 'verified' }; },
+      async disposeGuest() { return { status: 'verified' }; },
+    };
+    const receipt = await runSourceRecipeLifecycle(recipe, driver, { timeoutMs: 1000 });
+    expect(receipt.verdict).toBe(false);
+    expect(receipt.stages.find((stage) => stage.name === 'install')?.status).toBe('failed');
+    expect(receipt.stages.find((stage) => stage.name === 'install')?.details.reasonCode).toBe('stage-failed');
   });
 
   it('keeps installer and inner-app evidence blocked when only the protocol peer is present', async () => {

@@ -47,5 +47,11 @@ describe('guest lifecycle protocol contracts', () => {
     expect(WINDOWS_SANDBOX_GUEST_BOOTSTRAP).toContain('GetClassName');
     expect(WINDOWS_SANDBOX_GUEST_BOOTSTRAP).toContain('ApplicationFrameHost');
     expect(WINDOWS_SANDBOX_GUEST_BOOTSTRAP).toContain("'--uninstall','-s'");
+    expect(WINDOWS_SANDBOX_GUEST_BOOTSTRAP).toContain('$windowPid');
+    expect(WINDOWS_SANDBOX_GUEST_BOOTSTRAP).not.toContain('$pid =');
+    expect(WINDOWS_SANDBOX_GUEST_BOOTSTRAP).toContain('Send-Receipt');
+    expect(WINDOWS_SANDBOX_GUEST_BOOTSTRAP).toContain('receiptToken');
+    expect(WINDOWS_SANDBOX_GUEST_BOOTSTRAP).toContain('Assert-NoReparse');
+    expect(WINDOWS_SANDBOX_GUEST_BOOTSTRAP).toContain('sibling prefixes are not containment');
   });
 });

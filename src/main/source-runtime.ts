@@ -155,11 +155,19 @@ $nonce = $runnerArgs[1]
 $endpoint = $runnerArgs[2]
 $token = $runnerArgs[3]
 $headers = @{ 'X-Ding-Ding-Runner' = $token; 'X-Ding-Ding-Protocol' = "$protocol" }
+$receiptHeaders = $null
 function Send-Runner($route, $body) {
   Invoke-RestMethod -Method Post -Uri "$endpoint$route" -Headers $headers -ContentType 'application/json' -Body ($body | ConvertTo-Json -Depth 12 -Compress)
 }
+function Send-Receipt($route, $body) {
+  if (-not $receiptHeaders) { throw 'The one-time lifecycle receipt token was not issued.' }
+  Invoke-RestMethod -Method Post -Uri "$endpoint$route" -Headers $receiptHeaders -ContentType 'application/json' -Body ($body | ConvertTo-Json -Depth 12 -Compress)
+}
 $hello = @{ protocolVersion = $protocol; jobId = $jobId; challengeNonce = $nonce; guestId = "guest-$jobId"; hostMounts = 0; credentialsInjected = $false; secretsInjected = $false; shellStringsAllowed = $false; userProfileMounted = $false }
-Send-Runner "/hello/$jobId" $hello | Out-Null
+$helloResponse = Send-Runner "/hello/$jobId" $hello
+if (-not $helloResponse.receiptToken -or $helloResponse.receiptToken -notmatch '^[a-f0-9]{64}$') { throw 'The protocol peer did not issue a one-time lifecycle receipt token.' }
+$receiptHeaders = @{ 'X-Ding-Ding-Receipt' = $helloResponse.receiptToken; 'X-Ding-Ding-Protocol' = "$protocol" }
+$helloResponse = $null
 $plan = $null
 $lifecyclePlan = $null
 $planDeadline = [DateTimeOffset]::UtcNow.AddSeconds(30)
@@ -197,18 +205,35 @@ if ($lifecyclePlan) {
   $children = @()
   $installProcess = Start-Process -FilePath $installer -ArgumentList ([string[]]$installerArgs) -WorkingDirectory $installRoot -PassThru -Wait
   if ($installProcess.ExitCode -ne 0) { throw 'Reviewed installer exited unsuccessfully.' }
-  Send-Runner "/stage-receipt/$jobId" @{ schemaVersion = 1; protocolVersion = $protocol; jobId = $jobId; challengeNonce = $nonce; guestId = "guest-$jobId"; planDigest = $lifecyclePlan.planDigest; sequence = 1; stage = 'installer-bytes'; installerBytes = [int64](Get-Item -LiteralPath $installer).Length; installerSha256 = $installerHash; observedAt = [DateTimeOffset]::UtcNow.ToString('o') } | Out-Null
-  Send-Runner "/stage-receipt/$jobId" @{ schemaVersion = 1; protocolVersion = $protocol; jobId = $jobId; challengeNonce = $nonce; guestId = "guest-$jobId"; planDigest = $lifecyclePlan.planDigest; sequence = 2; stage = 'install'; operation = "$family-install"; observedAt = [DateTimeOffset]::UtcNow.ToString('o') } | Out-Null
+  Send-Receipt "/stage-receipt/$jobId" @{ schemaVersion = 1; protocolVersion = $protocol; jobId = $jobId; challengeNonce = $nonce; guestId = "guest-$jobId"; planDigest = $lifecyclePlan.planDigest; sequence = 1; stage = 'installer-bytes'; installerBytes = [int64](Get-Item -LiteralPath $installer).Length; installerSha256 = $installerHash; observedAt = [DateTimeOffset]::UtcNow.ToString('o') } | Out-Null
+  Send-Receipt "/stage-receipt/$jobId" @{ schemaVersion = 1; protocolVersion = $protocol; jobId = $jobId; challengeNonce = $nonce; guestId = "guest-$jobId"; planDigest = $lifecyclePlan.planDigest; sequence = 2; stage = 'install'; operation = "$family-install"; observedAt = [DateTimeOffset]::UtcNow.ToString('o') } | Out-Null
   if ($family -ne 'squirrel') { throw 'Only the reviewed Squirrel lifecycle helper is enabled; NSIS and Inno remain blocked.' }
   $uninstallRoots = @('HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*')
   $records = @(Get-ItemProperty -Path $uninstallRoots -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -eq $lifecyclePlan.registryDisplayName -and $_.DisplayVersion -eq $lifecyclePlan.expectedVersion -and $_.InstallLocation })
   if ($records.Count -ne 1) { throw 'The exact Squirrel uninstall identity was absent or ambiguous.' }
   $record = $records[0]
-  $installRoot = [IO.Path]::GetFullPath($record.InstallLocation)
-  $localRoot = [IO.Path]::GetFullPath($env:LOCALAPPDATA)
-  if (-not $installRoot.StartsWith($localRoot, [StringComparison]::OrdinalIgnoreCase) -or (Get-Item -LiteralPath $installRoot).Attributes.ToString() -match 'ReparsePoint') { throw 'The Squirrel install root was outside guest LOCALAPPDATA or was a reparse point.' }
+  function Canonical([string]$value) { return [IO.Path]::GetFullPath($value).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar) }
+  function Assert-NoReparse([string]$root, [string]$candidate) {
+    $rootCanonical = Canonical $root
+    $candidateCanonical = Canonical $candidate
+    $prefix = "$rootCanonical\"
+    if (-not $candidateCanonical.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) { throw 'The Squirrel path was outside guest LOCALAPPDATA; sibling prefixes are not containment.' }
+    $relative = $candidateCanonical.Substring($prefix.Length)
+    $cursor = $rootCanonical
+    foreach ($part in $relative -split '\\') {
+      if (-not $part) { continue }
+      $cursor = Join-Path $cursor $part
+      if (Test-Path -LiteralPath $cursor) {
+        $item = Get-Item -LiteralPath $cursor -Force
+        if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'A reparse component was present in the reviewed Squirrel path.' }
+      }
+    }
+    return $candidateCanonical
+  }
+  $localRoot = Canonical $env:LOCALAPPDATA
+  $installRoot = Assert-NoReparse $localRoot $record.InstallLocation
   $versionDirs = @(Get-ChildItem -LiteralPath $installRoot -Directory -Force | Where-Object { $_.Name -match '^app-' -and -not ($_.Attributes.ToString() -match 'ReparsePoint') })
-  $exeMatches = @($versionDirs | ForEach-Object { Join-Path $_.FullName $lifecyclePlan.executableFileName } | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })
+  $exeMatches = @($versionDirs | ForEach-Object { Assert-NoReparse $installRoot (Join-Path $_.FullName $lifecyclePlan.executableFileName) } | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf -and (Split-Path $_ -Leaf) -ne 'Update.exe' })
   if ($exeMatches.Count -ne 1) { throw 'The exact Squirrel executable was absent or ambiguous.' }
   $exeHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $exeMatches[0]).Hash.ToLowerInvariant()
   if ($exeHash -ne $lifecyclePlan.executableSha256) { throw 'The exact Squirrel executable digest did not match the reviewed plan.' }
@@ -220,23 +245,23 @@ public static class GuestWindowProbe { [DllImport("user32.dll", SetLastError=tru
   $deadline = [DateTimeOffset]::UtcNow.AddMilliseconds($lifecyclePlan.readinessTimeoutMs); $hwnd = [IntPtr]::Zero
   while ([DateTimeOffset]::UtcNow -lt $deadline -and $hwnd -eq [IntPtr]::Zero) { $app.Refresh(); $hwnd = $app.MainWindowHandle; if ($hwnd -eq [IntPtr]::Zero) { Start-Sleep -Milliseconds 100 } }
   if ($hwnd -eq [IntPtr]::Zero -or $app.MainWindowTitle -ne $lifecyclePlan.expectedWindowTitle) { throw 'Squirrel child did not expose the reviewed inner-app window.' }
-  $pid = 0; [void][GuestWindowProbe]::GetWindowThreadProcessId($hwnd, [ref]$pid); $class = New-Object Text.StringBuilder 256; [void][GuestWindowProbe]::GetClassName($hwnd, $class, $class.Capacity)
-  if ($pid -ne $app.Id -or $class.ToString() -ne $lifecyclePlan.expectedWindowClass -or $class.ToString() -match 'Sandbox|ApplicationFrameHost') { throw 'Wrapper or foreign window readiness was rejected.' }
+  $windowPid = 0; [void][GuestWindowProbe]::GetWindowThreadProcessId($hwnd, [ref]$windowPid); $class = New-Object Text.StringBuilder 256; [void][GuestWindowProbe]::GetClassName($hwnd, $class, $class.Capacity)
+  if ($windowPid -ne $app.Id -or $class.ToString() -ne $lifecyclePlan.expectedWindowClass -or $class.ToString() -match 'Sandbox|ApplicationFrameHost') { throw 'Wrapper or foreign window readiness was rejected.' }
   Start-Sleep -Milliseconds $lifecyclePlan.stabilityTimeoutMs
-  Send-Runner "/stage-receipt/$jobId" @{ schemaVersion=1; protocolVersion=$protocol; jobId=$jobId; challengeNonce=$nonce; guestId="guest-$jobId"; planDigest=$lifecyclePlan.planDigest; sequence=3; stage='launch'; operation='squirrel-launch'; installedIdentity=$record.DisplayName; installedVersion=$record.DisplayVersion; executableSha256=$exeHash; process=@{ ready=$true; pid=$app.Id; windowTitle=$app.MainWindowTitle; windowClass=$class.ToString(); hwnd=('0x{0:x}' -f $hwnd.ToInt64()) }; observedAt=[DateTimeOffset]::UtcNow.ToString('o') } | Out-Null
+  Send-Receipt "/stage-receipt/$jobId" @{ schemaVersion=1; protocolVersion=$protocol; jobId=$jobId; challengeNonce=$nonce; guestId="guest-$jobId"; planDigest=$lifecyclePlan.planDigest; sequence=3; stage='launch'; operation='squirrel-launch'; installedIdentity=$record.DisplayName; installedVersion=$record.DisplayVersion; executableSha256=$exeHash; process=@{ ready=$true; pid=$app.Id; windowTitle=$app.MainWindowTitle; windowClass=$class.ToString(); hwnd=('0x{0:x}' -f $hwnd.ToInt64()) }; observedAt=[DateTimeOffset]::UtcNow.ToString('o') } | Out-Null
   if ($app.HasExited) { throw 'Squirrel child exited before uninstall.' }
   $descendantPids = @(Get-CimInstance Win32_Process -Filter "ParentProcessId=$($app.Id)" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty ProcessId)
   $kill = Start-Process -FilePath 'taskkill.exe' -ArgumentList @('/PID', [string]$app.Id, '/T', '/F') -Wait -PassThru -WindowStyle Hidden
   if ($kill.ExitCode -ne 0 -and -not $app.HasExited) { throw 'The reviewed child process tree did not accept taskkill.' }
   if (-not (Wait-Until { $app.HasExited -and @($descendantPids | Where-Object { Get-Process -Id $_ -ErrorAction SilentlyContinue }).Count -eq 0 } $lifecyclePlan.maxStageMs)) { throw 'The reviewed child process tree did not become absent within the bounded stage limit.' }
-  $update = Join-Path $installRoot 'Update.exe'; if (-not (Test-Path -LiteralPath $update -PathType Leaf)) { throw 'Squirrel Update.exe was absent.' }
+  $update = Assert-NoReparse $installRoot (Join-Path $installRoot 'Update.exe'); if (-not (Test-Path -LiteralPath $update -PathType Leaf)) { throw 'Squirrel Update.exe was absent.' }
   $uninstall = Start-Process -FilePath $update -ArgumentList @('--uninstall','-s') -WorkingDirectory $installRoot -PassThru -Wait
   if ($uninstall.ExitCode -ne 0) { throw 'Squirrel uninstall exited unsuccessfully.' }
-  Send-Runner "/stage-receipt/$jobId" @{ schemaVersion=1; protocolVersion=$protocol; jobId=$jobId; challengeNonce=$nonce; guestId="guest-$jobId"; planDigest=$lifecyclePlan.planDigest; sequence=4; stage='uninstall'; operation='squirrel-uninstall'; uninstallSucceeded=$true; observedAt=[DateTimeOffset]::UtcNow.ToString('o') } | Out-Null
+  Send-Receipt "/stage-receipt/$jobId" @{ schemaVersion=1; protocolVersion=$protocol; jobId=$jobId; challengeNonce=$nonce; guestId="guest-$jobId"; planDigest=$lifecyclePlan.planDigest; sequence=4; stage='uninstall'; operation='squirrel-uninstall'; uninstallSucceeded=$true; observedAt=[DateTimeOffset]::UtcNow.ToString('o') } | Out-Null
   if (-not (Wait-Until { $remaining = @(Get-ItemProperty -Path $uninstallRoots -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -eq $lifecyclePlan.registryDisplayName -and $_.DisplayVersion -eq $lifecyclePlan.expectedVersion }); $remaining.Count -eq 0 -and -not (Test-Path -LiteralPath $installRoot) -and -not (Test-Path -LiteralPath $exeMatches[0]) -and $app.HasExited } $lifecyclePlan.maxStageMs)) { throw 'Squirrel uninstall absence was not proven within the bounded stage limit.' }
-  Send-Runner "/stage-receipt/$jobId" @{ schemaVersion=1; protocolVersion=$protocol; jobId=$jobId; challengeNonce=$nonce; guestId="guest-$jobId"; planDigest=$lifecyclePlan.planDigest; sequence=5; stage='absence'; absenceVerified=$true; observedAt=[DateTimeOffset]::UtcNow.ToString('o') } | Out-Null
-  Send-Runner "/stage-receipt/$jobId" @{ schemaVersion=1; protocolVersion=$protocol; jobId=$jobId; challengeNonce=$nonce; guestId="guest-$jobId"; planDigest=$lifecyclePlan.planDigest; sequence=6; stage='disposal'; childProcessesStopped=$true; observedAt=[DateTimeOffset]::UtcNow.ToString('o') } | Out-Null
-  Send-Runner "/final-receipt/$jobId" @{ schemaVersion=1; protocolVersion=$protocol; jobId=$jobId; challengeNonce=$nonce; guestId="guest-$jobId"; planDigest=$lifecyclePlan.planDigest; lastSequence=6; verdict=$true; installIdentity=$installIdentity; processReady=$true; windowTitle=$lifecyclePlan.expectedWindowTitle; windowClass=$lifecyclePlan.expectedWindowClass; hwnd=('0x{0:x}' -f $hwnd.ToInt64()); uninstallSucceeded=$true; absenceVerified=$true; childProcessesStopped=$true; observedAt=[DateTimeOffset]::UtcNow.ToString('o') } | Out-Null
+  Send-Receipt "/stage-receipt/$jobId" @{ schemaVersion=1; protocolVersion=$protocol; jobId=$jobId; challengeNonce=$nonce; guestId="guest-$jobId"; planDigest=$lifecyclePlan.planDigest; sequence=5; stage='absence'; absenceVerified=$true; observedAt=[DateTimeOffset]::UtcNow.ToString('o') } | Out-Null
+  Send-Receipt "/stage-receipt/$jobId" @{ schemaVersion=1; protocolVersion=$protocol; jobId=$jobId; challengeNonce=$nonce; guestId="guest-$jobId"; planDigest=$lifecyclePlan.planDigest; sequence=6; stage='disposal'; childProcessesStopped=$true; observedAt=[DateTimeOffset]::UtcNow.ToString('o') } | Out-Null
+  Send-Receipt "/final-receipt/$jobId" @{ schemaVersion=1; protocolVersion=$protocol; jobId=$jobId; challengeNonce=$nonce; guestId="guest-$jobId"; planDigest=$lifecyclePlan.planDigest; lastSequence=6; verdict=$true; installIdentity=$installIdentity; processReady=$true; windowTitle=$lifecyclePlan.expectedWindowTitle; windowClass=$lifecyclePlan.expectedWindowClass; hwnd=('0x{0:x}' -f $hwnd.ToInt64()); uninstallSucceeded=$true; absenceVerified=$true; childProcessesStopped=$true; observedAt=[DateTimeOffset]::UtcNow.ToString('o') } | Out-Null
   Remove-Item -LiteralPath $installer -Force -ErrorAction SilentlyContinue
   exit 0
 }
@@ -684,8 +709,10 @@ export interface WindowsSandboxProtocolPeerContract {
   dispose(jobId: string, lease: Readonly<IsolationCapabilityLease>, signal: AbortSignal): Promise<SourceDisposalReceipt>;
   abort(jobId: string, signal: AbortSignal): Promise<void>;
   endpoint?(): Promise<string> | string;
+  advertiseAddress?(): string;
   prepare?(challenge: Readonly<IsolationAttestationChallenge>, guestId: string, token: string): Promise<void> | void;
   markProcessTreeStopped?(jobId: string): void;
+  markGuestDeleted?(jobId: string): void;
 }
 
 interface ProtocolPeerOptions {
@@ -693,6 +720,7 @@ interface ProtocolPeerOptions {
   advertiseAddress?: string;
   maxBodyBytes?: number;
   requestTimeoutMs?: number;
+  lifecycleTimeoutMs?: number;
   maxArchiveBytes?: number;
   fetchArchive?: (url: string, maxBytes: number, signal: AbortSignal) => Promise<Buffer>;
 }
@@ -701,6 +729,7 @@ interface ProtocolPeerJob {
   challenge: IsolationAttestationChallenge;
   guestId: string;
   token: string;
+  receiptToken?: string;
   plan?: SourceExecutionPlan;
   guestPlan?: SourceExecutionPlan;
   outputs: Map<string, SourceGuestOutput>;
@@ -715,6 +744,7 @@ interface ProtocolPeerJob {
   archive?: Buffer;
   archiveFetched?: Promise<Buffer>;
   processTreeStopped: boolean;
+  guestDeleted: boolean;
   disposed: boolean;
   aborted: boolean;
   lifecyclePlan?: GuestLifecyclePlan;
@@ -776,6 +806,8 @@ export class WindowsSandboxProtocolPeer implements WindowsSandboxProtocolPeerCon
     return this.address!;
   }
 
+  advertiseAddress(): string { return this.options.advertiseAddress; }
+
   async close(): Promise<void> {
     for (const jobId of [...this.jobs.keys()]) await this.abort(jobId, new AbortController().signal);
     if (!this.listening) return;
@@ -814,7 +846,11 @@ export class WindowsSandboxProtocolPeer implements WindowsSandboxProtocolPeerCon
     const complete = new Promise<SourceExecutionResult>((resolve, reject) => { resolveComplete = resolve; rejectComplete = reject; });
     let resolveLifecycleFinal!: (value: GuestLifecycleFinalReceipt) => void; let rejectLifecycleFinal!: (error: Error) => void;
     const lifecycleFinalPromise = new Promise<GuestLifecycleFinalReceipt>((resolve, reject) => { resolveLifecycleFinal = resolve; rejectLifecycleFinal = reject; });
-    this.jobs.set(parsed.jobId, { challenge: { ...parsed }, guestId, token, outputs: new Map(), lifecycleReceipts: [], lifecycleFinalPromise, resolveLifecycleFinal, rejectLifecycleFinal, hello, resolveHello, rejectHello, complete, resolveComplete, rejectComplete, processTreeStopped: false, disposed: false, aborted: false });
+    // Abort can legitimately happen before a consumer starts awaiting these
+    // promises. Attach inert observers so recovery does not create an
+    // unhandled rejection while the caller receives the surfaced error.
+    void hello.catch(() => undefined); void complete.catch(() => undefined); void lifecycleFinalPromise.catch(() => undefined);
+    this.jobs.set(parsed.jobId, { challenge: { ...parsed }, guestId, token, outputs: new Map(), lifecycleReceipts: [], lifecycleFinalPromise, resolveLifecycleFinal, rejectLifecycleFinal, hello, resolveHello, rejectHello, complete, resolveComplete, rejectComplete, processTreeStopped: false, guestDeleted: false, disposed: false, aborted: false });
   }
 
   /** Publish the separately authenticated installer lifecycle plan. */
@@ -833,7 +869,7 @@ export class WindowsSandboxProtocolPeer implements WindowsSandboxProtocolPeerCon
   }
 
   lifecycleReceipt(jobId: string): GuestLifecycleFinalReceipt | undefined { return this.jobs.get(jobId)?.lifecycleFinal; }
-  async awaitLifecycleFinal(jobId: string, signal: AbortSignal): Promise<GuestLifecycleFinalReceipt> { const job = this.jobs.get(jobId); if (!job) throw new Error('Lifecycle job was not registered.'); return this.withAbort(job.lifecycleFinalPromise, signal, 'Guest lifecycle final receipt timed out.'); }
+  async awaitLifecycleFinal(jobId: string, signal: AbortSignal): Promise<GuestLifecycleFinalReceipt> { const job = this.jobs.get(jobId); if (!job) throw new Error('Lifecycle job was not registered.'); const leaseRemainingMs = Math.max(1, Math.min(SOURCE_RUNTIME_LIMITS.maxJobMs, Date.parse(job.challenge.leaseExpiresAt) - Date.now())); const budgetMs = this.options.lifecycleTimeoutMs === undefined ? leaseRemainingMs : Math.min(leaseRemainingMs, Math.max(1_000, this.options.lifecycleTimeoutMs)); return this.withAbort(job.lifecycleFinalPromise, signal, 'Guest lifecycle final receipt timed out.', budgetMs); }
 
   async attest(challenge: Readonly<IsolationAttestationChallenge>, guestId: string, signal: AbortSignal): Promise<unknown> {
     await this.listen();
@@ -859,14 +895,19 @@ export class WindowsSandboxProtocolPeer implements WindowsSandboxProtocolPeerCon
     if (job) job.processTreeStopped = true;
   }
 
+  markGuestDeleted(jobId: string): void {
+    const job = this.jobs.get(jobId);
+    if (job) job.guestDeleted = true;
+  }
+
   async dispose(jobId: string, lease: Readonly<IsolationCapabilityLease>, signal: AbortSignal): Promise<SourceDisposalReceipt> {
     const job = this.jobs.get(jobId);
     if (!job || job.aborted || job.challenge.nonce !== lease.challengeNonce) throw new Error('The guest protocol disposal binding was rejected.');
     if (!validateCapabilityLease(lease, job.challenge, 'dispose', Date.now(), true)) throw new Error('The guest protocol disposal lease was invalid.');
-    if (!job.processTreeStopped) throw new Error('Guest disposal is not proven until the process tree has stopped.');
+    if (!job.processTreeStopped || !job.guestDeleted) throw new Error('Guest disposal is not proven until the host process tree has stopped and the guest/config root is absent.');
     if (job.lifecyclePlan && !job.lifecycleFinal) throw new Error('Guest lifecycle disposal requires the ordered final lifecycle receipt.');
     job.disposed = true;
-    const receipt = sourceDisposalReceiptSchema.parse({ schemaVersion: 1, jobId, guestId: job.guestId, brokerId: SOURCE_GUEST_IDENTITY.brokerId, transportId: SOURCE_GUEST_IDENTITY.transportId, challengeNonce: job.challenge.nonce, disposedAt: new Date().toISOString(), processTreeStopped: true, guestDeleted: true, hostMounts: 0, credentialsInjected: false, secretsInjected: false });
+    const receipt = sourceDisposalReceiptSchema.parse({ schemaVersion: 1, jobId, guestId: job.guestId, brokerId: SOURCE_GUEST_IDENTITY.brokerId, transportId: SOURCE_GUEST_IDENTITY.transportId, challengeNonce: job.challenge.nonce, disposedAt: new Date().toISOString(), processTreeStopped: job.processTreeStopped, guestDeleted: job.guestDeleted, hostMounts: 0, credentialsInjected: false, secretsInjected: false });
     this.jobs.delete(jobId);
     return await this.withAbort(Promise.resolve(receipt), signal, 'Guest disposal receipt timed out.');
   }
@@ -875,14 +916,15 @@ export class WindowsSandboxProtocolPeer implements WindowsSandboxProtocolPeerCon
     const job = this.jobs.get(jobId);
     if (!job) return;
     if (!job.aborted) { job.aborted = true; const error = new Error('Guest protocol aborted.'); job.rejectHello(error); job.rejectComplete(error); job.rejectLifecycleFinal(error); }
-    this.jobs.delete(jobId);
+    // Keep the job record as a recovery handle. The transport removes it only
+    // after the host proves the process tree and config root are gone.
   }
 
-  private async withAbort<T>(work: Promise<T>, signal: AbortSignal, message: string): Promise<T> {
+  private async withAbort<T>(work: Promise<T>, signal: AbortSignal, message: string, timeoutMs = this.options.requestTimeoutMs): Promise<T> {
     if (signal.aborted) throw new DOMException('Cancelled', 'AbortError');
     let timer: NodeJS.Timeout | undefined;
     const abort = new Promise<never>((_, reject) => { const onAbort = () => reject(new DOMException('Cancelled', 'AbortError')); signal.addEventListener('abort', onAbort, { once: true }); });
-    try { return await Promise.race([work, abort, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error(message)), this.options.requestTimeoutMs); })]); }
+    try { return await Promise.race([work, abort, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error(message)), timeoutMs); })]); }
     finally { if (timer) clearTimeout(timer); }
   }
 
@@ -892,7 +934,10 @@ export class WindowsSandboxProtocolPeer implements WindowsSandboxProtocolPeerCon
       const url = new URL(request.url ?? '/', 'http://protocol.invalid');
       const jobId = url.pathname.split('/')[2];
       const job = jobId ? this.jobs.get(jobId) : undefined;
-      if (!job || request.headers['x-ding-ding-runner'] !== job.token || request.headers['x-ding-ding-protocol'] !== String(SOURCE_GUEST_PROTOCOL_VERSION)) return this.send(response, 401, { error: 'protocol-unauthorized' });
+      if (!job || request.headers['x-ding-ding-protocol'] !== String(SOURCE_GUEST_PROTOCOL_VERSION)) return this.send(response, 401, { error: 'protocol-unauthorized' });
+      const receiptRoute = url.pathname === `/stage-receipt/${jobId}` || url.pathname === `/final-receipt/${jobId}`;
+      const authorized = receiptRoute ? Boolean(job.receiptToken && request.headers['x-ding-ding-receipt'] === job.receiptToken) : request.headers['x-ding-ding-runner'] === job.token;
+      if (!authorized) return this.send(response, 401, { error: 'protocol-unauthorized' });
       if (request.method === 'POST' && url.pathname === `/hello/${jobId}`) return this.handleHello(request, response, job);
       if (request.method === 'GET' && url.pathname === `/plan/${jobId}`) return this.handlePlan(response, job);
       if (request.method === 'GET' && url.pathname === `/archive/${jobId}`) return this.handleArchive(response, job);
@@ -925,8 +970,10 @@ export class WindowsSandboxProtocolPeer implements WindowsSandboxProtocolPeerCon
     const now = new Date().toISOString();
     const lease = isolationCapabilityLeaseSchema.parse({ leaseId: randomUUID(), jobId: job.challenge.jobId, challengeNonce: job.challenge.nonce, brokerId: SOURCE_GUEST_IDENTITY.brokerId, transportId: SOURCE_GUEST_IDENTITY.transportId, issuedAt: now, expiresAt: job.challenge.leaseExpiresAt, capabilities: ['execute', 'dispose'] });
     const attestation = isolationAttestationSchema.parse({ ...REQUIRED_ISOLATION, version: 1, jobId: job.challenge.jobId, challengeNonce: job.challenge.nonce, brokerId: SOURCE_GUEST_IDENTITY.brokerId, transportId: SOURCE_GUEST_IDENTITY.transportId, attestedAt: now, expiresAt: job.challenge.expiresAt, lease });
+    if (job.receiptToken) throw new Error('Guest hello was replayed; the one-time lifecycle receipt token already exists.');
+    job.receiptToken = randomBytes(32).toString('hex');
     job.resolveHello(attestation);
-    this.send(response, 200, { ok: true, protocolVersion: SOURCE_GUEST_PROTOCOL_VERSION, jobId: jobIdFrom(job), challengeNonce: job.challenge.nonce });
+    this.send(response, 200, { ok: true, protocolVersion: SOURCE_GUEST_PROTOCOL_VERSION, jobId: jobIdFrom(job), challengeNonce: job.challenge.nonce, receiptToken: job.receiptToken });
   }
 
   private handlePlan(response: ServerResponse, job: ProtocolPeerJob): void {
@@ -1012,6 +1059,7 @@ export interface WindowsSandboxTransportOptions {
   protocol?: WindowsSandboxProtocolPeerContract;
   /** Ephemeral host endpoint created by the protocol adapter; never persisted. */
   endpoint?: string;
+  advertiseAddress?: string;
   launch?: (executable: string, configPath: string, signal: AbortSignal) => Promise<{ stop(): Promise<{ processTreeStopped: boolean; rootPid?: number }> }>;
   recoverOrphan?: (jobId: string, configPath: string) => Promise<boolean>;
   checkedAt?: () => string;
@@ -1022,6 +1070,13 @@ interface LiveGuest {
   challenge: IsolationAttestationChallenge;
   configPath: string;
   stop(): Promise<{ processTreeStopped: boolean; rootPid?: number }>;
+}
+
+function isExplicitNonLoopbackIpv4(value: unknown): value is string {
+  if (typeof value !== 'string' || !/^(?:\d{1,3}\.){3}\d{1,3}$/.test(value.trim())) return false;
+  const octets = value.split('.').map(Number);
+  if (octets.some((part) => part < 0 || part > 255)) return false;
+  return octets[0] !== 0 && octets[0] !== 127 && !(octets[0] === 169 && octets[1] === 254) && octets[0] < 224;
 }
 
 /**
@@ -1057,8 +1112,10 @@ export class WindowsSandboxGuestTransport implements IsolationBroker {
   async diagnose(): Promise<SourceIsolationStatus> {
     const base = await probeWindowsDisposableGuest(this.options);
     if (!base.evidence || base.reason !== 'guest-transport-not-connected') return base;
-    const endpoint = this.options.endpoint ?? (this.options.protocol?.endpoint ? await this.options.protocol.endpoint() : undefined);
-    if (!this.options.protocol || !endpoint || !/^https?:\/\/[^\s/]+(?::\d{1,5})?$/.test(endpoint)) return base;
+    const advertiseAddress = this.options.advertiseAddress ?? this.options.protocol?.advertiseAddress?.();
+    if (!this.options.protocol || !isExplicitNonLoopbackIpv4(advertiseAddress)) return base;
+    const endpoint = this.options.endpoint ?? (this.options.protocol.endpoint ? await this.options.protocol.endpoint() : undefined);
+    if (!endpoint || !/^https?:\/\/[^\s/]+(?::\d{1,5})?$/.test(endpoint)) return base;
     return { available: true, provider: 'windows-sandbox', reason: 'ready', checkedAt: base.checkedAt, evidence: [...base.evidence, 'The fixed zero-host-mount guest protocol peer is configured.', 'The guest bootstrap refuses host mounts, credentials, secrets and shell strings.'], remediation: 'Source execution may proceed only after the per-job guest attestation and disposal receipt validate.' };
   }
 
@@ -1105,7 +1162,10 @@ export class WindowsSandboxGuestTransport implements IsolationBroker {
 
   async executeLifecycle(plan: GuestLifecyclePlan, installerBytes: Buffer, signal: AbortSignal): Promise<{ guest: GuestLifecycleFinalReceipt; disposal: SourceDisposalReceipt }> {
     if (!this.options.protocol || this.options.platform === 'linux' || this.options.platform === 'darwin') throw new Error('Disposable guest lifecycle requires the configured Windows protocol peer.');
-    if (!this.options.endpoint || /https?:\/\/(?:127\.0\.0\.1|localhost|\[::1\])(?::\d+)?$/i.test(this.options.endpoint)) throw new Error('Live Sandbox lifecycle requires an explicit non-loopback advertise address.');
+    const advertiseAddress = this.options.advertiseAddress ?? this.options.protocol.advertiseAddress?.();
+    if (!isExplicitNonLoopbackIpv4(advertiseAddress)) throw new Error('Live Sandbox lifecycle requires an explicit non-loopback advertise address.');
+    const endpoint = this.options.endpoint ?? (this.options.protocol.endpoint ? await this.options.protocol.endpoint() : undefined);
+    if (!endpoint) throw new Error('The zero-mount guest protocol has no ephemeral endpoint.');
     const now = new Date().toISOString();
     const challenge = isolationAttestationChallengeSchema.parse({ version: 1, jobId: plan.jobId, nonce: plan.challengeNonce, issuedAt: now, expiresAt: new Date(Date.now() + SOURCE_BROKER_LIMITS.challengeTtlMs).toISOString(), leaseExpiresAt: new Date(Date.now() + SOURCE_RUNTIME_LIMITS.maxJobMs).toISOString(), requestedCapabilities: ['execute', 'dispose'], expectedBrokerId: SOURCE_GUEST_IDENTITY.brokerId, expectedTransportId: SOURCE_GUEST_IDENTITY.transportId });
     let guest: GuestLifecycleFinalReceipt | undefined;
@@ -1126,21 +1186,29 @@ export class WindowsSandboxGuestTransport implements IsolationBroker {
   async dispose(jobId: string, lease: Readonly<IsolationCapabilityLease>): Promise<SourceDisposalReceipt> {
     const guest = this.guests.get(jobId);
     if (!guest || !this.options.protocol) throw new Error('No admitted zero-mount guest is available for disposal.');
+    let completed = false;
     try {
       const stopped = await guest.stop();
       if (!stopped.processTreeStopped) throw new Error('Host Sandbox process-tree stop was not proven.');
       this.options.protocol.markProcessTreeStopped?.(jobId);
       await rm(guest.configPath, { force: false });
+      this.options.protocol.markGuestDeleted?.(jobId);
       const receipt = sourceDisposalReceiptSchema.parse(await this.options.protocol.dispose(jobId, lease, new AbortController().signal));
       if (receipt.jobId !== jobId || receipt.challengeNonce !== guest.challenge.nonce || receipt.guestId !== guest.guestId || receipt.hostMounts !== 0 || !receipt.processTreeStopped || !receipt.guestDeleted) throw new Error('The guest disposal receipt did not prove complete teardown.');
+      completed = true;
       return receipt;
-    } finally { this.guests.delete(jobId); }
+    } finally { if (completed) this.guests.delete(jobId); }
   }
 
   async abort(jobId: string): Promise<void> {
     const guest = this.guests.get(jobId); if (!guest) return;
-    try { if (this.options.protocol) await this.options.protocol.abort(jobId, new AbortController().signal); }
-    finally { try { await guest.stop(); } catch { /* preserve cleanup failure for the caller */ } this.guests.delete(jobId); await rm(guest.configPath, { force: true }); }
+    if (this.options.protocol) await this.options.protocol.abort(jobId, new AbortController().signal);
+    const stopped = await guest.stop();
+    if (!stopped.processTreeStopped) throw new Error('Guest abort could not prove the host process tree stopped; recovery state was retained.');
+    await rm(guest.configPath, { force: false });
+    this.options.protocol?.markProcessTreeStopped?.(jobId);
+    this.options.protocol?.markGuestDeleted?.(jobId);
+    this.guests.delete(jobId);
   }
 }
 

@@ -155,7 +155,7 @@ describe('source job contracts', () => {
 
   it('reports a configured protocol peer as ready while preserving the real guest policy', async () => {
     const transport = new WindowsSandboxGuestTransport({ platform: 'win32', fileExists: async () => true, endpoint: 'http://127.0.0.1:4567', protocol: {} as never, checkedAt: () => '2026-08-12T12:00:00.000Z' });
-    await expect(transport.diagnose()).resolves.toMatchObject({ available: true, reason: 'ready', checkedAt: '2026-08-12T12:00:00.000Z' });
+    await expect(transport.diagnose()).resolves.toMatchObject({ available: false, reason: 'guest-transport-not-connected', checkedAt: '2026-08-12T12:00:00.000Z' });
     expect(transport.identity()).toEqual(SOURCE_GUEST_IDENTITY);
   });
 
@@ -175,6 +175,11 @@ describe('source job contracts', () => {
     const hello = peer.attest(challenge, guestId, new AbortController().signal);
     const helloResponse = await fetch(`${endpoint}/hello/${jobId}`, { method: 'POST', headers, body: JSON.stringify({ protocolVersion: 1, jobId, challengeNonce: challenge.nonce, guestId, hostMounts: 0, credentialsInjected: false, secretsInjected: false, shellStringsAllowed: false, userProfileMounted: false }) });
     expect(helloResponse.ok).toBe(true);
+    const helloBody = await helloResponse.json() as { receiptToken: string };
+    expect(helloBody.receiptToken).toMatch(/^[a-f0-9]{64}$/);
+    expect(helloBody.receiptToken).not.toBe(token);
+    const transferCannotPostReceipt = await fetch(`${endpoint}/stage-receipt/${jobId}`, { method: 'POST', headers, body: JSON.stringify({}) });
+    expect(transferCannotPostReceipt.status).toBe(401);
     const attestation = await hello as IsolationAttestation;
     expect(validateIsolationAttestation(attestation, challenge).ok).toBe(true);
     const bootstrap = createGuestBootstrap(plan, challenge.nonce, guestId);
@@ -195,6 +200,7 @@ describe('source job contracts', () => {
     expect(result.outputManifest?.files[0]?.path).toBe('dist/app.exe');
     expect(result.outputs?.[0]?.content).toEqual(output);
     peer.markProcessTreeStopped(jobId);
+    peer.markGuestDeleted(jobId);
     const receipt = await peer.dispose(jobId, attestation.lease, new AbortController().signal);
     expect(receipt).toMatchObject({ jobId, guestId, processTreeStopped: true, guestDeleted: true, hostMounts: 0, credentialsInjected: false, secretsInjected: false });
     await peer.close();
@@ -214,6 +220,45 @@ describe('source job contracts', () => {
     expect(present.evidence.join(' ')).toMatch(/not connected/i);
     const broker = new WindowsSandboxIsolationBroker(async () => present);
     await expect(broker.execute(createSourceExecutionPlan(crypto.randomUUID(), 'build', recipe), () => undefined, new AbortController().signal)).rejects.toThrow(/guest-transport-not-connected/);
+  });
+
+  it('retains the guest config recovery handle when abort cannot prove process-tree stop', async () => {
+    const root = await tempRoot('guest-abort-retention');
+    const jobId = crypto.randomUUID();
+    const challenge = createIsolationAttestationChallenge(jobId, 60_000, SOURCE_GUEST_IDENTITY);
+    let abortCalls = 0;
+    const protocol = {
+      advertiseAddress: () => '192.0.2.44',
+      endpoint: async () => 'http://192.0.2.44:4567',
+      prepare: () => undefined,
+      attest: async () => ({ ok: true }),
+      abort: async () => { abortCalls += 1; },
+    } as never;
+    const transport = new WindowsSandboxGuestTransport({ platform: 'win32', appDataRoot: root, fileExists: async () => true, protocol, launch: async () => ({ stop: async () => ({ processTreeStopped: false, rootPid: 123 }) }) });
+    await transport.attest(challenge, new AbortController().signal);
+    await expect(transport.abort(jobId)).rejects.toThrow(/recovery state was retained/i);
+    expect(abortCalls).toBe(1);
+    await expect(readFile(path.join(root, `${jobId}.wsb`), 'utf8')).resolves.toContain('<LogonCommand>');
+  });
+
+  it('resolves a protocol endpoint asynchronously before lifecycle admission', async () => {
+    const root = await tempRoot('guest-endpoint-resolution');
+    const jobId = crypto.randomUUID();
+    let endpointCalls = 0;
+    const protocol = {
+      advertiseAddress: () => '192.0.2.44',
+      endpoint: async () => { endpointCalls += 1; return 'http://192.0.2.44:4567'; },
+      prepare: () => undefined,
+      attest: async (challenge: IsolationAttestationChallenge) => ({
+        ...REQUIRED_ISOLATION, version: 1, jobId: challenge.jobId, challengeNonce: challenge.nonce, brokerId: challenge.expectedBrokerId, transportId: challenge.expectedTransportId,
+        attestedAt: challenge.issuedAt, expiresAt: challenge.expiresAt,
+        lease: { leaseId: crypto.randomUUID(), jobId: challenge.jobId, challengeNonce: challenge.nonce, brokerId: challenge.expectedBrokerId, transportId: challenge.expectedTransportId, issuedAt: challenge.issuedAt, expiresAt: challenge.leaseExpiresAt, capabilities: ['execute', 'dispose'] },
+      }),
+      abort: async () => undefined,
+    } as never;
+    const transport = new WindowsSandboxGuestTransport({ platform: 'win32', appDataRoot: root, fileExists: async () => true, protocol, launch: async () => ({ stop: async () => ({ processTreeStopped: true, rootPid: 123 }) }) });
+    await expect(transport.executeLifecycle({ jobId, challengeNonce: 'a'.repeat(64) } as never, Buffer.from('installer'), new AbortController().signal)).rejects.toThrow(/final receipt wait/i);
+    expect(endpointCalls).toBeGreaterThan(0);
   });
 });
 
