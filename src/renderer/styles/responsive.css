@@ -62,3 +62,29 @@
     .authenticator-entry-management button { flex: 1 1 130px; }
   }
 }
+
+@layer responsive {
+  @media (max-width: 1080px) {
+    .app-card { grid-template-columns: 58px minmax(0, 1fr); padding: 18px; }
+    .app-avatar { width: 58px; height: 58px; border-radius: 19px; }
+    .page-heading { padding: 22px 24px; }
+  }
+  @media (max-width: 820px) {
+    .app-shell { --rail-width: 84px; }
+    .nav-title::after { display: none; }
+    .page-heading { padding: 22px; border-radius: 24px; }
+  }
+  @media (max-width: 520px) {
+    .titlebar { padding-left: 10px; gap: 7px; }
+    .titlebar strong { max-width: 28vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .titlebar-logo { width: 28px; height: 28px; }
+    .brand-mark { width: 32px; height: 32px; }
+    .content { padding: 18px 14px 30px; }
+    .page-heading { margin-bottom: 20px; padding: 20px 18px; }
+    .page-heading h1 { font-size: 32px; letter-spacing: -1.2px; }
+    .app-card { grid-template-columns: 48px minmax(0, 1fr); gap: 10px; padding: 15px; border-radius: 21px; }
+    .app-avatar { width: 48px; height: 48px; border-radius: 16px; font-size: 15px; }
+    .card-heading h3 { font-size: 18px; }
+    .meta span { padding: 3px 6px; font-size: 12px; }
+  }
+}
