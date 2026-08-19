@@ -254,10 +254,11 @@ public static class GuestWindowProbe { [DllImport("user32.dll", SetLastError=tru
   Start-Sleep -Milliseconds $lifecyclePlan.stabilityTimeoutMs
   Send-Receipt "/stage-receipt/$jobId" @{ schemaVersion=1; protocolVersion=$protocol; jobId=$jobId; challengeNonce=$nonce; guestId="guest-$jobId"; planDigest=$lifecyclePlan.planDigest; sequence=3; stage='launch'; operation='squirrel-launch'; installedIdentity=$record.DisplayName; installedVersion=$record.DisplayVersion; executableSha256=$exeHash; process=@{ ready=$true; pid=$app.Id; windowTitle=$app.MainWindowTitle; windowClass=$class.ToString(); hwnd=('0x{0:x}' -f $hwnd.ToInt64()) }; observedAt=[DateTimeOffset]::UtcNow.ToString('o') } | Out-Null
   if ($app.HasExited) { throw 'Squirrel child exited before uninstall.' }
-  $descendantPids = @(Get-CimInstance Win32_Process -Filter "ParentProcessId=$($app.Id)" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty ProcessId)
+  $descendantPids = @(); $queue = [Collections.Generic.Queue[int]]::new(); $queue.Enqueue([int]$app.Id); $seen = [Collections.Generic.HashSet[int]]::new(); [void]$seen.Add([int]$app.Id)
+  while ($queue.Count -gt 0) { $parent = $queue.Dequeue(); $children = @(Get-CimInstance Win32_Process -Filter "ParentProcessId=$parent" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty ProcessId); foreach ($childPid in $children) { if ($seen.Add([int]$childPid)) { $descendantPids += [int]$childPid; $queue.Enqueue([int]$childPid) } } }
   $kill = Start-Process -FilePath 'taskkill.exe' -ArgumentList @('/PID', [string]$app.Id, '/T', '/F') -Wait -PassThru -WindowStyle Hidden
   if ($kill.ExitCode -ne 0 -and -not $app.HasExited) { throw 'The reviewed child process tree did not accept taskkill.' }
-  if (-not (Wait-Until { $app.HasExited -and @($descendantPids | Where-Object { Get-Process -Id $_ -ErrorAction SilentlyContinue }).Count -eq 0 } $lifecyclePlan.maxStageMs)) { throw 'The reviewed child process tree did not become absent within the bounded stage limit.' }
+  if (-not (Wait-Until { $rootAbsent = $app.HasExited -or -not (Get-Process -Id $app.Id -ErrorAction SilentlyContinue); $remaining = @($descendantPids | Where-Object { Get-Process -Id $_ -ErrorAction SilentlyContinue }); $rootAbsent -and $remaining.Count -eq 0 } $lifecyclePlan.maxStageMs)) { throw 'The reviewed child process tree, including recursively discovered descendants, did not become absent within the bounded stage limit.' }
   $update = Assert-NoReparse $installRoot (Join-Path $installRoot 'Update.exe'); if (-not (Test-Path -LiteralPath $update -PathType Leaf)) { throw 'Squirrel Update.exe was absent.' }
   $uninstall = Start-Process -FilePath $update -ArgumentList @('--uninstall','-s') -WorkingDirectory $installRoot -PassThru -Wait
   if ($uninstall.ExitCode -ne 0) { throw 'Squirrel uninstall exited unsuccessfully.' }
@@ -1026,11 +1027,15 @@ export class WindowsSandboxProtocolPeer implements WindowsSandboxProtocolPeerCon
     const parsed = guestLifecycleReceiptSchema.parse(await this.body(request));
     if (!job.lifecyclePlan || parsed.jobId !== job.challenge.jobId || parsed.challengeNonce !== job.challenge.nonce || parsed.guestId !== job.guestId || parsed.planDigest !== job.lifecyclePlan.planDigest) throw new Error('Lifecycle receipt binding was rejected.');
     if (parsed.sequence !== job.lifecycleReceipts.length + 1) throw new Error('Lifecycle receipt sequence was skipped or replayed.');
+    const expectedStages = ['installer-bytes', 'install', 'launch', 'uninstall', 'absence', 'disposal'];
+    if (parsed.stage !== expectedStages[parsed.sequence - 1]) throw new Error('Lifecycle receipt stage order was not exact.');
+    if (parsed.stage === 'installer-bytes' && (parsed.operation !== undefined || parsed.installerBytes !== job.lifecyclePlan.installer.bytes || parsed.installerSha256 !== job.lifecyclePlan.installer.sha256)) throw new Error('Installer-bytes receipt did not match the exact plan bytes/hash matrix.');
+    if (parsed.stage === 'install' && (parsed.operation !== `${job.lifecyclePlan.installer.format}-install` || parsed.installerBytes !== undefined || parsed.process !== undefined)) throw new Error('Install receipt operation/evidence matrix was invalid.');
     if (parsed.stage === 'launch' && !parsed.process) throw new Error('Launch receipt omitted inner-app readiness facts.');
-    if (parsed.stage === 'launch' && (parsed.installedIdentity !== job.lifecyclePlan.installIdentity || parsed.installedVersion !== job.lifecyclePlan.expectedVersion || parsed.executableSha256 !== job.lifecyclePlan.executableSha256)) throw new Error('Launch receipt identity or executable digest did not match the reviewed plan.');
-    if (parsed.stage === 'uninstall' && parsed.uninstallSucceeded !== true) throw new Error('Uninstall receipt did not prove success.');
-    if (parsed.stage === 'absence' && parsed.absenceVerified !== true) throw new Error('Uninstall absence was not proven.');
-    if (parsed.stage === 'disposal' && parsed.childProcessesStopped !== true) throw new Error('Disposal receipt did not prove child-process stop.');
+    if (parsed.stage === 'launch' && (parsed.operation !== `${job.lifecyclePlan.installer.format}-launch` || parsed.installedIdentity !== job.lifecyclePlan.installIdentity || parsed.installedVersion !== job.lifecyclePlan.expectedVersion || parsed.executableSha256 !== job.lifecyclePlan.executableSha256 || parsed.process?.ready !== true || parsed.process.pid === undefined || parsed.process.windowTitle !== job.lifecyclePlan.expectedWindowTitle || parsed.process.windowClass !== job.lifecyclePlan.expectedWindowClass || parsed.process.hwnd === undefined)) throw new Error('Launch receipt identity, operation, or process evidence did not match the reviewed plan.');
+    if (parsed.stage === 'uninstall' && (parsed.operation !== `${job.lifecyclePlan.installer.format}-uninstall` || parsed.uninstallSucceeded !== true)) throw new Error('Uninstall receipt operation/evidence matrix was invalid.');
+    if (parsed.stage === 'absence' && (parsed.operation !== undefined || parsed.absenceVerified !== true)) throw new Error('Absence receipt operation/evidence matrix was invalid.');
+    if (parsed.stage === 'disposal' && (parsed.operation !== undefined || parsed.childProcessesStopped !== true)) throw new Error('Disposal receipt operation/evidence matrix was invalid.');
     job.lifecycleReceipts.push(parsed); this.send(response, 200, { ok: true, sequence: parsed.sequence });
   }
 
@@ -1040,7 +1045,8 @@ export class WindowsSandboxProtocolPeer implements WindowsSandboxProtocolPeerCon
     if (parsed.lastSequence !== job.lifecycleReceipts.length || parsed.lastSequence < 1) throw new Error('Final lifecycle receipt sequence was not complete.');
     const expectedStages = ['installer-bytes', 'install', 'launch', 'uninstall', 'absence', 'disposal'];
     if (job.lifecycleReceipts.length !== expectedStages.length || job.lifecycleReceipts.some((receipt, index) => receipt.stage !== expectedStages[index])) throw new Error('Final lifecycle receipt omitted an ordered lifecycle stage.');
-    if (!job.lifecycleReceipts.some((receipt) => receipt.stage === 'disposal' && receipt.childProcessesStopped)) throw new Error('Final lifecycle receipt claimed disposal without child-process proof.');
+    const launch = job.lifecycleReceipts.find((receipt) => receipt.stage === 'launch'); const uninstall = job.lifecycleReceipts.find((receipt) => receipt.stage === 'uninstall'); const absence = job.lifecycleReceipts.find((receipt) => receipt.stage === 'absence'); const disposal = job.lifecycleReceipts.find((receipt) => receipt.stage === 'disposal');
+    if (!launch?.process || launch.installedIdentity !== job.lifecyclePlan.installIdentity || launch.installedVersion !== job.lifecyclePlan.expectedVersion || launch.executableSha256 !== job.lifecyclePlan.executableSha256 || parsed.installIdentity !== launch.installedIdentity || parsed.processReady !== launch.process.ready || parsed.windowTitle !== launch.process.windowTitle || parsed.windowClass !== launch.process.windowClass || parsed.hwnd !== launch.process.hwnd || uninstall?.uninstallSucceeded !== true || parsed.uninstallSucceeded !== uninstall.uninstallSucceeded || absence?.absenceVerified !== true || parsed.absenceVerified !== absence.absenceVerified || disposal?.childProcessesStopped !== true || parsed.childProcessesStopped !== disposal.childProcessesStopped) throw new Error('Final lifecycle receipt did not cross-check stored launch, uninstall, absence, and disposal evidence.');
     job.lifecycleFinal = parsed; job.resolveLifecycleFinal(parsed); this.send(response, 200, { ok: true });
   }
 
@@ -1150,7 +1156,15 @@ export class WindowsSandboxGuestTransport implements IsolationBroker {
       return { stop };
     });
     const executable = this.options.sandboxExecutable ?? path.join(this.options.systemRoot ?? process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsSandbox.exe');
-    const processHandle = await launch(executable, configPath, signal);
+    let processHandle;
+    try { processHandle = await launch(executable, configPath, signal); }
+    catch (error) {
+      const failures: string[] = [];
+      try { await this.options.protocol?.abort(challenge.jobId, new AbortController().signal); } catch (cleanupError) { failures.push(`protocol abort failed: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`); }
+      try { await rm(configPath, { force: false }); } catch (cleanupError) { failures.push(`config cleanup failed: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`); }
+      if (failures.length) throw new Error(`${error instanceof Error ? error.message : String(error)} Recovery required: ${failures.join('; ')}`);
+      throw error;
+    }
     const guest = { guestId, challenge: { ...challenge }, configPath, stop: processHandle.stop };
     this.guests.set(challenge.jobId, guest);
     return guest;

@@ -54,6 +54,10 @@ describe('guest lifecycle protocol contracts', () => {
     expect(WINDOWS_SANDBOX_GUEST_BOOTSTRAP).toContain('receiptToken');
     expect(WINDOWS_SANDBOX_GUEST_BOOTSTRAP).toContain('Assert-NoReparse');
     expect(WINDOWS_SANDBOX_GUEST_BOOTSTRAP).toContain('sibling prefixes are not containment');
+    expect(WINDOWS_SANDBOX_GUEST_BOOTSTRAP).toContain('Queue[int]');
+    expect(WINDOWS_SANDBOX_GUEST_BOOTSTRAP).toContain('ParentProcessId=$parent');
+    expect(WINDOWS_SANDBOX_GUEST_BOOTSTRAP).toContain('descendantPids');
+    expect(WINDOWS_SANDBOX_GUEST_BOOTSTRAP).toContain('including recursively discovered descendants');
   });
 
   it('requires an explicit live advertise address instead of selecting a virtual interface', async () => {
@@ -76,5 +80,13 @@ describe('guest lifecycle protocol contracts', () => {
     expect(source).not.toContain('launch_on_headless_desktop');
     expect(source).not.toContain('WindowsSandbox.exe -> WindowsSandboxRemoteSession.exe');
     expect(source).not.toContain('platform: process.platform');
+  });
+
+  it('keeps stage and final evidence cross-checks in the protocol peer', async () => {
+    const source = await readFile(new URL('../src/main/source-runtime.ts', import.meta.url), 'utf8');
+    expect(source).toContain('Installer-bytes receipt did not match the exact plan bytes/hash matrix');
+    expect(source).toContain('Install receipt operation/evidence matrix was invalid');
+    expect(source).toContain('Launch receipt identity, operation, or process evidence did not match');
+    expect(source).toContain('Final lifecycle receipt did not cross-check stored launch, uninstall, absence, and disposal evidence');
   });
 });

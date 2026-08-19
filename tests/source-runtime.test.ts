@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -274,6 +274,17 @@ describe('source job contracts', () => {
     expect(response.ok).toBe(true);
     await expect(pending).resolves.toMatchObject({ lease: { jobId } });
     await peer.close();
+  });
+
+  it('cleans the exact config and protocol job when launch fails before guest admission', async () => {
+    const root = await tempRoot('guest-launch-failure'); const jobId = crypto.randomUUID();
+    let abortCalls = 0;
+    const protocol = { advertiseAddress: () => '192.0.2.44', endpoint: async () => 'http://192.0.2.44:4567', prepare: () => undefined, attest: async () => ({}), abort: async () => { abortCalls += 1; } } as never;
+    const transport = new WindowsSandboxGuestTransport({ platform: 'win32', appDataRoot: root, fileExists: async () => true, protocol, launch: async () => { throw new Error('injected launch failure'); } });
+    const challenge = createIsolationAttestationChallenge(jobId, 60_000, SOURCE_GUEST_IDENTITY);
+    await expect(transport.attest(challenge, new AbortController().signal)).rejects.toThrow(/injected launch failure/);
+    expect(abortCalls).toBeGreaterThan(0);
+    expect((await readdir(root)).filter((name) => name.endsWith('.wsb'))).toEqual([]);
   });
 
   it('rejects a guest hello after the challenge deadline', async () => {
