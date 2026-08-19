@@ -50,6 +50,13 @@ function appStatusLabel(settings: UserSettings, status: CatalogApp['updateState'
   return label(settings, en, yue);
 }
 
+function appMark(name: string, id: string): { letters: string; tone: string } {
+  const letters = name.trim().split(/\s+/).map((part) => part[0] ?? '').join('').slice(0, 2).toUpperCase() || 'DD';
+  let hash = 0;
+  for (const character of id) hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
+  return { letters, tone: ['violet', 'teal', 'coral', 'amber', 'blue'][hash % 5] };
+}
+
 export function AppCard({ app, installedRecord, settings, onAction, onManagedUpdate, onCancelInstall, managedUpdate, operationProgress, searchLabel, runningAction, selected, onSelect }: { app: CatalogApp; installedRecord: InstalledAppRecord | undefined; settings: UserSettings; onAction: (kind: ActionKind, app: CatalogApp, trigger: HTMLButtonElement) => void; onManagedUpdate: (kind: 'download' | 'cancel' | 'restart', app: CatalogApp, trigger: HTMLButtonElement) => void; onCancelInstall: (app: CatalogApp, trigger: HTMLButtonElement) => void; managedUpdate: ManagedUpdateState | undefined; operationProgress: OperationProgressEvent | undefined; searchLabel: ReactNode; runningAction: RunningAction | null; selected: boolean; onSelect(checked: boolean, shiftKey: boolean): void }) {
   const management = installationManagementState(installedRecord);
   const managed = management === 'store-managed';
@@ -58,17 +65,19 @@ export function AppCard({ app, installedRecord, settings, onAction, onManagedUpd
   const installBusy = (runningAction?.appId === app.id && runningAction.kind === 'install') || (operationProgress?.kind === 'install' && !operationProgress.final);
   const sourceBusy = runningAction?.appId === app.id && runningAction.kind === 'build';
   const installProgress = operationProgress?.kind === 'install' ? operationProgress : undefined;
+  const mark = appMark(app.name, app.id);
   const busyExplanation = operationProgress?.locked
     ? label(settings, 'This application remains locked until restart because installer termination could not be proven.', '安裝程式終止未能確認，呢個 app 會鎖住直到重啟。')
     : operationBusy ? label(settings, 'Wait for the current installation to finish before starting another action.', '等目前安裝操作完成先做下一步。') : undefined;
   return (
-    <article className="app-card" {...el('app-card')}>
+    <article className="app-card" data-app-id={app.id} data-availability={app.availability} {...el('app-card')}>
       <label className="selection-check app-selection"><input type="checkbox" checked={selected} onClick={(event) => onSelect(event.currentTarget.checked, event.shiftKey)} onChange={() => undefined} /><span className="visually-hidden">{label(settings, `Select ${app.name}`, `揀選 ${app.name}`)}</span></label>
-      <div className="app-avatar" aria-hidden="true">{app.name.slice(0, 2).toUpperCase()}</div>
+      <div className="app-avatar" data-app-tone={mark.tone} {...el('app-avatar')} aria-hidden="true"><span className="app-avatar-glyph">{mark.letters}</span><span className="app-avatar-spark" /></div>
       <div className="app-copy">
         <div className="card-heading"><h3 {...el('app-card-title')}>{searchLabel}</h3><span className={`status-pill ${app.updateState}`} {...el('status-pill')}>{appStatusLabel(settings, app.updateState)}</span></div>
         <p {...el('app-card-description')}>{app.description}</p>
-        <div className="meta"><span><Icon>deployed_code</Icon>{app.latestVersion ?? label(settings, 'No stable release', '冇穩定版本')}</span><span><Icon>download</Icon>{app.packageType}</span><span><Icon>star</Icon>{app.stars}</span>{installedRecord && <span><Icon>{managed ? 'verified_user' : 'visibility'}</Icon>{managed ? label(settings, 'Managed by App Store', '由 App Store 管理') : label(settings, 'Detected outside App Store', '偵測到外部安裝')}</span>}</div>
+        <div className="meta" aria-label={label(settings, 'Application facts', '應用資料')}><span><Icon>deployed_code</Icon>{app.latestVersion ?? label(settings, 'No stable release', '冇穩定版本')}</span><span><Icon>download</Icon>{app.packageType}</span><span><Icon>star</Icon>{app.stars}</span>{installedRecord && <span><Icon>{managed ? 'verified_user' : 'visibility'}</Icon>{managed ? label(settings, 'Managed by App Store', '由 App Store 管理') : label(settings, 'Detected outside App Store', '偵測到外部安裝')}</span>}</div>
+        <span className={`availability-note ${app.availability}`} role="status">{app.availability === 'installable' ? label(settings, 'Reviewed installer', '已審核安裝程式') : app.availability === 'source-build' ? label(settings, 'Reviewed source route', '已審核 source 路線') : app.availability === 'documentation-only' ? label(settings, 'Documentation only', '只有文件') : label(settings, 'Not currently available', '目前未能使用')}</span>
         {discoveryOnly && <p className="operation-status warning" role="status">{label(settings, `Detected ${installedRecord?.version ?? 'unknown version'} from the reviewed ${installedRecord?.source ?? 'registry'} identity. This App Store did not install it, so install, update, and uninstall actions stay unavailable.`, `由已審核嘅 ${installedRecord?.source ?? 'registry'} 身份偵測到版本 ${installedRecord?.version ?? '不明'}。唔係呢個 App Store 安裝，所以安裝、更新同解除安裝操作都唔會開放。`)}</p>}
         <div className="card-actions">
           {app.availability === 'installable' && !discoveryOnly && <button className="filled-button" data-install-action={app.id} {...el('button-filled')} disabled={operationBusy} aria-busy={installBusy} title={busyExplanation} onClick={(event) => onAction('install', app, event.currentTarget)}><Icon>download</Icon>{installBusy ? label(settings, 'Installing…', '安裝緊…') : label(settings, managed ? 'Reinstall' : 'Install', managed ? '重新安裝' : '安裝')}</button>}

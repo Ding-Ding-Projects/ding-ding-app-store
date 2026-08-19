@@ -18,3 +18,4 @@ Tabs, search, command palette, settings, appearance, and notifications.
 - [Dim-sum startup surprise](./dim-sum-surprise.md) — Gives later launches a small non-blocking dim-sum card using only metadata and a published public catalog photo URL.
 - [Changelog viewer](./changelog-viewer.md) — Browses every released version with searchable commit links, typed date filters, an anchored month-jump range calendar, presets, and filtered copy/export actions.
 - [Catalog language coverage](./catalog-language.md) — Keeps Discover, Installed, and Updates controls, status facts, loading states, and recovery actions aligned with the persisted language mode.
+- [Expressive storefront shell](./expressive-storefront.md) — Applies an expressive Material Design 3 shell to the title bar, tab rail, catalog cards, state surfaces, and responsive layouts while preserving the existing typed behaviors.

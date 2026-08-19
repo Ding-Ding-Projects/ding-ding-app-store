@@ -1011,7 +1011,7 @@ export function App() {
         {...el('app-shell')}
       >
         <header className="titlebar" {...el('titlebar')}>
-          <img className="titlebar-logo" src="/ding-ding-app-store.svg" alt="" aria-hidden="true" />
+          <img className="titlebar-logo" src="/ding-ding-app-store.svg" alt="" aria-hidden="true" onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = 'ding-ding-app-store.svg'; }} />
           <div className="brand-mark" aria-hidden="true"><Icon>storefront</Icon></div>
           <strong {...el('titlebar-brand')}>{settings.displayName}</strong>
           <span className="dev-badge" {...el('titlebar-badge')}>Preview 0.1.0</span>
@@ -1072,7 +1072,7 @@ export function App() {
             )}
           </div>
 
-          {catalog?.warning && <div className="notice warning" role="status" {...el('notice')}><Icon>wifi_off</Icon>{catalog.warning}</div>}
+          {catalog?.warning && <div className="notice warning catalog-state" role="status" {...el('catalog-state')}><Icon>wifi_off</Icon><div><strong>{label(settings, 'Offline catalog', '離線目錄')}</strong><p>{catalog.warning}</p></div><span className="status-pill failed">{catalog.source === 'cache' ? label(settings, 'Cached', '快取') : label(settings, 'Unavailable', '未能使用')}</span></div>}
 
           {(activeTab === 'catalog' || activeTab === 'installed' || activeTab === 'updates') && (
             <AppsPage

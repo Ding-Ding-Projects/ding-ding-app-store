@@ -197,3 +197,58 @@
   .sub-tab-row button { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 18px; border-radius: 999px; background: var(--surface-container); font-weight: 700; }
   .sub-tab-row button[aria-selected="true"] { color: var(--on-primary); background: var(--primary); }
 }
+
+/* Expressive storefront shell: a quiet title bar, a tactile rail, and clear
+   semantic layers keep the dense store useful without flattening it into a
+   dashboard of identical cards. */
+@layer features {
+  .app-shell {
+    grid-template-rows: var(--titlebar-height) 1fr;
+    background:
+      radial-gradient(circle at 88% 6%, color-mix(in srgb, var(--primary) 12%, transparent), transparent 28rem),
+      radial-gradient(circle at 18% 100%, color-mix(in srgb, #00a9b7 8%, transparent), transparent 24rem),
+      var(--surface);
+  }
+
+  .titlebar {
+    height: var(--titlebar-height);
+    gap: 12px;
+    padding: 0 8px 0 16px;
+    background: color-mix(in srgb, var(--surface) 90%, var(--primary) 10%);
+    border-bottom: 1px solid color-mix(in srgb, var(--primary) 22%, var(--outline-variant));
+    box-shadow: 0 1px 0 rgb(255 255 255 / 55%), 0 4px 18px rgb(58 38 94 / 6%);
+  }
+
+  .titlebar-logo { width: 32px; height: 32px; border-radius: 10px; }
+  .brand-mark { width: 36px; height: 36px; border-radius: 12px; background: linear-gradient(145deg, var(--primary), #00a9b7); box-shadow: var(--elevation-1); }
+  .titlebar strong { font-size: 15px; letter-spacing: .01em; }
+  .dev-badge { color: var(--on-primary-container); background: color-mix(in srgb, #00a9b7 16%, var(--surface)); border: 1px solid color-mix(in srgb, #00a9b7 30%, transparent); }
+  .titlebar .notification-button { margin-left: 10px; width: 40px; height: 40px; border-radius: 14px; }
+  .titlebar > button:not(.notification-button) { width: 40px; height: 40px; border-radius: 12px; }
+
+  .navigation {
+    padding: 20px 14px 14px;
+    background: color-mix(in srgb, var(--surface-container) 86%, var(--primary) 14%);
+    border-right: 1px solid color-mix(in srgb, var(--primary) 20%, var(--outline-variant));
+    box-shadow: inset -1px 0 0 rgb(255 255 255 / 20%);
+  }
+  .nav-title { padding: 2px 14px 14px; color: var(--on-surface); font-size: 24px; letter-spacing: -.8px; }
+  .nav-title::after { content: ' / app library'; color: var(--outline); font-size: 12px; font-weight: 600; letter-spacing: .2px; }
+  .tab-search { margin: 0 0 14px; border-radius: 18px; background: color-mix(in srgb, var(--surface) 78%, var(--primary) 22%); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 18%, transparent); }
+  .tab-discovery-panel, .tab-management-panel { border-radius: 18px; background: color-mix(in srgb, var(--surface) 72%, transparent); box-shadow: var(--elevation-1); }
+  .tab-strip { gap: 7px; padding: 2px; }
+  .tab-region { gap: 7px; }
+  .tab-region.pinned { padding-bottom: 12px; margin-bottom: 8px; border-bottom-color: color-mix(in srgb, var(--primary) 30%, var(--outline-variant)); }
+  .tab-group-body { gap: 7px; padding-left: 12px; }
+  .nav-tab { min-height: var(--tab-height); padding: 6px 14px; border-radius: 17px; color: color-mix(in srgb, var(--on-surface) 88%, var(--outline)); transition: background 140ms ease, transform 140ms ease, box-shadow 140ms ease; }
+  .nav-tab:hover { background: color-mix(in srgb, var(--surface-high) 75%, var(--primary) 25%); transform: translateX(2px); }
+  .nav-tab.selected { color: var(--on-primary-container); background: linear-gradient(100deg, color-mix(in srgb, var(--primary-container) 88%, white), color-mix(in srgb, #00a9b7 10%, var(--primary-container))); box-shadow: var(--elevation-1); }
+  .nav-tab.selected::after { content: ''; position: absolute; right: 8px; width: 5px; height: 22px; border-radius: 5px; background: linear-gradient(180deg, var(--primary), #00a9b7); }
+  .nav-tab::before { left: 4px; top: 11px; bottom: 11px; }
+  .tab-group-header { min-height: 36px; padding: 2px 12px; border-radius: 12px; }
+  .tab-group-header:hover { background: color-mix(in srgb, var(--surface-high) 74%, var(--primary) 26%); }
+  .palette-hint { margin-top: 14px; border: 1px solid color-mix(in srgb, var(--primary) 24%, var(--outline-variant)); background: color-mix(in srgb, var(--surface) 70%, var(--primary) 30%); box-shadow: var(--elevation-1); }
+  .palette-hint:hover { background: color-mix(in srgb, var(--primary-container) 80%, var(--surface)); }
+
+  .content { padding: clamp(24px, 4vw, 52px); }
+}
