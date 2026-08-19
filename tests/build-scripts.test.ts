@@ -34,7 +34,9 @@ describe('fresh-machine build entry points', () => {
     expect(common).not.toMatch(/\bGet-FileHash\b/);
     expect(common).toContain('electron-builder');
     expect(common).toContain("'--win', 'squirrel', '--publish', 'never'");
-    expect(common).toContain('Get-AuthenticodeSignature');
+    expect(common).toContain('function Get-SafeAuthenticodeSignature');
+    expect(common).toContain('Import-Module Microsoft.PowerShell.Security -Force -ErrorAction Stop');
+    expect(common).toContain('Microsoft.PowerShell.Security\\Get-AuthenticodeSignature');
     expect(common).toContain("Status -ne 'NotSigned'");
     expect(common).toContain('local-installer.v1');
     expect(common).not.toMatch(/gh\s+release|git\s+(?:push|tag)|forceCodeSigning\s*=\s*\$true/i);
@@ -43,5 +45,20 @@ describe('fresh-machine build entry points', () => {
     expect(installer).toContain('Invoke-ProjectInstaller');
     expect(installer).toContain('Get-Sha256 -LiteralPath $result.Setup.FullName');
     expect(installer).not.toMatch(/\bGet-FileHash\b/);
+  });
+
+  it('has a fail-closed regression for removing the explicit signature inspection route', async () => {
+    const common = await read('scripts/build-common.ps1');
+    const required = [
+      'Import-Module Microsoft.PowerShell.Security -Force -ErrorAction Stop',
+      'Microsoft.PowerShell.Security\\Get-AuthenticodeSignature',
+      'Get-SafeAuthenticodeSignature -LiteralPath $setup.FullName',
+    ];
+    const assertInspectionRoute = (source: string) => {
+      for (const marker of required) if (!source.includes(marker)) throw new Error(`Missing signature inspection marker: ${marker}`);
+    };
+    assertInspectionRoute(common);
+    const broken = common.replaceAll('Get-SafeAuthenticodeSignature -LiteralPath $setup.FullName', 'Get-AuthenticodeSignature -LiteralPath $setup.FullName');
+    expect(() => assertInspectionRoute(broken)).toThrow(/Missing signature inspection marker/);
   });
 });

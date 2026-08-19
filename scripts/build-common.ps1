@@ -160,6 +160,15 @@ function Assert-UnsignedSquirrelConfiguration {
   if ($targets -notcontains 'squirrel') { throw 'The installer path must use the Squirrel.Windows target.' }
 }
 
+function Get-SafeAuthenticodeSignature {
+  param([Parameter(Mandatory = $true)][string]$LiteralPath)
+  # No-profile PowerShell may discover this cmdlet but fail implicit module
+  # loading. Import the security module explicitly, then invoke its qualified
+  # command so the unsigned-state check cannot be skipped or guessed.
+  Import-Module Microsoft.PowerShell.Security -Force -ErrorAction Stop
+  return Microsoft.PowerShell.Security\Get-AuthenticodeSignature -LiteralPath $LiteralPath
+}
+
 function Invoke-ProjectInstaller {
   param([Parameter(Mandatory = $true)][string]$Root, [Parameter(Mandatory = $true)]$Tools)
   Assert-UnsignedSquirrelConfiguration -Root $Root
@@ -171,7 +180,7 @@ function Invoke-ProjectInstaller {
   $releases = Get-ChildItem -LiteralPath $releaseRoot -Recurse -File -Filter 'RELEASES' | Select-Object -First 1
   $nupkg = Get-ChildItem -LiteralPath $releaseRoot -Recurse -File -Filter '*-full.nupkg' | Select-Object -First 1
   if (-not $releases -or -not $nupkg) { throw 'The installer build did not produce RELEASES and a full .nupkg.' }
-  $signature = Get-AuthenticodeSignature -LiteralPath $setup.FullName
+  $signature = Get-SafeAuthenticodeSignature -LiteralPath $setup.FullName
   if ($signature.Status -ne 'NotSigned') { throw "Code signing is prohibited, but Setup.exe reported $($signature.Status)." }
   $identity = Get-SourceIdentity -Root $Root
   $rootPrefix = ([IO.Path]::GetFullPath($Root)).TrimEnd('\') + '\'
