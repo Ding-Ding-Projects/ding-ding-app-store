@@ -57,14 +57,16 @@ const packageSha256 = createHash('sha256').update(packageBytes).digest('hex');
 const extractionRoot = await mkdtemp(path.join(os.tmpdir(), 'ding-ding-guest-artifact-'));
 let peer; let transport; let receipt; const lowlevelState = path.join(runRoot, 'state.json'); const lowlevelOutputRoot = path.join(runRoot, 'output');
 const runLowlevel = (command, input, timeoutMs = 60_000) => new Promise((resolve, reject) => {
-  const child = spawn('py', ['-3', lowlevelClientPath, command, '--state', lowlevelState, ...(command === 'cleanup' ? ['--allow-saved-pid-kill'] : [])], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+  const childArgs = command === 'call' ? ['-3', lowlevelClientPath, 'call', input.tool] : ['-3', lowlevelClientPath, command, '--state', lowlevelState, ...(command === 'cleanup' ? ['--allow-saved-pid-kill'] : [])];
+  const child = spawn('py', childArgs, { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
   let stdout = ''; let stderr = ''; let settled = false;
   const timer = setTimeout(() => { if (!settled) { settled = true; child.kill(); reject(new Error(`Lowlevel ${command} exceeded ${timeoutMs}ms: ${stderr || stdout}`)); } }, timeoutMs);
   child.stdout.on('data', (chunk) => { stdout += chunk.toString(); }); child.stderr.on('data', (chunk) => { stderr += chunk.toString(); });
   child.once('error', (error) => { if (!settled) { settled = true; clearTimeout(timer); reject(error); } });
   child.once('exit', (code) => { if (settled) return; settled = true; clearTimeout(timer); if (code !== 0) reject(new Error(`Lowlevel ${command} exited ${code}: ${stderr || stdout}`)); else { try { resolve(JSON.parse(stdout.trim().split(/\r?\n/).filter(Boolean).at(-1) ?? '{}')); } catch (error) { reject(new Error(`Lowlevel ${command} returned non-JSON output: ${error instanceof Error ? error.message : String(error)}`)); } } });
-  child.stdin.end(input === undefined ? undefined : `${JSON.stringify(input)}\n`);
+  child.stdin.end(input === undefined ? undefined : `${JSON.stringify(command === 'call' ? input.params : input)}\n`);
 });
+const runLowlevelCall = (tool, params, timeoutMs = 60_000) => runLowlevel('call', { tool, params }, timeoutMs);
 try {
   await extractZipSafe(nupkgPath, extractionRoot, undefined, { maxBytes: 500 * 1024 * 1024 });
   const files = await findFiles(extractionRoot);
@@ -87,14 +89,39 @@ try {
   let recordedPid;
   const launch = async (executable, configPath) => {
     if (path.resolve(executable).toLowerCase() !== path.resolve(sandboxExecutable).toLowerCase()) throw new Error(`Lowlevel launch executable mismatch: ${executable}`);
-    const launchResult = await runLowlevel('launch', { desktop: `GuestLifecycle-${jobId.slice(0, 12)}`, executable: sandboxExecutable, arguments: [configPath], allowShellWrapper: false, runRoot, outputRoot: lowlevelOutputRoot, cdp: null });
-    if (launchResult.client_ok !== true || launchResult.ok !== true || !Number.isInteger(launchResult.pid)) throw new Error(`Lowlevel launch was not verified: ${JSON.stringify(launchResult)}`);
-    recordedPid = launchResult.pid;
+    const desktop = `GuestLifecycle-${jobId.slice(0, 12)}`;
+    let resolvedWindow;
+    const recoverHandoff = async (pid) => {
+      if (Number.isInteger(pid)) { try { await runLowlevelCall('kill_process', { pid, force: true }, 30_000); } catch { /* preserve exact failure for receipt */ } }
+      try { await runLowlevelCall('close_headless_desktop', { name: desktop }, 30_000); } catch { /* preserve exact failure for receipt */ }
+    };
+    try {
+      const handoff = await runLowlevelCall('launch_on_headless_desktop', { name: desktop, command: `"${sandboxExecutable}" "${configPath}"` }, 60_000);
+      if (handoff.client_ok !== true || handoff.ok !== true) throw new Error(`Lowlevel Sandbox alias handoff was not accepted: ${JSON.stringify(handoff)}`);
+      const deadline = Date.now() + 35_000;
+      while (Date.now() < deadline) {
+        const listed = await runLowlevelCall('list_headless_windows', { name: desktop }, 30_000);
+        const windows = Array.isArray(listed.windows) ? listed.windows : [];
+        const candidates = windows.filter((window) => /windows sandbox/i.test(String(window.title ?? window.windowTitle ?? '')) && Number(window.width ?? window.rect?.width ?? 0) > 0 && Number(window.height ?? window.rect?.height ?? 0) > 0 && Number.isInteger(Number(window.pid ?? window.processId)));
+        if (candidates.length === 1) { resolvedWindow = candidates[0]; break; }
+        if (candidates.length > 1) throw new Error(`Ambiguous Windows Sandbox wrapper windows on ${desktop}: ${JSON.stringify(candidates)}`);
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+      if (!resolvedWindow) throw new Error(`Windows Sandbox wrapper did not appear on ${desktop} before the bounded handoff deadline.`);
+      recordedPid = Number(resolvedWindow.pid ?? resolvedWindow.processId);
+      if (!/windows sandbox/i.test(String(resolvedWindow.title ?? resolvedWindow.windowTitle ?? ''))) throw new Error('Windows Sandbox wrapper title was not validated.');
+      await writeFile(lowlevelState, `${JSON.stringify({ desktop, pid: recordedPid, configPath, wrapper: resolvedWindow, handoff: 'WindowsSandbox.exe -> WindowsSandboxRemoteSession.exe' }, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
+    } catch (error) {
+      await recoverHandoff(recordedPid);
+      throw error;
+    }
     return { stop: async () => {
       try {
-        const cleanupResult = await runLowlevel('cleanup', undefined, 60_000);
-        const cleanupOk = cleanupResult.client_ok === true && cleanupResult.ok === true && cleanupResult.actions?.every((action) => action.ok === true);
-        if (!cleanupOk) return { processTreeStopped: false, rootPid: recordedPid };
+        const killed = await runLowlevelCall('kill_process', { pid: recordedPid, force: true }, 30_000);
+        const listed = await runLowlevelCall('list_headless_windows', { name: desktop }, 30_000);
+        const closed = await runLowlevelCall('close_headless_desktop', { name: desktop }, 30_000);
+        const processTreeStopped = killed.client_ok === true && killed.ok === true && Array.isArray(listed.windows) && listed.windows.length === 0 && closed.client_ok === true && closed.ok === true && closed.closed === true;
+        if (!processTreeStopped) return { processTreeStopped: false, rootPid: recordedPid };
         return { processTreeStopped: true, rootPid: recordedPid };
       } catch (error) {
         return { processTreeStopped: false, rootPid: recordedPid };

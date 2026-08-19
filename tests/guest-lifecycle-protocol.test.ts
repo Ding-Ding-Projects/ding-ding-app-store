@@ -68,6 +68,11 @@ describe('guest lifecycle protocol contracts', () => {
     expect(source).toContain('allowShellWrapper: false');
     expect(source).toContain('WindowsSandbox.exe');
     expect(source).toContain("runLowlevel('cleanup'");
+    expect(source).toContain("runLowlevelCall('launch_on_headless_desktop'");
+    expect(source).toContain("runLowlevelCall('list_headless_windows'");
+    expect(source).toContain("runLowlevelCall('kill_process'");
+    expect(source).toContain("runLowlevelCall('close_headless_desktop'");
+    expect(source).toContain('WindowsSandbox.exe -> WindowsSandboxRemoteSession.exe');
     expect(source).not.toContain('platform: process.platform');
   });
 });
