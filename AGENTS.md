@@ -6,7 +6,7 @@ This is a sanitized public mirror of the applicable shared project rules. Update
 
 - Work in a fresh linked worktree and preserve unrelated changes.
 - Use `git` for local Git operations and `gh` for GitHub operations.
-- Finish repository changes with focused tests, factual documentation, a commit, a push, exact remote-branch proof, default-branch integration, and safe cleanup.
+- Finish repository changes with focused local checks, factual documentation, a commit, a push, exact remote-branch proof, default-branch integration, and safe cleanup.
 - Do not claim runtime, release, deployment, or visual success from static checks alone.
 - Keep one rolling progress Discussion and an issue-backed handoff with exact commits, test counts, run links, blockers, and next actions.
 
@@ -35,7 +35,7 @@ This is a sanitized public mirror of the applicable shared project rules. Update
 - The self-updater checks on startup and a bounded schedule, downloads only after policy validation, warns that artifacts are unsigned, and restarts only after `Restart to install update`.
 - Code signing is permanently prohibited. Squirrel.Windows output must include `Setup.exe`, `RELEASES`, and a full `.nupkg`; verify executables are unsigned.
 - GitHub Actions jobs use pinned GitHub-hosted cloud runners (`windows-2022` for checks, packaging, and release publication; `ubuntu-24.04` for Pages). This repository is public and has no registered self-hosted capacity. Do not route these workflows back to an unavailable self-hosted label without a new explicit owner decision and live runner evidence.
-- Successful push/dispatch workflows test first and publish one unique non-draft release with a real installer, verified timing, line-count table, and required release metadata. Failed tests publish no release.
+- GitHub Actions workflows build, package, publish, and collect safe evidence only. They do not run tests, lint, type-check, or static-analysis jobs and no quality verdict gates a release. Run focused local checks before dewing; report their real result separately from cloud build/publication evidence.
 
 ## Documentation and evidence
 

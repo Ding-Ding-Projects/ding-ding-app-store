@@ -16,7 +16,7 @@ These articles describe the current application at the exact boundary implemente
 - **Documentation:** Offline documentation browser (shipped)
 - **Memory synchronization:** Shared Status Hub (limited), Shared convenience skills (limited), Local authenticator registration and entries (limited), Secret and display-name mutation history (limited)
 - **Security and privacy:** Privacy and security (shipped)
-- **Verification:** Verification and evidence (shipped)
+- **Verification:** Verification and evidence (shipped), Thirteen-product lifecycle proof (limited)
 
 ## Documentation contract
 

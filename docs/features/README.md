@@ -106,3 +106,4 @@ Renderer isolation, privileged validation, local data, and evidence boundaries.
 What static checks, tests, runtime captures, workflows, and releases prove.
 
 - [Verification and evidence](./verification/verification.md) — **shipped** — Separates source structure, focused tests, build, packaged runtime, hidden-desktop capture, workflow, release, and installer evidence.
+- [Thirteen-product lifecycle proof](./verification/lifecycle-proof.md) — **limited** — Bounded source-build, install, launch-readiness, uninstall, absence, and guest-disposal receipts for exactly thirteen reviewed products.

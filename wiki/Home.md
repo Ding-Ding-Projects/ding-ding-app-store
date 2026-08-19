@@ -88,3 +88,4 @@ The wiki mirrors the same canonical feature articles bundled into the applicatio
 ## Verification
 
 - [Verification and evidence](Verification) — **shipped** — Separates source structure, focused tests, build, packaged runtime, hidden-desktop capture, workflow, release, and installer evidence.
+- [Thirteen-product lifecycle proof](Lifecycle-Proof) — **limited** — Bounded source-build, install, launch-readiness, uninstall, absence, and guest-disposal receipts for exactly thirteen reviewed products.
