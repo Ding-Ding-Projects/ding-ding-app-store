@@ -40,8 +40,8 @@ describe('GitHub-hosted workflow and bootstrap contract', () => {
   it('keeps Actions build and release paths free of test, lint, and typecheck gates', async () => {
     const ci = await read('.github/workflows/ci.yml');
     const release = await read('.github/workflows/release.yml');
-    const proof = await read('.github/workflows/install-adapter-proof.yml');
-    for (const workflow of [ci, release, proof]) {
+    await expect(read('.github/workflows/install-adapter-proof.yml')).rejects.toMatchObject({ code: 'ENOENT' });
+    for (const workflow of [ci, release]) {
       expect(workflow).not.toMatch(/npm run (?:check|test)|npm test|vitest|tsc\s+-p|eslint|lint/i);
       expect(workflow).toContain('npm ci');
       expect(workflow).toContain('if: always()');
