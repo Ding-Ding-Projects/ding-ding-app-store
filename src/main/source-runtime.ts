@@ -178,7 +178,7 @@ export const sourceRecipeSchema = z.strictObject({
   run: z.array(sourceStepSchema).max(8),
   readiness: sourceReadinessSchema,
   repairableStepIds: z.array(z.string().regex(/^[a-z][a-z0-9-]{0,47}$/)).max(32),
-  finalOutputs: z.array(relativePathSchema).min(1).max(32),
+  finalOutputs: z.array(relativePathSchema).max(32),
   repairAttempts: z.number().int().min(0).max(SOURCE_RUNTIME_LIMITS.maxRepairAttempts),
 });
 
@@ -200,6 +200,10 @@ export const sourceRecipeCatalogSchema = z.strictObject({
     if (recipe.status === 'ready' && recipe.blocker) ctx.addIssue({ code: 'custom', path: ['recipes', index, 'blocker'], message: 'Ready recipes cannot carry a blocker.' });
     if (recipe.status === 'blocked' && !recipe.blocker) ctx.addIssue({ code: 'custom', path: ['recipes', index, 'blocker'], message: 'Blocked recipes require a precise blocker.' });
     if (recipe.status === 'blocked' && steps.length > 0) ctx.addIssue({ code: 'custom', path: ['recipes', index], message: 'Blocked recipes cannot expose executable steps.' });
+    if (recipe.status === 'ready' && recipe.finalOutputs.length === 0) ctx.addIssue({ code: 'custom', path: ['recipes', index, 'finalOutputs'], message: 'Ready recipes require at least one reviewed final output.' });
+    if (recipe.status === 'blocked' && recipe.finalOutputs.length > 0) ctx.addIssue({ code: 'custom', path: ['recipes', index, 'finalOutputs'], message: 'Blocked recipes cannot claim a final output.' });
+    if (recipe.status === 'ready' && recipe.readiness.target === 'not-applicable') ctx.addIssue({ code: 'custom', path: ['recipes', index, 'readiness', 'target'], message: 'Ready recipes require a concrete readiness target.' });
+    if (recipe.status === 'blocked' && recipe.readiness.target !== 'not-applicable') ctx.addIssue({ code: 'custom', path: ['recipes', index, 'readiness', 'target'], message: 'Blocked recipes must use the not-applicable readiness target.' });
   });
 });
 
