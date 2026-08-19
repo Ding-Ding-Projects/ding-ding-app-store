@@ -98,7 +98,6 @@ export const guestLifecyclePlanSchema = z.strictObject({
   installer: z.strictObject({ format: installerFormatSchema, bytes: z.number().int().positive().max(500 * 1024 * 1024), sha256: digestSchema }),
   operations: z.array(guestInstallerOperationSchema).min(1).max(3).refine((values) => new Set(values).size === values.length, 'Lifecycle operations must be unique.'),
   maxStageMs: z.number().int().min(1_000).max(SOURCE_RUNTIME_LIMITS.maxStepMs),
-  maxBodyBytes: z.number().int().min(1_024).max(500 * 1024 * 1024),
 }).superRefine((plan, ctx) => {
   const prefix = `${plan.installer.format}-`;
   if (plan.operations.some((operation) => !operation.startsWith(prefix))) ctx.addIssue({ code: 'custom', path: ['operations'], message: 'Lifecycle operations must match the installer format.' });
@@ -755,7 +754,7 @@ export class WindowsSandboxProtocolPeer implements WindowsSandboxProtocolPeerCon
   constructor(options: ProtocolPeerOptions = {}) {
     this.options = {
       listenHost: options.listenHost ?? '0.0.0.0',
-      advertiseAddress: options.advertiseAddress ?? 'host.docker.internal',
+      advertiseAddress: options.advertiseAddress ?? '127.0.0.1',
       maxBodyBytes: options.maxBodyBytes ?? 8 * 1024 * 1024,
       requestTimeoutMs: options.requestTimeoutMs ?? 15_000,
       maxArchiveBytes: options.maxArchiveBytes ?? 200 * 1024 * 1024,
@@ -1098,6 +1097,7 @@ export class WindowsSandboxGuestTransport implements IsolationBroker {
 
   async executeLifecycle(plan: GuestLifecyclePlan, installerBytes: Buffer, signal: AbortSignal): Promise<{ guest: GuestLifecycleFinalReceipt; disposal: SourceDisposalReceipt }> {
     if (!this.options.protocol || this.options.platform === 'linux' || this.options.platform === 'darwin') throw new Error('Disposable guest lifecycle requires the configured Windows protocol peer.');
+    if (!this.options.endpoint || /https?:\/\/(?:127\.0\.0\.1|localhost|\[::1\])(?::\d+)?$/i.test(this.options.endpoint)) throw new Error('Live Sandbox lifecycle requires an explicit non-loopback advertise address.');
     const now = new Date().toISOString();
     const challenge = isolationAttestationChallengeSchema.parse({ version: 1, jobId: plan.jobId, nonce: plan.challengeNonce, issuedAt: now, expiresAt: new Date(Date.now() + SOURCE_BROKER_LIMITS.challengeTtlMs).toISOString(), leaseExpiresAt: new Date(Date.now() + SOURCE_RUNTIME_LIMITS.maxJobMs).toISOString(), requestedCapabilities: ['execute', 'dispose'], expectedBrokerId: SOURCE_GUEST_IDENTITY.brokerId, expectedTransportId: SOURCE_GUEST_IDENTITY.transportId });
     let guest: GuestLifecycleFinalReceipt | undefined;
