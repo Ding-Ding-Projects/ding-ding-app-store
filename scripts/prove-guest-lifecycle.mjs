@@ -1,5 +1,6 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { spawn } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
@@ -8,7 +9,7 @@ import { createGuestLifecyclePlanDigest, WindowsSandboxGuestTransport, WindowsSa
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 2) args.set(process.argv[i], process.argv[i + 1]);
-const setup = args.get('--setup'); const nupkg = args.get('--nupkg'); const output = args.get('--output'); const advertiseAddress = args.get('--advertise-address');
+const setup = args.get('--setup'); const nupkg = args.get('--nupkg'); const output = args.get('--output'); const advertiseAddress = args.get('--advertise-address'); const lowlevelClient = args.get('--lowlevel-client'); const runRootArg = args.get('--run-root');
 if (!setup || !nupkg || !output) throw new Error('Usage: node scripts/prove-guest-lifecycle.mjs --setup <Setup.exe> --nupkg <package.nupkg> --output <receipt.json> --advertise-address <non-loopback IPv4>');
 
 const boundedFile = async (file) => {
@@ -41,6 +42,12 @@ const availableIpv4Candidates = () => {
   return candidates;
 };
 if (!advertiseAddress) throw new Error(`An explicit --advertise-address is required; candidates: ${availableIpv4Candidates().join(', ') || 'none'}`);
+if (!lowlevelClient || !path.isAbsolute(lowlevelClient)) throw new Error('An absolute --lowlevel-client path is required; visible desktop or default process spawning is not permitted.');
+if (!runRootArg || !path.isAbsolute(runRootArg)) throw new Error('An absolute --run-root temp child path is required for task-owned Lowlevel state.');
+const lowlevelClientPath = path.resolve(lowlevelClient); const runRoot = path.resolve(runRootArg); const tempRoot = path.resolve(os.tmpdir());
+if (!runRoot.startsWith(`${tempRoot}${path.sep}`)) throw new Error(`--run-root must be a child of the host temp directory: ${tempRoot}`);
+if (!(await stat(lowlevelClientPath).catch(() => null))) throw new Error(`Lowlevel client was not found: ${lowlevelClientPath}`);
+await mkdir(runRoot, { recursive: true });
 
 const setupPath = path.resolve(setup); const nupkgPath = path.resolve(nupkg); const outputPath = path.resolve(output);
 const setupBytes = await boundedFile(setupPath); const packageBytes = await boundedFile(nupkgPath);
@@ -48,7 +55,16 @@ if (setupBytes.subarray(0, 2).toString('ascii') !== 'MZ') throw new Error('Setup
 const setupSha256 = createHash('sha256').update(setupBytes).digest('hex');
 const packageSha256 = createHash('sha256').update(packageBytes).digest('hex');
 const extractionRoot = await mkdtemp(path.join(os.tmpdir(), 'ding-ding-guest-artifact-'));
-let peer; let transport; let receipt;
+let peer; let transport; let receipt; const lowlevelState = path.join(runRoot, 'state.json'); const lowlevelOutputRoot = path.join(runRoot, 'output');
+const runLowlevel = (command, input, timeoutMs = 60_000) => new Promise((resolve, reject) => {
+  const child = spawn('py', ['-3', lowlevelClientPath, command, '--state', lowlevelState, ...(command === 'cleanup' ? ['--allow-saved-pid-kill'] : [])], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+  let stdout = ''; let stderr = ''; let settled = false;
+  const timer = setTimeout(() => { if (!settled) { settled = true; child.kill(); reject(new Error(`Lowlevel ${command} exceeded ${timeoutMs}ms: ${stderr || stdout}`)); } }, timeoutMs);
+  child.stdout.on('data', (chunk) => { stdout += chunk.toString(); }); child.stderr.on('data', (chunk) => { stderr += chunk.toString(); });
+  child.once('error', (error) => { if (!settled) { settled = true; clearTimeout(timer); reject(error); } });
+  child.once('exit', (code) => { if (settled) return; settled = true; clearTimeout(timer); if (code !== 0) reject(new Error(`Lowlevel ${command} exited ${code}: ${stderr || stdout}`)); else { try { resolve(JSON.parse(stdout.trim().split(/\r?\n/).filter(Boolean).at(-1) ?? '{}')); } catch (error) { reject(new Error(`Lowlevel ${command} returned non-JSON output: ${error instanceof Error ? error.message : String(error)}`)); } } });
+  child.stdin.end(input === undefined ? undefined : `${JSON.stringify(input)}\n`);
+});
 try {
   await extractZipSafe(nupkgPath, extractionRoot, undefined, { maxBytes: 500 * 1024 * 1024 });
   const files = await findFiles(extractionRoot);
@@ -67,7 +83,25 @@ try {
   };
   const plan = Object.freeze({ ...unsignedPlan, planDigest: createGuestLifecyclePlanDigest(unsignedPlan) });
   peer = new WindowsSandboxProtocolPeer({ advertiseAddress: hostIpv4, listenHost: '0.0.0.0' });
-  transport = new WindowsSandboxGuestTransport({ platform: process.platform, advertiseAddress: hostIpv4, protocol: peer });
+  const sandboxExecutable = path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsSandbox.exe');
+  let recordedPid;
+  const launch = async (executable, configPath) => {
+    if (path.resolve(executable).toLowerCase() !== path.resolve(sandboxExecutable).toLowerCase()) throw new Error(`Lowlevel launch executable mismatch: ${executable}`);
+    const launchResult = await runLowlevel('launch', { desktop: `GuestLifecycle-${jobId.slice(0, 12)}`, executable: sandboxExecutable, arguments: [configPath], allowShellWrapper: false, runRoot, outputRoot: lowlevelOutputRoot, cdp: null });
+    if (launchResult.client_ok !== true || launchResult.ok !== true || !Number.isInteger(launchResult.pid)) throw new Error(`Lowlevel launch was not verified: ${JSON.stringify(launchResult)}`);
+    recordedPid = launchResult.pid;
+    return { stop: async () => {
+      try {
+        const cleanupResult = await runLowlevel('cleanup', undefined, 60_000);
+        const cleanupOk = cleanupResult.client_ok === true && cleanupResult.ok === true && cleanupResult.actions?.every((action) => action.ok === true);
+        if (!cleanupOk) return { processTreeStopped: false, rootPid: recordedPid };
+        return { processTreeStopped: true, rootPid: recordedPid };
+      } catch (error) {
+        return { processTreeStopped: false, rootPid: recordedPid };
+      }
+    } };
+  };
+  transport = new WindowsSandboxGuestTransport({ platform: 'win32', systemRoot: process.env.SystemRoot ?? 'C:\\Windows', appDataRoot: runRoot, advertiseAddress: hostIpv4, protocol: peer, launch });
   const startedAt = new Date().toISOString();
   try {
     const result = await transport.executeLifecycle(plan, setupBytes, new AbortController().signal);
@@ -77,6 +111,15 @@ try {
     process.exitCode = 1;
   }
 } finally {
+  let lowlevelCleanup;
+  if (await stat(lowlevelState).catch(() => null)) {
+    try { lowlevelCleanup = await runLowlevel('cleanup', undefined, 60_000); } catch (error) { lowlevelCleanup = { ok: false, client_ok: false, error: error instanceof Error ? error.message : String(error) }; }
+  }
+  const cleanupVerified = lowlevelCleanup?.ok === true && lowlevelCleanup?.client_ok === true && lowlevelCleanup.actions?.every((action) => action.ok === true);
+  if (cleanupVerified || !(await stat(lowlevelState).catch(() => null))) {
+    for (const config of await readdir(runRoot).then((names) => names.filter((name) => name.toLowerCase().endsWith('.wsb'))).catch(() => [])) await rm(path.join(runRoot, config), { force: false });
+  }
+  if (receipt && typeof receipt === 'object') receipt.cleanup = { lowlevelCleanup: lowlevelCleanup ?? null, cleanupVerified, runRoot, statePath: lowlevelState, remainingConfigFiles: (await readdir(runRoot).catch(() => [])).filter((name) => name.toLowerCase().endsWith('.wsb')).map((name) => path.join(runRoot, name)) };
   await transport?.abort?.(receipt?.guestFinal?.jobId ?? '').catch(() => undefined);
   await peer?.close?.().catch(() => undefined);
   await rm(extractionRoot, { recursive: true, force: true });

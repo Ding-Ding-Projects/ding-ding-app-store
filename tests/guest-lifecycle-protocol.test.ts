@@ -62,5 +62,12 @@ describe('guest lifecycle protocol contracts', () => {
     expect(source).toContain('An explicit --advertise-address is required');
     expect(source).toContain('availableIpv4Candidates');
     expect(source).not.toContain('chooseHostIpv4');
+    expect(source).toContain("args.get('--lowlevel-client')");
+    expect(source).toContain("args.get('--run-root')");
+    expect(source).toContain("spawn('py', ['-3', lowlevelClientPath");
+    expect(source).toContain('allowShellWrapper: false');
+    expect(source).toContain('WindowsSandbox.exe');
+    expect(source).toContain("runLowlevel('cleanup'");
+    expect(source).not.toContain('platform: process.platform');
   });
 });
