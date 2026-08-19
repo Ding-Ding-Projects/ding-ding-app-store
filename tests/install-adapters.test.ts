@@ -144,6 +144,7 @@ describe('installer integrity and archive inputs', () => {
       name: 'App', repository: 'App', description: '', homepageUrl: null, repositoryUrl: 'https://github.com/Ding-Ding-Projects/App',
       defaultBranch: 'main', topics: [], stars: 0, updatedAt: new Date(0).toISOString(), latestVersion: 'v2.0.0',
       latestReleaseUrl: null, availability: 'installable' as const, packageType: 'msi' as const,
+      proofStatus: 'verified' as const, proofTargetId: null,
       installedVersion: 'stale-cache', updateState: 'available' as const, docsAvailable: true,
     };
     const apps = [

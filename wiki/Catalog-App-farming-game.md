@@ -8,7 +8,7 @@
 
 This record describes the reviewed catalog entry `farming-game`. Its public source repository is [farming-game](https://github.com/Ding-Ding-Projects/farming-game). The current availability is **Installable through a reviewed adapter** and the declared package type is **squirrel**. The closed adapter identifier is `farming-game-squirrel`.
 
-The current adapter state is: Reviewed Squirrel.Windows adapter. The adapter has a fixed, application-specific release contract; this article deliberately does not reproduce executable names, arguments, download URLs, or filesystem locations. Lifecycle status is **blocked until clean-Windows proof**; the catalog does not claim installation, launch, ownership, or uninstall evidence yet.
+The current adapter state is: Reviewed Squirrel.Windows adapter. The adapter has a fixed, application-specific release contract; this article deliberately does not reproduce executable names, arguments, download URLs, or filesystem locations. Lifecycle status is **blocked until clean-Windows proof** (target farming-game-clean-windows); the catalog does not claim installation, launch, ownership, or uninstall evidence yet.
 
 The icon is first-party reviewed from repository asset `docs/shots/farm-spring-midday.png`; if that asset is unavailable, the UI uses the declared generated-monogram fallback rather than a remote or guessed image.
 

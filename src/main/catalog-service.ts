@@ -3,7 +3,7 @@ import path from 'node:path';
 import { app } from 'electron';
 import semver from 'semver';
 import { z } from 'zod';
-import type { Availability, CatalogApp, CatalogSnapshot, InstalledAppRecord, PackageType, ScheduleTaskResult } from '../shared/contracts.js';
+import type { Availability, CatalogApp, CatalogProofStatus, CatalogSnapshot, InstalledAppRecord, PackageType, ScheduleTaskResult } from '../shared/contracts.js';
 import { adapterFor, installAdapterIdSchema } from './install-adapters.js';
 import { readJson, writeJsonAtomic } from './json-store.js';
 
@@ -39,14 +39,16 @@ const catalogRecordSchema = z.object({
   icon: iconMetadataSchema.optional(),
   iconProvenance: iconMetadataSchema.optional(),
   sourceMetadata: sourceMetadataSchema.optional(),
-  proofStatus: z.enum(['not-required', 'blocked-until-proof', 'verified']).optional(),
-  proofTargetId: z.string().regex(/^[a-z0-9][a-z0-9-]{1,127}$/).nullable().optional(),
+  proofStatus: z.enum(['not-required', 'blocked-until-proof', 'verified']),
+  proofTargetId: z.string().regex(/^[a-z0-9][a-z0-9-]{1,127}$/).nullable(),
 }).strict().superRefine((record, context) => {
   const adapter = adapterFor(record.id);
   if (adapter.id !== record.adapterId) context.addIssue({ code: 'custom', path: ['adapterId'], message: 'Adapter ID does not match the application.' });
   const expectedAvailability = adapter.supported ? 'installable' : 'unsupported';
   if (record.availability !== expectedAvailability) context.addIssue({ code: 'custom', path: ['availability'], message: `Adapter requires ${expectedAvailability}.` });
   if (record.packageType !== adapter.packageType) context.addIssue({ code: 'custom', path: ['packageType'], message: 'Package type does not match the reviewed adapter.' });
+  if (record.proofStatus === 'blocked-until-proof' && record.proofTargetId === null) context.addIssue({ code: 'custom', path: ['proofTargetId'], message: 'Blocked catalog apps must name their proof target.' });
+  if (record.proofStatus !== 'blocked-until-proof' && record.proofTargetId !== null) context.addIssue({ code: 'custom', path: ['proofTargetId'], message: 'Only blocked catalog apps may name a proof target.' });
 });
 
 const catalogFileSchema = z.object({
@@ -86,6 +88,29 @@ const releaseSchema = z.object({
 export type CatalogRecord = z.infer<typeof catalogRecordSchema>;
 export type ReleaseAsset = z.infer<typeof assetSchema>;
 export type ReleaseRecord = z.infer<typeof releaseSchema>;
+
+export function proofStatusAllowsPrivilegedAction(status: CatalogProofStatus | undefined): status is 'verified' {
+  return status === 'verified';
+}
+
+export function proofStatusBlockMessage(record: Pick<CatalogRecord, 'displayName' | 'proofStatus' | 'proofTargetId'>): string {
+  if (record.proofStatus === 'blocked-until-proof') {
+    const target = record.proofTargetId ? ` (${record.proofTargetId})` : '';
+    return `${record.displayName} is unavailable until its clean-Windows lifecycle proof is verified${target}. Install, build, and update actions remain blocked.`;
+  }
+  return `${record.displayName} is unavailable because its proof status is not verified. Install, build, and update actions remain blocked.`;
+}
+
+function normalizeCachedProofStatus(app: CatalogApp): CatalogApp {
+  const proofStatus: CatalogProofStatus = app.proofStatus === 'verified' || app.proofStatus === 'not-required' || app.proofStatus === 'blocked-until-proof'
+    ? app.proofStatus
+    : 'blocked-until-proof';
+  return {
+    ...app,
+    proofStatus,
+    proofTargetId: proofStatus === 'blocked-until-proof' && typeof app.proofTargetId === 'string' ? app.proofTargetId : null,
+  };
+}
 
 interface CachedCatalog extends CatalogSnapshot {
   fetchedAt: string;
@@ -178,7 +203,9 @@ export class CatalogService {
     return {
       ...snapshot,
       warning,
-      apps: applyVerifiedInstalledState(snapshot.apps, installed),
+      // Old cache files may predate the typed proof fields. Unknown or missing
+      // proof is normalized to blocked before any renderer or operation sees it.
+      apps: applyVerifiedInstalledState(snapshot.apps.map(normalizeCachedProofStatus), installed),
     };
   }
 
@@ -219,6 +246,8 @@ export class CatalogService {
           installedVersion: null,
           updateState: 'failed',
           docsAvailable: record.wiki,
+          proofStatus: record.proofStatus,
+          proofTargetId: record.proofTargetId,
         };
       }
 
@@ -243,6 +272,8 @@ export class CatalogService {
         installedVersion,
         updateState: compareVersion(installedVersion, latestVersion),
         docsAvailable: record.wiki,
+        proofStatus: record.proofStatus,
+        proofTargetId: record.proofTargetId,
       };
     }));
 

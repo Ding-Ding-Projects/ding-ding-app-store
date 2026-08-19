@@ -5,7 +5,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { app } from 'electron';
 import type { InstallCancelRequest, InstalledAppRecord, OperationKind, OperationProgressEvent, OperationProgressPhase, OperationRequest, OperationResult } from '../shared/contracts.js';
-import { CatalogService, type CatalogRecord, type ReleaseAsset, type ReleaseRecord } from './catalog-service.js';
+import { CatalogService, proofStatusAllowsPrivilegedAction, proofStatusBlockMessage, type CatalogRecord, type ReleaseAsset, type ReleaseRecord } from './catalog-service.js';
 import { HistoryService } from './history-service.js';
 import { adapterFor, selectInstallerAsset, type ExecutableInstallAdapter, type InstallAdapter, type PortableZipInstallAdapter } from './install-adapters.js';
 import { InstalledService } from './installed-service.js';
@@ -389,6 +389,7 @@ export class OperationService {
   async install(request: unknown): Promise<OperationResult> {
     if (!isOperationRequest(request)) return invalidRequest('install');
     const record = await this.catalog.recordFor(request.appId);
+    if (!proofStatusAllowsPrivilegedAction(record.proofStatus)) return this.finish(record, 'install', { ok: false, appId: record.id, message: proofStatusBlockMessage(record) });
     if (request.decision !== 'install') {
       return this.finish(record, 'install', { ok: false, appId: request.appId, message: 'The install request did not carry the matching user decision.' });
     }
@@ -535,6 +536,7 @@ export class OperationService {
   async build(request: unknown): Promise<OperationResult> {
     if (!isOperationRequest(request)) return invalidRequest('build');
     const record = await this.catalog.recordFor(request.appId);
+    if (!proofStatusAllowsPrivilegedAction(record.proofStatus)) return this.finish(record, 'build', { ok: false, appId: record.id, message: proofStatusBlockMessage(record) });
     if (request.decision !== 'build') {
       return this.finish(record, 'build', { ok: false, appId: request.appId, message: 'The source-install request did not carry the matching user decision.' });
     }

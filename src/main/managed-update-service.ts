@@ -10,7 +10,7 @@ import type {
   ManagedUpdateState,
   OperationResult,
 } from '../shared/contracts.js';
-import { CatalogService, type CatalogRecord, type ReleaseAsset, type ReleaseRecord } from './catalog-service.js';
+import { CatalogService, proofStatusAllowsPrivilegedAction, proofStatusBlockMessage, type CatalogRecord, type ReleaseAsset, type ReleaseRecord } from './catalog-service.js';
 import { HistoryService } from './history-service.js';
 import { adapterFor, selectInstallerAsset, type ExecutableInstallAdapter, type InstallAdapter, type PortableZipInstallAdapter } from './install-adapters.js';
 import { InstalledService } from './installed-service.js';
@@ -258,6 +258,7 @@ export class ManagedUpdateService {
     if (!isAppId(appId)) return this.fail(appId, 'Invalid application identifier.');
     try {
       const record = await this.catalog.recordFor(appId);
+      if (!proofStatusAllowsPrivilegedAction(record.proofStatus)) return this.publish({ appId, status: 'blocked', installedVersion: null, message: proofStatusBlockMessage(record), checkedAt: new Date().toISOString() });
       const current = await this.installed.get(appId);
       if (!current) return this.publish(idleState(appId, null));
       const release = await this.catalog.latestRelease(record.repository);
@@ -287,6 +288,8 @@ export class ManagedUpdateService {
 
   async download(request: unknown): Promise<ManagedUpdateState> {
     if (!isManagedUpdateRequest(request) || request.decision !== 'download-update') return this.fail(isManagedUpdateRequest(request) ? request.appId : 'invalid', 'Invalid managed update download request.');
+    const record = await this.catalog.recordFor(request.appId);
+    if (!proofStatusAllowsPrivilegedAction(record.proofStatus)) return this.publish({ appId: request.appId, status: 'blocked', installedVersion: null, message: proofStatusBlockMessage(record), checkedAt: new Date().toISOString() });
     const current = this.current(request.appId);
     if (current.status === 'ready') return current;
     if (this.activeDownloads.has(request.appId)) return current;
@@ -337,6 +340,8 @@ export class ManagedUpdateService {
 
   async restart(request: unknown): Promise<OperationResult> {
     if (!isManagedUpdateRequest(request) || request.decision !== 'restart-to-install') return { ok: false, appId: 'invalid', message: 'Invalid managed update restart request.' };
+    const record = await this.catalog.recordFor(request.appId);
+    if (!proofStatusAllowsPrivilegedAction(record.proofStatus)) return { ok: false, appId: request.appId, message: proofStatusBlockMessage(record) };
     const state = this.current(request.appId);
     if (state.status !== 'ready') return { ok: false, appId: request.appId, message: 'Download and verify the stable update before choosing Restart to install.' };
     const candidate = this.candidates.get(request.appId);

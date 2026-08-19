@@ -6,7 +6,7 @@
 
 This record describes the reviewed catalog entry `material-encryption`. Its public source repository is [material-encryption](https://github.com/Ding-Ding-Projects/material-encryption). The current availability is **Installable through a reviewed adapter** and the declared package type is **squirrel**. The closed adapter identifier is `material-encryption-squirrel`.
 
-The current adapter state is: Reviewed Squirrel.Windows adapter. The adapter has a fixed, application-specific release contract; this article deliberately does not reproduce executable names, arguments, download URLs, or filesystem locations. Lifecycle status is **blocked until clean-Windows proof**; the catalog does not claim installation, launch, ownership, or uninstall evidence yet.
+The current adapter state is: Reviewed Squirrel.Windows adapter. The adapter has a fixed, application-specific release contract; this article deliberately does not reproduce executable names, arguments, download URLs, or filesystem locations. Lifecycle status is **blocked until clean-Windows proof** (target material-encryption-clean-windows); the catalog does not claim installation, launch, ownership, or uninstall evidence yet.
 
 The icon is first-party reviewed from repository asset `design/assets/material-encryption-logo.png`; if that asset is unavailable, the UI uses the declared generated-monogram fallback rather than a remote or guessed image.
 

@@ -77,7 +77,7 @@ function catalogMetadataArticle(record) {
   const articleId = catalogArticleId(record.id);
   const availability = record.availability === 'installable' ? 'Installable through a reviewed adapter' : 'Unavailable through this catalog';
   const adapterStatus = adapter.status === 'reviewed'
-    ? `Reviewed ${adapter.family} adapter. The adapter has a fixed, application-specific release contract; this article deliberately does not reproduce executable names, arguments, download URLs, or filesystem locations.${adapter.proofStatus === 'blocked-until-proof' ? ' Lifecycle status is **blocked until clean-Windows proof**; the catalog does not claim installation, launch, ownership, or uninstall evidence yet.' : ''}`
+    ? `Reviewed ${adapter.family} adapter. The adapter has a fixed, application-specific release contract; this article deliberately does not reproduce executable names, arguments, download URLs, or filesystem locations.${record.proofStatus === 'blocked-until-proof' ? ` Lifecycle status is **blocked until clean-Windows proof**${record.proofTargetId ? ` (target ${record.proofTargetId})` : ''}; the catalog does not claim installation, launch, ownership, or uninstall evidence yet.` : record.proofStatus === 'verified' ? ' Lifecycle status is **verified** for the reviewed catalog route; installation and update actions remain subject to their live byte, ownership, and process checks.' : ' Lifecycle proof is not required for this unavailable catalog route.'}`
     : `Blocked. ${adapter.blocker}`;
   const body = `# ${record.displayName} catalog record
 

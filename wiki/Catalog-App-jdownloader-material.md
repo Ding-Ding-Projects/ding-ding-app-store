@@ -8,7 +8,7 @@
 
 This record describes the reviewed catalog entry `jdownloader-material`. Its public source repository is [jdownloader-material](https://github.com/Ding-Ding-Projects/jdownloader-material). The current availability is **Installable through a reviewed adapter** and the declared package type is **jpackage**. The closed adapter identifier is `jdownloader-material-jpackage`.
 
-The current adapter state is: Reviewed jpackage EXE adapter. The adapter has a fixed, application-specific release contract; this article deliberately does not reproduce executable names, arguments, download URLs, or filesystem locations.
+The current adapter state is: Reviewed jpackage EXE adapter. The adapter has a fixed, application-specific release contract; this article deliberately does not reproduce executable names, arguments, download URLs, or filesystem locations. Lifecycle status is **verified** for the reviewed catalog route; installation and update actions remain subject to their live byte, ownership, and process checks.
 
 No icon provenance metadata is declared for this legacy record; the renderer keeps its neutral catalog fallback.
 

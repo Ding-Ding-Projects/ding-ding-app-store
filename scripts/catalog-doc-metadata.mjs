@@ -59,6 +59,9 @@ export function catalogArticleId(appId) {
 export function catalogAdapterDocumentation(record) {
   const metadata = CATALOG_ADAPTER_DOCUMENTATION[record.id];
   if (!metadata) throw new Error(`Unknown catalog application ID: ${record.id}`);
+  if (!['not-required', 'blocked-until-proof', 'verified'].includes(record.proofStatus)) throw new Error(`${record.id}: proof status must be explicit`);
+  if (record.proofStatus === 'blocked-until-proof' && typeof record.proofTargetId !== 'string') throw new Error(`${record.id}: blocked proof status requires a proof target`);
+  if (record.proofStatus !== 'blocked-until-proof' && record.proofTargetId !== null) throw new Error(`${record.id}: only blocked proof status may name a proof target`);
   if (metadata.adapterId !== record.adapterId) throw new Error(`${record.id}: catalog adapter ID does not match generated documentation metadata`);
   if (metadata.status === 'reviewed' && record.availability !== 'installable') throw new Error(`${record.id}: reviewed adapter must be installable`);
   if (metadata.status === 'blocked' && record.availability !== 'unsupported') throw new Error(`${record.id}: blocked adapter must be unsupported`);

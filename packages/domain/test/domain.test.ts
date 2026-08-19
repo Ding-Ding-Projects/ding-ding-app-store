@@ -117,6 +117,8 @@ describe("immutable update selection", () => {
       description: "A longer description.",
       iconResourceId: "icons.har-gow",
       categories: ["Utilities"],
+      proofStatus: "verified",
+      proofTargetId: null,
       releases: [
         {
           version: "2.0.0-beta.1",
