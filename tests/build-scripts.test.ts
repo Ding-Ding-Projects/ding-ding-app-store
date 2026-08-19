@@ -27,7 +27,11 @@ describe('fresh-machine build entry points', () => {
     expect(common).toContain('npm ci');
     expect(common).toContain("@('run', 'build')");
     expect(common).toContain('https://nodejs.org/dist/');
-    expect(common).toContain('Get-FileHash');
+    expect(common).toContain('function Get-Sha256');
+    expect(common).toContain('[Security.Cryptography.SHA256]::Create()');
+    expect(common).toContain('[IO.File]::OpenRead($LiteralPath)');
+    expect(common).toContain('Get-Sha256 -LiteralPath $archive');
+    expect(common).not.toMatch(/\bGet-FileHash\b/);
     expect(common).toContain('electron-builder');
     expect(common).toContain("'--win', 'squirrel', '--publish', 'never'");
     expect(common).toContain('Get-AuthenticodeSignature');
@@ -37,5 +41,7 @@ describe('fresh-machine build entry points', () => {
     expect(local).toContain('param([switch]$Silent)');
     expect(installer).toContain('param([switch]$Silent)');
     expect(installer).toContain('Invoke-ProjectInstaller');
+    expect(installer).toContain('Get-Sha256 -LiteralPath $result.Setup.FullName');
+    expect(installer).not.toMatch(/\bGet-FileHash\b/);
   });
 });

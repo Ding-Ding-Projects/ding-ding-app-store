@@ -26,6 +26,24 @@ function Get-NodeVersion {
   return [pscustomobject]@{ Text = $line; Major = [int]$Matches.major; Minor = [int]$Matches.minor; Patch = [int]$Matches.patch }
 }
 
+function Get-Sha256 {
+  param([Parameter(Mandatory = $true)][string]$LiteralPath)
+  if (-not (Test-Path -LiteralPath $LiteralPath -PathType Leaf)) {
+    throw "Cannot hash a missing file: $LiteralPath"
+  }
+  $stream = $null
+  $algorithm = $null
+  try {
+    $stream = [IO.File]::OpenRead($LiteralPath)
+    $algorithm = [Security.Cryptography.SHA256]::Create()
+    return ([BitConverter]::ToString($algorithm.ComputeHash($stream)).Replace('-', '')).ToLowerInvariant()
+  }
+  finally {
+    if ($stream) { $stream.Dispose() }
+    if ($algorithm) { $algorithm.Dispose() }
+  }
+}
+
 function Find-UsableNode {
   Refresh-ProcessPath
   $command = Get-Command node.exe -ErrorAction SilentlyContinue
@@ -70,7 +88,7 @@ function Resolve-NodeToolchain {
     $line = Select-String -LiteralPath $checksums -Pattern "node-v$version-win-x64\.zip\s*$" | Select-Object -First 1
     if (-not $line) { throw 'Node.js SHA-256 manifest did not contain the pinned Windows archive.' }
     $expected = (($line.Line -split '\s+')[0]).ToLowerInvariant()
-    $actual = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+    $actual = Get-Sha256 -LiteralPath $archive
     if ($actual -ne $expected) { throw "Node.js archive SHA-256 mismatch: expected $expected, received $actual." }
     $extractRoot = Join-Path $toolRoot 'extract'
     if (Test-Path -LiteralPath $extractRoot) { Remove-Item -LiteralPath $extractRoot -Recurse -Force }
@@ -165,7 +183,7 @@ function Invoke-ProjectInstaller {
     generatedAt = [DateTimeOffset]::UtcNow.ToString('o')
     artifacts = @($setup, $releases, $nupkg | ForEach-Object {
       $relative = $_.FullName.Substring($rootPrefix.Length).Replace('\', '/')
-      [ordered]@{ name = $_.Name; path = $relative; bytes = $_.Length; sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
+      [ordered]@{ name = $_.Name; path = $relative; bytes = $_.Length; sha256 = (Get-Sha256 -LiteralPath $_.FullName) }
     })
   }
   $manifestPath = Join-Path $releaseRoot 'local-installer-manifest.json'

@@ -16,8 +16,8 @@ Write-Output 'Packaging the unsigned Squirrel.Windows installer.'
 $result = Invoke-ProjectInstaller -Root $root -Tools $tools
 $timer.Stop()
 Write-Output "Installer complete in $([Math]::Round($timer.Elapsed.TotalSeconds, 1)) seconds."
-Write-Output "Setup.exe: $($result.Setup.FullName) ($($result.Setup.Length) bytes; $((Get-FileHash -LiteralPath $result.Setup.FullName -Algorithm SHA256).Hash.ToLowerInvariant()))"
-Write-Output "RELEASES: $($result.Releases.FullName) ($($result.Releases.Length) bytes; $((Get-FileHash -LiteralPath $result.Releases.FullName -Algorithm SHA256).Hash.ToLowerInvariant()))"
-Write-Output "Full nupkg: $($result.Nupkg.FullName) ($($result.Nupkg.Length) bytes; $((Get-FileHash -LiteralPath $result.Nupkg.FullName -Algorithm SHA256).Hash.ToLowerInvariant()))"
+Write-Output "Setup.exe: $($result.Setup.FullName) ($($result.Setup.Length) bytes; $(Get-Sha256 -LiteralPath $result.Setup.FullName))"
+Write-Output "RELEASES: $($result.Releases.FullName) ($($result.Releases.Length) bytes; $(Get-Sha256 -LiteralPath $result.Releases.FullName))"
+Write-Output "Full nupkg: $($result.Nupkg.FullName) ($($result.Nupkg.Length) bytes; $(Get-Sha256 -LiteralPath $result.Nupkg.FullName))"
 Write-Output "Manifest: $($result.Manifest)"
 if ($result.Identity.Dirty) { Write-Warning 'The installer was built from a dirty checkout; the manifest records that fact.' }
