@@ -79,7 +79,7 @@ const LATEST_ASSET_FIXTURES: Readonly<Record<string, string>> = {
   'sprout-hollow-valley': 'Sprout-Hollow-Valley-Setup-1.2.12.exe',
 };
 
-describe('hand-written universal install adapter coverage', () => {
+describe('hand-written 40-row universal install adapter coverage', () => {
   it('enumerates exactly the reviewed catalog IDs', () => {
     expect(CATALOG_APP_IDS).toEqual(EXPECTED_APP_IDS);
     expect(new Set(INSTALL_ADAPTER_IDS).size).toBe(EXPECTED_APP_IDS.length);
