@@ -98,6 +98,8 @@ export const guestLifecyclePlanSchema = z.strictObject({
 }).superRefine((plan, ctx) => {
   const prefix = `${plan.installer.format}-`;
   if (plan.operations.some((operation) => !operation.startsWith(prefix))) ctx.addIssue({ code: 'custom', path: ['operations'], message: 'Lifecycle operations must match the installer format.' });
+  const expected = [`${plan.installer.format}-install`, `${plan.installer.format}-launch`, `${plan.installer.format}-uninstall`];
+  if (plan.operations.length !== expected.length || plan.operations.some((operation, index) => operation !== expected[index])) ctx.addIssue({ code: 'custom', path: ['operations'], message: 'Lifecycle operations must be the ordered install, launch, uninstall sequence.' });
 });
 export type GuestLifecyclePlan = z.infer<typeof guestLifecyclePlanSchema>;
 export function createGuestLifecyclePlanDigest(plan: Omit<GuestLifecyclePlan, 'planDigest'> | GuestLifecyclePlan): string {
