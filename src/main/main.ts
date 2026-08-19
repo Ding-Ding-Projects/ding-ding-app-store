@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { AUTHENTICATOR_MAX_IMAGE_BYTES, AUTHENTICATOR_MAX_URI_LENGTH, type AuthenticatorBulkDeleteRequest, type AuthenticatorBulkDeleteResult, type AuthenticatorDeleteRequest, type AuthenticatorDeleteResult, type AuthenticatorExportRequest, type AuthenticatorExportResult, type AuthenticatorSecretExportRequest, type AuthenticatorSecretExportResult, type AuthenticatorSecretExportAuthorizationRequest, type AuthenticatorGroupRequest, type AuthenticatorGroupCreateRequest, type AuthenticatorGroupRenameRequest, type AuthenticatorGroupReorderRequest, type AuthenticatorGroupCollapseRequest, type AuthenticatorGroupDeleteRequest, type AuthenticatorGroupBulkMoveRequest, type AuthenticatorListResult, type AuthenticatorMutationResult, type AuthenticatorPreviewRequest, type AuthenticatorPreviewResult, type AuthenticatorQrImageImportResult, type AuthenticatorRegistrationConfirmRequest, type AuthenticatorRegistrationPreviewResult, type AuthenticatorRegistrationRequest, type AuthenticatorRenameRequest, type AuthenticatorReorderRequest, type AuthenticatorStatus, type ElementKey, type ElementOverride, type ExternalEditorOpenRequest, type ExternalEditorPreference, type History7zRequest, type HistoryExportFormat, type InstallCancelRequest, type LockCredentialRequest, type LockSetRequest, type LockTarget, type OperationRequest, type SchoolModeConfigureRequest, type SchoolModeCredentialChangeRequest, type SchoolModeRenameRequest, type SchoolModeToggleRequest, type SchoolModeVerifyRequest, type SourceJobCancelRequest, type SourceJobRequest, type SourceOutputExportRequest, type SupportTicketCreateRequest, type SupportTicketBulkAdvanceRequest, type TabWorkspace, type UserSettings } from '../shared/contracts.js';
 import { AUTHENTICATOR_CAMERA_SESSION_MS } from '../shared/contracts.js';
 import { AppearanceService } from './appearance-service.js';
-import { CatalogService } from './catalog-service.js';
+import { CatalogService, proofStatusAllowsPrivilegedAction, proofStatusBlockMessage } from './catalog-service.js';
 import { HistoryService } from './history-service.js';
 import { InstalledService } from './installed-service.js';
 import { OperationService } from './operation-service.js';
@@ -42,6 +42,18 @@ const dirname = path.dirname(fileURLToPath(import.meta.url));
 let mainWindow: BrowserWindow | null = null;
 let authenticatorCameraLease: { sessionId: string; webContentsId: number; expiresAtMs: number } | null = null;
 let authenticatorSecretExportInFlight = false;
+
+async function blockedCatalogRecord(catalog: CatalogService, request: unknown): Promise<Awaited<ReturnType<CatalogService['recordFor']>> | null> {
+  if (!request || typeof request !== 'object' || Array.isArray(request)) return null;
+  const appId = (request as Record<string, unknown>).appId;
+  if (typeof appId !== 'string') return null;
+  try {
+    const record = await catalog.recordFor(appId);
+    return proofStatusAllowsPrivilegedAction(record.proofStatus) ? null : record;
+  } catch {
+    return null;
+  }
+}
 
 export function cameraPermissionAllowed(webContents: Electron.WebContents | null, permission: string, mediaTypes: string[] | undefined, details: { isMainFrame: boolean; requestingUrl?: string; securityOrigin?: string }): boolean {
   const lease = authenticatorCameraLease;
@@ -275,13 +287,19 @@ void app.whenReady().then(async () => {
   });
   ipcMain.handle('catalog:list', () => stateMutationQueue.run(() => catalog.list(false)));
   ipcMain.handle('catalog:refresh', () => stateMutationQueue.run(() => catalog.list(true)));
-  ipcMain.handle('operations:install', (_event, request: OperationRequest) => stateMutationQueue.run(() => operations.install(request)));
+  ipcMain.handle('operations:install', (_event, request: OperationRequest) => stateMutationQueue.run(async () => {
+    const blocked = await blockedCatalogRecord(catalog, request);
+    return blocked ? { ok: false, appId: blocked.id, message: proofStatusBlockMessage(blocked) } : operations.install(request);
+  }));
   // Cancellation must remain an abort-priority path; queueing it behind the
   // long-running install would let the operation finish before it can see the
   // user's cancel request.
   ipcMain.handle('operations:cancel-install', (_event, request: InstallCancelRequest) => operations.cancelInstall(request));
   ipcMain.handle('operations:status', (event) => event.sender === mainWindow?.webContents ? operations.listActive() : []);
-  ipcMain.handle('operations:build', (_event, request: OperationRequest) => stateMutationQueue.run(() => operations.build(request)));
+  ipcMain.handle('operations:build', (_event, request: OperationRequest) => stateMutationQueue.run(async () => {
+    const blocked = await blockedCatalogRecord(catalog, request);
+    return blocked ? { ok: false, appId: blocked.id, message: proofStatusBlockMessage(blocked) } : operations.build(request);
+  }));
   ipcMain.handle('operations:uninstall', (_event, request: OperationRequest) => stateMutationQueue.run(() => operations.uninstall(request)));
   ipcMain.handle('operations:installed', (_event, discover: unknown = true) => stateMutationQueue.run(() => operations.listInstalled(discover !== false)));
   ipcMain.handle('source-jobs:start', (event, request: SourceJobRequest) => {
@@ -316,9 +334,17 @@ void app.whenReady().then(async () => {
   ipcMain.handle('updates:store-cancel-download', () => updates.cancelDownload());
   ipcMain.handle('updates:open-release-notes', (_event, url: unknown) => updates.openReleaseNotes(typeof url === 'string' ? url : ''));
   ipcMain.handle('updates:app-check', (event, appId: unknown) => event.sender === mainWindow?.webContents ? managedUpdates.checkApp(typeof appId === 'string' ? appId : 'invalid') : managedUpdates.checkApp('invalid'));
-  ipcMain.handle('updates:app-download', (event, request: unknown) => stateMutationQueue.run(() => event.sender === mainWindow?.webContents ? managedUpdates.download(request) : managedUpdates.download({ appId: 'invalid', decision: 'download-update' })));
+  ipcMain.handle('updates:app-download', (event, request: unknown) => stateMutationQueue.run(async () => {
+    if (event.sender !== mainWindow?.webContents) return managedUpdates.download({ appId: 'invalid', decision: 'download-update' });
+    const blocked = await blockedCatalogRecord(catalog, request);
+    return blocked ? { appId: blocked.id, status: 'blocked' as const, installedVersion: null, message: proofStatusBlockMessage(blocked), checkedAt: new Date().toISOString() } : managedUpdates.download(request);
+  }));
   ipcMain.handle('updates:app-cancel', (event, request: unknown) => event.sender === mainWindow?.webContents ? managedUpdates.cancel(request) : managedUpdates.cancel({ appId: 'invalid', decision: 'cancel-update' }));
-  ipcMain.handle('updates:app-restart', (event, request: unknown) => stateMutationQueue.run(() => event.sender === mainWindow?.webContents ? managedUpdates.restart(request) : managedUpdates.restart({ appId: 'invalid', decision: 'restart-to-install' })));
+  ipcMain.handle('updates:app-restart', (event, request: unknown) => stateMutationQueue.run(async () => {
+    if (event.sender !== mainWindow?.webContents) return managedUpdates.restart({ appId: 'invalid', decision: 'restart-to-install' });
+    const blocked = await blockedCatalogRecord(catalog, request);
+    return blocked ? { ok: false, appId: blocked.id, message: proofStatusBlockMessage(blocked) } : managedUpdates.restart(request);
+  }));
   ipcMain.handle('settings:load', () => settings.load());
   ipcMain.handle('settings:provenance', () => settings.provenance());
   ipcMain.handle('settings:save', (_event, value: UserSettings) => stateMutationQueue.run(() => settings.save(value)));

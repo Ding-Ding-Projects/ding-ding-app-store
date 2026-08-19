@@ -242,6 +242,7 @@
   .availability-note.installable { color: var(--success); background: color-mix(in srgb, var(--success) 12%, var(--surface)); }
   .availability-note.source-build { color: var(--primary); background: color-mix(in srgb, var(--primary) 12%, var(--surface)); }
   .availability-note.unsupported { color: var(--error); background: color-mix(in srgb, var(--error) 10%, var(--surface)); }
+  .availability-note.blocked { color: var(--error); background: color-mix(in srgb, var(--error) 10%, var(--surface)); max-width: 100%; white-space: normal; }
   .card-actions { gap: 7px; }
   .status-pill { letter-spacing: .6px; }
   .bulk-toolbar { max-width: 1480px; margin: 0 auto 20px; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--primary) 16%, var(--outline-variant)); border-radius: 18px; background: color-mix(in srgb, var(--surface-container) 84%, var(--primary) 16%); box-shadow: var(--elevation-1); }

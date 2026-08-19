@@ -6,7 +6,7 @@
 
 This record describes the reviewed catalog entry `minecraft-server-command-center`. Its public source repository is [minecraft-server-command-center](https://github.com/Ding-Ding-Projects/minecraft-server-command-center). The current availability is **Installable through a reviewed adapter** and the declared package type is **squirrel**. The closed adapter identifier is `minecraft-server-command-center-squirrel`.
 
-The current adapter state is: Reviewed Squirrel.Windows adapter. The adapter has a fixed, application-specific release contract; this article deliberately does not reproduce executable names, arguments, download URLs, or filesystem locations. Lifecycle status is **blocked until clean-Windows proof**; the catalog does not claim installation, launch, ownership, or uninstall evidence yet.
+The current adapter state is: Reviewed Squirrel.Windows adapter. The adapter has a fixed, application-specific release contract; this article deliberately does not reproduce executable names, arguments, download URLs, or filesystem locations. Lifecycle status is **blocked until clean-Windows proof** (target minecraft-server-command-center-clean-windows); the catalog does not claim installation, launch, ownership, or uninstall evidence yet.
 
 The icon is first-party reviewed from repository asset `assets/app-mark.ico`; if that asset is unavailable, the UI uses the declared generated-monogram fallback rather than a remote or guessed image.
 

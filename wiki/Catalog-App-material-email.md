@@ -8,7 +8,7 @@
 
 This record describes the reviewed catalog entry `material-email`. Its public source repository is [material-email](https://github.com/Ding-Ding-Projects/material-email). The current availability is **Installable through a reviewed adapter** and the declared package type is **nsis**. The closed adapter identifier is `material-email-nsis`.
 
-The current adapter state is: Reviewed NSIS adapter. The adapter has a fixed, application-specific release contract; this article deliberately does not reproduce executable names, arguments, download URLs, or filesystem locations.
+The current adapter state is: Reviewed NSIS adapter. The adapter has a fixed, application-specific release contract; this article deliberately does not reproduce executable names, arguments, download URLs, or filesystem locations. Lifecycle status is **verified** for the reviewed catalog route; installation and update actions remain subject to their live byte, ownership, and process checks.
 
 No icon provenance metadata is declared for this legacy record; the renderer keeps its neutral catalog fallback.
 

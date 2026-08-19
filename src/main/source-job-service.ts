@@ -4,7 +4,7 @@ import path from 'node:path';
 import { ZipFile } from 'yazl';
 import type { SourceDisposalReceipt, SourceJobCancelRequest, SourceJobRequest, SourceJobRetryRequest, SourceJobStartResult, SourceOutputExportRequest, SourceOutputExportResult, SourceOutputManifest, SourceTerminalEvent } from '../shared/contracts.js';
 import { sourceJobCancelRequestSchema, sourceJobRequestSchema, sourceJobRetryRequestSchema, sourceOutputExportRequestSchema, sourceOutputManifestSchema } from '../shared/contracts.js';
-import { CatalogService } from './catalog-service.js';
+import { CatalogService, proofStatusAllowsPrivilegedAction, proofStatusBlockMessage } from './catalog-service.js';
 import { HistoryService } from './history-service.js';
 import { SettingsService } from './settings-service.js';
 import {
@@ -100,6 +100,9 @@ export class SourceJobService {
       record = await this.catalog.recordFor(request.appId);
     } catch {
       return { ok: false, appId: request.appId, state: 'failed', message: 'The requested catalog application is not available.' };
+    }
+    if (!proofStatusAllowsPrivilegedAction(record.proofStatus)) {
+      return { ok: false, appId: record.id, state: 'failed', message: proofStatusBlockMessage(record) };
     }
     if (record.availability !== 'source-build' || record.packageType !== 'source') {
       return { ok: false, appId: request.appId, state: 'failed', message: 'Automatic repair is available only for reviewed source recipes; ordinary release installation never invokes OpenCode.' };

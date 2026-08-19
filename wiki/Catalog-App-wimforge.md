@@ -8,7 +8,7 @@
 
 This record describes the reviewed catalog entry `wimforge`. Its public source repository is [WimForge](https://github.com/Ding-Ding-Projects/WimForge). The current availability is **Installable through a reviewed adapter** and the declared package type is **archive**. The closed adapter identifier is `wimforge-portable-zip`.
 
-The current adapter state is: Reviewed managed portable ZIP adapter. The adapter has a fixed, application-specific release contract; this article deliberately does not reproduce executable names, arguments, download URLs, or filesystem locations.
+The current adapter state is: Reviewed managed portable ZIP adapter. The adapter has a fixed, application-specific release contract; this article deliberately does not reproduce executable names, arguments, download URLs, or filesystem locations. Lifecycle status is **verified** for the reviewed catalog route; installation and update actions remain subject to their live byte, ownership, and process checks.
 
 No icon provenance metadata is declared for this legacy record; the renderer keeps its neutral catalog fallback.
 

@@ -4,6 +4,7 @@ export type LanguageMode = 'en' | 'yue' | 'bilingual';
 export type ThemeMode = 'system' | 'light' | 'dark';
 export type PackageType = 'squirrel' | 'msi' | 'nsis' | 'inno' | 'jpackage' | 'archive' | 'source' | 'unsupported';
 export type Availability = 'installable' | 'source-build' | 'documentation-only' | 'unsupported';
+export type CatalogProofStatus = 'not-required' | 'blocked-until-proof' | 'verified';
 
 export interface CatalogApp {
   id: string;
@@ -20,6 +21,8 @@ export interface CatalogApp {
   latestReleaseUrl: string | null;
   availability: Availability;
   packageType: PackageType;
+  proofStatus: CatalogProofStatus;
+  proofTargetId: string | null;
   installedVersion: string | null;
   updateState: 'unknown' | 'up-to-date' | 'available' | 'unsupported' | 'failed';
   docsAvailable: boolean;
@@ -455,6 +458,7 @@ export interface UpdatePackageMetadata {
  */
 export type ManagedUpdateState =
   | { appId: string; status: 'idle' | 'up-to-date'; installedVersion: string | null; checkedAt?: string }
+  | { appId: string; status: 'blocked'; installedVersion: string | null; message: string; checkedAt: string }
   | { appId: string; status: 'available'; installedVersion: string; version: string; releaseNotesUrl: string; unsigned: true }
   | { appId: string; status: 'downloading'; installedVersion: string; version: string; releaseNotesUrl: string; progress: number; bytesDownloaded: number; bytesTotal: number; unsigned: true }
   | { appId: string; status: 'ready'; installedVersion: string; version: string; releaseNotesUrl: string; progress: 100; bytesDownloaded: number; bytesTotal: number; unsigned: true }

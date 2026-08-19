@@ -30,6 +30,8 @@ const app: CatalogApp = {
   latestReleaseUrl: 'https://github.com/Ding-Ding-Projects/codex-material/releases/tag/v2.0.0',
   availability: 'installable',
   packageType: 'msi',
+  proofStatus: 'verified',
+  proofTargetId: null,
   installedVersion: '1.0.0',
   updateState: 'available',
   docsAvailable: true,

@@ -29,7 +29,7 @@ describe('School mode presentation', () => {
   });
 
   it('removes language, voice, funny-level, and dim-sum discoverability from the command registry', () => {
-    const entries = buildRegistry({ settings: DEFAULT_USER_SETTINGS, workspace: structuredClone(DEFAULT_TAB_WORKSPACE), appearance: {}, schedule: structuredClone(DEFAULT_SCHEDULE), apps: [{ id: 'dim-sum-atlas', name: 'Dim Sum Atlas', repository: 'dim-sum-atlas', description: '', homepageUrl: null, repositoryUrl: '', defaultBranch: 'main', topics: [], stars: 0, updatedAt: '', latestVersion: null, latestReleaseUrl: null, availability: 'documentation-only', packageType: 'unsupported', installedVersion: null, updateState: 'unknown', docsAvailable: true }], schoolModeEnabled: true });
+    const entries = buildRegistry({ settings: DEFAULT_USER_SETTINGS, workspace: structuredClone(DEFAULT_TAB_WORKSPACE), appearance: {}, schedule: structuredClone(DEFAULT_SCHEDULE), apps: [{ id: 'dim-sum-atlas', name: 'Dim Sum Atlas', repository: 'dim-sum-atlas', description: '', homepageUrl: null, repositoryUrl: '', defaultBranch: 'main', topics: [], stars: 0, updatedAt: '', latestVersion: null, latestReleaseUrl: null, availability: 'documentation-only', packageType: 'unsupported', proofStatus: 'not-required', proofTargetId: null, installedVersion: null, updateState: 'unknown', docsAvailable: true }], schoolModeEnabled: true });
     const text = entries.map((entry) => `${entry.id} ${entry.en} ${entry.yue} ${entry.keywords.join(' ')}`).join('\n');
     expect(text).not.toMatch(/language mode|funny level|粵語 funny|dim sum atlas|點心/i);
     expect(text).not.toMatch(/authenticator|驗證器|RFC 6238|TOTP/i);

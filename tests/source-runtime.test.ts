@@ -358,7 +358,15 @@ async function serviceFixture(behavior: 'wait-for-cancel' | 'hang' | 'complete',
   const recipeFile = path.join(root, 'recipes.json');
   await writeFile(recipeFile, JSON.stringify({ schemaVersion: 1, recipes: [recipe] }));
   const events: SourceTerminalEvent[] = [];
-  const catalog = { recordFor: async () => ({ id: recipe.appId, displayName: 'Reviewed App', availability: 'source-build', packageType: 'source', repository: 'reviewed-app' }) } as unknown as CatalogService;
+  const catalog = { recordFor: async () => ({
+    id: recipe.appId,
+    displayName: 'Reviewed App',
+    availability: 'source-build',
+    packageType: 'source',
+    repository: 'reviewed-app',
+    proofStatus: 'verified',
+    proofTargetId: null,
+  }) } as unknown as CatalogService;
   const history = { record: async () => undefined } as unknown as HistoryService;
   const settings = { load: async () => ({ automaticRepairConsent: true }) } as unknown as SettingsService;
   const broker = new FakeBroker(behavior);

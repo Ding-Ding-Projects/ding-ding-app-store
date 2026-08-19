@@ -6,7 +6,7 @@
 
 This record describes the reviewed catalog entry `material-ollama`. Its public source repository is [material-ollama](https://github.com/Ding-Ding-Projects/material-ollama). The current availability is **Installable through a reviewed adapter** and the declared package type is **inno**. The closed adapter identifier is `material-ollama-inno`.
 
-The current adapter state is: Reviewed Inno Setup adapter. The adapter has a fixed, application-specific release contract; this article deliberately does not reproduce executable names, arguments, download URLs, or filesystem locations. Lifecycle status is **blocked until clean-Windows proof**; the catalog does not claim installation, launch, ownership, or uninstall evidence yet.
+The current adapter state is: Reviewed Inno Setup adapter. The adapter has a fixed, application-specific release contract; this article deliberately does not reproduce executable names, arguments, download URLs, or filesystem locations. Lifecycle status is **blocked until clean-Windows proof** (target material-ollama-clean-windows); the catalog does not claim installation, launch, ownership, or uninstall evidence yet.
 
 The icon is first-party reviewed from repository asset `app/assets/material-ollama-mark.svg`; if that asset is unavailable, the UI uses the declared generated-monogram fallback rather than a remote or guessed image.
 
