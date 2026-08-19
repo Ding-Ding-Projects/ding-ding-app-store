@@ -1,14 +1,15 @@
-import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { createHash, randomUUID } from 'node:crypto';
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { SourceJobCancelRequest, SourceJobRequest, SourceJobRetryRequest, SourceJobStartResult, SourceTerminalEvent } from '../shared/contracts.js';
-import { sourceJobCancelRequestSchema, sourceJobRequestSchema, sourceJobRetryRequestSchema } from '../shared/contracts.js';
+import { ZipFile } from 'yazl';
+import type { SourceDisposalReceipt, SourceJobCancelRequest, SourceJobRequest, SourceJobRetryRequest, SourceJobStartResult, SourceOutputExportRequest, SourceOutputExportResult, SourceOutputManifest, SourceTerminalEvent } from '../shared/contracts.js';
+import { sourceJobCancelRequestSchema, sourceJobRequestSchema, sourceJobRetryRequestSchema, sourceOutputExportRequestSchema, sourceOutputManifestSchema } from '../shared/contracts.js';
 import { CatalogService } from './catalog-service.js';
 import { HistoryService } from './history-service.js';
 import { SettingsService } from './settings-service.js';
 import {
   TerminalEventBudget,
-  WindowsSandboxIsolationBroker,
+  WindowsSandboxGuestTransport,
   cleanupOwnedWorkspace,
   createIsolationAttestationChallenge,
   createSourceExecutionPlan,
@@ -25,9 +26,11 @@ import {
   SOURCE_RUNTIME_LIMITS,
   verifyOwnedDirectChild,
   verifyOwnedRoot,
+  type SourceExecutionResult,
 } from './source-runtime.js';
 
 interface ActiveJob {
+  jobId: string;
   appId: string;
   displayName: string;
   workspaceName: string;
@@ -36,6 +39,8 @@ interface ActiveJob {
   lease?: IsolationCapabilityLease;
   teardown?: Promise<void>;
   leasedTeardown?: Promise<void>;
+  output?: SourceOutputManifest;
+  disposalReceipt?: SourceDisposalReceipt;
 }
 
 interface CompletedJob {
@@ -50,6 +55,8 @@ export class SourceJobService {
   private readonly startingApps = new Set<string>();
   private readonly completed = new Map<string, CompletedJob>();
   private recipes: Map<string, SourceRecipe> | null = null;
+  private readonly outputManifests = new Map<string, SourceOutputManifest>();
+  private readonly outputPayloads = new Map<string, Map<string, Buffer>>();
 
   constructor(
     private readonly catalog: CatalogService,
@@ -57,7 +64,7 @@ export class SourceJobService {
     private readonly settings: SettingsService,
     private readonly ownedRoot: string,
     private readonly recipeFile: string,
-    private readonly broker: IsolationBroker = new WindowsSandboxIsolationBroker(),
+    private readonly broker: IsolationBroker = new WindowsSandboxGuestTransport(),
     private readonly publish: (event: Readonly<SourceTerminalEvent>) => void = () => undefined,
     private readonly jobTimeoutMs = SOURCE_RUNTIME_LIMITS.maxJobMs,
   ) {}
@@ -78,6 +85,8 @@ export class SourceJobService {
     const parsed = sourceJobRequestSchema.safeParse(input);
     if (!parsed.success) return { ok: false, appId: 'invalid', state: 'failed', message: 'Invalid source job request. Only a catalog application ID and build/run decision are accepted.' };
     const request: SourceJobRequest = parsed.data;
+    if (this.broker.recoverOrphans) await this.broker.recoverOrphans();
+    await this.recoverOrphanedWorkspaces();
     if (this.active.size + this.startingApps.size >= 1 || this.startingApps.has(request.appId)) {
       return { ok: false, appId: request.appId, state: 'failed', message: 'The disposable runner is at its verified one-job capacity. Wait for the active source job to finish.' };
     }
@@ -123,6 +132,7 @@ export class SourceJobService {
       return { ok: false, appId: request.appId, state: 'failed', message: `The app-owned disposable workspace could not be created: ${(error as Error).message}` };
     }
     const job: ActiveJob = {
+      jobId,
       appId: request.appId,
       displayName: record.displayName,
       workspaceName,
@@ -170,6 +180,52 @@ export class SourceJobService {
     return result;
   }
 
+  async outputs(jobId: string): Promise<SourceOutputManifest | null> {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(jobId)) return null;
+    return this.outputManifests.get(jobId) ?? null;
+  }
+
+  async exportOutput(input: unknown, destination?: string): Promise<SourceOutputExportResult> {
+    const parsed = sourceOutputExportRequestSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, format: 'json', suggestedName: 'source-output.json', message: 'The source output export request was invalid.' };
+    const request: SourceOutputExportRequest = parsed.data;
+    const manifest = this.outputManifests.get(request.jobId);
+    const suggestedName = request.format === 'json' ? `source-output-${request.jobId}.json` : `source-output-${request.jobId}.zip`;
+    if (!manifest) return { ok: false, format: request.format, suggestedName, message: 'No retained output manifest exists for that source job.' };
+    const manifestJson = Buffer.from(JSON.stringify({ schema: 'ding-ding-app-store.source-output.v1', manifest, omittedFields: ['hostPaths', 'credentials', 'secrets'] }, null, 2) + '\n', 'utf8');
+    const content = request.format === 'json' ? manifestJson : await this.zipOutput(manifestJson, this.outputPayloads.get(request.jobId));
+    if (!destination) return { ok: true, format: request.format, suggestedName, bytes: content.length, sha256: (await import('node:crypto')).createHash('sha256').update(content).digest('hex'), message: 'Source output export is ready for the native save dialog.' };
+    await writeFile(destination, content, { flag: 'wx' });
+    return { ok: true, format: request.format, suggestedName, bytes: content.length, sha256: (await import('node:crypto')).createHash('sha256').update(content).digest('hex'), message: `Source output exported to ${request.format.toUpperCase()} without exposing host paths.` };
+  }
+
+  private async zipOutput(manifest: Buffer, payloads: Map<string, Buffer> | undefined): Promise<Buffer> {
+    return await new Promise<Buffer>((resolve, reject) => {
+      const zip = new ZipFile();
+      const chunks: Buffer[] = [];
+      zip.outputStream.on('data', (chunk: Buffer) => chunks.push(chunk));
+      zip.outputStream.once('error', reject);
+      zip.outputStream.once('end', () => resolve(Buffer.concat(chunks)));
+      zip.addBuffer(manifest, 'manifest.json');
+      for (const [filePath, bytes] of payloads ?? []) {
+        if (/^[A-Za-z0-9][A-Za-z0-9._/-]{0,239}$/.test(filePath)) zip.addBuffer(bytes, `outputs/${filePath}`);
+      }
+      zip.end();
+    });
+  }
+
+  private async recoverOrphanedWorkspaces(): Promise<void> {
+    let entries: string[];
+    try { entries = await readdir(this.ownedRoot); } catch { return; }
+    for (const name of entries) {
+      if (!/^[A-Za-z0-9-]+$/.test(name) || [...this.active.values()].some((job: ActiveJob) => job.workspaceName === name)) continue;
+      try {
+        const marker = (await readFile(resolveOwnedPath(this.ownedRoot, `${name}/.ding-ding-source-job`), 'utf8')).trim();
+        if (/^[0-9a-f-]{36}$/i.test(marker)) await cleanupOwnedWorkspace(this.ownedRoot, name, marker);
+      } catch { /* An unsafe orphan remains for the next bounded recovery pass. */ }
+    }
+  }
+
   private async loadRecipes(): Promise<Map<string, SourceRecipe>> {
     if (this.recipes) return this.recipes;
     const parsed = sourceRecipeCatalogSchema.parse(JSON.parse(await readFile(this.recipeFile, 'utf8')));
@@ -186,7 +242,7 @@ export class SourceJobService {
 
   private async teardown(job: ActiveJob, jobId: string): Promise<void> {
     if (job.lease) {
-      if (!job.leasedTeardown) job.leasedTeardown = this.broker.dispose(jobId, job.lease);
+      if (!job.leasedTeardown) job.leasedTeardown = this.broker.dispose(jobId, job.lease).then((receipt) => { if (receipt) job.disposalReceipt = receipt; });
       await job.leasedTeardown;
       return;
     }
@@ -240,7 +296,8 @@ export class SourceJobService {
       if (job.controller.signal.aborted) throw new DOMException('Cancelled', 'AbortError');
       const plan = createSourceExecutionPlan(jobId, request.decision, recipe);
       this.emit(job, { stream: 'progress', state: 'preparing', text: `Pinned revision ${recipe.revision.slice(0, 12)} and reviewed command vectors accepted.`, progress: 10 });
-      await withinDeadline(this.broker.execute(plan, (line) => this.emit(job, line), job.controller.signal, attestation.lease));
+      const execution = await withinDeadline(this.broker.execute(plan, (line) => this.emit(job, line), job.controller.signal, attestation.lease));
+      this.retainOutputs(job, recipe, request.decision, execution);
       if (job.controller.signal.aborted) throw new DOMException('Cancelled', 'AbortError');
       ok = true;
       message = `${job.displayName} source ${request.decision} completed in the disposable runner and expected outputs were validated.`;
@@ -277,4 +334,29 @@ export class SourceJobService {
       while (this.completed.size > 32) this.completed.delete(this.completed.keys().next().value!);
     }
   }
+
+  private retainOutputs(job: ActiveJob, recipe: SourceRecipe, decision: SourceJobRequest['decision'], result: SourceExecutionResult | void): void {
+    if (!result) return;
+    const supplied = result.outputManifest ?? (result.outputs ? {
+      schemaVersion: 1 as const,
+      jobId: job.jobId,
+      appId: recipe.appId,
+      revision: recipe.revision,
+      decision,
+      generatedAt: new Date().toISOString(),
+      totalBytes: result.outputs.reduce((sum, file) => sum + file.bytes, 0),
+      files: result.outputs.map(({ content: _content, ...file }) => file),
+    } : undefined);
+    if (!supplied) return;
+    const parsed = sourceOutputManifestSchema.safeParse(supplied);
+    if (!parsed.success || parsed.data.jobId !== job.jobId || parsed.data.appId !== recipe.appId || parsed.data.revision !== recipe.revision || parsed.data.decision !== decision) return;
+    if (result.outputs?.some((file) => file.content && (file.content.length !== file.bytes || (awaitHash(file.content) !== file.sha256)))) return;
+    job.output = parsed.data;
+    this.outputManifests.set(parsed.data.jobId, parsed.data);
+    if (result.outputs) this.outputPayloads.set(parsed.data.jobId, new Map(result.outputs.filter((file) => file.content).map((file) => [file.path, file.content!] )));
+  }
+}
+
+function awaitHash(content: Buffer): string {
+  return createHash('sha256').update(content).digest('hex');
 }

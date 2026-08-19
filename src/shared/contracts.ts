@@ -130,6 +130,7 @@ export const SOURCE_ISOLATION_REASONS = [
   'sandbox-executable-missing',
   'sandbox-feature-unverified',
   'guest-transport-not-connected',
+  'ready',
 ] as const;
 export type SourceIsolationReason = (typeof SOURCE_ISOLATION_REASONS)[number];
 export const sourceIsolationStatusSchema = z.strictObject({
@@ -173,6 +174,59 @@ export type SourceJobRequest = z.infer<typeof sourceJobRequestSchema>;
 export type SourceJobCancelRequest = z.infer<typeof sourceJobCancelRequestSchema>;
 export type SourceJobRetryRequest = z.infer<typeof sourceJobRetryRequestSchema>;
 export type SourceTerminalEvent = z.infer<typeof sourceTerminalEventSchema>;
+
+export const sourceOutputFileSchema = z.strictObject({
+  path: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._/-]{0,239}$/).refine((value) => !value.includes('..') && !value.includes('//') && !value.includes('\\'), 'Output paths must stay relative to the guest output root.'),
+  bytes: z.number().int().min(0).max(2_000_000_000),
+  sha256: z.string().regex(/^[a-f0-9]{64}$/),
+});
+export type SourceOutputFile = z.infer<typeof sourceOutputFileSchema>;
+
+export const sourceOutputManifestSchema = z.strictObject({
+  schemaVersion: z.literal(1),
+  jobId: z.uuid(),
+  appId: z.string().regex(/^[a-z0-9][a-z0-9-]{0,127}$/),
+  revision: z.string().regex(/^[a-f0-9]{40}$/),
+  decision: z.enum(SOURCE_JOB_DECISIONS),
+  generatedAt: z.iso.datetime(),
+  totalBytes: z.number().int().min(0).max(2_000_000_000),
+  files: z.array(sourceOutputFileSchema).max(128),
+}).superRefine((manifest, ctx) => {
+  if (new Set(manifest.files.map((file) => file.path)).size !== manifest.files.length) ctx.addIssue({ code: 'custom', path: ['files'], message: 'Output paths must be unique.' });
+  if (manifest.files.reduce((total, file) => total + file.bytes, 0) !== manifest.totalBytes) ctx.addIssue({ code: 'custom', path: ['totalBytes'], message: 'Output byte total does not match the file list.' });
+});
+export type SourceOutputManifest = z.infer<typeof sourceOutputManifestSchema>;
+
+export const sourceOutputExportRequestSchema = z.strictObject({
+  jobId: z.uuid(),
+  format: z.enum(['json', 'zip']),
+});
+export type SourceOutputExportRequest = z.infer<typeof sourceOutputExportRequestSchema>;
+
+export interface SourceOutputExportResult {
+  ok: boolean;
+  format: 'json' | 'zip';
+  suggestedName: string;
+  bytes?: number;
+  sha256?: string;
+  message: string;
+}
+
+export const sourceDisposalReceiptSchema = z.strictObject({
+  schemaVersion: z.literal(1),
+  jobId: z.uuid(),
+  guestId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/),
+  brokerId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/),
+  transportId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/),
+  challengeNonce: z.string().regex(/^[a-f0-9]{64}$/),
+  disposedAt: z.iso.datetime(),
+  processTreeStopped: z.literal(true),
+  guestDeleted: z.literal(true),
+  hostMounts: z.literal(0),
+  credentialsInjected: z.literal(false),
+  secretsInjected: z.literal(false),
+});
+export type SourceDisposalReceipt = z.infer<typeof sourceDisposalReceiptSchema>;
 
 export interface SourceJobStartResult {
   ok: boolean;
@@ -1670,6 +1724,8 @@ export interface DingDingStoreApi {
     cancel(request: SourceJobCancelRequest): Promise<SourceJobStartResult>;
     retry(request: SourceJobRetryRequest): Promise<SourceJobStartResult>;
     status(): Promise<SourceIsolationStatus>;
+    outputs(jobId: string): Promise<SourceOutputManifest | null>;
+    exportOutput(request: SourceOutputExportRequest): Promise<SourceOutputExportResult>;
     subscribe(listener: (event: Readonly<SourceTerminalEvent>) => void): () => void;
   };
   updates: {
