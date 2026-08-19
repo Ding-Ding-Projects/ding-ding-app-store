@@ -99,8 +99,10 @@ try {
     catch (error) {
       const listed = await runLowlevelCall('list_headless_windows', { name: desktop }, 30_000).catch(() => ({ windows: [] }));
       const windows = Array.isArray(listed.windows) ? listed.windows : [];
-      const exact = windows.filter((window) => Number.isInteger(Number(window.pid ?? window.processId)) && String(window.commandLine ?? '').includes(configPath) && path.basename(String(window.executablePath ?? window.process ?? '')) === 'WindowsSandboxRemoteSession.exe');
-      if (exact.length === 1) { await runLowlevelCall('kill_process', { pid: Number(exact[0].pid ?? exact[0].processId), force: true }, 30_000).catch(() => undefined); await runLowlevelCall('close_headless_desktop', { name: desktop }, 30_000).catch(() => undefined); await rm(configPath, { force: false }).catch(() => undefined); }
+      const exactWindows = windows.filter((window) => Number.isInteger(Number(window.process_id)) && window.title === 'Windows Sandbox' && window.class === 'WinUIDesktopWin32WindowClass' && Number(window.width) > 0 && Number(window.height) > 0);
+      const processes = await runLowlevelCall('list_processes', { name_filter: 'WindowsSandboxRemoteSession' }, 30_000).catch(() => ({ processes: [] }));
+      const exact = exactWindows.filter((window) => (processes.processes ?? []).filter((process) => process.pid === window.process_id && process.name === 'WindowsSandboxRemoteSession.exe').length === 1);
+      if (exact.length === 1) { const pid = Number(exact[0].process_id); const killed = await runLowlevelCall('kill_process', { pid, force: true }, 30_000).catch(() => ({ ok: false, client_ok: false })); const after = await runLowlevelCall('list_processes', { name_filter: 'WindowsSandboxRemoteSession' }, 30_000).catch(() => ({ processes: [] })); const closed = await runLowlevelCall('close_headless_desktop', { name: desktop }, 30_000).catch(() => ({ ok: false, client_ok: false })); if (killed.ok === true && killed.client_ok === true && !(after.processes ?? []).some((process) => process.pid === pid) && closed.ok === true && closed.client_ok === true) { await rm(configPath, { force: false }); await rm(lowlevelLedger, { force: false }); } else throw new Error('launch-cleanup-unproven: exact process absence or desktop closure was not proven.'); }
       else if (exact.length > 1) throw new Error(`launch-cleanup-unproven: ambiguous exact Sandbox processes on ${desktop}.`);
       else throw new Error(`launch-cleanup-unproven: launch failed before state and no exact Sandbox process proof was available (${error instanceof Error ? error.message : String(error)}).`);
       throw error;
@@ -130,7 +132,7 @@ try {
     try { lowlevelCleanup = await runLowlevel('cleanup', undefined, 60_000); } catch (error) { lowlevelCleanup = { ok: false, client_ok: false, error: error instanceof Error ? error.message : String(error) }; }
   }
   const cleanupVerified = lowlevelCleanup?.ok === true && lowlevelCleanup?.client_ok === true && lowlevelCleanup.actions?.every((action) => action.ok === true);
-  if (cleanupVerified || (!(await stat(lowlevelState).catch(() => null)) && ledger?.configPath)) {
+  if (cleanupVerified) {
     if (ledger?.configPath) await rm(ledger.configPath, { force: false }).catch(() => undefined);
     for (const config of await readdir(runRoot).then((names) => names.filter((name) => name.toLowerCase().endsWith('.wsb'))).catch(() => [])) await rm(path.join(runRoot, config), { force: false });
   }
