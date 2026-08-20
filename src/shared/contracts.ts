@@ -646,6 +646,8 @@ export interface LockCredentialRequest extends LockTarget {
   /** Optional one-off lifetime override; the configured lock lifetime is used when omitted. */
   unlockDuration?: LockUnlockDuration;
 }
+export interface LockBulkRemoveRequest { items: Array<LockCredentialRequest>; confirmed: true; }
+export interface LockBulkMutationResult extends LockMutationResult { affectedCount: number; skippedCount: number; skippedTargets: LockTarget[]; }
 export interface LockMutationResult {
   ok: boolean;
   state: LockState;
@@ -1847,6 +1849,8 @@ export interface DingDingStoreApi {
     unlock(request: LockCredentialRequest): Promise<LockMutationResult>;
     lockAgain(target: LockTarget): Promise<LockMutationResult>;
     remove(request: LockCredentialRequest): Promise<LockMutationResult>;
+    bulkLockAgain(targets: LockTarget[]): Promise<LockBulkMutationResult>;
+    bulkRemove(request: LockBulkRemoveRequest): Promise<LockBulkMutationResult>;
   };
   support: {
     load(): Promise<SupportState>;

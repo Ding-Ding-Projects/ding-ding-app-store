@@ -165,7 +165,7 @@ void app.whenReady().then(async () => {
   const personalVocabulary = new PersonalVocabularyService();
   const schoolMode = new SchoolModeService();
   const authenticator = new AuthenticatorService(authenticatorVault, history);
-  const lockSupport = new LockSupportService(history);
+  const lockSupport = new LockSupportService(history, () => schoolMode.isRestricted());
   const unsubscribeSchoolMode = schoolMode.subscribe((snapshot) => {
     if (snapshot.sync.status !== 'ready' || snapshot.state?.enabled === true) historyAccess.invalidate();
     authenticator.setRestricted(snapshot.sync.status !== 'ready' || snapshot.state?.enabled === true);
@@ -544,10 +544,12 @@ void app.whenReady().then(async () => {
     return authenticator.authorizeSecretExport(request as AuthenticatorSecretExportAuthorizationRequest);
   });
   ipcMain.handle('locks:load', (event) => event.sender === mainWindow?.webContents ? lockSupport.loadLocks() : Promise.reject(new Error('Blocked lock request from an unknown renderer.')));
-  ipcMain.handle('locks:set', (event, request: LockSetRequest) => event.sender === mainWindow?.webContents ? lockSupport.setLock(request) : Promise.reject(new Error('Blocked lock request from an unknown renderer.')));
+  ipcMain.handle('locks:set', (event, request: LockSetRequest) => stateMutationQueue.run(() => event.sender === mainWindow?.webContents ? lockSupport.setLock(request) : Promise.reject(new Error('Blocked lock request from an unknown renderer.'))));
   ipcMain.handle('locks:unlock', (event, request: LockCredentialRequest) => event.sender === mainWindow?.webContents ? lockSupport.unlock(request) : Promise.reject(new Error('Blocked lock request from an unknown renderer.')));
-  ipcMain.handle('locks:lock-again', (event, target: LockTarget) => event.sender === mainWindow?.webContents ? lockSupport.lockAgain(target) : Promise.reject(new Error('Blocked lock request from an unknown renderer.')));
-  ipcMain.handle('locks:remove', (event, request: LockCredentialRequest) => event.sender === mainWindow?.webContents ? lockSupport.remove(request) : Promise.reject(new Error('Blocked lock request from an unknown renderer.')));
+  ipcMain.handle('locks:lock-again', (event, target: LockTarget) => stateMutationQueue.run(() => event.sender === mainWindow?.webContents ? lockSupport.lockAgain(target) : Promise.reject(new Error('Blocked lock request from an unknown renderer.'))));
+  ipcMain.handle('locks:remove', (event, request: LockCredentialRequest) => stateMutationQueue.run(() => event.sender === mainWindow?.webContents ? lockSupport.remove(request) : Promise.reject(new Error('Blocked lock request from an unknown renderer.'))));
+  ipcMain.handle('locks:bulk-lock-again', (event, targets: LockTarget[]) => stateMutationQueue.run(() => event.sender === mainWindow?.webContents ? lockSupport.bulkLockAgain(targets) : Promise.reject(new Error('Blocked bulk lock request from an unknown renderer.'))));
+  ipcMain.handle('locks:bulk-remove', (event, request) => stateMutationQueue.run(() => event.sender === mainWindow?.webContents ? lockSupport.bulkRemove(request) : Promise.reject(new Error('Blocked bulk lock removal request from an unknown renderer.'))));
   ipcMain.handle('support:load', (event) => event.sender === mainWindow?.webContents ? lockSupport.loadSupport() : Promise.reject(new Error('Blocked Support Tickets request from an unknown renderer.')));
   ipcMain.handle('support:create', (event, request: SupportTicketCreateRequest) => event.sender === mainWindow?.webContents ? lockSupport.createTicket(request) : Promise.reject(new Error('Blocked Support Tickets request from an unknown renderer.')));
   ipcMain.handle('support:advance', (event, ticketId: unknown) => event.sender === mainWindow?.webContents && typeof ticketId === 'string' ? lockSupport.advanceTicket(ticketId) : Promise.reject(new Error('Blocked Support Tickets request from an unknown renderer.')));
