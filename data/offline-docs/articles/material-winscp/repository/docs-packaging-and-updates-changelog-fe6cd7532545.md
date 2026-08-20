@@ -1,0 +1,123 @@
+# The changelog viewer
+
+## What it does
+
+An in-app viewer covering **every** released version, not just the newest.
+Reachable from Help / About. A link to release notes on a website does not
+satisfy this — the changelog is in the app.
+
+Each entry carries its version, its release date, its
+[dim sum code name](app-doc://article/material-winscp.repository.ec20b3572803cd00) with the bundled photo, and its changes grouped
+by category (added, changed, fixed, security, breaking, removed).
+
+## The date filter
+
+An advanced calendar picker — the same control the
+[history panel](app-doc://article/material-winscp.repository.20297aa033513700) uses:
+
+- **Month and year jump.**
+- **Range selection.**
+- **Presets** — last 30 days, last 6 months, this year, all.
+- **Typed dates**, accepted in the locale's format *and* as plain ISO
+  (`2026-08-02`).
+- An invalid or partial entry is **reported inline without discarding what was
+  typed**. Typing and the calendar stay in step.
+
+## The search
+
+The changelog text is searchable, with the full
+[regex builder](app-doc://article/material-winscp.repository.e00a792e9bc916e2) anchored beside the field.
+Plain-text search is the default; regex is an explicit opt-in; query, pattern,
+flags, validation and mode synchronize bidirectionally.
+
+**Search and the date filter compose** rather than override one another, and the
+empty result is an honest no-match message naming both filters.
+
+## Export and copy
+
+- **Copy** the current selection or the filtered view to the clipboard.
+- **Export** to Markdown or plain text.
+
+Both honour the active filter and search, so the export matches what is on
+screen, and **the exported file states the range** — a changelog extract with no
+stated range is a document nobody can trust later.
+
+## Documentation-site parity
+
+The documentation site renders the same generated commit ledger beneath this
+article. `site/build.js` obtains entries through `tools/changelog.js`, preserving
+the full object name, author date, title and issue references. Each short SHA is
+an accessible link whose target is the exact full SHA on the repository's own
+forge. A source archive without a Git object database shows an honest empty
+ledger; it never guesses a neighbouring ref.
+
+Release notes carry the same date, full SHA and commit URL for the generated
+entries they present. This keeps the in-app viewer, copied Markdown, site and
+published release presentation traceable to one source of truth.
+
+## Language and tone
+
+The viewer obeys the three
+[language modes](app-doc://article/material-winscp.repository.728997f194376526) and both
+[funny-level sliders](app-doc://article/material-winscp.repository.8dd415c0d17db8b3), which
+style **every** entry including security fixes and breaking changes.
+
+The same voice-not-facts rule applies: **version numbers, dates and what actually
+changed stay exact and unambiguous however playfully they are narrated.** A
+breaking change at level 5 is still unmistakably a breaking change.
+
+## Honesty
+
+**Entries are never invented.** No fabricated dates, no imagined fixes to fill a
+gap in the list. A version with no recorded changes says exactly that. A
+changelog that pads itself is worse than a short one, because it makes every
+other entry untrustworthy.
+
+## Failure modes
+
+| Situation | What the user sees | Recoverable |
+| --- | --- | --- |
+| Partial typed date (`2026-08`) | Reported inline; the typed text stays; no filter applied. | Yes |
+| A date range with no releases | Honest no-match naming the range. | n/a |
+| Invalid regex | Reported inline, typed text kept, no search run. | Yes |
+| No releases yet | The viewer says so plainly and offers the development history where one exists. It does not invent a 1.0. | n/a |
+| A version with no recorded changes | Listed with "no recorded changes", not omitted — an omitted version looks like a gap in the record. | n/a |
+| A code name with no bundled image | The entry shows the code name without a photo rather than a broken image. | n/a |
+| Export with an active filter | The file states the range and the search that produced it. | n/a |
+| Very long changelog | Virtualized; counts are exact. | n/a |
+
+## Security considerations
+
+- **Security fixes are styled by the funny level like everything else**, and like
+  everything else they keep every fact: what was vulnerable, what was fixed, and
+  what a user should do. A joke never replaces the advisory.
+- **The changelog is local data**, shipped with the app. Viewing it makes no
+  network request and reports nothing about what was read.
+- **Export contains only changelog text**, no system or configuration
+  information.
+
+## Verification
+
+- The date picker is tested for month/year jump, range selection, every preset,
+  locale-format and ISO typed input, and for preserving partial input while
+  reporting it.
+- Filter composition is tested: date and search must compose, never override.
+- Export is tested to match the filtered view exactly and to state its range.
+- Every entry is asserted to render in all three language modes at all five funny
+  levels with its version, date and category intact.
+- The empty and no-releases states are tested to be honest rather than blank.
+
+**Remote verification (2026-08-03):** the project has published
+[v0.1.548](https://github.com/Ding-Ding-Projects/material-winscp/releases/tag/v0.1.548),
+and its [release workflow run](https://github.com/Ding-Ding-Projects/material-winscp/actions/runs/30822430826)
+completed successfully. The embedded viewer data still has no release entry in
+this source tree, so its no-released-version state remains accurate for the
+current application build; that state is separate from the published GitHub
+release.
+
+## Suggested articles
+
+- [Releases](app-doc://article/material-winscp.repository.ec20b3572803cd00) — what produces changelog entries.
+- [The history panel](app-doc://article/material-winscp.repository.20297aa033513700) — the shared date picker.
+- [Funny levels](app-doc://article/material-winscp.repository.8dd415c0d17db8b3) — voice, never facts.
+- [The regex builder](app-doc://article/material-winscp.repository.e00a792e9bc916e2) — the builder on this search bar.

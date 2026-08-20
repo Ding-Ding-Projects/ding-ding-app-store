@@ -1,0 +1,184 @@
+# Editors
+
+## What it does
+
+Opens a remote file for editing without an explicit download-edit-upload cycle:
+the file is fetched to a temporary location, opened in an editor, watched, and
+uploaded back each time it is saved.
+
+Two kinds of editor are supported. The **internal editor** is built in — a text
+editor with find and replace, encoding control and word wrap. An **external
+editor** is any program on the machine, launched with the temporary path.
+
+## Configuration
+
+Under **Preferences → Editors**, stored in `PREF_DEFAULTS.editor`.
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `list` | `[{mask:'*.*', type:'internal'}]` | Ordered associations. First matching [mask](app-doc://article/material-winscp.repository.a3cb68eed237457c) wins. |
+| `fontName`, `fontSize`, `fontCharset`, `fontStyle` | Consolas 11 | Internal editor font. |
+| `autoFont` | `true` | Pick a font suited to the file's content. |
+| `wordWrap` | `false` | |
+| `tabSize` | `8` | |
+| `encoding` | `auto` | `auto`, `utf8`, `utf8bom`, `utf16le`, `utf16be`, `ansi`. A forced BOM-capable encoding strips a BOM only when one is present; BOM-less files keep their first character. |
+| `warnOnEncodingFallback` | `true` | Say when the chosen encoding could not represent the content. |
+| `maxEditors` | `500` | Concurrent open editors. |
+| `singleEditor` | `true` | Reuse one internal editor window with tabs. |
+| `sDIShellEditor`, `sDIExternal` | `false` | Treat an external editor as single-document, so its exit means the edit finished. |
+| `earlyClose` | `2` | Seconds within which an external editor exiting is treated as "it handed off to another instance" rather than "editing finished". |
+| `keepTemporaryFiles` | `false` | Keep temporaries for debugging. Warns when on. |
+| `warnOrphans` | `true` | Warn about temporary files left from a previous run. |
+| `findText`, `replaceText`, `findMatchCase`, `findByMask`, `findWholeWord`, `findDown` | — | Remembered find state. |
+
+The internal editor's find bar carries the
+[regex builder](app-doc://article/material-winscp.repository.e00a792e9bc916e2) like every other search
+surface — `findByMask` additionally allows a [file mask](app-doc://article/material-winscp.repository.a3cb68eed237457c) as the
+search term.
+
+The editor also provides selection-aware cut, copy, paste, delete, select-all,
+undo and redo actions from its context menu and keyboard shortcuts. Paste reads
+text through the application clipboard bridge, with the browser clipboard as a
+fallback; read-only viewer windows disable mutating actions. Copy requires an
+actual selection, so it never unexpectedly copies an entire file.
+
+The menu commands remain keyboard-reachable while focus is in the document:
+`Ctrl+S`/`Cmd+S` saves, `Ctrl+F`/`Cmd+F` focuses the find bar, `Ctrl+G`/`Cmd+G`
+focuses Go to line, and `F3`/`Shift+F3` finds the next/previous match. These
+handlers prevent the browser's document actions and call the same functions as
+the visible controls, so a read-only viewer still refuses Save visibly and
+without changing the text.
+
+Undo and redo are available from the editor toolbar and context menu. `Ctrl+Z`/
+`Cmd+Z` undoes the latest text change, `Ctrl+Y`/`Cmd+Y` redoes it, and
+`Ctrl+Shift+Z`/`Cmd+Shift+Z` is an alternate redo shortcut. Each action is
+disabled when its local history stack is empty or when the window is read-only;
+reload and encoding changes start a fresh history for the newly loaded text.
+
+## Behaviour worth knowing
+
+### Ordering associations
+
+The association list is first-match-wins, so its order is persisted as part of
+`editor.list`. In Preferences → Editors, focus an association and use Up/Down
+(or Left/Right) to move it one position; Home and End move it to the beginning
+or end. The selected row remains selected, the list announces its new position,
+and the change is saved through the normal Preferences save path. This is also
+available through the visible Up and Down buttons for pointer users.
+
+- **Temporary files live under the app's own data tree** (`paths.js`), never in
+  the user's folders and never in a location another user can read.
+- **Upload-on-save is watched, not polled.** Saving triggers an upload through
+  the ordinary queue, so transfer settings and speed limits apply.
+- **Editor integrations use the same IPC seam.** A native or renderer editor
+  can call `editor:fileChanged` after writing the owned temporary file; the main
+  process applies the same metadata check and conflict event as `fs.watch`.
+- **`earlyClose` exists because of how modern editors launch.** Many exit
+  immediately after handing the file to an already-running instance; treating
+  that as "editing finished" would upload an unedited file and close the session
+  too early.
+- **Remote changes are detected.** Before uploading, the remote file's timestamp
+  and size are compared with what was downloaded. When the protocol provides a
+  strong ETag (currently WebDAV and S3), that identity is compared too, so a
+  same-size rewrite with an unchanged coarse timestamp still opens a conflict
+  prompt rather than silently overwriting it.
+- **Saves are serialized and snapshot-based.** If Save is pressed again while an
+  upload is pending, the second request joins the first instead of uploading a
+  duplicate. Edits made while that upload is pending remain marked unsaved, so
+  they cannot be mistaken for the text that was uploaded.
+- **Upload events do not guess which text is clean.** A completion event can
+  come from a watcher or another save and does not identify the renderer's
+  immutable snapshot. The editor therefore advances its clean marker only from
+  the response to its own snapshot-aware save, preserving edits typed while an
+  upload is in flight.
+- **Watcher notifications are serialized too.** Windows can report one save as
+  several overlapping filesystem events. The editor queues those callbacks per
+  document, then rechecks the temporary file before each upload so the newest
+  edit is not lost or uploaded out of order.
+- **Close drains an active watcher save.** Closing an editor waits for any
+  already-running watcher upload to settle before removing its temporary file;
+  a save cannot race cleanup and disappear.
+- **Failed saves remain retryable.** If the remote check or upload fails after
+  the temporary bytes are written, the retry stamp is cleared. Reconnect plus
+  `editor:fileChanged`, or another Save, retries those same bytes instead of
+  treating the failed attempt as already observed.
+
+## Failure modes
+
+| Situation | What the user sees | Recoverable |
+| --- | --- | --- |
+| External editor not found at its configured path | Named error, and the association is not silently reassigned. | Yes |
+| External editor name cannot be resolved from `PATH` | Empty `PATH` entries are ignored; resolution fails closed rather than probing the filesystem root. | Yes |
+| File changed on the server while being edited | A modal conflict prompt: upload anyway, download theirs, or save locally. This is a decision, so it is modal. | Yes |
+| Editor exits before saving | Nothing is uploaded. The temporary is kept briefly so an accidental close is recoverable. | Yes |
+| Encoding cannot represent an edited character | With `warnOnEncodingFallback`, a warning naming the character and offering UTF-8. Without it, the substitution is still recorded in the session log. | Yes |
+| Binary file opened in the internal editor | Detected and refused with an explanation, rather than displaying and re-saving mangled bytes. | Yes |
+| Very large file | Above a threshold the internal editor declines and suggests downloading; it does not attempt to load it entirely into memory. | Yes |
+| Session lost while editing | The temporary survives. Reconnecting offers to upload it. | Yes |
+| Watcher upload fails temporarily | The edit remains dirty; a later `editor:fileChanged` notification retries the same bytes even if the file was not modified again. | Yes |
+| Orphaned temporaries from a crash | With `warnOrphans`, a startup notification lists them with an option to recover or discard. The editor states whether the recovery copy exists and whether the discard reached version history; removing selected copies refreshes the list immediately. | Yes |
+| `maxEditors` reached | Refused with a count, rather than opening an editor that cannot be tracked. | Yes |
+| Remote download or temporary-file preparation fails | Any partial temporary copy and empty folders are removed before the error returns; no untracked editor or orphan is published. | Yes |
+
+## Security considerations
+
+- **The temporary file is plaintext on local disk** for the duration of the
+  edit, even when the site uses [at-rest encryption](app-doc://article/material-winscp.repository.644e9d8291155c00).
+  This is unavoidable — an editor needs plaintext — and it is stated where the
+  feature is configured.
+- **Temporaries are cleaned up on exit** per `temporaryDirectoryCleanup`.
+  `keepTemporaryFiles` leaves sensitive content on disk and warns that it does.
+- **An external editor receives a path and runs with the user's privileges.**
+  Associating an editor is trusting it; the association editor shows the full
+  command line before it is saved.
+- **Filenames are quoted when passed to an external editor**, so a remote file
+  named with shell metacharacters cannot become a command.
+- **The external command is validated before launch.** An empty command or an
+  unterminated quote is rejected as an invalid association. If **Pass the file
+  name to the program** is off, the process receives no arguments at all; it is
+  not silently given the temporary path.
+- **Conflict detection is best-effort** — it relies on the metadata the protocol
+  provides. Where none is available the prompt says the check could not be made,
+  rather than implying it passed.
+- **The temporary directory layout can leak structure.** `temporaryDirectoryAppendPath`
+  and `temporaryDirectoryAppendSession` mirror remote paths locally, which is
+  convenient and mildly revealing; `temporaryDirectoryDeterministic` makes the
+  names predictable, which is worse and off by default.
+
+If an external editor cannot be started, the launch is rolled back as one
+operation: its watcher and registry entry are removed and the downloaded
+temporary is deleted. This prevents a broken association from leaving a
+plaintext orphan that looks like an active edit. The failure is still returned
+to the caller with the executable error so the association can be corrected.
+
+## Verification
+
+- Association matching is tested against the mask engine, including ordering and
+  first-match-wins.
+- The download-edit-upload cycle is tested against the local adapter with
+  simulated saves, asserting one upload per save.
+- Conflict detection is tested by mutating the remote file between download and
+  save.
+- `earlyClose` is tested with a synthetic editor that exits immediately.
+- Encoding round trips are tested for UTF-8 with and without BOM, and for the
+  ANSI fallback path including the warning. Forced UTF-8/UTF-16 encodings are
+  also tested against BOM-less files so selecting an encoding cannot discard
+  their leading bytes.
+- Orphan recovery is tested by leaving temporaries behind and restarting.
+- A failed external launch is tested for registry, watcher and temporary-file
+  cleanup.
+- Renderer save lifecycle invariants are tested for serialization, snapshot
+  ownership, and release of the in-flight guard after failure.
+- Renderer editor action wiring is tested for clipboard operations, read-only
+  guards, and undo/redo exposure.
+- Renderer upload completion is tested so text typed after a save snapshot
+  remains dirty until that text is actually saved.
+- Overlapping `editor:fileChanged` callbacks are tested to ensure uploads run in
+  order and the final temporary-file contents reach the remote file.
+
+## Suggested articles
+
+- [File masks](app-doc://article/material-winscp.repository.a3cb68eed237457c) — the association language.
+- [Custom commands](app-doc://article/material-winscp.repository.0f1843719a666217) — the other way to act on a selected file.
+- [At-rest encryption](app-doc://article/material-winscp.repository.644e9d8291155c00) — why editing means plaintext locally.
+- [The regex builder](app-doc://article/material-winscp.repository.e00a792e9bc916e2) — the find bar's builder.

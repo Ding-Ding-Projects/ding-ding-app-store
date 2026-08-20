@@ -1,0 +1,242 @@
+# Headless CLI
+
+## What it does
+
+`winscp` is the installable, headless command-line entry point. It exposes the
+same console scripting engine as `winscp-com` and adds deterministic commands
+for exercising drag and drop without opening Electron, Explorer, or a terminal
+window created by the app.
+
+```text
+winscp run /script=deploy.txt
+winscp script deploy.txt --parameter production --command "exit"
+winscp command "open sftp://host/" "put report.txt" "exit"
+winscp drag plan --source remote --result invalid --last-effect move
+winscp drop classify report.txt folder --allow-move=false
+winscp drop simulate report.txt --queue --default-download-target C:\\Downloads
+winscp drop target --queue --default-download-target C:\\Downloads
+winscp drag stage report.txt --temp-root C:\\Temp
+winscp drag extension-status
+winscp url parse sftp://alice:secret@example.com:2222/home/report.txt --want-file
+winscp url generate --protocol sftp --host example.com --username alice --specific
+winscp capabilities --pretty
+winscp config sites
+winscp config workspaces
+winscp config export backup.json
+winscp config import backup.ini
+```
+
+The `script` and `command` forms forward the console runner's practical
+headless switches as well as commands and parameters. Repeated `--command` and
+`--parameter` options are grouped into one contiguous `/command` or
+`/parameter` run before the existing console engine sees them; this preserves
+all values instead of accidentally leaving later values for an interactive
+prompt:
+`--log FILE`, `--loglevel N`, `--xmllog FILE`, `--xmllogrequired`,
+`--xmlgroups[=on|off]`, `--stdout[=binary|chunked]`, `--stdin[=binary]`,
+`--ini PATH`, `--rawsettings NAME=VALUE`, `--nointeractiveinput`, and
+`--unsafe`. They are translated to their WinSCP
+slash-switch equivalents before the existing console engine runs. For exact
+WinSCP command-line compatibility, pass those slash switches directly to
+`winscp run` or invoke `winscp-com`.
+
+The URL utilities use the same session-data parser and generator as the app.
+`url parse` returns the protocol, host, port, user, directory and optional file
+name as JSON; it always prints the masked URL and a `hasPassword` boolean, never
+the password itself. `url generate` creates a credential-free URL from a
+protocol, host, optional port and user. `--specific` selects WinSCP's
+`winscp-<scheme>://` handler form. Both commands are local-only and do not open
+Electron, connect to a server, or read a stored session.
+
+The simulation commands print JSON. `drag plan` applies the same safe
+copy-versus-move rules as the application. `drop classify` uses the real local
+filesystem to separate files, directories and paths that disappeared before
+the drop was handled. `drag stage` exercises the temporary-folder drag-out
+branch, including invalid-name replacement, the shell payload shape and
+cleanup. `--move` records the requested move but preserves the fixture because
+this command only stages bytes; it never performs the destructive source
+deletion. It does not pretend to deliver a GUI drop; use a console script or
+the app for a real transfer.
+
+`drop target` exercises the same Explorer target-resolution policy used by the
+`explorer:dropTarget` IPC handler. Supply `--queue --default-download-target
+PATH`, `--fake-file-target PATH`, or `--external-drop-directory PATH`. It
+returns the target, queue-forcing decision, and refusal counter as JSON without
+starting Electron, Explorer, or a network connection.
+
+`drop simulate` composes the real path classifier, shell-effect policy, remote
+capability checks, and Explorer/queue target resolver into one read-only JSON
+decision. It never copies, deletes, uploads, or creates a target directory;
+the command is intended for CI and adapter tests that need to exercise the
+whole local-drop boundary in one call. A `MOVE` with `--allow-move=false` is
+reported as a safe `COPY`; `NONE`, `LINK`, and other non-transfer effects are
+refused. Its target options are `--queue --default-download-target PATH`,
+`--fake-file-target PATH`, and `--external-drop-directory PATH`; `--target` is
+the descriptive target label for `drag plan`, not a filesystem destination.
+
+`capabilities` is a machine-readable discovery endpoint. It lists the two
+console executables, every console switch accepted by the headless wrapper,
+the drag/drop simulation commands, and the URL utilities. This lets scripts
+feature-detect the installed CLI without opening the app or scraping help.
+The capability record distinguishes the real console's network-capable session
+runner from the simulation commands, which are deliberately local-only.
+
+The `config` commands use the same local configuration store as the app and
+never start Electron, a terminal window, or a network session. `config sites`
+and `config workspaces` emit safe summaries: credentials are represented only
+by boolean presence flags or session counts. `config export FILE` writes JSON
+when the extension is not `.ini`, or a credential-free WinSCP INI for `.ini`.
+`config import FILE` validates and atomically persists either format, including
+legacy-secret migration and rollback on a failed write.
+
+Help is available at every level: `winscp drag --help`, `winscp drop --help`,
+`winscp drag plan --help`, and `winscp url --help` all return the same command
+reference with exit code `0`, without starting the console runner or a GUI.
+The same is true for the console forms: `winscp run --help`,
+`winscp script --help`, and `winscp command --help`. `--version` is likewise
+handled by `run`, `script`, and `command` before the scripting engine starts.
+The standalone `winscp-com` wrapper also owns help/version flags after a
+variadic `/command` or `/parameter` group, so discovery cannot accidentally
+enter an interactive prompt.
+Help may follow a nested simulation option, for example
+`winscp url parse sftp://host/ --help`.
+
+Explorer drag payloads fail closed when a preserved remote name contains `/`,
+`\\`, `.` or `..`, or ends in a dot or space. Windows trims those suffixes when
+resolving a name, so accepting them could make two staged entries alias or turn
+`CON ` into the reserved `CON` device. These names are rejected even when
+invalid-character replacement is disabled.
+
+The application-side drop executor has the same safety boundary: only an
+explicit `COPY` or `MOVE` effect is actionable. `NONE`, cancel, and unknown
+shell effects are refused and cannot be interpreted as a copy. This matters
+for direct integrations because the normal Windows `DDEnd` path resolves an
+invalid result before dispatch, while an embedder may call the orchestration
+method directly.
+
+The direct `winscp run` form accepts every switch understood by the existing
+console runner, including `/script`, `/command`, `/parameter`, `/log`,
+`/loglevel`, `/xmllog`, `/ini`, `/rawsettings`, `/xmllogrequired`, `/xmlgroups`, `/stdout`, `/stdin`,
+`/nointeractiveinput` and `/unsafe`.
+`winscp-com` remains available for scripts that explicitly require that
+legacy executable name. It also supports `winscp-com --help` and
+`winscp-com --version` without starting the console runner.
+
+The console boundary validates numeric values before it starts work. Transfer
+speed, `open -timeout`, session numbers, and `/loglevel` reject partial or
+non-decimal values rather than truncating them or silently selecting a default;
+the runner returns its normal non-zero script status and does not start the
+affected operation.
+
+The console `open` command shares the app's session URL handling. It accepts
+the bare and registered-handler URL forms documented in [Script runner](app-doc://article/material-winscp.repository.ef482e920571a327),
+applies client-certificate and raw-setting switches to the session, and keeps
+passwords out of generated warnings and `/log` output. `/log=FILE` uses the
+same timestamped, redacted session-log format as the app logger.
+
+## Configuration
+
+There is no stored preference. The command line is the configuration boundary:
+
+| Option | Meaning |
+| --- | --- |
+| `--source remote\|local` | Origin for `drag plan`; defaults to remote. |
+| `--destination remote\|local` | Drop destination; inferred from origin when omitted. |
+| `--result` and `--last-effect` | Shell result and OS effect used by the decision model. |
+| `--allow-move=false` | Downgrade an incoming MOVE to COPY. |
+| `--read-only`, `--no-upload`, `--no-mkdir` | Model remote capability refusals. |
+| `--queue` | Mark the planned operation as background work. |
+| `--file PATH` | Repeatable path input for `drop classify` or `drag stage`. |
+| `--queue --default-download-target PATH` | For `drop simulate`, model a queue drop with its required destination. |
+| `--windows-build N` | Override the Windows build used by extension-status output. |
+| `--protocol SCHEME` | URL scheme for `url generate`: `scp`, `sftp`, `ftp`, `ftps`, `ftpes`, `dav`, `davs`, `s3`, or `s3plain`. |
+| `--host HOST`, `--port N`, `--username USER` | Connection fields for `url generate`; no password option is provided. |
+| `--want-file` | Ask `url parse` to split the final path component into `session.fileName`. |
+
+The configuration subcommands take one positional file for `export` or
+`import`; `sites` and `workspaces` take no positional arguments. Add
+`--pretty` for readable JSON. JSON exports retain only the store's protected
+secret representation; INI exports omit credential fields entirely. Never put
+passwords on the command line.
+
+All simulation output is structured JSON so a CI job or another process can
+assert the decision without scraping prose. `drag stage` removes its temporary
+directory in a `finally` path even when staging fails; its output labels the
+deleted path `stagingDirectoryBeforeCleanup` so callers do not treat it as
+usable.
+
+JSON is compact by default for pipes and scripts. Pass `--pretty` to any
+simulation command for indented JSON intended for a terminal. `--json` remains
+accepted as an explicit synonym for the default machine-readable format.
+
+## Failure modes
+
+| Situation | What the user sees | Recoverable |
+| --- | --- | --- |
+| No subcommand or `--help` | The complete command reference is printed. | Yes |
+| Unknown drag/drop option or effect | A concise error and exit code `2`; no transfer starts. | Yes — correct the option |
+| A positional argument is supplied to `drag plan` | A concise error and exit code `2`; the inert argument is not reported as a successful plan. | Yes — use a named option |
+| Invalid Windows path/build or local-to-local plan | A concise input error and exit code `2`; no transfer starts. | Yes — correct the input |
+| A classified path is gone | It appears in `classification.missing`; the command still reports the other paths. If every path is gone, `accepted.ok` is `false` and no operation is planned. | Yes — restore or remove the path |
+| A value-taking option has no value | The command returns exit code `2` with an input error naming the option; it never treats the boolean word `true` as a path, host, target, or other value. | Yes — provide the option's value |
+| Read-only or incapable remote target | `accepted.ok` is `false` with the specific reason. | Yes — choose a writable target |
+| Stage source cannot be read | The command fails and removes its staging directory. | Yes — fix the path or permissions |
+| Different remote names sanitize to the same Windows name | The command fails with a collision error before staging; it never overwrites one item with another. | Yes — choose a transfer naming rule or drag the items separately |
+| An empty stage path is supplied | The command fails with an input error; it never resolves the empty value to the current directory. | Yes — provide a file or directory path |
+| A console script fails | The existing console engine returns its normal non-zero script result. | Yes — inspect its log/XML output |
+| A URL is malformed or has no host | `url parse` returns exit code `2` without opening a session. | Yes — provide a supported session URL |
+| A simulated drop has no target or actionable effect | `drop simulate` returns `accepted.ok: false` and `effectiveOperation: null`; no filesystem mutation occurs. | Yes — provide a target and COPY/MOVE effect |
+| A configuration file is missing, malformed, or invalid | `config import` exits `2` with a validation error and leaves the live store unchanged. | Yes — repair or choose another file |
+| A JSON export contains protected values | The export contains no plaintext secret; site listings expose only `hasPassword`/`hasPassphrase`. | Yes — keep the file protected like any configuration backup |
+
+## Security considerations
+
+- `winscp run`, `script` and `command` have the remote privileges of the
+  supplied session. They intentionally do not filter shell commands.
+- Command-line arguments can be recorded by shell history and process
+  inspection. Do not place passwords or private keys in them; use the existing
+  session and secret-input paths.
+- Drag simulation is local-only and does not connect to a server. It reads only
+  paths explicitly supplied by the caller and cleans the temporary staging
+  directory after `drag stage`.
+- `--unsafe` is passed only through the established console runner when the
+  caller uses `winscp run`; the drag/drop commands never enable it or execute a
+  script.
+
+## Verification
+
+- `test/cli.test.js` covers help/version, console-argument translation, drag
+  decisions, missing option values, real-path classification, temporary staging
+  and cleanup.
+- `test/script.test.js` covers handler URL aliases, WinSCP URL decoding and port
+  validation, client-certificate/raw-setting application, generated command
+  parity, and redacted `/log=FILE` output.
+- The `winscp-com --help` and `winscp-com --version` wrapper paths are covered
+  with process-level smoke tests; neither starts the console runner.
+- `node --check bin/winscp.js` checks the executable syntax.
+- `node bin/winscp.js drag plan --source remote --result invalid --last-effect move`
+  is a smoke check for the safe MOVE branch.
+- `node bin/winscp.js config sites` and `node bin/winscp.js config workspaces` are
+  credential-safe store inspection smoke checks.
+- `node bin/winscp.js config export backup.json` and `node bin/winscp.js config import
+  backup.json` cover headless persistence round-trips; use a temporary file path
+  ending in `.ini` to exercise the interoperable export.
+- `node bin/winscp.js url parse sftp://alice:secret@example.com/home/a.txt --want-file`
+  is a smoke check for the redacted URL parser; its output must not contain
+  `secret`.
+- `node bin/winscp.js url generate --protocol sftp --host example.com --username alice`
+  is a smoke check for credential-free URL generation.
+- `node bin/winscp.js drop simulate FILE --queue --default-download-target C:\\Downloads`
+  is a smoke check for the complete read-only local-drop decision.
+- `node bin/winscp.js capabilities` is a smoke check for CLI feature discovery.
+- `npm run smoke:docker` exercises the real SFTP and FTP transfer engine with
+  throwaway local Docker servers; it is separate from this local-only CLI
+  simulation.
+
+## Suggested articles
+
+- [Command-line parsing](app-doc://article/material-winscp.repository.f227dc8465de1a51) — startup switch semantics.
+- [The console](app-doc://article/material-winscp.repository.2036717365155926) — interactive and scripted remote commands.
+- [Script runner](app-doc://article/material-winscp.repository.ef482e920571a327) — batch behaviour and XML output.
+- [Synchronization Docker smoke](app-doc://article/material-winscp.repository.13c5ea98a13b4b72) —
+  real-protocol headless verification.

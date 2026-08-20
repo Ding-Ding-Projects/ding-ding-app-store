@@ -1,0 +1,125 @@
+# Amazon S3 and S3-compatible storage
+
+## What it does
+
+The S3 adapter presents a bucket as a directory tree. Because S3 has no
+directories — only keys with `/` in them — the adapter synthesizes folders from
+common prefixes, which is why a few operations behave unlike a filesystem and
+are documented here rather than hidden.
+
+It supports listing (with pagination), streaming upload and download,
+multipart upload for large objects, server-side copy (including multipart copy
+for objects over S3's 5 GiB single-request limit), ETag-based checksums, and
+storage-class selection. It does **not** support POSIX permissions, timestamps
+you can set, symbolic links, or a recycle bin — all four capability flags are
+false, and the corresponding commands are greyed out.
+
+## Configuration
+
+Under **Site → Advanced → S3**.
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `s3DefaultRegion` | `''` | Region used when the bucket's own region cannot be discovered. |
+| `s3UrlStyle` | `virtualhost` | `virtualhost` (`bucket.host`) or `path` (`host/bucket`). Most S3-compatible servers — MinIO, Ceph — need `path`. |
+| `s3MaxKeys` | `auto` | Page size for `ListObjectsV2`. Lower it for servers with strict response limits. |
+| `s3SessionToken` | `''` | Temporary-credential session token. |
+| `s3RoleArn` | `''` | Role to assume after authenticating. |
+| `s3Profile` | `''` | Named profile from the shared AWS credentials file. |
+| `s3CredentialsEnv` | `false` | Take credentials from the environment / instance metadata instead of the site. |
+| `s3RequesterPays` | `false` | Send `x-amz-request-payer`. Without it, requester-pays buckets return `403`. |
+| `s3StorageClass` | `''` (bucket default) | `STANDARD`, `STANDARD_IA`, `GLACIER`, `DEEP_ARCHIVE`, … |
+| `encryptFiles` / `encryptKey` | `false` / `''` | Client-side encryption before upload — independent of the server's own encryption. |
+
+Access key and secret use the ordinary `userName` / `password` fields, so they
+go through the same credential protection as every other secret.
+
+## Failure modes
+
+| Situation | What the user sees | Recoverable |
+| --- | --- | --- |
+| Wrong region | `301 PermanentRedirect` from AWS. The adapter reads the region from the response and retries once, then reports it so the site can be corrected. | Yes |
+| Incomplete or malformed AssumeRole response | The adapter rejects an STS response missing any of `AccessKeyId`, `SecretAccessKey`, `SessionToken`, or `Expiration`, and rejects an `Expiration` that is not an ISO date, before using it to sign S3 requests. | Yes, retry after fixing the STS proxy or role response |
+| `virtualhost` style against MinIO/Ceph | DNS failures or `404`s for every bucket. The error names `s3UrlStyle`. | Yes |
+| Object restored from Glacier not yet available | `InvalidObjectState`. Download fails with the storage class and the restore state named. | Yes, after restore |
+| Requester-pays bucket without the flag | `403 AccessDenied`. The message distinguishes this from an ordinary permission failure. | Yes |
+| "Directory" delete | S3 cannot delete a prefix. The adapter enumerates and deletes keys in batches; a partial failure lists exactly which keys survived. | Partially |
+| An empty synthesized folder disappears after refresh | Expected: a prefix with no keys does not exist. The UI explains this the first time it happens rather than looking like data loss. | n/a |
+| Multipart upload interrupted | The incomplete upload is aborted so it stops accruing storage cost. If the abort itself fails, the error says which upload id needs manual cleanup. | Yes |
+| Transfer cancelled while an HTTP request is active | The request is destroyed promptly; a multipart upload then sends `AbortMultipartUpload` so no incomplete upload is retained. | Yes, retry |
+| A range read receives a negative, fractional, non-finite or reversed offset | The request is rejected before signing or sending anything; valid zero-based bounds are sent as an inclusive `Range` header. | Yes, retry with a byte range |
+| Bucket listing fails because the endpoint or TLS connection is unavailable | Connection setup reports the transport/certificate failure. Only an explicit 401/403 from bucket discovery is treated as a bucket-scoped credential. | Yes, fix the endpoint or trust configuration |
+| S3-compatible server repeats a continuation token | The adapter keeps the pages already received, logs a warning, and stops instead of fetching the same page forever. | Yes, retry after fixing the server |
+| S3-compatible server repeats a common prefix across pages | The adapter keeps one directory row for the repeated prefix, so an overlapping page cannot duplicate a folder in the panel. | Yes, refresh or retry after fixing the server |
+| S3-compatible server overlaps object rows across pages | The adapter keeps the first row for each key, so recursive operations and listings do not process the same object twice. | Yes, refresh or retry after fixing the server |
+| Malformed numeric XML entity in a server response | The invalid entity is preserved as text instead of crashing the response parser; the surrounding S3 operation can report the response normally. | Yes, fix the server response |
+| Server-side copy above 5 GiB | The adapter switches from `CopyObject` to bounded `UploadPartCopy` requests, then completes the multipart copy. A failed part aborts the pending upload. | Yes, retry the copy |
+| Two keys differing only in case, or a key ending in `/` | Both are legal in S3 and confusing as files. They are listed exactly as stored, never merged or renamed. | n/a |
+| ETag is not an MD5 | True for multipart objects and SSE-KMS. Checksum comparison reports "not comparable" rather than a false mismatch. | n/a |
+
+## Security considerations
+
+- **The secret access key is a long-lived credential with wide blast radius.**
+  It is stored exactly like a password: wrapped by the OS keychain or a
+  master-password-derived key, or not stored at all. It is never written to the
+  session log, and never included in a generated session URL.
+- **Prefer temporary credentials.** `s3SessionToken` with a role, or
+  `s3CredentialsEnv` with instance metadata, avoids putting a permanent key on
+  disk at all.
+- **Pre-signed URLs are not generated by this app.** Nothing here creates a URL
+  that grants access without a credential, so there is no accidental-sharing path
+  through the client.
+- **Server-side encryption is the bucket's business; client-side encryption is
+  yours.** `encryptFiles` encrypts before upload, so the provider never sees
+  plaintext — at the cost that losing `encryptKey` loses the data permanently.
+  The UI states this before the option can be enabled.
+- **Deleting a prefix is not atomic.** A partial delete leaves a partial bucket.
+  The confirmation names the key count, and the result reports survivors rather
+  than claiming success.
+- **A folder marker can disappear during deletion.** The adapter ignores only a
+  `404 Not Found` for that final marker cleanup (the same race the core handles);
+  permission and transport failures still reach the caller.
+- **`s3RequesterPays` moves cost to you.** Enabling it is an explicit choice, and
+  labelled as one.
+
+## Verification
+
+- `ListObjectsV2` XML parsing, pagination continuation, overlap handling, and prefix-to-folder
+  synthesis are unit-tested, including keys that end in `/` and keys containing
+  characters that need URL escaping. A repeated continuation token and a
+  repeated `CommonPrefixes` entry are covered so malformed or overlapping
+  pagination cannot loop forever or duplicate an object or folder row.
+- Region-redirect retry is tested against a synthetic `301` response.
+- AssumeRole success, incomplete-credential responses, and malformed expiration values are tested with a mocked STS request seam; invalid credentials fail before any S3 request can be signed or refreshed.
+- Numeric XML entities outside Unicode's scalar range are preserved as text rather than causing `String.fromCodePoint()` to throw; this protects all S3 response parsing from malformed server input.
+- Multipart server-side copy is tested without credentials by mocking the S3
+  request seam: a >5 GiB object is partitioned into contiguous, valid-sized
+  copy ranges and the collected ETags are passed to completion. A live 5 GiB
+  fixture is intentionally not required for this regression.
+- Upload cancellation is tested with an `AbortController`; the stream reports
+  cancellation and aborts its remote multipart upload exactly once.
+- Range validation is tested before the S3 request seam, including an explicit
+  `bytes=0-0` request; destroying an active multipart stream without an error
+  still aborts its upload.
+- Bucket discovery transport failures are not mistaken for a valid bucket-scoped
+  login, and IPv6 endpoints use path-style addressing with a bracketed Host
+  header.
+- Folder-marker deletion is tested with mocked `404` and `403` responses: the
+  expected concurrent-delete race is ignored, while an authorization failure is
+  preserved.
+- Checksum requests name the limitation precisely: only `md5` is supported, and
+  only for single-part objects whose ETag is an MD5; other algorithms and
+  multipart ETags are rejected before being presented as content checksums.
+- Signature v4 canonicalization is tested against the published AWS test vectors,
+  which is the only way to be confident about it.
+
+Manual check: connect to a bucket, enable session logging at debug level 1, and
+confirm the `Authorization` header uses `AWS4-HMAC-SHA256` and that the request
+path matches the configured URL style.
+
+## Suggested articles
+
+- [WebDAV](app-doc://article/material-winscp.repository.84ede37559ada49f) — the other HTTP backend.
+- [Credential storage](app-doc://article/material-winscp.repository.9d2325dcc3bf8dd4) — where the secret key actually lives.
+- [At-rest encryption](app-doc://article/material-winscp.repository.644e9d8291155c00) — what `encryptFiles` does and what it costs.
+- [The adapter contract](app-doc://article/material-winscp.repository.77c1e7f43ee4268a) — why permissions and timestamps are greyed out here.
