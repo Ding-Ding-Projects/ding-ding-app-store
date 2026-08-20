@@ -494,6 +494,6 @@ describe('activity history and export', () => {
     expect(activity).toContain("'all', 'ok', 'failed'");
     expect(activity).toContain("'all', 'today', '7d', '30d'");
     expect(activity).toContain('Copy JSON');
-    expect(activity).toContain('loadHistory()');
+    expect(activity).toContain('onHistoryChanged()');
   });
 });
