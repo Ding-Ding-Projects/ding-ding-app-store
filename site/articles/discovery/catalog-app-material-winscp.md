@@ -6,7 +6,7 @@
 
 This record describes the reviewed catalog entry `material-winscp`. Its public source repository is [material-winscp](https://github.com/Ding-Ding-Projects/material-winscp). The current availability is **Installable through a reviewed adapter** and the declared package type is **squirrel**. The closed adapter identifier is `material-winscp-squirrel`.
 
-The current adapter state is: Reviewed Squirrel.Windows adapter. The adapter has a fixed, application-specific release contract; this article deliberately does not reproduce executable names, arguments, download URLs, or filesystem locations. Lifecycle status is **verified** for the reviewed catalog route; installation and update actions remain subject to their live byte, ownership, and process checks.
+The current adapter state is: Reviewed Squirrel.Windows adapter. The adapter has a fixed, application-specific release contract; this article deliberately does not reproduce executable names, arguments, download URLs, or filesystem locations. Lifecycle status is **blocked until clean-Windows proof** (target material-winscp-clean-windows); the catalog does not claim installation, launch, ownership, or uninstall evidence yet.
 
 No icon provenance metadata is declared for this legacy record; the renderer keeps its neutral catalog fallback.
 

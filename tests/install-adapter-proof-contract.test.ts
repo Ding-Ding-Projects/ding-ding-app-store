@@ -10,11 +10,20 @@ describe('lifecycle proof replacement', () => {
 
   it('keeps the local disposable proof allowlist closed to reviewed adapters', () => {
     expect(Object.keys(CLOUD_INSTALL_PROOF_TARGETS)).toEqual([
-      'dim-sum-atlas', 'winforge', 'wimforge', 'qbittorrent-material', 'keepassxc', 'codex-material',
+      'material-winscp', 'dim-sum-atlas', 'winforge', 'wimforge', 'qbittorrent-material', 'keepassxc', 'codex-material',
       'farming-game', 'material-cookie-clicker', 'material-encryption', 'material-ollama', 'material-sandbox',
       'material-tools', 'material-virtualbox', 'material-winforge', 'material-winutil', 'meadowmark',
       'minecraft-server-command-center', 'minecraft-server-studio', 'sprout-hollow-valley',
     ]);
+    expect(cloudInstallProofTargetFor('material-winscp')).toEqual({
+      appId: 'material-winscp',
+      adapterId: 'material-winscp-squirrel',
+      family: 'squirrel',
+      ownershipKind: 'registry',
+      uninstallKind: 'squirrel',
+      requiresCleanStart: true,
+      requiresDirectSha256: true,
+    });
     expect(cloudInstallProofTargetFor('qbittorrent-material')).toEqual({
       appId: 'qbittorrent-material',
       adapterId: 'qbittorrent-material-squirrel',
