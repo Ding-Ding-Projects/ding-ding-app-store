@@ -6,6 +6,8 @@ import { z } from 'zod';
 import type {
   ElementKey,
   LockCredentialRequest,
+  LockBulkRemoveRequest,
+  LockBulkMutationResult,
   LockMutationResult,
   LockSetRequest,
   LockState,
@@ -114,7 +116,7 @@ export class LockSupportService {
   private readonly attempts = new Map<string, { count: number; windowStartedAt: number }>();
   private supportMutation: Promise<void> = Promise.resolve();
 
-  constructor(private readonly history?: Pick<HistoryService, 'record'>) {}
+  constructor(private readonly history?: Pick<HistoryService, 'record'>, private readonly isRestricted: () => Promise<boolean> = async () => false) {}
 
   async loadLocks(): Promise<LockState> {
     await this.ensureLocksLoaded();
@@ -222,6 +224,31 @@ export class LockSupportService {
       try { await writeJsonAtomic(this.lockPath, { schemaVersion: 1, records: previousLocks }); } catch { /* preserve the honest failure state */ }
       return this.lockFailure('The lock could not be removed; no content was deleted.', 'credential-store-read-failed');
     }
+  }
+
+  async bulkLockAgain(inputs: LockTarget[]): Promise<LockBulkMutationResult> {
+    if (await this.isRestricted()) return { ok: false, state: await this.loadLocks(), affectedCount: 0, skippedCount: inputs.length, skippedTargets: inputs, message: 'Bulk lock changes are unavailable while restricted mode is enabled.', reason: 'invalid' };
+    const unique = [...new Map(inputs.map((target) => [keyOf(target), target])).values()];
+    const skippedTargets: LockTarget[] = [];
+    let affectedCount = 0;
+    for (const target of unique) {
+      const result = await this.lockAgain(target);
+      if (result.ok) affectedCount += 1; else skippedTargets.push(target);
+    }
+    return { ok: affectedCount > 0, state: await this.loadLocks(), affectedCount, skippedCount: skippedTargets.length, skippedTargets, message: `${affectedCount} lock${affectedCount === 1 ? '' : 's'} locked again${skippedTargets.length ? `; ${skippedTargets.length} skipped` : ''}.`, reason: affectedCount ? undefined : 'not-found' };
+  }
+
+  async bulkRemove(input: LockBulkRemoveRequest): Promise<LockBulkMutationResult> {
+    if (!input?.confirmed || !Array.isArray(input.items) || input.items.length > MAX_LOCKS) return { ok: false, state: await this.loadLocks(), affectedCount: 0, skippedCount: 0, skippedTargets: [], message: 'Bulk lock removal requires completed confirmation.', reason: 'invalid' };
+    if (await this.isRestricted()) return { ok: false, state: await this.loadLocks(), affectedCount: 0, skippedCount: input.items.length, skippedTargets: input.items, message: 'Bulk lock changes are unavailable while restricted mode is enabled.', reason: 'invalid' };
+    const unique = [...new Map(input.items.map((item) => [keyOf(item), item])).values()];
+    const skippedTargets: LockTarget[] = [];
+    let affectedCount = 0;
+    for (const item of unique) {
+      const result = await this.remove(item);
+      if (result.ok) affectedCount += 1; else skippedTargets.push({ targetKind: item.targetKind, targetId: item.targetId });
+    }
+    return { ok: affectedCount > 0, state: await this.loadLocks(), affectedCount, skippedCount: skippedTargets.length, skippedTargets, message: `${affectedCount} lock${affectedCount === 1 ? '' : 's'} removed${skippedTargets.length ? `; ${skippedTargets.length} skipped` : ''}.`, reason: affectedCount ? undefined : 'credential-mismatch' };
   }
 
   async loadSupport(): Promise<SupportState> {

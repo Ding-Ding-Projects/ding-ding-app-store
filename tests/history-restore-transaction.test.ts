@@ -42,7 +42,7 @@ describe('history restore transaction recovery', () => {
       previous: target === AUTHENTICATOR_TARGET ? '{"old":"authenticator"}\n' : `{"old":"${target}"}\n`,
     })));
     expect(manifest.files).toHaveLength(8);
-    const participant = { restore: async (content: string) => { await writeFile(path.join(targetRoot, AUTHENTICATOR_TARGET), content, 'utf8'); } };
+    const participant = { restoreAvailable: () => true, restore: async (content: string) => { await writeFile(path.join(targetRoot, AUTHENTICATOR_TARGET), content, 'utf8'); } };
     const applied = await applyRestoreTransaction(transactionRoot, targetRoot, manifest, participant);
     expect(applied.files.at(-1)?.targetName).toBe(AUTHENTICATOR_TARGET);
     await expect(readFile(path.join(targetRoot, AUTHENTICATOR_TARGET), 'utf8')).resolves.toBe('{"new":"authenticator-history.v1.json"}\n');

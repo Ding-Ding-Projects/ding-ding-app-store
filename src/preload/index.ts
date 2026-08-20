@@ -51,6 +51,7 @@ import type {
   HistoryRevision,
   InstallCancelRequest,
   LockCredentialRequest,
+  LockBulkRemoveRequest,
   LockSetRequest,
   LockState,
   LockTarget,
@@ -60,7 +61,6 @@ import type {
   OperationProgressEvent,
   OperationRequest,
   ScheduleConfig,
-  ScheduleCredentialResult,
   ScheduleStatus,
   ScheduleTaskId,
   SchoolModeCredentialChangeRequest,
@@ -93,7 +93,7 @@ import {
 } from './school-mode-parser.js';
 import { parseHistoryAccessResult, parseHistoryAccessStatus } from './history-access-parser.js';
 import { parseHistory7zExportResult } from './history-archive-parser.js';
-import { parseLockCredentialRequest, parseLockMutationResult, parseLockSetRequest, parseLockState, parseLockTarget } from './lock-parser.js';
+import { parseLockBulkMutationResult, parseLockBulkRemoveRequest, parseLockCredentialRequest, parseLockMutationResult, parseLockSetRequest, parseLockState, parseLockTarget } from './lock-parser.js';
 import { parseSupportState, parseSupportTicketBulkAdvanceRequest, parseSupportTicketBulkAdvanceResult, parseSupportTicketMutationResult } from './support-parser.js';
 const SOURCE_STATES = new Set(['queued', 'preparing', 'running', 'repairing', 'cancelling', 'succeeded', 'failed', 'cancelled']);
 const SOURCE_STREAMS = new Set(['system', 'progress', 'stdout', 'stderr']);
@@ -525,6 +525,8 @@ const api: DingDingStoreApi = {
     unlock: async (request: LockCredentialRequest) => parseLockMutationResult(await ipcRenderer.invoke('locks:unlock', parseLockCredentialRequest(request))),
     lockAgain: async (target: LockTarget) => parseLockMutationResult(await ipcRenderer.invoke('locks:lock-again', parseLockTarget(target))),
     remove: async (request: LockCredentialRequest) => parseLockMutationResult(await ipcRenderer.invoke('locks:remove', parseLockCredentialRequest(request))),
+    bulkLockAgain: async (targets: LockTarget[]) => parseLockBulkMutationResult(await ipcRenderer.invoke('locks:bulk-lock-again', targets.map(parseLockTarget))),
+    bulkRemove: async (request: LockBulkRemoveRequest) => parseLockBulkMutationResult(await ipcRenderer.invoke('locks:bulk-remove', parseLockBulkRemoveRequest(request))),
   },
   support: {
     load: async () => parseSupportState(await ipcRenderer.invoke('support:load')),
@@ -565,7 +567,6 @@ const api: DingDingStoreApi = {
     load: () => ipcRenderer.invoke('schedule:load'),
     save: (config: ScheduleConfig) => ipcRenderer.invoke('schedule:save', config),
     runNow: (task: ScheduleTaskId) => ipcRenderer.invoke('schedule:run-now', task),
-    setHomeAssistantToken: (key: string, token: string): Promise<ScheduleCredentialResult> => ipcRenderer.invoke('schedule:set-home-assistant-token', { key, token }),
     subscribe: (listener: (status: ScheduleStatus) => void) => {
       const handler = (_event: Electron.IpcRendererEvent, status: ScheduleStatus) => listener(status);
       ipcRenderer.on('schedule:status', handler);
