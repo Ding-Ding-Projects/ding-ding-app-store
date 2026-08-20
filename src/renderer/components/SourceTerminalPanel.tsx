@@ -7,7 +7,7 @@ import { SourceIsolationStatusCard } from './SourceIsolationStatusCard';
 
 const ACTIVE_STATES = new Set<SourceJobState>(['queued', 'preparing', 'running', 'repairing', 'cancelling']);
 
-export function SourceTerminalPanel({ appName, events, fallbackMessage, isolationStatus, isolationLoading, onRefreshIsolation, settings, onCancel, onRetry, onClose, allowRetry = true }: {
+export function SourceTerminalPanel({ appName, events, fallbackMessage, isolationStatus, isolationLoading, onRefreshIsolation, settings, onCancel, onRetry, onExportOutput, onClose, allowRetry = true }: {
   appName: string;
   events: readonly Readonly<SourceTerminalEvent>[];
   fallbackMessage?: string;

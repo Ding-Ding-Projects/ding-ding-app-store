@@ -40,6 +40,8 @@ describe("public catalog contract", () => {
           description: "A longer factual description.",
           iconResourceId: "icons.har-gow",
           categories: ["Utilities"],
+          proofStatus: "verified",
+          proofTargetId: null,
           releases: [
             {
               version: "1.2.3",
