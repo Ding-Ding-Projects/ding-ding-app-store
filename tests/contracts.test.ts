@@ -459,3 +459,44 @@ describe('tab, appearance, and schedule bridge contracts', () => {
     expect(updater).not.toMatch(/runScheduled[\s\S]*?this\.download\(\)/);
   });
 });
+
+describe('activity history and export', () => {
+  it('records every install, build, and uninstall outcome through one main-process path', async () => {
+    const operations = await read('src/main/operation-service.ts');
+    expect(operations).toContain("private readonly history: HistoryService");
+    expect(operations).toContain('private async finish(');
+    expect(operations.match(/this\.finish\(record, 'install'/g)?.length).toBeGreaterThanOrEqual(5);
+    expect(operations.match(/this\.finish\(record, 'build'/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(operations.match(/this\.finish\(record, 'uninstall'/g)?.length).toBeGreaterThanOrEqual(4);
+    expect(operations).not.toMatch(/return \{ ok:/);
+  });
+
+  it('bounds stored history and exports JSON, CSV, and Markdown', async () => {
+    const history = await read('src/main/history-service.ts');
+    expect(history).toContain('MAX_ENTRIES = 500');
+    expect(history).toContain(".slice(-MAX_ENTRIES)");
+    expect(history).toContain("format === 'json'");
+    expect(history).toContain("format === 'csv'");
+    expect(history).toContain('| When | Action | App | Result | Message |');
+  });
+
+  it('exposes history over the typed bridge only, never a generic channel', async () => {
+    const preload = await read('src/preload/index.ts');
+    expect(preload).toContain("ipcRenderer.invoke('history:list')");
+    expect(preload).toContain("ipcRenderer.invoke('history:export', format)");
+    const main = await read('src/main/main.ts');
+    expect(main).toContain("ipcMain.handle('history:list'");
+    expect(main).toContain("ipcMain.handle('history:export'");
+  });
+
+  it('renders real activity with search, action/result/date filters, and export controls', async () => {
+    const app = await read('src/renderer/App.tsx');
+    expect(app).toContain('function HistoryPanel(');
+    expect(app).toContain("Search activity by app, action, or message");
+    expect(app).toContain("'all', 'install', 'build', 'uninstall'");
+    expect(app).toContain("'all', 'ok', 'failed'");
+    expect(app).toContain("'all', 'today', '7d', '30d'");
+    expect(app).toContain('Copy JSON');
+    expect(app).toContain("void loadHistory()");
+  });
+});
