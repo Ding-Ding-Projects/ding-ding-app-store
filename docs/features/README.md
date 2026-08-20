@@ -94,6 +94,7 @@ Tabs, search, command palette, settings, appearance, and notifications.
 - [Changelog viewer](./experience/changelog-viewer.md) — **shipped** — Browses every released version with searchable commit links, typed date filters, an anchored month-jump range calendar, presets, and filtered copy/export actions.
 - [Catalog language coverage](./experience/catalog-language.md) — **shipped** — Keeps Discover, Installed, and Updates controls, status facts, loading states, and recovery actions aligned with the persisted language mode.
 - [Expressive storefront shell](./experience/expressive-storefront.md) — **shipped** — Applies an expressive Material Design 3 shell to the title bar, tab rail, catalog cards, state surfaces, and responsive layouts while preserving the existing typed behaviors.
+- [Public design reference](./product/design-reference.md) — **limited** — Provides an offline, public-safe visual reference for the seven pages, five Settings subtabs, responsive shell, themes, language modes, and deterministic overlay fixtures.
 
 ## Documentation
 

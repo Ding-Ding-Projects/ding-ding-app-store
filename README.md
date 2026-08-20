@@ -111,6 +111,10 @@ The application uses Squirrel.Windows. A successful package must contain `Setup.
 
 The tab rail is a real persisted workspace: it defaults to the left edge but can dock to any edge, keeps pinned tabs protected, gives every strip/group/group-name/master search its own regex builder state, and previews **Close tabs containing text** / **Close tabs not containing text** before a second confirmation click. Closed tabs remain recoverable from the tab-actions panel; the final open tab cannot be closed.
 
+### Public design reference
+
+The offline Material Design 3 reference lives in [`design/reference.html`](design/reference.html). It documents the seven application pages, five Settings subtabs, responsive 1440px/820px/360px layouts, English/Cantonese/bilingual copy, light/dark themes, and query-addressable interaction overlays. Open it directly in a browser, or use the plain sandboxed Electron viewer with `npm run design:reference`; `npm run design:compare` selects a fixed, task-owned comparison row. The fixtures are explanatory and contain no network or installer behavior.
+
 </details>
 
 <details id="project-guidance">

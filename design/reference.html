@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Ding Ding App Store public-safe Material 3 design reference">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; font-src 'none'; base-uri 'none'; form-action 'none'">
+    <title>Ding Ding App Store · Design reference</title>
+    <link rel="stylesheet" href="./reference.css">
+  </head>
+  <body>
+    <div class="app-shell" id="app-shell">
+      <header class="title-bar" data-ref="title-bar">
+        <div class="brand-lockup"><span class="brand-mark" aria-hidden="true">✦</span><span>Ding Ding App Store</span></div>
+        <button class="icon-button" id="window-menu" aria-label="Window menu" title="Window menu">⋮</button>
+      </header>
+
+      <div class="workspace">
+        <aside class="rail" aria-label="Primary navigation">
+          <div class="rail-topline"><span class="eyebrow" data-i18n="workspaces">WORKSPACE</span><button class="icon-button small" id="new-tab" aria-label="New tab">＋</button></div>
+          <nav class="page-tabs" id="page-tabs"></nav>
+          <div class="rail-divider"></div>
+          <button class="rail-action" id="tab-manager"><span class="material-symbol">▣</span><span data-i18n="manageTabs">Manage tabs</span><kbd>⌘⇧P</kbd></button>
+          <button class="rail-action" id="notification-button"><span class="material-symbol">♢</span><span data-i18n="notifications">Notifications</span><span class="badge">3</span></button>
+          <div class="rail-footer"><span class="status-dot"></span><span data-i18n="offline">Offline reference</span></div>
+        </aside>
+
+        <main class="main-column">
+          <div class="command-search" role="search">
+            <span class="material-symbol" aria-hidden="true">⌕</span>
+            <input id="global-search" placeholder="Search pages, settings, commands" aria-label="Search pages, settings, commands">
+            <button class="shortcut" id="open-palette" aria-label="Open command palette">Ctrl+Shift+F</button>
+          </div>
+          <div class="page-area" id="page-area"></div>
+        </main>
+      </div>
+    </div>
+
+    <div class="scrim" id="scrim" hidden></div>
+    <section class="overlay" id="overlay" hidden aria-modal="true" role="dialog" aria-labelledby="overlay-title"></section>
+    <div class="toast-stack" id="toast-stack" aria-live="polite"></div>
+    <script type="module" src="./reference.mjs"></script>
+  </body>
+</html>
