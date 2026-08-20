@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { CatalogReleaseEvidence, PackageType } from '../shared/contracts.js';
-import { AMULET_RELEASE_EVIDENCE } from '../shared/catalog-release-evidence.js';
+import { AMULET_RELEASE_EVIDENCE, TAX_REPORTING_RELEASE_EVIDENCE } from '../shared/catalog-release-evidence.js';
 
 export const CATALOG_APP_IDS = [
   'lowlevel-computer-use-mcp', 'material-download-manager', 'material-designer', 'material-bluemap',
@@ -25,7 +25,7 @@ export const INSTALL_ADAPTER_IDS = [
   'minecraft-world-downloader-nsis', 'codex-material-msi', 'libreoffice-material-msi',
   'thunderbird-desktop-mozilla-nsis', 'bambu-studio-nsis', 'keepassxc-msi',
   'jdownloader-material-jpackage', 'ha-bambulab-external-home-assistant', 'winforge-portable-zip',
-  'wimforge-portable-zip', 'photo-viewer-empty-release', 'material-minecraft-map-editor-squirrel', 'material-gitlab-no-reviewed-installer', 'material-tax-reporting-no-reviewed-installer',
+  'wimforge-portable-zip', 'photo-viewer-empty-release', 'material-minecraft-map-editor-squirrel', 'material-gitlab-no-reviewed-installer', 'material-tax-reporting-squirrel',
   'farming-game-squirrel', 'material-cookie-clicker-squirrel', 'material-encryption-squirrel', 'material-ollama-inno',
   'material-sandbox-inno', 'material-tools-squirrel', 'material-virtualbox-nsis', 'material-winforge-squirrel',
   'material-winutil-squirrel', 'meadowmark-squirrel', 'minecraft-server-command-center-squirrel',
@@ -169,10 +169,13 @@ export const INSTALL_ADAPTERS: Readonly<Record<CatalogAppId, InstallAdapter>> = 
   winforge: portable('winforge-portable-zip', 'winforge', /^WinForge-portable-x64-[0-9A-Za-z.+-]+\.zip$/, 'WinForge.exe', ['.github/workflows/release.yml: validated self-contained portable archive with WinForge.exe']),
   wimforge: portable('wimforge-portable-zip', 'wimforge', /^WimForge-portable-x64-[0-9A-Za-z.+-]+\.zip$/, 'WimForge.exe', ['.github/workflows/release.yml: self-contained portable Qt archive']),
   'photo-viewer': { id: 'photo-viewer-empty-release', appId: 'photo-viewer', supported: false, family: 'unsupported', packageType: 'unsupported', blockerCode: 'empty-release', blocker: 'The latest public release exists but contains no assets, so there is no installer byte stream to verify or run.', evidence: ['release v0.1.0 had zero assets on 2026-08-07', 'package.json proves a future NSIS target but not a published installer'] },
-  'material-gitlab': { id: 'material-gitlab-no-reviewed-installer', appId: 'material-gitlab', supported: false, family: 'unsupported', packageType: 'unsupported', blockerCode: 'no-reviewed-installer', blocker: 'The public repository has no reviewed Windows installer asset for this catalog route.', evidence: ['catalog expansion 2026-08-18: installer evidence pending review'] },
-  'material-tax-reporting': { id: 'material-tax-reporting-no-reviewed-installer', appId: 'material-tax-reporting', supported: false, family: 'unsupported', packageType: 'unsupported', blockerCode: 'no-reviewed-installer', blocker: 'The public repository has no reviewed Windows installer asset for this catalog route.', evidence: ['catalog expansion 2026-08-18: installer evidence pending review'] },
+  'material-gitlab': { id: 'material-gitlab-no-reviewed-installer', appId: 'material-gitlab', supported: false, family: 'unsupported', packageType: 'unsupported', blockerCode: 'no-reviewed-installer', blocker: 'The public repository publishes no release for the Material GitLab catalog product. Its root build-installer.bat produces a source ZIP, while the Windows release workflow packages two separately identified tools, so there is no immutable product installer to verify or run.', evidence: ['GitHub release inventory returned no releases on 2026-08-20', 'build-installer.bat: reviewed unsigned source ZIP only', '.github/workflows/windows-release.yml: separately identified material-gitlab-deployer and material-gitlab-instant installers'] },
+  'material-tax-reporting': {
+    ...squirrel('material-tax-reporting-squirrel', 'material-tax-reporting', /^MaterialTaxReporting-[0-9A-Za-z.+-]+-Setup\.exe$/, ['Material Tax Reporting'], ['build.bat and build-installer.bat: supported silent root entry points', 'apps/desktop/electron-builder.yml: fixed Material Tax Reporting Squirrel identity and MaterialTaxReporting executable', 'scripts/release/invoke-build.ps1: exact source-commit, unsigned, hash-verified packaging'], undefined, ['MaterialTaxReporting.exe']),
+    releaseEvidence: TAX_REPORTING_RELEASE_EVIDENCE,
+  },
   'material-minecraft-map-editor': {
-    ...squirrel('material-minecraft-map-editor-squirrel', 'material-minecraft-map-editor', /^Setup\.exe$/, ['Amulet Map Editor', 'Amulet'], ['installer/amulet.manifest: Amulet assembly identity', 'installer/build-squirrel.ps1: pinned Squirrel.Windows packaging and Amulet.exe validation', 'release 0.10.0-dev.567: unsigned Setup.exe; the release body records a non-green upstream test report']),
+    ...squirrel('material-minecraft-map-editor-squirrel', 'material-minecraft-map-editor', /^Setup\.exe$/, ['Material Minecraft Map Editor', 'Amulet Map Editor', 'Amulet'], ['package.json and electron/electron-builder.yml: unsigned Electron Squirrel package and fixed product identity', '.github/workflows/build-electron-windows.yml: the sole workflow that publishes the catalog product release', 'release 0.11.0-dev.25: immutable unsigned Setup.exe, RELEASES, and full package'], undefined, ['Material Minecraft Map Editor.exe']),
     releaseEvidence: AMULET_RELEASE_EVIDENCE,
   },
   'farming-game': squirrel('farming-game-squirrel', 'farming-game', /^Sprout\.Hollow-Setup-[0-9A-Za-z.+-]+\.exe$/, ['Sprout Hollow', 'Sprout Hollow Valley'], ['package.json: Squirrel.Windows release target and Sprout.Hollow identity'], undefined, ['sprout-hollow.exe']),

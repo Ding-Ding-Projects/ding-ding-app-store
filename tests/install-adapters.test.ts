@@ -64,6 +64,7 @@ const LATEST_ASSET_FIXTURES: Readonly<Record<string, string>> = {
   winforge: 'WinForge-portable-x64-1.1.326.zip',
   wimforge: 'WimForge-portable-x64-0.1.42.zip',
   'material-minecraft-map-editor': 'Setup.exe',
+  'material-tax-reporting': 'MaterialTaxReporting-0.1.36001-Setup.exe',
   'farming-game': 'Sprout.Hollow-Setup-1.4.3.exe',
   'material-cookie-clicker': 'MaterialCookieClicker-Setup.exe',
   'material-encryption': 'MaterialEncryption-Setup-0.1.10.exe',
@@ -102,7 +103,7 @@ describe('hand-written 40-row universal install adapter coverage', () => {
   });
 
   it('selects exactly one audited current release asset for every supported application', () => {
-    expect(Object.keys(LATEST_ASSET_FIXTURES)).toHaveLength(35);
+    expect(Object.keys(LATEST_ASSET_FIXTURES)).toHaveLength(36);
     for (const [appId, assetName] of Object.entries(LATEST_ASSET_FIXTURES)) {
       const adapter = adapterFor(appId);
       expect(adapter.supported).toBe(true);
@@ -127,7 +128,7 @@ describe('hand-written 40-row universal install adapter coverage', () => {
   });
 
   it('keeps every unsupported row explicit and evidence-backed', () => {
-    for (const appId of ['win-ssh-copy-id', 'ha-bambulab', 'photo-viewer']) {
+    for (const appId of ['win-ssh-copy-id', 'ha-bambulab', 'photo-viewer', 'material-gitlab']) {
       const adapter = INSTALL_ADAPTERS[appId as keyof typeof INSTALL_ADAPTERS];
       expect(adapter.supported).toBe(false);
       if (!adapter.supported) {

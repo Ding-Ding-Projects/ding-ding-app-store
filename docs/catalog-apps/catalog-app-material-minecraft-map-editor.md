@@ -8,7 +8,7 @@ This record describes the reviewed catalog entry `material-minecraft-map-editor`
 
 The current adapter state is: Reviewed Squirrel.Windows adapter. The adapter has a fixed, application-specific release contract; this article deliberately does not reproduce executable names, arguments, download URLs, or filesystem locations. Lifecycle status is **verified** for the reviewed catalog route; installation and update actions remain subject to their live byte, ownership, and process checks.
 
-No icon provenance metadata is declared for this legacy record; the renderer keeps its neutral catalog fallback.
+The icon is first-party reviewed from repository asset `installer/logo.ico`; if that asset is unavailable, the UI uses the declared generated-monogram fallback rather than a remote or guessed image.
 
 ## Configuration
 

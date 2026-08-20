@@ -95,6 +95,10 @@ export const CLOUD_INSTALL_PROOF_TARGETS = {
     appId: 'sprout-hollow-valley', adapterId: 'sprout-hollow-valley-squirrel', family: 'squirrel',
     ownershipKind: 'registry', uninstallKind: 'squirrel', requiresCleanStart: true, requiresDirectSha256: true,
   },
+  'material-tax-reporting': {
+    appId: 'material-tax-reporting', adapterId: 'material-tax-reporting-squirrel', family: 'squirrel',
+    ownershipKind: 'registry', uninstallKind: 'squirrel', requiresCleanStart: true, requiresDirectSha256: true,
+  },
 } as const satisfies Partial<Record<CatalogAppId, CloudInstallProofTarget>>;
 
 export type CloudInstallProofAppId = keyof typeof CLOUD_INSTALL_PROOF_TARGETS;

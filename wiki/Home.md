@@ -31,7 +31,7 @@ The wiki mirrors the same canonical feature articles bundled into the applicatio
 - [Photo Viewer catalog record](Catalog-App-photo-viewer) — **limited** — Generated reviewed metadata for Photo Viewer: unsupported, unsupported, and adapter photo-viewer-empty-release.
 - [Amulet Map Editor catalog record](Catalog-App-material-minecraft-map-editor) — **limited** — Generated reviewed metadata for Amulet Map Editor: installable, squirrel, and adapter material-minecraft-map-editor-squirrel.
 - [Material GitLab catalog record](Catalog-App-material-gitlab) — **limited** — Generated reviewed metadata for Material GitLab: unsupported, unsupported, and adapter material-gitlab-no-reviewed-installer.
-- [Material Tax Reporting catalog record](Catalog-App-material-tax-reporting) — **limited** — Generated reviewed metadata for Material Tax Reporting: unsupported, unsupported, and adapter material-tax-reporting-no-reviewed-installer.
+- [Material Tax Reporting catalog record](Catalog-App-material-tax-reporting) — **limited** — Generated reviewed metadata for Material Tax Reporting: installable, squirrel, and adapter material-tax-reporting-squirrel.
 - [Sprout Hollow catalog record](Catalog-App-farming-game) — **limited** — Generated reviewed metadata for Sprout Hollow: installable, squirrel, and adapter farming-game-squirrel.
 - [Material Cookie Clicker catalog record](Catalog-App-material-cookie-clicker) — **limited** — Generated reviewed metadata for Material Cookie Clicker: installable, squirrel, and adapter material-cookie-clicker-squirrel.
 - [Material Encryption catalog record](Catalog-App-material-encryption) — **limited** — Generated reviewed metadata for Material Encryption: installable, squirrel, and adapter material-encryption-squirrel.
@@ -49,7 +49,7 @@ The wiki mirrors the same canonical feature articles bundled into the applicatio
 ## Installation and removal
 
 - [Verified installer operations](Verified-Installer-Operations) — **limited** — Downloads one app-specific Squirrel, MSI, NSIS, jpackage, or portable-ZIP asset, verifies its bytes, and applies only a fixed reviewed adapter.
-- [One-click installation and adapter coverage](One-Click-Installation) — **limited** — Dispatches 22 reviewed release adapters without typed confirmation and reports three current public-release blockers instead of guessing commands.
+- [One-click installation and adapter coverage](One-Click-Installation) — **limited** — Dispatches 36 reviewed release adapters without typed confirmation and reports four current public-release blockers instead of guessing commands.
 - [Source-build security](Source-Build-Security) — **limited** — Provides a typed, bounded source-job and repair runtime with a zero-host-mount Windows Sandbox transport, fixed guest bootstrap, output manifests, disposal receipts, and a fail-closed status when the live protocol is not connected.
 - [Reviewed source-build recipes](Source-Build-Recipes) — **limited** — Pins exactly thirteen public source revisions and archive digests, typed build/run vectors, readiness contracts, bounded repair, and explicit native-toolchain blockers.
 - [Protected uninstall](Uninstall) — **shipped** — Removes only an installation whose Squirrel, MSI, or managed-portable ownership route was recorded or safely rediscovered.
@@ -69,7 +69,6 @@ The wiki mirrors the same canonical feature articles bundled into the applicatio
 
 ## Workspace and customization
 
-- [Public design reference](Public-Design-Reference) — **limited** — Records the sanitized seven-page/five-Settings-tab Material 3 shell, named interaction overlays, responsive fixtures, and the secure fixed-row comparison viewer with explicit pending-evidence boundaries.
 - [Tab workspace](Tab-Navigation) — **shipped** — Keeps six recoverable browser-style pages in a persistent four-edge tab rail with pinning, groups, independent searches, bulk close/reopen, overflow, keyboard control, and JSON import/export.
 - [Tab and group UX locks with local Support Tickets](Tab-And-Group-Locks-And-Support-Tickets) — **limited** — Password- or TOTP-backed local UX locks for tabs, groups, and individual appearance properties, with an honest operating-system vault boundary and an on-device recovery desk.
 - [Search and regex builder](Search-and-Regex-Builder) — **shipped** — Gives every current collection/settings surface independent plain-text-first search and the same adjacent guided JavaScript regex builder.

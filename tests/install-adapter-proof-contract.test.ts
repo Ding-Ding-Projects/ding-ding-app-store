@@ -14,6 +14,7 @@ describe('lifecycle proof replacement', () => {
       'farming-game', 'material-cookie-clicker', 'material-encryption', 'material-ollama', 'material-sandbox',
       'material-tools', 'material-virtualbox', 'material-winforge', 'material-winutil', 'meadowmark',
       'minecraft-server-command-center', 'minecraft-server-studio', 'sprout-hollow-valley',
+      'material-tax-reporting',
     ]);
     expect(cloudInstallProofTargetFor('qbittorrent-material')).toEqual({
       appId: 'qbittorrent-material',
@@ -50,6 +51,10 @@ describe('lifecycle proof replacement', () => {
     });
     expect(cloudInstallProofTargetFor('material-sandbox')).toMatchObject({
       adapterId: 'material-sandbox-inno', family: 'inno', ownershipKind: 'registry', uninstallKind: 'reviewed-executable',
+    });
+    expect(cloudInstallProofTargetFor('material-tax-reporting')).toEqual({
+      appId: 'material-tax-reporting', adapterId: 'material-tax-reporting-squirrel', family: 'squirrel',
+      ownershipKind: 'registry', uninstallKind: 'squirrel', requiresCleanStart: true, requiresDirectSha256: true,
     });
   });
 

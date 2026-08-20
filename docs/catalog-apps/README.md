@@ -30,7 +30,7 @@ These records are generated from the reviewed local catalog allowlist and adapte
 - [Photo Viewer catalog record](./catalog-app-photo-viewer.md) — Generated reviewed metadata for Photo Viewer: unsupported, unsupported, and adapter photo-viewer-empty-release.
 - [Amulet Map Editor catalog record](./catalog-app-material-minecraft-map-editor.md) — Generated reviewed metadata for Amulet Map Editor: installable, squirrel, and adapter material-minecraft-map-editor-squirrel.
 - [Material GitLab catalog record](./catalog-app-material-gitlab.md) — Generated reviewed metadata for Material GitLab: unsupported, unsupported, and adapter material-gitlab-no-reviewed-installer.
-- [Material Tax Reporting catalog record](./catalog-app-material-tax-reporting.md) — Generated reviewed metadata for Material Tax Reporting: unsupported, unsupported, and adapter material-tax-reporting-no-reviewed-installer.
+- [Material Tax Reporting catalog record](./catalog-app-material-tax-reporting.md) — Generated reviewed metadata for Material Tax Reporting: installable, squirrel, and adapter material-tax-reporting-squirrel.
 - [Sprout Hollow catalog record](./catalog-app-farming-game.md) — Generated reviewed metadata for Sprout Hollow: installable, squirrel, and adapter farming-game-squirrel.
 - [Material Cookie Clicker catalog record](./catalog-app-material-cookie-clicker.md) — Generated reviewed metadata for Material Cookie Clicker: installable, squirrel, and adapter material-cookie-clicker-squirrel.
 - [Material Encryption catalog record](./catalog-app-material-encryption.md) — Generated reviewed metadata for Material Encryption: installable, squirrel, and adapter material-encryption-squirrel.

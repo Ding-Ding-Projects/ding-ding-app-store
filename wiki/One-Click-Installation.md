@@ -4,11 +4,11 @@
 
 ## Behaviour
 
-Selecting **Install** or **Reinstall** immediately submits only the catalog application identifier and the closed `install` decision. The main process selects one of 25 hand-written adapter records; the renderer cannot submit an executable, URL, path, argument, checksum, dependency, or package type. Twenty-two records currently have a reviewed Windows release route. Three are explicitly unavailable and cannot be mislabeled installable. The new record is Amulet Map Editor, whose public release has an unsigned Squirrel.Windows Setup.exe but no packaged runtime/UI proof in this repository.
+Selecting **Install** or **Reinstall** immediately submits only the catalog application identifier and the closed `install` decision. The main process selects one of 40 hand-written adapter records; the renderer cannot submit an executable, URL, path, argument, checksum, dependency, or package type. Thirty-six records currently have a reviewed Windows release route. Four are explicitly unavailable and cannot be mislabeled installable. The two records audited on 2026-08-20 are Amulet Map Editor, whose current public release has an unsigned Squirrel.Windows `Setup.exe`, and Material Tax Reporting, whose current public release has a product-specific unsigned Squirrel.Windows setup plus the required update index and full package.
 
 The App Store's own Squirrel package carries an explicit `Ding Ding App Store` product identity, a checked-in branded ICO for the installer and native window, and the same local SVG mark in the renderer title bar. The main process creates that branded shell before restore and migration work, pins the native title against renderer title changes, and reports renderer load failures to the application log instead of silently leaving an Electron fallback shell. A package is not launch proof by itself: the packaged smoke path must observe a live window with the product title and a non-default icon. The missing runtime `yazl` dependency that previously crashed the installed app has now been moved into production dependencies, and a clean local launch opens the installed executable as `Ding Ding App Store`.
 
-The catalog now contains **forty records**, of which **thirty-five** have reviewed executable or portable release contracts. The thirteen newly reviewed public products are deliberately marked `blocked-until-proof`: a release asset, icon provenance, launch identity, or uninstall identity is not the same as clean-Windows lifecycle evidence. Their typed proof targets are ready for a later manual dispatch, but no row is promoted to verified merely because the target exists.
+The catalog now contains **forty records**, of which **thirty-six** have reviewed executable or portable release contracts. The thirteen expansion products remain deliberately marked `blocked-until-proof`: a release asset, icon provenance, launch identity, or uninstall identity is not the same as clean-Windows lifecycle evidence. Their typed proof targets are ready for a later manual dispatch, but no row is promoted to verified merely because the target exists.
 
 | Application | Reviewed route | Current public evidence or blocker |
 | --- | --- | --- |
@@ -35,7 +35,7 @@ The catalog now contains **forty records**, of which **thirty-five** have review
 | Home Assistant Bambu Lab | External target required | `bambu_lab.zip` is a HACS custom component. Fresh Windows has no canonical local Home Assistant configuration target; selecting a remote instance requires host/account authorization that cannot be inferred. |
 | WinForge | Managed portable ZIP | `WinForge-portable-x64-1.1.326.zip`; workflow validates `WinForge.exe` and archive paths. |
 | WimForge | Managed portable ZIP | `WimForge-portable-x64-0.1.42.zip`; self-contained Qt archive with `WimForge.exe`. |
-| Amulet Map Editor | Squirrel | `Setup.exe`; release `0.10.0-dev.567` records pinned Squirrel.Windows packaging and a non-green upstream test report. |
+| Amulet Map Editor | Squirrel | `Setup.exe`; release `0.11.0-dev.25` at commit `60eb2e3e0d07bb3aa0ec8e493b40790faa3522c4` records the unsigned Electron Squirrel package. The workflow ran no tests. |
 | Sprout Hollow | Squirrel | `Sprout.Hollow-Setup-1.4.3.exe`; first-party farm capture and exact Squirrel identity; blocked until clean-Windows proof. |
 | Material Cookie Clicker | Squirrel | `MaterialCookieClicker-Setup.exe`; first-party ICO and exact Squirrel identity; blocked until clean-Windows proof. |
 | Material Encryption | Squirrel | `MaterialEncryption-Setup-0.1.10.exe`; first-party logo and exact Squirrel identity; blocked until clean-Windows proof. |
@@ -50,20 +50,32 @@ The catalog now contains **forty records**, of which **thirty-five** have review
 | Minecraft Server Studio | Squirrel | `Minecraft.Server.Studio-0.120.1-x64-Setup.exe`; first-party ICO and exact Squirrel identity; blocked until clean-Windows proof. |
 | Sprout Hollow Valley | Squirrel | `Sprout-Hollow-Valley-Setup-1.2.12.exe`; first-party ICO and exact Squirrel identity; blocked until clean-Windows proof. |
 | Photo Viewer | Unavailable | Public `v0.1.0` release contains zero assets. Its source declares a future NSIS target but no published installer exists. |
-| Material GitLab | Unavailable | Public repository has no reviewed Windows installer asset for this catalog route. |
-| Material Tax Reporting | Unavailable | Public repository has no reviewed Windows installer asset for this catalog route. |
+| Material GitLab | Unavailable | The public repository has no product release. Its root installer script emits a source ZIP, and its Windows workflow publishes two separately identified tools rather than a Material GitLab product installer. |
+| Material Tax Reporting | Squirrel | `MaterialTaxReporting-0.1.36001-Setup.exe`; release `v0.1.36001` also publishes `RELEASES` and a full package from the exact root `build.bat` and `build-installer.bat` route. |
 
 ### Amulet Map Editor release evidence
 
-The reviewed Amulet record is pinned to public release `0.10.0-dev.567` at source commit `0173704db6bb37f8cdeae75b98bf2e6a25537e46`. Its source-manifest evidence is `pyproject.toml`, `.github/workflows/build-windows.yml`, `installer/build-squirrel.ps1`, and `installer/PACKAGING.md`; the catalog's source-manifest marker remains metadata only and never becomes a renderer-supplied build recipe.
+The reviewed Amulet record is pinned to public release `0.11.0-dev.25` at source commit `60eb2e3e0d07bb3aa0ec8e493b40790faa3522c4`. Its source-manifest evidence is `pyproject.toml`, `package.json`, `electron/electron-builder.yml`, and `.github/workflows/build-electron-windows.yml`; the catalog's source-manifest marker remains metadata only and never becomes a renderer-supplied build recipe.
 
 | Release asset | Bytes | SHA-256 | Role |
 | --- | ---: | --- | --- |
-| `Setup.exe` | 70,412,800 | `bfd30c6ad64cd4c8f6efbd03ffac44e032b334d163074bd089cf52bc0fe6fce1` | Squirrel installer |
-| `RELEASES` | 79 | `039bcef7f8f87f5ea0a4ae010022231bdf389bb94d58dc9070320c9aaf0166c7` | Squirrel update index |
-| `Amulet-0.10.100567-full.nupkg` | 70,259,367 | `5b427ae6fe6285333ace91385199cb29a2bae51f0cb7579b7194dbced9c6c606` | Full Squirrel package |
+| `Setup.exe` | 128,645,120 | `45a7e3ca3cca7b584b7aa4a0df77a6b68896090aced2a38773fc73ab7541c780` | Squirrel installer |
+| `RELEASES` | 106 | `084f33bd7bcb7b988e3a0d48395d2671d252214e16d93afa51df1d2d24451933` | Squirrel update index |
+| `material-minecraft-map-editor-0.11.100025-full.nupkg` | 127,785,869 | `a383ba08fb4f3786ed6231949176ecc02d93ef8dca6e44be61a75a151d976e4a` | Full Squirrel package |
 
-The source workflow reports `2026-08-11T05:59:50Z` to `2026-08-11T06:08:38Z` (`00:08:48`). Its latest release test result is **failed**, with `1256 passed, 8 skipped, 1 warning, 24 errors, 332 subtests passed in 221.33s`. The installable classification is based only on the immutable Squirrel asset contract; this record does not claim green tests, a clean-machine installation, or packaged UI evidence. The current branch now also has direct local launch proof for the installed `Ding Ding App Store` executable after moving the missing `yazl` runtime dependency into production dependencies.
+The source workflow reports `2026-08-13T16:51:21Z` to `2026-08-13T16:53:38Z` (`00:02:17`). It built and published without running tests. The installable classification is based only on the immutable Squirrel asset contract; this record does not claim green tests, a clean-machine installation, or packaged UI evidence. Lifecycle execution was not attempted during the 2026-08-20 audit because an existing Amulet installation was detected and the proof route refuses to adopt or uninstall pre-existing software.
+
+### Material Tax Reporting release evidence
+
+The reviewed Material Tax Reporting record is pinned to public release `v0.1.36001` at source commit `7f509f9713dec6e98abc43ac3ea3b1c13260e495`. Its release route is defined by the root `build.bat` and `build-installer.bat` entry points, `apps/desktop/electron-builder.yml`, `scripts/release/invoke-build.ps1`, and `.github/workflows/release.yml`.
+
+| Release asset | Bytes | SHA-256 | Role |
+| --- | ---: | --- | --- |
+| `MaterialTaxReporting-0.1.36001-Setup.exe` | 205,370,880 | `5d6a5a701a00696da8870d6127888bcc5231d8754a50f21fb1d03f2e51b56f5f` | Squirrel installer |
+| `RELEASES` | 95 | `9b5384ccba33e472373a185676fac89e7cde1146da22eb1db1f0d1382ce915e0` | Squirrel update index |
+| `MaterialTaxReporting-0.1.36001-full.nupkg` | 204,607,728 | `6c7eacd7180877fc3436c6545e4d950890711f85710168d8114ab70b5f51f5e5` | Full Squirrel package |
+
+The release publication interval is `2026-08-15T22:37:41Z` to `2026-08-15T22:43:26Z` (`00:05:45`). The workflow intentionally ran no tests, lint, type checks, security scans, accessibility checks, or screenshots. Those omissions remain explicit and are not reclassified as passing evidence.
 
 Uninstall remains behind the native two-key plus full-slider confirmation because it removes user-visible state. Installation and source-repair stay separate: ordinary release installation never imports or invokes the disposable/OpenCode runtime.
 
@@ -77,7 +89,7 @@ Dependencies are self-contained in the reviewed release packages. MSI uses the W
 
 Installation fails closed for malformed or mismatched requests, duplicate starts, unsupported adapters, missing or prerelease-only releases, zero or multiple matching assets, absent integrity evidence, unverified companion checksums, disallowed HTTPS origins, more than three redirects, declared or received sizes beyond the limit, hash mismatch, download/extraction cancellation, timeout, non-zero installer exit, unsafe ZIP names, symbolic links, special files, excessive entry/expanded size, missing portable executable, or missing exact post-install registry ownership. Cancellation is refused after an external installer starts because killing its launcher cannot prove a Windows Installer or elevated child service stopped. ZIP cancellation destroys and drains the active read/write pipeline before staging cleanup. A timed-out installer is unlocked only after `taskkill /T` succeeds and the launcher closes; otherwise staging and the per-app operation lock are retained until restart. An installer exit code of zero is not success when the reviewed installed-app entry cannot be rediscovered.
 
-The three unsupported records return their exact blocker. They do not fall through to source execution or receive guessed installer flags.
+The four unsupported records return their exact blocker. They do not fall through to source execution or receive guessed installer flags.
 
 ## Security considerations
 
@@ -87,7 +99,7 @@ Installed ownership is captured from exactly one new or changed registry entry b
 
 ## Verification
 
-The hand-written coverage test enumerates all 25 application IDs, asserts 25 unique adapter IDs, proves every installable row maps to a supported adapter with the same package type, rejects unsupported rows labeled installable, and exercises one current asset filename for each of the 22 supported applications. Behavioural tests create real ZIPs to cover empty files, symlinks, Windows case collisions, reserved device aliases, pre-start cancellation, and active-writer cancellation/drain; exercise partial writes; and inject portable commit, cleanup, rollback, and rollback-failure outcomes. Focused registry tests cover incomplete ownership snapshots, fingerprint mutation, exact names, MSI product codes, and safe roots/basenames. Source-contract checks cover bounded redirects/timeouts, hidden shell-free process trees, typed cancellation, exact changed-entry ownership, and separation from the repair runtime.
+The hand-written coverage test enumerates all 40 application IDs, asserts 40 unique adapter IDs, proves every installable row maps to a supported adapter with the same package type, rejects unsupported rows labeled installable, and exercises one current asset filename for each of the 36 supported applications. Behavioural tests create real ZIPs to cover empty files, symlinks, Windows case collisions, reserved device aliases, pre-start cancellation, and active-writer cancellation/drain; exercise partial writes; and inject portable commit, cleanup, rollback, and rollback-failure outcomes. Focused registry tests cover incomplete ownership snapshots, fingerprint mutation, exact names, MSI product codes, and safe roots/basenames. Source-contract checks cover bounded redirects/timeouts, hidden shell-free process trees, typed cancellation, exact changed-entry ownership, and separation from the repair runtime.
 
 The retired install-adapter proof workflow no longer runs in GitHub Actions. Its typed adapter contract remains source-controlled, while real install, exact rediscovery, uninstall, and absence evidence belongs to the local disposable-Windows proof lanes described in [Thirteen-product lifecycle proof](Lifecycle-Proof). Adding a catalog record still does not silently authorize cloud execution, and GitHub Actions remains build/package/publication-only.
 
@@ -99,7 +111,7 @@ The typed proof allowlist also contains two MSI targets, KeePassXC and Codex Mat
 
 The Codex Material lane selects only `codex-material-msi`. [Windows proof `31270172555`](https://github.com/Ding-Ding-Projects/ding-ding-app-store/actions/runs/31270172555) succeeded on exact commit `9cad7164e89cde7ce33f4d56f4242b68d070f418`: the clean runner selected release `v0.1.0+build.646`, downloaded the 237,932,544-byte `Codex.Studio-0.1.0-x64.msi`, verified SHA-256 `3aae77b70d7efecbd58a1f477e4c5b0b854c4b26490e8f10859e36f644ddf235`, rediscovered one `store` record owned by `codex-material-msi` with an MSI uninstall descriptor, uninstalled it, and found zero detected plus zero persisted records afterward. The sibling EXE did not match the MSI adapter's anchored asset pattern. The bounded manifest recorded 106 progress events with none dropped, `timedOut:false`, `sourceRuntimeInvoked:false`, and `verdict:true`; artifact `install-adapter-proof-codex-material-31270172555` has digest `sha256:418a14afb26500244dd246fbe7a794c80a0804103bfaf24f330a8b3b60b182db`. This proves the install lifecycle only; it does not prove application launch or UI interaction.
 
-The adapter audit uses current public release metadata and source/release configuration as of 2026-08-07. The new workflow provides the fresh-Windows evidence path, but each application still needs its own successful cloud proof run; no adapter is claimed complete merely because the workflow exists. The three external blockers remain genuine incomplete outcomes, not test failures disguised as support.
+The adapter audit uses current public release metadata and source/release configuration as of 2026-08-20. The local proof harness provides the clean-start evidence path, but each application still needs its own successful exact-release proof; no adapter is claimed complete merely because a proof target exists. The four external blockers remain genuine incomplete outcomes, not test failures disguised as support.
 
 ## Suggested articles
 

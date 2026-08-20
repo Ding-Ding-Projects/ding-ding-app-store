@@ -33,7 +33,7 @@ Finding reviewed public applications and understanding their release state.
 - [Photo Viewer catalog record](../catalog-apps/catalog-app-photo-viewer.md) — **limited** — *(generated catalog metadata)* — Generated reviewed metadata for Photo Viewer: unsupported, unsupported, and adapter photo-viewer-empty-release.
 - [Amulet Map Editor catalog record](../catalog-apps/catalog-app-material-minecraft-map-editor.md) — **limited** — *(generated catalog metadata)* — Generated reviewed metadata for Amulet Map Editor: installable, squirrel, and adapter material-minecraft-map-editor-squirrel.
 - [Material GitLab catalog record](../catalog-apps/catalog-app-material-gitlab.md) — **limited** — *(generated catalog metadata)* — Generated reviewed metadata for Material GitLab: unsupported, unsupported, and adapter material-gitlab-no-reviewed-installer.
-- [Material Tax Reporting catalog record](../catalog-apps/catalog-app-material-tax-reporting.md) — **limited** — *(generated catalog metadata)* — Generated reviewed metadata for Material Tax Reporting: unsupported, unsupported, and adapter material-tax-reporting-no-reviewed-installer.
+- [Material Tax Reporting catalog record](../catalog-apps/catalog-app-material-tax-reporting.md) — **limited** — *(generated catalog metadata)* — Generated reviewed metadata for Material Tax Reporting: installable, squirrel, and adapter material-tax-reporting-squirrel.
 - [Sprout Hollow catalog record](../catalog-apps/catalog-app-farming-game.md) — **limited** — *(generated catalog metadata)* — Generated reviewed metadata for Sprout Hollow: installable, squirrel, and adapter farming-game-squirrel.
 - [Material Cookie Clicker catalog record](../catalog-apps/catalog-app-material-cookie-clicker.md) — **limited** — *(generated catalog metadata)* — Generated reviewed metadata for Material Cookie Clicker: installable, squirrel, and adapter material-cookie-clicker-squirrel.
 - [Material Encryption catalog record](../catalog-apps/catalog-app-material-encryption.md) — **limited** — *(generated catalog metadata)* — Generated reviewed metadata for Material Encryption: installable, squirrel, and adapter material-encryption-squirrel.
@@ -53,7 +53,7 @@ Finding reviewed public applications and understanding their release state.
 Verified install adapters, fail-closed source builds, removal, and pending automation.
 
 - [Verified installer operations](./installation/verified-installer-operations.md) — **limited** — Downloads one app-specific Squirrel, MSI, NSIS, jpackage, or portable-ZIP asset, verifies its bytes, and applies only a fixed reviewed adapter.
-- [One-click installation and adapter coverage](./installation/one-click-installation.md) — **limited** — Dispatches 22 reviewed release adapters without typed confirmation and reports three current public-release blockers instead of guessing commands.
+- [One-click installation and adapter coverage](./installation/one-click-installation.md) — **limited** — Dispatches 36 reviewed release adapters without typed confirmation and reports four current public-release blockers instead of guessing commands.
 - [Source-build security](./installation/source-build-security.md) — **limited** — Provides a typed, bounded source-job and repair runtime with a zero-host-mount Windows Sandbox transport, fixed guest bootstrap, output manifests, disposal receipts, and a fail-closed status when the live protocol is not connected.
 - [Reviewed source-build recipes](./installation/source-build-recipes.md) — **limited** — Pins exactly thirteen public source revisions and archive digests, typed build/run vectors, readiness contracts, bounded repair, and explicit native-toolchain blockers.
 - [Protected uninstall](./installation/uninstall.md) — **shipped** — Removes only an installation whose Squirrel, MSI, or managed-portable ownership route was recorded or safely rediscovered.
@@ -94,7 +94,6 @@ Tabs, search, command palette, settings, appearance, and notifications.
 - [Changelog viewer](./experience/changelog-viewer.md) — **shipped** — Browses every released version with searchable commit links, typed date filters, an anchored month-jump range calendar, presets, and filtered copy/export actions.
 - [Catalog language coverage](./experience/catalog-language.md) — **shipped** — Keeps Discover, Installed, and Updates controls, status facts, loading states, and recovery actions aligned with the persisted language mode.
 - [Expressive storefront shell](./experience/expressive-storefront.md) — **shipped** — Applies an expressive Material Design 3 shell to the title bar, tab rail, catalog cards, state surfaces, and responsive layouts while preserving the existing typed behaviors.
-- [Public design reference](./product/design-reference.md) — **limited** — Provides an offline, public-safe visual reference for the seven pages, five Settings subtabs, responsive shell, themes, language modes, and deterministic overlay fixtures.
 
 ## Documentation
 
