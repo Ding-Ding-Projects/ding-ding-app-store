@@ -69,7 +69,7 @@ const LATEST_ASSET_FIXTURES: Readonly<Record<string, string>> = {
   'material-encryption': 'MaterialEncryption-Setup-0.1.10.exe',
   'material-ollama': 'OllamaSetup.exe',
   'material-sandbox': 'Sandboxie-Plus-x64-v1.18.2.exe',
-  'material-tools': 'MaterialTools-Setup-0.1.0.exe',
+  'material-tools': 'MaterialTools-Setup-0.1.0-x64.exe',
   'material-virtualbox': 'VirtualBox-7.2.97-Setup.exe',
   'material-winforge': 'WinForge-Material-3-Preview-Setup-1.0.21.exe',
   'material-winutil': 'MaterialSystemUtility-Setup.exe',

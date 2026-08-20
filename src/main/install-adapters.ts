@@ -1,6 +1,11 @@
 import { z } from 'zod';
 import type { CatalogReleaseEvidence, PackageType } from '../shared/contracts.js';
-import { AMULET_RELEASE_EVIDENCE } from '../shared/catalog-release-evidence.js';
+import {
+  AMULET_RELEASE_EVIDENCE,
+  MATERIAL_OLLAMA_RELEASE_EVIDENCE,
+  MATERIAL_SANDBOX_RELEASE_EVIDENCE,
+  MATERIAL_TOOLS_RELEASE_EVIDENCE,
+} from '../shared/catalog-release-evidence.js';
 
 export const CATALOG_APP_IDS = [
   'lowlevel-computer-use-mcp', 'material-download-manager', 'material-designer', 'material-bluemap',
@@ -178,9 +183,18 @@ export const INSTALL_ADAPTERS: Readonly<Record<CatalogAppId, InstallAdapter>> = 
   'farming-game': squirrel('farming-game-squirrel', 'farming-game', /^Sprout\.Hollow-Setup-[0-9A-Za-z.+-]+\.exe$/, ['Sprout Hollow', 'Sprout Hollow Valley'], ['package.json: Squirrel.Windows release target and Sprout.Hollow identity'], undefined, ['sprout-hollow.exe']),
   'material-cookie-clicker': squirrel('material-cookie-clicker-squirrel', 'material-cookie-clicker', /^MaterialCookieClicker-Setup\.exe$/, ['Material Cookie Clicker'], ['package.json: electron-builder Squirrel target and MaterialCookieClicker identity'], undefined, ['MaterialCookieClicker.exe']),
   'material-encryption': squirrel('material-encryption-squirrel', 'material-encryption', /^MaterialEncryption-Setup-[0-9A-Za-z.+-]+\.exe$/, ['Material Encryption'], ['package.json: Squirrel.Windows release target', 'build/material-encryption.ico: first-party icon and package identity'], undefined, ['MaterialEncryption.exe']),
-  'material-ollama': inno('material-ollama-inno', 'material-ollama', /^OllamaSetup\.exe$/, ['Ollama'], ['ollama app.exe', 'ollama.exe'], ['release v0.0.0-build.17: OllamaSetup.exe', 'app/CMakeLists.txt: bundled Ollama Windows payload'], undefined),
-  'material-sandbox': inno('material-sandbox-inno', 'material-sandbox', /^Sandboxie-Plus-x64-v[0-9A-Za-z.+-]+\.exe$/, ['Sandboxie-Plus'], ['SandMan.exe'], ['Installer/Sandboxie-Plus.iss: AppId Sandboxie-Plus, SandMan.exe launch and unins000.exe uninstall'], undefined),
-  'material-tools': squirrel('material-tools-squirrel', 'material-tools', /^MaterialTools-Setup-[0-9A-Za-z.+-]+\.exe$/, ['Material Tools'], ['package.json: Squirrel.Windows release target'], undefined, ['MaterialTools.exe']),
+  'material-ollama': {
+    ...inno('material-ollama-inno', 'material-ollama', /^OllamaSetup\.exe$/, ['Ollama'], ['ollama app.exe', 'ollama.exe'], ['release v0.0.0-build.18: OllamaSetup.exe', 'app/ollama.iss: fixed Ollama identity, payload names, and Inno uninstall identity'], undefined),
+    releaseEvidence: MATERIAL_OLLAMA_RELEASE_EVIDENCE,
+  },
+  'material-sandbox': {
+    ...inno('material-sandbox-inno', 'material-sandbox', /^Sandboxie-Plus-x64-v[0-9A-Za-z.+-]+\.exe$/, ['Sandboxie-Plus'], ['SandMan.exe'], ['Installer/Sandboxie-Plus.iss: AppId Sandboxie-Plus, SandMan.exe launch and unins000.exe uninstall', 'release v0.0.0-build.35: unsigned Sandboxie-Plus-x64-v1.18.2.exe with published SHA-256'], undefined),
+    releaseEvidence: MATERIAL_SANDBOX_RELEASE_EVIDENCE,
+  },
+  'material-tools': {
+    ...squirrel('material-tools-squirrel', 'material-tools', /^MaterialTools-Setup-[0-9A-Za-z.+-]+\.exe$/, ['Material Tools'], ['package.json: Squirrel.Windows release target', 'release build-0.1.0.19: installer, RELEASES, and full package with published SHA-256 values'], undefined, ['MaterialTools.exe']),
+    releaseEvidence: MATERIAL_TOOLS_RELEASE_EVIDENCE,
+  },
   'material-virtualbox': nsis('material-virtualbox-nsis', 'material-virtualbox', /^VirtualBox-[0-9A-Za-z.+-]+-Setup\.exe$/, ['Oracle VM VirtualBox', 'VirtualBox'], ['uninstall.exe'], ['release VirtualBox-7.2.97-Setup.exe: reviewed NSIS-compatible Windows installer', 'src/VBox/Main: VirtualBox application identity'], undefined, ['VirtualBox.exe']),
   'material-winforge': squirrel('material-winforge-squirrel', 'material-winforge', /^WinForge-Material-3-Preview-Setup-[0-9A-Za-z.+-]+\.exe$/, ['WinForge Material 3 Preview', 'WinForge'], ['main-app-design/package.json: Squirrel.Windows target and WinForge identity'], undefined, ['WinForge.exe']),
   'material-winutil': squirrel('material-winutil-squirrel', 'material-winutil', /^MaterialSystemUtility-Setup\.exe$/, ['Material System Utility', 'Material WinUtil'], ['package.json: Squirrel.Windows target and MaterialSystemUtility identity'], undefined, ['MaterialSystemUtility.exe']),

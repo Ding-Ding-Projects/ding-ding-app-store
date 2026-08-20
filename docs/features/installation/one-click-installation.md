@@ -47,7 +47,7 @@ The catalog now contains **forty records**, of which **thirty-five** have review
 | Material Encryption | Squirrel | `MaterialEncryption-Setup-0.1.10.exe`; first-party logo and exact Squirrel identity; blocked until clean-Windows proof. |
 | Material Ollama | Inno Setup | `OllamaSetup.exe`; strict Inno switches and bundled Ollama payload; blocked until clean-Windows proof. |
 | Material Sandbox | Inno Setup | `Sandboxie-Plus-x64-v1.18.2.exe`; `Sandboxie-Plus.iss` fixes AppId, `SandMan.exe`, and `unins000.exe`; blocked until clean-Windows proof. |
-| Material Tools | Squirrel | `MaterialTools-Setup-0.1.0.exe`; first-party overview evidence and exact Squirrel identity; blocked until clean-Windows proof. |
+| Material Tools | Squirrel | `MaterialTools-Setup-0.1.0-x64.exe`; first-party overview evidence and exact Squirrel identity; blocked until clean-Windows proof. |
 | Material VirtualBox | NSIS | `VirtualBox-7.2.97-Setup.exe`; exact VirtualBox registry and launch identities; blocked until clean-Windows proof. |
 | Material WinForge | Squirrel | `WinForge-Material-3-Preview-Setup-1.0.21.exe`; first-party `app-icon.svg`; blocked until clean-Windows proof. |
 | Material System Utility | Squirrel | `MaterialSystemUtility-Setup.exe`; first-party `build/icon.ico`; blocked until clean-Windows proof. |
@@ -70,6 +70,18 @@ The reviewed Amulet record is pinned to public release `0.10.0-dev.567` at sourc
 | `Amulet-0.10.100567-full.nupkg` | 70,259,367 | `5b427ae6fe6285333ace91385199cb29a2bae51f0cb7579b7194dbced9c6c606` | Full Squirrel package |
 
 The source workflow reports `2026-08-11T05:59:50Z` to `2026-08-11T06:08:38Z` (`00:08:48`). Its latest release test result is **failed**, with `1256 passed, 8 skipped, 1 warning, 24 errors, 332 subtests passed in 221.33s`. The installable classification is based only on the immutable Squirrel asset contract; this record does not claim green tests, a clean-machine installation, or packaged UI evidence. The current branch now also has direct local launch proof for the installed `Ding Ding App Store` executable after moving the missing `yazl` runtime dependency into production dependencies.
+
+### Material release evidence
+
+The three reviewed material records below now carry immutable typed release metadata directly on their adapters. The tags, target commits, workflow timing, asset names, byte counts, and SHA-256 values were read back from their public non-draft releases and independently checked against downloaded assets. Their release workflows build, package, and publish only, so all three test verdicts remain **unknown**. This evidence does not promote any row past `blocked-until-proof`.
+
+| Application | Release and target commit | Workflow timing | Reviewed assets |
+| --- | --- | --- | --- |
+| Material Ollama | `v0.0.0-build.18` at `3b33fc66c42c82b3d9fe0bfb012f85e68fc6ea6f` | `2026-08-19T10:25:33.000Z` to `2026-08-19T10:49:24.453Z` (`00:23:51`) | `OllamaSetup.exe`, 41,883,579 bytes, `fe807823c152c0ca5f67145ada389a583bd1538e4dbe01bb8e70b668f11a09fc` |
+| Material Sandbox | `v0.0.0-build.35` at `00e262034853c4fd06a3157deca163880fa8b584` | `2026-08-19T10:29:44Z` to `2026-08-19T11:20:40Z` (`00:50:56`) | `Sandboxie-Plus-x64-v1.18.2.exe`, 25,022,623 bytes, `dcace3572fe3476d60b9425071401e8dfb49c7afd7355d3778b9da04ed601496` |
+| Material Tools | `build-0.1.0.19` at `9c407a81e9e4e30dc922cf955e83232dd5aeb754` | `2026-08-12T01:48:47Z` to `2026-08-12T01:51:29Z` (`00:02:42`) | `MaterialTools-Setup-0.1.0-x64.exe`, 143,731,712 bytes, `6395210d754ee67025f77031a2f116da4a493522a48f79ab6efd17435515478b`; `RELEASES`, 85 bytes, `ba908df5fbd56508ec8c667b2e0ee90874887bfebe6470d7bf0f10819cfe50af`; `material-tools-0.1.0-full.nupkg`, 143,036,421 bytes, `30b03085bb2544f23c299663542efe2a98e37ec5195e1757ce0c3acd05a51f03` |
+
+Material Ollama's source recipe remains blocked because the source runner does not yet ingest its pinned Windows toolchain archives and verified submodule inputs as bounded typed steps. Material Sandbox's source recipe remains blocked because its native compiler, SDK/WDK, Qt, jom, and installer toolchain are not part of the source runner contract. Material Tools remains the only ready source recipe of these three.
 
 Uninstall remains behind the native two-key plus full-slider confirmation because it removes user-visible state. Installation and source-repair stay separate: ordinary release installation never imports or invokes the disposable/OpenCode runtime.
 

@@ -1,6 +1,11 @@
 import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
-import { AMULET_RELEASE_EVIDENCE } from '../src/shared/catalog-release-evidence.js';
+import {
+  AMULET_RELEASE_EVIDENCE,
+  MATERIAL_OLLAMA_RELEASE_EVIDENCE,
+  MATERIAL_SANDBOX_RELEASE_EVIDENCE,
+  MATERIAL_TOOLS_RELEASE_EVIDENCE,
+} from '../src/shared/catalog-release-evidence.js';
 import { INSTALL_ADAPTERS } from '../src/main/install-adapters.js';
 
 const read = (relative: string) => readFile(new URL(`../${relative}`, import.meta.url), 'utf8');
@@ -43,6 +48,59 @@ describe('reviewed catalog release evidence', () => {
     const docs = await read('docs/features/installation/one-click-installation.md');
     for (const value of [AMULET_RELEASE_EVIDENCE.tag, AMULET_RELEASE_EVIDENCE.targetCommit, ...AMULET_RELEASE_EVIDENCE.assets.map((asset) => asset.sha256), '24 errors']) {
       expect(docs).toContain(value);
+    }
+  });
+
+  it('pins the three reviewed material release identities without promoting ungated workflows to test verdicts', async () => {
+    const catalog = JSON.parse(await read('data/catalog.v1.json')) as { apps: Array<{ id: string; repository: string; sourceManifest: string }> };
+    const records = [
+      MATERIAL_OLLAMA_RELEASE_EVIDENCE,
+      MATERIAL_SANDBOX_RELEASE_EVIDENCE,
+      MATERIAL_TOOLS_RELEASE_EVIDENCE,
+    ] as const;
+
+    expect(catalog.apps.find((record) => record.id === 'material-ollama')).toMatchObject({ repository: 'material-ollama', sourceManifest: 'CMakeLists.txt' });
+    expect(catalog.apps.find((record) => record.id === 'material-sandbox')).toMatchObject({ repository: 'material-sandbox', sourceManifest: 'Installer/Sandboxie-Plus.iss' });
+    expect(catalog.apps.find((record) => record.id === 'material-tools')).toMatchObject({ repository: 'material-tools', sourceManifest: 'package.json' });
+
+    for (const evidence of records) {
+      expect(INSTALL_ADAPTERS[evidence.appId].releaseEvidence).toBe(evidence);
+      expect(evidence.tests.status).toBe('unknown');
+      expect(evidence.tests.disclosure).toContain('Release publication is not a test verdict');
+      expect(Object.isFrozen(evidence)).toBe(true);
+      expect(Object.isFrozen(evidence.sourceEvidence)).toBe(true);
+      expect(Object.isFrozen(evidence.workflow)).toBe(true);
+      expect(Object.isFrozen(evidence.assets)).toBe(true);
+      expect(evidence.assets.every((asset) => Object.isFrozen(asset))).toBe(true);
+      expect(Object.isFrozen(evidence.tests)).toBe(true);
+    }
+
+    expect(MATERIAL_OLLAMA_RELEASE_EVIDENCE).toMatchObject({
+      tag: 'v0.0.0-build.18',
+      targetCommit: '3b33fc66c42c82b3d9fe0bfb012f85e68fc6ea6f',
+      workflow: { duration: '00:23:51' },
+      assets: [{ name: 'OllamaSetup.exe', bytes: 41883579, sha256: 'fe807823c152c0ca5f67145ada389a583bd1538e4dbe01bb8e70b668f11a09fc', role: 'installer' }],
+    });
+    expect(MATERIAL_SANDBOX_RELEASE_EVIDENCE).toMatchObject({
+      tag: 'v0.0.0-build.35',
+      targetCommit: '00e262034853c4fd06a3157deca163880fa8b584',
+      workflow: { duration: '00:50:56' },
+      assets: [{ name: 'Sandboxie-Plus-x64-v1.18.2.exe', bytes: 25022623, sha256: 'dcace3572fe3476d60b9425071401e8dfb49c7afd7355d3778b9da04ed601496', role: 'installer' }],
+    });
+    expect(MATERIAL_TOOLS_RELEASE_EVIDENCE).toMatchObject({
+      tag: 'build-0.1.0.19',
+      targetCommit: '9c407a81e9e4e30dc922cf955e83232dd5aeb754',
+      workflow: { duration: '00:02:42' },
+      assets: [
+        { name: 'MaterialTools-Setup-0.1.0-x64.exe', bytes: 143731712, sha256: '6395210d754ee67025f77031a2f116da4a493522a48f79ab6efd17435515478b', role: 'installer' },
+        { name: 'RELEASES', bytes: 85, sha256: 'ba908df5fbd56508ec8c667b2e0ee90874887bfebe6470d7bf0f10819cfe50af', role: 'update-index' },
+        { name: 'material-tools-0.1.0-full.nupkg', bytes: 143036421, sha256: '30b03085bb2544f23c299663542efe2a98e37ec5195e1757ce0c3acd05a51f03', role: 'package' },
+      ],
+    });
+
+    const docs = await read('docs/features/installation/one-click-installation.md');
+    for (const evidence of records) {
+      for (const value of [evidence.tag, evidence.targetCommit, ...evidence.assets.map((asset) => asset.sha256)]) expect(docs).toContain(value);
     }
   });
 });
