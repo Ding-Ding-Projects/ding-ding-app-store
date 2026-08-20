@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { access, mkdir, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import { app } from 'electron';
@@ -7,6 +7,9 @@ const APP_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,127}$/;
 const PROOF_SCHEMA = 'ding-ding-app-store.install-proof.v1';
 const DEFAULT_TIMEOUT_MS = 20 * 60_000;
 const MAX_PROGRESS_EVENTS = 256;
+const MAX_REGISTRY_DIAGNOSTICS = 16;
+const CLEANUP_SETTLE_TIMEOUT_MS = 30_000;
+const CLEANUP_SETTLE_INTERVAL_MS = 250;
 
 function option(name, fallback = null) {
   const index = process.argv.indexOf(name);
@@ -56,6 +59,7 @@ let lastProgress = null;
 let lastBytes = null;
 let droppedProgressEvents = 0;
 let operationService = null;
+const processObservations = [];
 let timedOut = false;
 let proof;
 let exitCode = 1;
@@ -110,6 +114,50 @@ function withProofTimeout(work, label) {
   return Promise.race([work, timeout]).finally(() => clearTimeout(timer));
 }
 
+function processObservation(observation) {
+  if (processObservations.length >= 8) return;
+  processObservations.push({
+    operationLabel: observation.operationLabel,
+    stage: observation.stage,
+    processId: observation.processId,
+    exitCode: observation.exitCode,
+  });
+}
+
+async function pathPresent(target) {
+  if (!target) return false;
+  try { await access(target); return true; } catch { return false; }
+}
+
+async function ownedFileState(record) {
+  const installRoot = record?.installRoot ?? null;
+  const uninstallExecutable = record?.uninstall?.kind === 'portable' ? null : record?.uninstall?.executable ?? null;
+  const executableNames = installRoot && await pathPresent(installRoot)
+    ? (await readdir(installRoot, { withFileTypes: true }).catch(() => []))
+      .filter((entry) => entry.isFile() && entry.name.toLocaleLowerCase().endsWith('.exe'))
+      .map((entry) => entry.name).sort().slice(0, 16)
+    : [];
+  return {
+    installRootPresent: await pathPresent(installRoot),
+    uninstallExecutablePresent: await pathPresent(uninstallExecutable),
+    executableNames,
+  };
+}
+
+async function waitForTargetAbsence(installedService, targetAppId) {
+  const settleDeadline = Math.min(deadline, Date.now() + CLEANUP_SETTLE_TIMEOUT_MS);
+  let records = [];
+  do {
+    records = (await withProofTimeout(installedService.list(true), 'post-cleanup discovery'))
+      .filter((record) => record.appId === targetAppId);
+    if (records.length === 0) return records;
+    const remaining = settleDeadline - Date.now();
+    if (remaining <= 0) return records;
+    await new Promise((resolve) => setTimeout(resolve, Math.min(CLEANUP_SETTLE_INTERVAL_MS, remaining)));
+  } while (Date.now() < settleDeadline);
+  return records;
+}
+
 const heartbeat = setInterval(() => {
   const elapsed = Math.round((Date.now() - Date.parse(startedAt)) / 1000);
   logMilestone('heartbeat', `elapsedSeconds=${elapsed} phase=${lastPhase} progress=${lastProgress ?? 'n/a'} bytes=${lastBytes ?? 'n/a'}`);
@@ -128,12 +176,13 @@ try {
   const { OperationService } = await import('../dist/main/operation-service.js');
   const { adapterFor, selectInstallerAsset } = await import('../dist/main/install-adapters.js');
   const { cloudInstallProofTargetFor } = await import('../dist/main/install-proof-targets.js');
+  const { exactDisplayNameMatch, extractQuotedExecutable, registryEntryFingerprint } = await import('../dist/main/installed-detection.js');
 
   const catalog = new CatalogService();
   const installed = new InstalledService(catalog);
   catalog.setInstalledProvider(() => installed.list(true));
   const history = new HistoryService();
-  operationService = new OperationService(catalog, history, installed, progressEvent);
+  operationService = new OperationService(catalog, history, installed, progressEvent, processObservation);
   logMilestone('services-loaded');
   const adapter = adapterFor(appId);
   const target = cloudInstallProofTargetFor(appId);
@@ -158,6 +207,9 @@ try {
     downloadVerification: 'operation-service-sha256',
   };
   logMilestone('integrity-resolved', `release=${release.tag_name} asset=${selectedAsset.name} bytes=${selectedAsset.size}`);
+  const beforeRegistry = target.ownershipKind === 'registry'
+    ? await withProofTimeout(installed.registrySnapshot(), 'initial registry diagnostics')
+    : [];
   const before = (await withProofTimeout(installed.list(true), 'initial discovery')).filter((record) => record.appId === appId).map((record) => ({
     appId: record.appId, version: record.version, source: record.source, hasUninstall: Boolean(record.uninstall),
     ownershipKind: record.ownership?.kind ?? null, adapterId: record.ownership?.adapterId ?? null,
@@ -184,6 +236,27 @@ try {
     uninstallKind: record.uninstall?.kind ?? null, ownershipKind: record.ownership?.kind ?? null,
     adapterId: record.ownership?.adapterId ?? null,
   }));
+  const afterRegistry = target.ownershipKind === 'registry'
+    ? await withProofTimeout(installed.registrySnapshot(), 'post-install registry diagnostics')
+    : [];
+  const beforeRegistryFingerprints = new Map(beforeRegistry.map((entry) => [entry.key.toLocaleLowerCase(), registryEntryFingerprint(entry)]));
+  const changedRegistryEntries = afterRegistry.filter((entry) =>
+    beforeRegistryFingerprints.get(entry.key.toLocaleLowerCase()) !== registryEntryFingerprint(entry));
+  const sanitizedRegistryEntry = (entry) => {
+    const executable = extractQuotedExecutable(entry.uninstallString) ?? '';
+    return {
+      hive: entry.key.toUpperCase().startsWith('HKEY_CURRENT_USER\\') ? 'HKEY_CURRENT_USER' : 'HKEY_LOCAL_MACHINE',
+      displayName: entry.displayName,
+      displayVersion: entry.displayVersion,
+      uninstallExecutableName: path.win32.basename(executable),
+      uninstallArguments: executable ? entry.uninstallString.trim().slice(entry.uninstallString.trim().indexOf(executable) + executable.length).replace(/^"/, '').trim().split(/\s+/).filter(Boolean).slice(0, 8) : [],
+    };
+  };
+  const registryDiagnostics = {
+    changedEntryCount: changedRegistryEntries.length,
+    truncated: changedRegistryEntries.length > MAX_REGISTRY_DIAGNOSTICS,
+    entries: changedRegistryEntries.slice(0, MAX_REGISTRY_DIAGNOSTICS).map(sanitizedRegistryEntry),
+  };
   const matchedAfterInstall = afterInstall.length === 1
     && afterInstall[0].source === (target.ownershipKind === 'portable' ? 'portable-managed' : 'store')
     && afterInstall[0].hasUninstall
@@ -191,15 +264,29 @@ try {
     && afterInstall[0].ownershipKind === target.ownershipKind
     && afterInstall[0].adapterId === target.adapterId;
   let cleanup = { attempted: false, ok: true, message: null };
+  const ownedBeforeCleanup = result.ok && matchedAfterInstall ? await installed.get(appId) : null;
+  const cleanupDiagnostics = {
+    processTreeBoundary: 'direct-child-only',
+    uninstallKind: ownedBeforeCleanup?.uninstall?.kind ?? null,
+    uninstallArguments: ownedBeforeCleanup?.uninstall?.arguments ?? [],
+    before: await ownedFileState(ownedBeforeCleanup),
+    after: null,
+    registryBefore: changedRegistryEntries.slice(0, MAX_REGISTRY_DIAGNOSTICS).map(sanitizedRegistryEntry),
+    registryAfter: [],
+  };
   if (result.ok && matchedAfterInstall) {
     cleanup = { attempted: true, ok: false, message: null };
     logMilestone('uninstall-started');
     const removed = await withProofTimeout(operationService.uninstall({ appId, decision: 'uninstall' }), 'uninstall');
     cleanup = { attempted: true, ok: removed.ok, message: removed.message };
   }
-  const afterCleanup = (await withProofTimeout(installed.list(true), 'post-cleanup discovery')).filter((record) => record.appId === appId).map((record) => ({
+  const afterCleanup = (await waitForTargetAbsence(installed, appId)).map((record) => ({
     appId: record.appId, version: record.version, source: record.source, hasUninstall: Boolean(record.uninstall),
   }));
+  cleanupDiagnostics.after = await ownedFileState(ownedBeforeCleanup);
+  cleanupDiagnostics.registryAfter = (await installed.registrySnapshot())
+    .filter((entry) => exactDisplayNameMatch(entry.displayName, adapter.registryDisplayNames))
+    .slice(0, MAX_REGISTRY_DIAGNOSTICS).map(sanitizedRegistryEntry);
   const persistedAfterCleanup = (await withProofTimeout(installed.list(false), 'persisted cleanup verification')).filter((record) => record.appId === appId).map((record) => ({
     appId: record.appId, version: record.version, source: record.source,
   }));
@@ -232,8 +319,11 @@ try {
     cleanStart,
     result: { ok: result.ok, message: result.message },
     afterInstall,
+    registryDiagnostics,
     matchedAfterInstall,
     cleanup,
+    cleanupDiagnostics,
+    processObservations,
     afterCleanup,
     persistedAfterCleanup,
     progress: events,

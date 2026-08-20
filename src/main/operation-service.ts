@@ -77,6 +77,13 @@ function childEnvironment(): NodeJS.ProcessEnv {
 
 export class TerminationUnprovenError extends Error {}
 
+export interface ProcessExecutionObservation {
+  readonly operationLabel: string;
+  readonly stage: 'spawned' | 'exited';
+  readonly processId: number | null;
+  readonly exitCode: number | null;
+}
+
 export function operationMustRetainLock(error: unknown): boolean {
   return error instanceof TerminationUnprovenError;
 }
@@ -120,7 +127,7 @@ async function terminateProcessTree(child: ReturnType<typeof spawn>): Promise<bo
   return taskkillResult.code === 0 && !taskkillResult.timedOut && launcherClosed;
 }
 
-export async function run(executable: string, args: readonly string[], signal?: AbortSignal, timeoutMs = 15 * 60_000, operationLabel = 'installer', onStarted?: () => void): Promise<number> {
+export async function run(executable: string, args: readonly string[], signal?: AbortSignal, timeoutMs = 15 * 60_000, operationLabel = 'installer', onStarted?: () => void, observeProcess: (observation: Readonly<ProcessExecutionObservation>) => void = () => undefined): Promise<number> {
   if (signal?.aborted) throw new Error('Installation cancelled before the installer started.');
   return await new Promise<number>((resolve, reject) => {
     const child = spawn(executable, [...args], {
@@ -131,7 +138,10 @@ export async function run(executable: string, args: readonly string[], signal?: 
     });
     let settled = false;
     let stopping = false;
-    child.once('spawn', () => { try { onStarted?.(); } catch { /* status publication is best effort */ } });
+    child.once('spawn', () => {
+      try { observeProcess({ operationLabel, stage: 'spawned', processId: child.pid ?? null, exitCode: null }); } catch { /* Diagnostic publication is best effort. */ }
+      try { onStarted?.(); } catch { /* status publication is best effort */ }
+    });
     const finish = (callback: () => void) => {
       if (settled) return;
       settled = true;
@@ -151,7 +161,10 @@ export async function run(executable: string, args: readonly string[], signal?: 
     const timer = setTimeout(() => stop('The installer exceeded the 15-minute safety limit.'), timeoutMs);
     signal?.addEventListener('abort', abort, { once: true });
     child.once('error', (error) => finish(() => reject(error)));
-    child.once('exit', (code) => { if (!stopping) finish(() => resolve(code ?? -1)); });
+    child.once('exit', (code) => {
+      try { observeProcess({ operationLabel, stage: 'exited', processId: child.pid ?? null, exitCode: code ?? -1 }); } catch { /* Diagnostic publication is best effort. */ }
+      if (!stopping) finish(() => resolve(code ?? -1));
+    });
   });
 }
 
@@ -328,6 +341,7 @@ export class OperationService {
     private readonly history: HistoryService,
     private readonly installed: InstalledService,
     private readonly publishProgress: (event: Readonly<OperationProgressEvent>) => void = () => undefined,
+    private readonly publishProcessObservation: (observation: Readonly<ProcessExecutionObservation>) => void = () => undefined,
   ) {}
 
   private progressEvent(active: ActiveOperation, phase: OperationProgressPhase, message: string, final = false, locked = false, cancellable = false, progress: number | null = null): OperationProgressEvent {
@@ -489,7 +503,7 @@ export class OperationService {
     const arguments_ = adapter.family === 'msi'
       ? ['/i', installerPath, ...adapter.installArguments]
       : adapter.installArguments;
-    const exitCode = await run(executable, arguments_, signal, 15 * 60_000, 'installer', onStarted);
+    const exitCode = await run(executable, arguments_, signal, 15 * 60_000, 'installer', onStarted, this.publishProcessObservation);
     if (exitCode !== 0) throw new Error(`Installer exited with code ${exitCode}.`);
   }
 
@@ -589,7 +603,7 @@ export class OperationService {
           ? path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', current.uninstall.executable)
           : current.uninstall.executable;
         await access(executable, constants.X_OK);
-        const exitCode = await run(executable, current.uninstall.arguments, undefined, 15 * 60_000, 'uninstaller');
+        const exitCode = await run(executable, current.uninstall.arguments, undefined, 15 * 60_000, 'uninstaller', undefined, this.publishProcessObservation);
         if (exitCode !== 0) throw new Error(`Uninstaller exited with code ${exitCode}.`);
       }
       await this.installed.remove(request.appId);
