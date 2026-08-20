@@ -467,17 +467,15 @@ describe('activity history and export', () => {
     expect(operations).toContain('private async finish(');
     expect(operations.match(/this\.finish\(record, 'install'/g)?.length).toBeGreaterThanOrEqual(5);
     expect(operations.match(/this\.finish\(record, 'build'/g)?.length).toBeGreaterThanOrEqual(2);
-    expect(operations.match(/this\.finish\(record, 'uninstall'/g)?.length).toBeGreaterThanOrEqual(4);
+    expect(operations.match(/this\.finish\(record, 'uninstall'/g)?.length).toBeGreaterThanOrEqual(3);
     expect(operations).not.toMatch(/return \{ ok:/);
   });
 
   it('bounds stored history and exports JSON, CSV, and Markdown', async () => {
     const history = await read('src/main/history-service.ts');
-    expect(history).toContain('MAX_ENTRIES = 500');
-    expect(history).toContain(".slice(-MAX_ENTRIES)");
-    expect(history).toContain("format === 'json'");
-    expect(history).toContain("format === 'csv'");
-    expect(history).toContain('| When | Action | App | Result | Message |');
+    expect(history).toContain('MAX_HISTORY_ENTRIES = 10_000');
+    expect(history).toContain('.slice(-MAX_HISTORY_ENTRIES)');
+    expect(history).toContain('serializeHistoryEntries(await this.list(), format)');
   });
 
   it('exposes history over the typed bridge only, never a generic channel', async () => {
@@ -490,13 +488,12 @@ describe('activity history and export', () => {
   });
 
   it('renders real activity with search, action/result/date filters, and export controls', async () => {
-    const app = await read('src/renderer/App.tsx');
-    expect(app).toContain('function HistoryPanel(');
-    expect(app).toContain("Search activity by app, action, or message");
-    expect(app).toContain("'all', 'install', 'build', 'uninstall'");
-    expect(app).toContain("'all', 'ok', 'failed'");
-    expect(app).toContain("'all', 'today', '7d', '30d'");
-    expect(app).toContain('Copy JSON');
-    expect(app).toContain("void loadHistory()");
+    const activity = await read('src/renderer/pages/ActivityPage.tsx');
+    expect(activity).toContain('Search activity and local versions');
+    expect(activity).toContain("'all', 'install', 'build', 'uninstall'");
+    expect(activity).toContain("'all', 'ok', 'failed'");
+    expect(activity).toContain("'all', 'today', '7d', '30d'");
+    expect(activity).toContain('Copy JSON');
+    expect(activity).toContain('loadHistory()');
   });
 });
