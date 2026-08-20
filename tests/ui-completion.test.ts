@@ -233,4 +233,14 @@ describe('global renderer UI completion', () => {
     expect(generator).toContain("const normalizeNewlines = (value) => value?.replaceAll('\\r\\n', '\\n')");
     expect(generator).toContain('normalizeNewlines(actual) !== normalizeNewlines(content)');
   });
+
+  it('localizes every External editor settings control and status path', async () => {
+    const editor = await read('src/renderer/components/ExternalEditorSettings.tsx');
+    expect(editor).toContain("label(settings, 'Preferred VS Code edition', '偏好 VS Code 版本')");
+    expect(editor).toContain("label(settings, 'Checking for Visual Studio Code…', '檢查緊 Visual Studio Code…')");
+    expect(editor).toContain("label(settings, 'Add validated VS Code', '加入已驗證 VS Code')");
+    expect(editor).toContain("label(settings, 'Copy VS Code download URL', '複製 VS Code 下載網址')");
+    expect(editor).not.toContain('Preferred VS Code edition<select');
+    expect(editor).not.toContain('>Checking for Visual Studio Code…</');
+  });
 });

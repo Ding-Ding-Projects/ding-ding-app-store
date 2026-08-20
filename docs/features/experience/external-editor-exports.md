@@ -16,7 +16,7 @@ Every exportable app-store surface keeps its normal download action and also off
 
 ## Configuration
 
-Settings → About contains the searchable External editor card. Stable, Insiders, portable, and validated-fallback choices are persisted in `external-editor.v1.json` by the main process. Detection checks `code.exe`/`code-insiders.exe` on PATH, bounded per-user and machine install locations, Scoop locations, and an explicitly selected executable from the native file picker. The add action accepts only a real `Code.exe` or `Code - Insiders.exe`; the renderer cannot provide a path or command.
+Settings → About contains the searchable External editor card. Stable, Insiders, portable, and validated-fallback choices are persisted in `external-editor.v1.json` by the main process. Detection checks `code.exe`/`code-insiders.exe` on PATH, bounded per-user and machine install locations, Scoop locations, and an explicitly selected executable from the native file picker. The add action accepts only a real `Code.exe` or `Code - Insiders.exe`; the renderer cannot provide a path or command. The card's explanation, edition choices, availability state, tooltips, and download/recovery actions follow the persisted English, Hong Kong Cantonese, or bilingual mode; validated executable labels and error facts remain exact.
 
 ## Failure modes
 
@@ -28,7 +28,7 @@ The preload API exposes only typed editor ids, editions, record kinds, bounded s
 
 ## Verification
 
-Contract tests reject traversal, executable-path injection, unknown editions, unknown keys, unsafe archive payloads, and oversized content. Launch tests cover observed spawn, child-process error, and the no-event timeout; the timeout is a fail-closed result rather than guessed success. Source checks prove the main/preload IPC handlers, native validation picker, PATH/install discovery, app-owned workspace write/extraction, shell-free launch, command-palette routes, and every renderer export action. `npm run check`, `npm run build`, and `npm run docs:check` are required before integration. A packaged hidden-desktop run should still verify the real VS Code availability boundary on the target Windows machine; this source lane does not claim that runtime launch.
+Contract tests reject traversal, executable-path injection, unknown editions, unknown keys, unsafe archive payloads, and oversized content. Launch tests cover observed spawn, child-process error, and the no-event timeout; the timeout is a fail-closed result rather than guessed success. Renderer source coverage also checks that every External editor settings control and status path uses the shared language helper. Source checks prove the main/preload IPC handlers, native validation picker, PATH/install discovery, app-owned workspace write/extraction, shell-free launch, command-palette routes, and every renderer export action. `npm run check`, `npm run build`, and `npm run docs:check` are required before integration. A packaged hidden-desktop run should still verify the real VS Code availability boundary on the target Windows machine; this source lane does not claim that runtime launch.
 
 ## Suggested articles
 
