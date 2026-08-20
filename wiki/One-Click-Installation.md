@@ -77,6 +77,8 @@ The reviewed Material Tax Reporting record is pinned to public release `v0.1.360
 
 The release publication interval is `2026-08-15T22:37:41Z` to `2026-08-15T22:43:26Z` (`00:05:45`). The workflow intentionally ran no tests, lint, type checks, security scans, accessibility checks, or screenshots. Those omissions remain explicit and are not reclassified as passing evidence.
 
+An isolated local lifecycle proof completed on App Store commit `f3ec9c5b814ff1a61b9a724f3e64a80cf37b8339`. It began with no detected Material Tax Reporting record, selected only `MaterialTaxReporting-0.1.36001-Setup.exe`, downloaded all `205,370,880` bytes, verified SHA-256 `5d6a5a701a00696da8870d6127888bcc5231d8754a50f21fb1d03f2e51b56f5f`, rediscovered one App Store-owned Squirrel record for adapter `material-tax-reporting-squirrel`, invoked its reviewed uninstall descriptor, and finished with zero detected and zero persisted records. The bounded JSON receipt has SHA-256 `d32e40f7ffe71a3ec273e0bd6ddaf8731eb7ef3779475efcb19eb865af6004ed`. This proves the exact install and uninstall lifecycle only; it does not prove application launch, packaged UI interaction, or any checks omitted by the upstream workflow.
+
 Uninstall remains behind the native two-key plus full-slider confirmation because it removes user-visible state. Installation and source-repair stay separate: ordinary release installation never imports or invokes the disposable/OpenCode runtime.
 
 ## Configuration
