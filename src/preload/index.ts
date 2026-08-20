@@ -60,6 +60,7 @@ import type {
   OperationProgressEvent,
   OperationRequest,
   ScheduleConfig,
+  ScheduleCredentialResult,
   ScheduleStatus,
   ScheduleTaskId,
   SchoolModeCredentialChangeRequest,
@@ -564,6 +565,7 @@ const api: DingDingStoreApi = {
     load: () => ipcRenderer.invoke('schedule:load'),
     save: (config: ScheduleConfig) => ipcRenderer.invoke('schedule:save', config),
     runNow: (task: ScheduleTaskId) => ipcRenderer.invoke('schedule:run-now', task),
+    setHomeAssistantToken: (key: string, token: string): Promise<ScheduleCredentialResult> => ipcRenderer.invoke('schedule:set-home-assistant-token', { key, token }),
     subscribe: (listener: (status: ScheduleStatus) => void) => {
       const handler = (_event: Electron.IpcRendererEvent, status: ScheduleStatus) => listener(status);
       ipcRenderer.on('schedule:status', handler);
