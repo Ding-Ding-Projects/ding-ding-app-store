@@ -35,6 +35,10 @@ export const CLOUD_INSTALL_PROOF_TARGETS = {
     appId: 'qbittorrent-material', adapterId: 'qbittorrent-material-squirrel', family: 'squirrel',
     ownershipKind: 'registry', uninstallKind: 'squirrel', requiresCleanStart: true, requiresDirectSha256: true,
   },
+  opencodex: {
+    appId: 'opencodex', adapterId: 'opencodex-squirrel', family: 'squirrel',
+    ownershipKind: 'registry', uninstallKind: 'squirrel', requiresCleanStart: true, requiresDirectSha256: true,
+  },
   keepassxc: {
     appId: 'keepassxc', adapterId: 'keepassxc-msi', family: 'msi',
     ownershipKind: 'registry', uninstallKind: 'msi', requiresCleanStart: true, requiresDirectSha256: true,

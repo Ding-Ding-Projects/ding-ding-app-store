@@ -47,6 +47,20 @@ describe('catalog proof-status enforcement', () => {
     }
   });
 
+  it('keeps the audited catalog shard aligned with its real lifecycle evidence', async () => {
+    const manifest = JSON.parse(await readFile(new URL('../data/catalog.v1.json', import.meta.url), 'utf8')) as {
+      apps: Array<{ id: string; proofStatus: string; proofTargetId: string | null }>;
+    };
+    const scoped = Object.fromEntries(manifest.apps
+      .filter((row) => ['material-email', 'opencodex', 'qbittorrent-material'].includes(row.id))
+      .map((row) => [row.id, { proofStatus: row.proofStatus, proofTargetId: row.proofTargetId }]));
+    expect(scoped).toEqual({
+      'material-email': { proofStatus: 'verified', proofTargetId: null },
+      opencodex: { proofStatus: 'blocked-until-proof', proofTargetId: 'opencodex-clean-windows' },
+      'qbittorrent-material': { proofStatus: 'verified', proofTargetId: null },
+    });
+  });
+
   it('renders blocked rows as unavailable and with no install, build, or update controls', () => {
     const blocked = render(baseApp);
     expect(blocked).toContain('Blocked until proof');
