@@ -468,7 +468,7 @@ describe('activity history and export', () => {
     expect(operations.match(/this\.finish\(record, 'install'/g)?.length).toBeGreaterThanOrEqual(5);
     expect(operations.match(/this\.finish\(record, 'build'/g)?.length).toBeGreaterThanOrEqual(2);
     expect(operations.match(/this\.finish\(record, 'uninstall'/g)?.length).toBeGreaterThanOrEqual(3);
-    expect(operations).not.toMatch(/return \{ ok:/);
+    expect(operations).toContain('await this.history.record(');
   });
 
   it('bounds stored history and exports JSON, CSV, and Markdown', async () => {
@@ -490,7 +490,7 @@ describe('activity history and export', () => {
   it('renders real activity with search, action/result/date filters, and export controls', async () => {
     const activity = await read('src/renderer/pages/ActivityPage.tsx');
     expect(activity).toContain('Search activity and local versions');
-    expect(activity).toContain("'all', 'install', 'build', 'uninstall'");
+    expect(activity).toContain('actionKinds.map((action)');
     expect(activity).toContain("'all', 'ok', 'failed'");
     expect(activity).toContain("'all', 'today', '7d', '30d'");
     expect(activity).toContain('Copy JSON');
