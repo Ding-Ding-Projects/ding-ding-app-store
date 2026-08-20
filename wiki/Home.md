@@ -22,7 +22,7 @@ The wiki mirrors the same canonical feature articles bundled into the applicatio
 - [Codex Material catalog record](Catalog-App-codex-material) — **limited** — Generated reviewed metadata for Codex Material: installable, msi, and adapter codex-material-msi.
 - [LibreOffice Material catalog record](Catalog-App-libreoffice-material) — **limited** — Generated reviewed metadata for LibreOffice Material: installable, msi, and adapter libreoffice-material-msi.
 - [Material Mail catalog record](Catalog-App-thunderbird-desktop) — **limited** — Generated reviewed metadata for Material Mail: installable, nsis, and adapter thunderbird-desktop-mozilla-nsis.
-- [Bambu Studio catalog record](Catalog-App-bambu-studio) — **limited** — Generated reviewed metadata for Bambu Studio: installable, nsis, and adapter bambu-studio-nsis.
+- [Bambu Studio catalog record](Catalog-App-bambu-studio) — **limited** — Generated reviewed metadata for Bambu Studio: installable, squirrel, and adapter bambu-studio-squirrel.
 - [KeePassXC catalog record](Catalog-App-keepassxc) — **limited** — Generated reviewed metadata for KeePassXC: installable, msi, and adapter keepassxc-msi.
 - [JDownloader Material catalog record](Catalog-App-jdownloader-material) — **limited** — Generated reviewed metadata for JDownloader Material: installable, jpackage, and adapter jdownloader-material-jpackage.
 - [Home Assistant Bambu Lab catalog record](Catalog-App-ha-bambulab) — **limited** — Generated reviewed metadata for Home Assistant Bambu Lab: unsupported, unsupported, and adapter ha-bambulab-external-home-assistant.

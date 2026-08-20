@@ -6,9 +6,9 @@
 
 ## Behaviour
 
-This record describes the reviewed catalog entry `bambu-studio`. Its public source repository is [BambuStudio](https://github.com/Ding-Ding-Projects/BambuStudio). The current availability is **Installable through a reviewed adapter** and the declared package type is **nsis**. The closed adapter identifier is `bambu-studio-nsis`.
+This record describes the reviewed catalog entry `bambu-studio`. Its public source repository is [BambuStudio](https://github.com/Ding-Ding-Projects/BambuStudio). The current availability is **Installable through a reviewed adapter** and the declared package type is **squirrel**. The closed adapter identifier is `bambu-studio-squirrel`.
 
-The current adapter state is: Reviewed NSIS adapter. The adapter has a fixed, application-specific release contract; this article deliberately does not reproduce executable names, arguments, download URLs, or filesystem locations. Lifecycle status is **verified** for the reviewed catalog route; installation and update actions remain subject to their live byte, ownership, and process checks.
+The current adapter state is: Reviewed Squirrel.Windows adapter. The adapter has a fixed, application-specific release contract; this article deliberately does not reproduce executable names, arguments, download URLs, or filesystem locations. Lifecycle status is **verified** for the reviewed catalog route; installation and update actions remain subject to their live byte, ownership, and process checks.
 
 No icon provenance metadata is declared for this legacy record; the renderer keeps its neutral catalog fallback.
 

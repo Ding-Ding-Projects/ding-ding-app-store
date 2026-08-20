@@ -58,7 +58,7 @@ const LATEST_ASSET_FIXTURES: Readonly<Record<string, string>> = {
   'codex-material': 'Codex.Studio-0.1.0-x64.msi',
   'libreoffice-material': 'LibreOfficeMaterial-Windows-x64.msi',
   'thunderbird-desktop': 'thunderbird-155.0a1.en-US.win64.installer.exe',
-  'bambu-studio': 'BambuStudioMD3-Setup.exe',
+  'bambu-studio': 'Setup.exe',
   keepassxc: 'KeePassXC-2.8.0-snapshot-x64.msi',
   'jdownloader-material': 'JDownloader-Material-windows-x64.exe',
   winforge: 'WinForge-portable-x64-1.1.326.zip',
@@ -135,6 +135,19 @@ describe('hand-written 40-row universal install adapter coverage', () => {
         expect(adapter.evidence.length).toBeGreaterThan(0);
       }
     }
+  });
+
+  it('pins the shard-06 installer families and current release asset contracts', async () => {
+    const catalog = JSON.parse(await readFile(new URL('../data/catalog.v1.json', import.meta.url), 'utf8')) as {
+      apps: Array<{ id: string; adapterId: string; packageType: string; sourceManifest: string }>;
+    };
+    const byId = new Map(catalog.apps.map((record) => [record.id, record]));
+    expect(byId.get('libreoffice-material')).toMatchObject({ adapterId: 'libreoffice-material-msi', packageType: 'msi', sourceManifest: 'configure.ac' });
+    expect(byId.get('thunderbird-desktop')).toMatchObject({ adapterId: 'thunderbird-desktop-mozilla-nsis', packageType: 'nsis', sourceManifest: 'moz.build' });
+    expect(byId.get('bambu-studio')).toMatchObject({ adapterId: 'bambu-studio-squirrel', packageType: 'squirrel', sourceManifest: 'CMakeLists.txt' });
+    expect(adapterFor('libreoffice-material')).toMatchObject({ family: 'msi', assetPattern: /^LibreOfficeMaterial-Windows-x64\.msi$/ });
+    expect(adapterFor('thunderbird-desktop')).toMatchObject({ family: 'mozilla-nsis', installArguments: ['-ms'], uninstallExecutableNames: ['helper.exe'], uninstallArguments: ['/S'] });
+    expect(adapterFor('bambu-studio')).toMatchObject({ family: 'squirrel', assetPattern: /^Setup\.exe$/, checksumAssetPattern: /^Setup\.exe\.sha256$/, launchExecutableNames: ['bambu-studio.exe'] });
   });
 });
 
