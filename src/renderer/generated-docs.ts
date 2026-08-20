@@ -358,6 +358,22 @@ export const GENERATED_DOCS: readonly GeneratedDocArticle[] = [
     "source": "canonical"
   },
   {
+    "id": "external-editor-exports",
+    "title": "External editor exports",
+    "titleYue": "外置編輯器匯出",
+    "category": "experience",
+    "wiki": "External-Editor-Exports",
+    "status": "shipped",
+    "related": [
+      "settings-language-and-display-name",
+      "activity-history",
+      "offline-documentation-browser",
+      "privacy-and-security"
+    ],
+    "summary": "Exports every exposed record and view to an app-owned VS Code workspace through a validated, shell-free main-process adapter.",
+    "body": "# External editor exports\n\n## Behaviour\n\nEvery exportable app-store surface keeps its normal download action and also offers **Open in VS Code**: catalog and installed records, activity, notifications, changelog entries, offline documentation articles, settings, appearance, and tab layout. The main process writes the selected UTF-8 document into an app-owned workspace folder and launches the chosen validated VS Code edition with that folder as its workspace root. Opening an export never blocks the app or replaces the download.\n\n## Configuration\n\nSettings → About contains the searchable External editor card. Stable, Insiders, portable, and validated-fallback choices are persisted in `external-editor.v1.json` by the main process. Detection checks `code.exe`/`code-insiders.exe` on PATH, bounded per-user and machine install locations, Scoop locations, and an explicitly selected executable from the native file picker. The add action accepts only a real `Code.exe` or `Code - Insiders.exe`; the renderer cannot provide a path or command.\n\n## Failure modes\n\nMissing VS Code, a stale selected executable, an invalid filename or MIME type, oversized content, an unwritable app-owned export folder, or a failed launch produces a localized non-blocking notification. The download action remains available. A failed launch never claims that the export opened, and the generated file remains inside the app-owned workspace for recovery.\n\n## Security considerations\n\nThe preload API exposes only typed editor ids, editions, record kinds, bounded suggested names, allowlisted MIME types, and bounded text. Main-process schemas reject traversal, repeated dots, unknown keys, executable paths, and oversized payloads. Launch uses a validated executable with `shell: false`, `windowsHide: true`, and no renderer-controlled arguments. The workspace folder is created below application data with a restrictive file mode.\n\n## Verification\n\nContract tests reject traversal, executable-path injection, unknown editions, unknown keys, and oversized content. Source checks prove the main/preload IPC handlers, native validation picker, PATH/install discovery, app-owned workspace write, shell-free launch, and every renderer export action. `npm run check`, `npm run build`, and `npm run docs:check` are required before integration. A packaged hidden-desktop run should still verify the real VS Code availability boundary on the target Windows machine; this source lane does not claim that runtime launch.\n\n## Suggested articles\n\n- [Settings, language, and display name](settings-language-and-display-name.md)\n- [Activity history and export](../installed/activity-history.md)\n- [Offline documentation browser](../documentation/offline-documentation-browser.md)\n- [Privacy and security](../security/privacy-and-security.md)\n"
+  },
+  {
     "id": "appearance-editor",
     "title": "Appearance editor",
     "titleYue": "外觀編輯器",
