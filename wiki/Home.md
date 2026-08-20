@@ -69,6 +69,7 @@ The wiki mirrors the same canonical feature articles bundled into the applicatio
 
 ## Workspace and customization
 
+- [Public design reference](Public-Design-Reference) — **limited** — Records the sanitized seven-page/five-Settings-tab Material 3 shell, named interaction overlays, responsive fixtures, and the secure fixed-row comparison viewer with explicit pending-evidence boundaries.
 - [Tab workspace](Tab-Navigation) — **shipped** — Keeps six recoverable browser-style pages in a persistent four-edge tab rail with pinning, groups, independent searches, bulk close/reopen, overflow, keyboard control, and JSON import/export.
 - [Tab and group UX locks with local Support Tickets](Tab-And-Group-Locks-And-Support-Tickets) — **limited** — Password- or TOTP-backed local UX locks for tabs, groups, and individual appearance properties, with an honest operating-system vault boundary and an on-device recovery desk.
 - [Search and regex builder](Search-and-Regex-Builder) — **shipped** — Gives every current collection/settings surface independent plain-text-first search and the same adjacent guided JavaScript regex builder.
