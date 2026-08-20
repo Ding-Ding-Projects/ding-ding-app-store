@@ -10,7 +10,7 @@ describe('lifecycle proof replacement', () => {
 
   it('keeps the local disposable proof allowlist closed to reviewed adapters', () => {
     expect(Object.keys(CLOUD_INSTALL_PROOF_TARGETS)).toEqual([
-      'dim-sum-atlas', 'winforge', 'wimforge', 'qbittorrent-material', 'keepassxc', 'codex-material',
+      'dim-sum-atlas', 'winforge', 'wimforge', 'qbittorrent-material', 'material-office', 'minecraft-world-downloader', 'keepassxc', 'codex-material',
       'farming-game', 'material-cookie-clicker', 'material-encryption', 'material-ollama', 'material-sandbox',
       'material-tools', 'material-virtualbox', 'material-winforge', 'material-winutil', 'meadowmark',
       'minecraft-server-command-center', 'minecraft-server-studio', 'sprout-hollow-valley',
@@ -30,6 +30,24 @@ describe('lifecycle proof replacement', () => {
       family: 'msi',
       ownershipKind: 'registry',
       uninstallKind: 'msi',
+      requiresCleanStart: true,
+      requiresDirectSha256: true,
+    });
+    expect(cloudInstallProofTargetFor('material-office')).toEqual({
+      appId: 'material-office',
+      adapterId: 'material-office-nsis',
+      family: 'nsis',
+      ownershipKind: 'registry',
+      uninstallKind: 'reviewed-executable',
+      requiresCleanStart: true,
+      requiresDirectSha256: true,
+    });
+    expect(cloudInstallProofTargetFor('minecraft-world-downloader')).toEqual({
+      appId: 'minecraft-world-downloader',
+      adapterId: 'minecraft-world-downloader-squirrel',
+      family: 'squirrel',
+      ownershipKind: 'registry',
+      uninstallKind: 'squirrel',
       requiresCleanStart: true,
       requiresDirectSha256: true,
     });

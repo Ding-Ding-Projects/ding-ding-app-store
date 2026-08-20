@@ -54,7 +54,7 @@ const LATEST_ASSET_FIXTURES: Readonly<Record<string, string>> = {
   'material-winscp': 'WinSCP.Material.0.1.590.Setup.exe',
   'dim-sum-atlas': 'DimSumAtlas-v0.1.13-windows-x64.zip',
   'material-office': 'Material-Office-0.1.0-x64-Setup.exe',
-  'minecraft-world-downloader': 'WorldDownloaderManager-Setup.exe',
+  'minecraft-world-downloader': 'World.Downloader.Studio-Setup-1.0.99.exe',
   'codex-material': 'Codex.Studio-0.1.0-x64.msi',
   'libreoffice-material': 'LibreOfficeMaterial-Windows-x64.msi',
   'thunderbird-desktop': 'thunderbird-155.0a1.en-US.win64.installer.exe',
@@ -124,6 +124,25 @@ describe('hand-written 40-row universal install adapter coverage', () => {
     expect(adapterFor('material-ollama')).toMatchObject({ family: 'inno', packageType: 'inno', installArguments: ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-'] });
     expect(adapterFor('material-sandbox')).toMatchObject({ family: 'inno', packageType: 'inno', uninstallExecutableNames: ['unins000.exe'] });
     for (const id of ids) expect(adapterFor(id).assetPattern.source).toMatch(/^\^.*\\\$|^\^/);
+  });
+
+  it('keeps the audited office, downloader, and Codex installer families and proof claims exact', async () => {
+    const catalog = JSON.parse(await readFile(new URL('../data/catalog.v1.json', import.meta.url), 'utf8')) as { apps: Array<Record<string, unknown>> };
+    const byId = Object.fromEntries(catalog.apps.map((record) => [record.id, record]));
+    expect(adapterFor('material-office')).toMatchObject({
+      id: 'material-office-nsis', family: 'nsis', packageType: 'nsis',
+      checksumAssetPattern: /^Material-Office-[0-9A-Za-z.+-]+-x64-Setup\.exe\.sha256$/,
+    });
+    expect(byId['material-office']).toMatchObject({ proofStatus: 'blocked-until-proof', proofTargetId: 'material-office-clean-windows' });
+    expect(adapterFor('minecraft-world-downloader')).toMatchObject({
+      id: 'minecraft-world-downloader-squirrel', family: 'squirrel', packageType: 'squirrel',
+      registryDisplayNames: ['World Downloader Studio'],
+    });
+    expect(byId['minecraft-world-downloader']).toMatchObject({
+      sourceManifest: 'app/package.json', proofStatus: 'blocked-until-proof', proofTargetId: 'minecraft-world-downloader-clean-windows',
+    });
+    expect(adapterFor('codex-material')).toMatchObject({ id: 'codex-material-msi', family: 'msi', packageType: 'msi' });
+    expect(byId['codex-material']).toMatchObject({ proofStatus: 'verified', proofTargetId: null });
   });
 
   it('keeps every unsupported row explicit and evidence-backed', () => {

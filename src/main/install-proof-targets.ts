@@ -35,6 +35,14 @@ export const CLOUD_INSTALL_PROOF_TARGETS = {
     appId: 'qbittorrent-material', adapterId: 'qbittorrent-material-squirrel', family: 'squirrel',
     ownershipKind: 'registry', uninstallKind: 'squirrel', requiresCleanStart: true, requiresDirectSha256: true,
   },
+  'material-office': {
+    appId: 'material-office', adapterId: 'material-office-nsis', family: 'nsis',
+    ownershipKind: 'registry', uninstallKind: 'reviewed-executable', requiresCleanStart: true, requiresDirectSha256: true,
+  },
+  'minecraft-world-downloader': {
+    appId: 'minecraft-world-downloader', adapterId: 'minecraft-world-downloader-squirrel', family: 'squirrel',
+    ownershipKind: 'registry', uninstallKind: 'squirrel', requiresCleanStart: true, requiresDirectSha256: true,
+  },
   keepassxc: {
     appId: 'keepassxc', adapterId: 'keepassxc-msi', family: 'msi',
     ownershipKind: 'registry', uninstallKind: 'msi', requiresCleanStart: true, requiresDirectSha256: true,

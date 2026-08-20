@@ -4,7 +4,7 @@ title: One-click installation and adapter coverage
 titleYue: 一按安裝同配接器覆蓋
 category: installation
 status: limited
-summary: Dispatches 22 reviewed release adapters without typed confirmation and reports three current public-release blockers instead of guessing commands.
+summary: Dispatches 35 reviewed release adapters without typed confirmation, distinguishes lifecycle proof from packaging evidence, and reports three current public-release blockers instead of guessing commands.
 ---
 # One-click installation and adapter coverage
 
@@ -14,7 +14,7 @@ Selecting **Install** or **Reinstall** immediately submits only the catalog appl
 
 The App Store's own Squirrel package carries an explicit `Ding Ding App Store` product identity, a checked-in branded ICO for the installer and native window, and the same local SVG mark in the renderer title bar. The main process creates that branded shell before restore and migration work, pins the native title against renderer title changes, and reports renderer load failures to the application log instead of silently leaving an Electron fallback shell. A package is not launch proof by itself: the packaged smoke path must observe a live window with the product title and a non-default icon. The missing runtime `yazl` dependency that previously crashed the installed app has now been moved into production dependencies, and a clean local launch opens the installed executable as `Ding Ding App Store`.
 
-The catalog now contains **forty records**, of which **thirty-five** have reviewed executable or portable release contracts. The thirteen newly reviewed public products are deliberately marked `blocked-until-proof`: a release asset, icon provenance, launch identity, or uninstall identity is not the same as clean-Windows lifecycle evidence. Their typed proof targets are ready for a later manual dispatch, but no row is promoted to verified merely because the target exists.
+The catalog now contains **forty records**, of which **thirty-five** have reviewed executable or portable release contracts. Fifteen routes are deliberately marked `blocked-until-proof`: the thirteen newer public products plus Material Office and Minecraft World Downloader. A release asset, icon provenance, launch identity, build result, or uninstall identity is not the same as clean-Windows lifecycle evidence. Their typed proof targets are ready for a later manual dispatch, but no row is promoted to verified merely because the target exists. Codex Material remains verified because its exact MSI route has an existing clean-runner install, ownership, uninstall, and absence receipt.
 
 | Application | Reviewed route | Current public evidence or blocker |
 | --- | --- | --- |
@@ -30,9 +30,9 @@ The catalog now contains **forty records**, of which **thirty-five** have review
 | WinSCP Material | Squirrel | `WinSCP.Material.0.1.590.Setup.exe`; Forge maker-squirrel configuration. |
 | Dim Sum Atlas | Managed portable ZIP | `DimSumAtlas-v0.1.13-windows-x64.zip`; expected `DimSumAtlas.exe`. |
 | Win SSH Copy ID | Unavailable | Public repository has no release. There is no immutable installer asset to verify. |
-| Material Office | NSIS | `Material-Office-0.1.0-x64-Setup.exe`; Electron Builder NSIS and silent lifecycle documentation. |
-| Minecraft World Downloader | NSIS | `WorldDownloaderManager-Setup.exe`; reviewed `installer.nsi` fixes identity, root, and uninstaller. |
-| Codex Material | MSI | `Codex.Studio-0.1.0-x64.msi`; Electron Builder MSI x64 target. |
+| Material Office | NSIS | Release `v0.1.0-build.30.attempt.1` publishes `Material-Office-0.1.0-x64-Setup.exe` and its exact checksum companion; the clean-Windows lifecycle remains blocked until proof. |
+| Minecraft World Downloader | Squirrel | Release `app-v1.0.99` publishes `World.Downloader.Studio-Setup-1.0.99.exe`, `RELEASES`, and a full package; the previous fixed-name NSIS contract was stale and the clean-Windows lifecycle remains blocked until proof. |
+| Codex Material | MSI | Release `v0.1.0+build.646` publishes `Codex.Studio-0.1.0-x64.msi`; clean-runner proof `31270172555` verified exact MSI ownership and removal. |
 | LibreOffice Material | MSI | `LibreOfficeMaterial-Windows-x64.msi`; CPack/WiX workflow and companion checksum. |
 | Material Mail | Mozilla NSIS | `thunderbird-155.0a1.en-US.win64.installer.exe`; `mach package` produces the Mozilla NSIS installer. |
 | Bambu Studio | NSIS | `BambuStudioMD3-Setup.exe`; reviewed NSIS script has fixed owned install/uninstall identities. |
