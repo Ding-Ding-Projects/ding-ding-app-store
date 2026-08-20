@@ -1018,15 +1018,34 @@ export function App() {
         {...el('app-shell')}
       >
         <header className="titlebar" {...el('titlebar')}>
-          <img className="titlebar-logo" src="/ding-ding-app-store.svg" alt="" aria-hidden="true" onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = 'ding-ding-app-store.svg'; }} />
-          <div className="brand-mark" aria-hidden="true"><Icon>storefront</Icon></div>
-          <strong {...el('titlebar-brand')}>{settings.displayName}</strong>
-          <span className="dev-badge" {...el('titlebar-badge')}>Preview 0.1.0</span>
+          <div className="titlebar-branding">
+            <img className="titlebar-logo" src="/ding-ding-app-store.svg" alt="" aria-hidden="true" onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = 'ding-ding-app-store.svg'; }} />
+            <div className="brand-mark" aria-hidden="true"><Icon>storefront</Icon></div>
+            <div className="brand-copy"><strong {...el('titlebar-brand')}>{settings.displayName}</strong><span>丁丁項目 · App Store</span></div>
+            <span className="dev-badge" {...el('titlebar-badge')}>Preview 0.1.0</span>
+          </div>
+          <button className="palette-trigger" type="button" onClick={() => setPaletteOpen(true)} aria-label={label(settings, 'Search everything, Control+Shift+F', '搜尋全部，Control+Shift+F')}>
+            <Icon>search</Icon><span>{label(settings, 'Search everything', '搜尋全部')}</span><kbd>Ctrl+Shift+F</kbd>
+          </button>
           <div className="drag-space" />
-          <button ref={notificationTriggerRef} className="notification-button" onClick={() => setNotificationCenterOpen(true)} aria-label={`Open notification centre, ${visibleUnreadCount} unread`}><Icon>notifications</Icon>{visibleUnreadCount > 0 && <span className="notification-count" aria-hidden="true">{Math.min(visibleUnreadCount, 99)}</span>}</button>
-          <button onClick={() => window.dingDingStore.window.minimize()} aria-label="Minimize"><Icon>remove</Icon></button>
-          <button onClick={() => window.dingDingStore.window.toggleMaximize()} aria-label="Maximize or restore"><Icon>crop_square</Icon></button>
-          <button className="close-window" onClick={() => window.dingDingStore.window.close()} aria-label="Close"><Icon>close</Icon></button>
+          <div className="titlebar-controls" role="toolbar" aria-label={label(settings, 'Window and appearance controls', '視窗同外觀控制')}>
+            <button ref={notificationTriggerRef} className="notification-button" onClick={() => setNotificationCenterOpen(true)} aria-label={`Open notification centre, ${visibleUnreadCount} unread`}><Icon>notifications</Icon>{visibleUnreadCount > 0 && <span className="notification-count" aria-hidden="true">{Math.min(visibleUnreadCount, 99)}</span>}</button>
+            <label className="titlebar-select-wrap" title={label(settings, 'Language', '語言')}>
+              <Icon>language</Icon>
+              <select aria-label={label(settings, 'Language mode', '語言模式')} value={settings.language} onChange={(event) => void patchSetting('language', event.target.value as UserSettings['language'])}>
+                <option value="bilingual">中 / EN</option><option value="en">EN</option><option value="yue">粵</option>
+              </select>
+            </label>
+            <label className="titlebar-select-wrap" title={label(settings, 'Theme', '主題')}>
+              <Icon>contrast</Icon>
+              <select aria-label={label(settings, 'Theme', '主題')} value={settings.theme} onChange={(event) => void patchSetting('theme', event.target.value as UserSettings['theme'])}>
+                <option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option>
+              </select>
+            </label>
+            <button onClick={() => window.dingDingStore.window.minimize()} aria-label="Minimize"><Icon>remove</Icon></button>
+            <button onClick={() => window.dingDingStore.window.toggleMaximize()} aria-label="Maximize or restore"><Icon>crop_square</Icon></button>
+            <button className="close-window" onClick={() => window.dingDingStore.window.close()} aria-label="Close"><Icon>close</Icon></button>
+          </div>
         </header>
 
       <TabRail
@@ -1069,6 +1088,7 @@ export function App() {
           )}
 
           <div className="page-heading" {...el('page-heading')}>
+            <div className="page-heading-icon" aria-hidden="true"><Icon>{meta.icon}</Icon></div>
             <div>
               <span className="eyebrow">DING DING PROJECTS</span>
               <h1 {...el('page-title')}>{label(settings, meta.en, meta.yue)}</h1>
