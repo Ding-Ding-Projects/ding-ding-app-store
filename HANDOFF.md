@@ -1,5 +1,13 @@
 # Handoff
 
+## 2026-08-20 public shell design reference
+
+- Completed the desktop shell design rewrite as a sanitized public reference in `design/reference.html`, `reference.css`, and `reference.mjs`. The reference records the exact seven pages—Catalog, Installed, Updates, Authenticator, Documentation, Activity, and Settings—and the five Settings subtabs—General, Appearance, Schedule, About, and Locks & Support.
+- The reference uses the compact Material 3 shell contract: 60px custom title bar, 288px left rail, centered `Ctrl+Shift+F` search, 56px page icon tile, rounded surface containers, deterministic local fixtures, responsive 1440×920/820×920/360×640 layouts, light/dark themes, and English/Cantonese/bilingual labels.
+- Query-addressable overlays cover the command palette, regex builder, tab management/context menu, notification center, anchored appearance panel, action/progress dialog, destructive super-confirmation, source terminal, changelog, and dim-sum surprise. The artifact is public-safe: no remote fonts, network calls, private prototype references, credentials, user paths, or simulated authentication data.
+- Added the plain Electron comparison viewer in `tools/design-reference/main.mjs`. It uses context isolation, sandboxing, disabled Node integration, denied permissions, blocked navigation and network protocols, and allowlisted mode/row identifiers that resolve only to fixed task-owned comparison locations. Renderer input never supplies raw paths or URLs.
+- Yum Leung Cha verification boundary: tests, linters, audits, reviews, captures, and screenshots were intentionally not run. Build, packaged runtime, comparison-artifact, and release evidence remain pending at documentation time.
+
 ## 2026-08-19 source lifecycle receipt recovery
 
 - The hand-written lifecycle matrix now contains exactly the thirteen source-recipe IDs from `data/source-recipes.v1.json`, with pinned revisions/archive digests, adapter families, recipe status, and clean-Windows proof targets. A negative regression proves the matrix, recipe catalog, and `blocked-until-proof` catalog rows remain exact-set equal.

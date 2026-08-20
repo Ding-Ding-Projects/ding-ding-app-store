@@ -51,6 +51,7 @@
 - [x] Memory synchronization documentation category: shared Status Hub and convenience-skill articles with generated offline/site/wiki mirrors and fail-closed completeness tests
 - [x] Documentation deployment: [`https://ding-ding-projects.github.io/ding-ding-app-store/`](https://ding-ding-projects.github.io/ding-ding-app-store/) is live and verified serving the real site
 - [x] Static-site personal vocabulary: visible local JSON picker, strict bounded parser, browser-local validated cache/replace/clear/corruption boundary, technical-token-safe canonical article presentation, settings search/palette reachability, and explicit site-only restricted presentation boundary (not shared desktop School mode)
+- [x] Desktop shell design rewrite and sanitized public reference: exact seven-page/five-Settings-tab map, Material 3 responsive shell, light/dark and English/Cantonese/bilingual fixtures, named overlay states, and a secure fixed-row side-by-side comparison viewer; Yum Leung Cha verification intentionally omitted tests, captures, and audits, with build/release evidence still pending
 - [ ] Working update-feed proof (the self-updater release channel now aligns main-only fresh-tip publication, exact new tags plus historical inventory tags, package semver, `RELEASES`, and immutable feed assets; a clean-Windows restart/install cycle against the published unsigned feed still needs runtime evidence)
 
 ## Completion boundary
