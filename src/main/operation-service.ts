@@ -191,6 +191,8 @@ interface PortableReplacementOperations {
   stat(target: string): Promise<unknown | null>;
   rename(from: string, to: string): Promise<void>;
   rm(target: string): Promise<void>;
+  wait?(milliseconds: number): Promise<void>;
+  retryDelaysMs?: readonly number[];
 }
 
 const portableReplacementOperations: PortableReplacementOperations = {
@@ -198,6 +200,24 @@ const portableReplacementOperations: PortableReplacementOperations = {
   rename: async (from, to) => { await rename(from, to); },
   rm: async (target) => { await rm(target, { recursive: true, force: true }); },
 };
+
+const PORTABLE_RENAME_RETRY_DELAYS_MS = [25, 50, 100, 200, 400, 800, 1_200] as const;
+const TRANSIENT_PORTABLE_RENAME_CODES = new Set(['EPERM', 'EACCES', 'EBUSY']);
+
+async function renamePortableWithRetry(operations: PortableReplacementOperations, from: string, to: string): Promise<void> {
+  const delays = operations.retryDelaysMs ?? PORTABLE_RENAME_RETRY_DELAYS_MS;
+  const wait = operations.wait ?? ((milliseconds: number) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds)));
+  for (let attempt = 0;; attempt += 1) {
+    try {
+      await operations.rename(from, to);
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (!code || !TRANSIENT_PORTABLE_RENAME_CODES.has(code) || attempt >= delays.length) throw error;
+      await wait(delays[attempt]);
+    }
+  }
+}
 
 export async function replacePortableDirectory(
   extracted: string,
@@ -209,10 +229,10 @@ export async function replacePortableDirectory(
   let movedExisting = false;
   try {
     if (await operations.stat(target)) {
-      await operations.rename(target, backup);
+      await renamePortableWithRetry(operations, target, backup);
       movedExisting = true;
     }
-    await operations.rename(extracted, target);
+    await renamePortableWithRetry(operations, extracted, target);
     await commit();
   } catch (error) {
     const rollbackErrors: string[] = [];
@@ -220,7 +240,7 @@ export async function replacePortableDirectory(
       await operations.rm(target).catch((rollbackError: Error) => rollbackErrors.push(`new-directory cleanup failed: ${rollbackError.message}`));
     }
     if (movedExisting) {
-      await operations.rename(backup, target).catch((rollbackError: Error) => rollbackErrors.push(`previous-version restore failed: ${rollbackError.message}`));
+      await renamePortableWithRetry(operations, backup, target).catch((rollbackError: Error) => rollbackErrors.push(`previous-version restore failed: ${rollbackError.message}`));
     }
     throw new Error(`${(error as Error).message}${rollbackErrors.length ? ` Rollback incomplete: ${rollbackErrors.join('; ')}.` : ''}`);
   }

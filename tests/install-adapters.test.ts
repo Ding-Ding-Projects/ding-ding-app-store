@@ -260,6 +260,30 @@ describe('installer integrity and archive inputs', () => {
     expect(paths.has('backup')).toBe(true);
   });
 
+  it('retries only transient Windows directory-rename sharing failures before the portable commit', async () => {
+    const paths = new Set(['extracted', 'target']);
+    const waits: number[] = [];
+    let transientAttempts = 0;
+    const operations = {
+      retryDelaysMs: [1, 2] as const,
+      async wait(milliseconds: number) { waits.push(milliseconds); },
+      async stat(target: string) { return paths.has(target) ? {} : null; },
+      async rename(from: string, to: string) {
+        if (from === 'target' && transientAttempts < 2) {
+          transientAttempts += 1;
+          throw Object.assign(new Error('directory temporarily locked'), { code: 'EPERM' });
+        }
+        if (!paths.delete(from)) throw new Error(`missing ${from}`);
+        paths.add(to);
+      },
+      async rm(target: string) { paths.delete(target); },
+    };
+    await expect(replacePortableDirectory('extracted', 'target', 'backup', async () => undefined, operations)).resolves.toBeNull();
+    expect(transientAttempts).toBe(2);
+    expect(waits).toEqual([1, 2]);
+    expect(paths).toEqual(new Set(['target']));
+  });
+
   it('rolls portable bytes back before the metadata commit and surfaces rollback failure', async () => {
     const paths = new Set(['extracted', 'target']);
     const operations = {
@@ -297,6 +321,7 @@ describe('installer integrity and archive inputs', () => {
       'shell: false', 'windowsHide: true', 'AbortController', 'AbortSignal.timeout(120_000)',
       'MAX_DOWNLOAD_BYTES', 'MAX_CHECKSUM_BYTES', 'REDIRECT_HOSTS', 'checksumFromCompanion',
       'extractZipSafe', 'terminateProcessTree', 'taskkill.exe', 'activeOperations', 'cancelInstall',
+      'TRANSIENT_PORTABLE_RENAME_CODES', 'PORTABLE_RENAME_RETRY_DELAYS_MS',
       "const operationKey = record.id", "kind: 'uninstall'", 'operationMustRetainLock',
       'recordInstalledFromRegistry', 'exact reviewed installed-app entry was not detected',
     ]) expect(source).toContain(contract);
