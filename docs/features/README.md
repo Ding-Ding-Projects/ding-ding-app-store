@@ -65,7 +65,7 @@ Windows discovery, owned records, operation history, snapshots, and export.
 
 - [Installed app discovery](./installed/installed-app-discovery.md) — **shipped** — Detects reviewed registry installs while keeping external discovery separate from exact App Store ownership and removal authority.
 - [Launch installed applications](./installed/launch-installed-applications.md) — **limited** — Starts an App Store-managed application through its exact reviewed executable identity without accepting renderer-supplied paths, commands, or arguments.
-- [Activity history and export](./installed/activity-history.md) — **shipped** — Appends every install, build, and uninstall result, offers composed filters, exports the selected or filtered log, and links into local version history.
+- [Activity history and export](./installed/activity-history.md) — **shipped** — Records the operation and selected settings outcomes that the App Store actually emits, offers composed filters, exports the selected or filtered log, and links into local version history.
 - [Local history and version restore](./installed/history-versioning.md) — **limited** — Browses bounded local-Git snapshots with diff, labels, and an explicit reversible restore path.
 
 ## Updates and schedules

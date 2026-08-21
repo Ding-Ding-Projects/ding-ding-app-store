@@ -36,6 +36,8 @@ The renderer cannot submit an executable, directory, command, argument, environm
 
 The launch control remains unavailable for proof-blocked rows and discovery-only installs. Installing an unrelated executable with a similar display name does not grant launch authority.
 
+A same-user installation that happens to be writable, or a path string that happens to resemble a reviewed install root, is not ownership proof. The App Store cannot infer lifecycle authority from write access, a display name, or a renderer-provided path; only the persisted exact adapter-owned ownership record and its revalidated identity can make Launch, Reinstall, Update, or Uninstall available. A user may therefore see an installed application remain discovery-only even when the current account can write to its directory. This is an intentional limitation of the same-user/path-string boundary, not a missing fallback.
+
 ## Verification
 
 The typed contract is in `src/shared/contracts.ts`; preload and IPC registration are in `src/preload/index.ts` and `src/main/main.ts`; target resolution and detached process start are in `src/main/app-launch-service.ts`; adapter identities are in `src/main/install-adapters.ts`; and the visible singular/bulk controls are in `src/renderer/pages/AppsPage.tsx` and `src/renderer/App.tsx`.

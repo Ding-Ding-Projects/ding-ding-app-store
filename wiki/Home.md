@@ -59,7 +59,7 @@ The wiki mirrors the same canonical feature articles bundled into the applicatio
 
 - [Installed app discovery](Installed-App-Discovery) — **shipped** — Detects reviewed registry installs while keeping external discovery separate from exact App Store ownership and removal authority.
 - [Launch installed applications](Launch-Installed-Applications) — **limited** — Starts an App Store-managed application through its exact reviewed executable identity without accepting renderer-supplied paths, commands, or arguments.
-- [Activity history and export](Activity-History) — **shipped** — Appends every install, build, and uninstall result, offers composed filters, exports the selected or filtered log, and links into local version history.
+- [Activity history and export](Activity-History) — **shipped** — Records the operation and selected settings outcomes that the App Store actually emits, offers composed filters, exports the selected or filtered log, and links into local version history.
 - [Local history and version restore](History-Versioning) — **limited** — Browses bounded local-Git snapshots with diff, labels, and an explicit reversible restore path.
 
 ## Updates and schedules
