@@ -11,6 +11,7 @@ import { adapterFor, selectInstallerAsset, type ExecutableInstallAdapter, type I
 import { InstalledService } from './installed-service.js';
 import { extractZipSafe } from './safe-zip.js';
 import type { RegistryUninstallEntry } from './installed-detection.js';
+import { AppOperationCoordinator } from './app-operation-coordinator.js';
 
 const MAX_DOWNLOAD_BYTES = 1_500_000_000;
 const MAX_CHECKSUM_BYTES = 128_000;
@@ -342,6 +343,7 @@ export class OperationService {
     private readonly installed: InstalledService,
     private readonly publishProgress: (event: Readonly<OperationProgressEvent>) => void = () => undefined,
     private readonly publishProcessObservation: (observation: Readonly<ProcessExecutionObservation>) => void = () => undefined,
+    private readonly coordinator: AppOperationCoordinator = new AppOperationCoordinator(),
   ) {}
 
   private progressEvent(active: ActiveOperation, phase: OperationProgressPhase, message: string, final = false, locked = false, cancellable = false, progress: number | null = null): OperationProgressEvent {
@@ -406,16 +408,38 @@ export class OperationService {
 
   async install(request: unknown): Promise<OperationResult> {
     if (!isOperationRequest(request)) return invalidRequest('install');
-    const record = await this.catalog.recordFor(request.appId);
-    if (!proofStatusAllowsPrivilegedAction(record.proofStatus)) return this.finish(record, 'install', { ok: false, appId: record.id, message: proofStatusBlockMessage(record) });
+    const lease = this.coordinator.acquire(request.appId, 'install');
+    if (!lease) return { ok: false, appId: request.appId, message: 'This application already has an install, update, uninstall, or launch operation in progress.', messageYue: '呢個 app 已經有安裝、更新、卸載或者啟動操作進行緊。' };
+    let record;
+    try {
+      record = await this.catalog.recordFor(request.appId);
+    } catch (error) {
+      lease.release();
+      throw error;
+    }
+    if (!proofStatusAllowsPrivilegedAction(record.proofStatus)) {
+      lease.release();
+      return this.finish(record, 'install', { ok: false, appId: record.id, message: proofStatusBlockMessage(record) });
+    }
     if (request.decision !== 'install') {
+      lease.release();
       return this.finish(record, 'install', { ok: false, appId: request.appId, message: 'The install request did not carry the matching user decision.' });
     }
-    const adapter = adapterFor(record.id);
-    if (!adapter.supported) return this.finish(record, 'install', { ok: false, appId: record.id, message: adapter.blocker });
+    let adapter: InstallAdapter;
+    try {
+      adapter = adapterFor(record.id);
+    } catch (error) {
+      lease.release();
+      throw error;
+    }
+    if (!adapter.supported) {
+      lease.release();
+      return this.finish(record, 'install', { ok: false, appId: record.id, message: adapter.blocker });
+    }
 
     const operationKey = record.id;
     if (this.activeOperations.has(operationKey)) {
+      lease.release();
       return this.finish(record, 'install', { ok: false, appId: request.appId, message: `${record.displayName} already has an install or uninstall operation in progress.` });
     }
     const controller = new AbortController();
@@ -494,6 +518,8 @@ export class OperationService {
         this.activeOperations.delete(operationKey);
       }
     }
+    if (retainOperationLock) lease.retain();
+    else lease.release();
     const finalPhase: OperationProgressPhase = retainOperationLock
       ? 'unknown'
       : result.ok ? 'succeeded' : controller.signal.aborted ? 'cancelled' : 'failed';
@@ -570,12 +596,22 @@ export class OperationService {
 
   async uninstall(request: unknown): Promise<OperationResult> {
     if (!isOperationRequest(request)) return invalidRequest('uninstall');
-    const record = await this.catalog.recordFor(request.appId);
+    const lease = this.coordinator.acquire(request.appId, 'uninstall');
+    if (!lease) return { ok: false, appId: request.appId, message: 'This application already has an install, update, uninstall, or launch operation in progress.', messageYue: '呢個 app 已經有安裝、更新、卸載或者啟動操作進行緊。' };
+    let record;
+    try {
+      record = await this.catalog.recordFor(request.appId);
+    } catch (error) {
+      lease.release();
+      throw error;
+    }
     if (request.decision !== 'uninstall') {
+      lease.release();
       return this.finish(record, 'uninstall', { ok: false, appId: request.appId, message: 'The uninstall request did not carry the matching destructive decision.' });
     }
     const operationKey = record.id;
     if (this.activeOperations.has(operationKey)) {
+      lease.release();
       return this.finish(record, 'uninstall', { ok: false, appId: request.appId, message: `${record.displayName} already has an install or uninstall operation in progress.` });
     }
     this.activeOperations.set(operationKey, {
@@ -617,6 +653,8 @@ export class OperationService {
       result = { ok: false, appId: request.appId, message: `${(error as Error).message}${retainOperationLock ? ' This application remains locked until restart.' : ''}` };
     }
     if (!retainOperationLock) this.activeOperations.delete(operationKey);
+    if (retainOperationLock) lease.retain();
+    else lease.release();
     return this.finish(record, 'uninstall', result);
   }
 

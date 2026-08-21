@@ -35,6 +35,7 @@ import { StateMutationQueue } from './state-mutation-queue.js';
 import { PersonalVocabularyService } from './personal-vocabulary-service.js';
 import { HistoryAccessService, type HistoryAccessUnlockRequest } from './history-access-service.js';
 import { AuthenticatorHistoryParticipant } from './authenticator-history-participant.js';
+import { AppOperationCoordinator } from './app-operation-coordinator.js';
 
 const scheduleTaskSchema = z.enum(['self-update', 'catalog-refresh']);
 const PRODUCT_NAME = 'Ding Ding App Store';
@@ -157,11 +158,12 @@ void app.whenReady().then(async () => {
   await history.recoverPendingRestore();
   const installed = new InstalledService(catalog);
   catalog.setInstalledProvider(async () => await installed.list(true));
+  const operationCoordinator = new AppOperationCoordinator();
   const operations = new OperationService(catalog, history, installed, (event) => {
     const contents = mainWindow?.webContents;
     if (!contents || contents.isDestroyed()) return;
     try { contents.send('operations:progress', event); } catch { /* Renderer teardown must never interrupt a privileged install. */ }
-  });
+  }, () => undefined, operationCoordinator);
   const settings = new SettingsService(history);
   const personalVocabulary = new PersonalVocabularyService();
   const schoolMode = new SchoolModeService();
@@ -270,8 +272,8 @@ void app.whenReady().then(async () => {
     (event) => mainWindow?.webContents.send('source-jobs:event', event),
   );
   const updates = new UpdateService(() => mainWindow);
-  const managedUpdates = new ManagedUpdateService(catalog, installed, history, () => mainWindow, (appId) => operations.hasActive(appId));
-  const appLaunch = new AppLaunchService(catalog, installed, history, (appId) => operations.hasActive(appId) || managedUpdates.isBusy(appId));
+  const managedUpdates = new ManagedUpdateService(catalog, installed, history, () => mainWindow, (appId) => operations.hasActive(appId), operationCoordinator);
+  const appLaunch = new AppLaunchService(catalog, installed, history, (appId) => operations.hasActive(appId) || managedUpdates.isBusy(appId), undefined, operationCoordinator);
   const workspace = new WorkspaceService();
   const appearance = new AppearanceService((key, next, current) => lockSupport.assertAppearanceMutation(key, next, current));
   const schedule = new ScheduleService();
@@ -347,7 +349,8 @@ void app.whenReady().then(async () => {
   ipcMain.handle('updates:store-restart', () => stateMutationQueue.run(() => updates.restart()));
   ipcMain.handle('updates:store-cancel-download', () => updates.cancelDownload());
   ipcMain.handle('updates:open-release-notes', (_event, url: unknown) => updates.openReleaseNotes(typeof url === 'string' ? url : ''));
-  ipcMain.handle('updates:app-check', (event, appId: unknown) => event.sender === mainWindow?.webContents ? managedUpdates.checkApp(typeof appId === 'string' ? appId : 'invalid') : managedUpdates.checkApp('invalid'));
+  ipcMain.handle('updates:app-state', (event) => event.sender === mainWindow?.webContents ? managedUpdates.currentStates() : []);
+  ipcMain.handle('updates:app-check', (event, appId: unknown) => stateMutationQueue.run(() => event.sender === mainWindow?.webContents ? managedUpdates.checkApp(typeof appId === 'string' ? appId : 'invalid') : managedUpdates.checkApp('invalid')));
   ipcMain.handle('updates:app-download', (event, request: unknown) => stateMutationQueue.run(async () => {
     if (event.sender !== mainWindow?.webContents) return managedUpdates.download({ appId: 'invalid', decision: 'download-update' });
     const blocked = await blockedCatalogRecord(catalog, request);
