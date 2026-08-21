@@ -168,6 +168,14 @@ export class InstalledService {
       }
     }
     const installedRecord = { ...discovered, version, source: 'store' as const, installedAt: new Date().toISOString() };
+    if (adapter.family === 'squirrel') {
+      const requested = semver.coerce(version);
+      const observed = semver.coerce(discovered.version);
+      const appDirectory = discovered.installRoot && requested ? path.join(discovered.installRoot, `app-${requested.version}`) : null;
+      if (!requested || !observed || semver.compare(requested, observed) !== 0 || !appDirectory || !await exists(appDirectory)) {
+        throw new Error('The installer exited successfully, but the requested Squirrel app directory did not independently prove the installed version.');
+      }
+    }
     await this.record(installedRecord);
     return installedRecord;
   }

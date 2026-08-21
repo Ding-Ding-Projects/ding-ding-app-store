@@ -8,6 +8,7 @@ import { CatalogService, proofStatusAllowsPrivilegedAction, proofStatusBlockMess
 import { HistoryService } from './history-service.js';
 import { adapterFor, type ExecutableInstallAdapter, type PortableZipInstallAdapter } from './install-adapters.js';
 import { InstalledService } from './installed-service.js';
+import { AppOperationCoordinator } from './app-operation-coordinator.js';
 
 const LAUNCH_CONFIRM_TIMEOUT_MS = 2_000;
 
@@ -59,6 +60,9 @@ async function validateLaunchTarget(root: string, candidate: string, allowedBase
     throw new Error('The installed executable did not match the reviewed launch identity.');
   }
   await assertNoLinkedPath(root, candidate, fileSystem);
+  // Lexical validation plus realpath closes ordinary junction/symlink escapes;
+  // it cannot solve a same-user path-string TOCTOU race between these reads and
+  // the OS process creation. The launch boundary therefore does not claim that.
   const [resolvedRoot, resolvedTarget] = await Promise.all([fileSystem.realpath(root), fileSystem.realpath(candidate)]);
   if (!pathIsInside(resolvedTarget, resolvedRoot)) throw new Error('The reviewed launch target escaped its resolved installation root.');
   const targetStat = await fileSystem.stat(resolvedTarget);
@@ -157,13 +161,30 @@ export class AppLaunchService {
     private readonly history: HistoryService,
     private readonly operationBusy: (appId: string) => boolean = () => false,
     private readonly launchProcess: (executable: string, workingDirectory: string) => Promise<void> = startDetached,
+    private readonly coordinator: AppOperationCoordinator = new AppOperationCoordinator(),
   ) {}
 
   async launch(request: unknown): Promise<OperationResult> {
     if (!isAppLaunchRequest(request)) return { ok: false, appId: 'invalid', message: 'Invalid launch request. Only a catalog application ID and matching user decision are accepted.' };
-    const record = await this.catalog.recordFor(request.appId);
-    if (!proofStatusAllowsPrivilegedAction(record.proofStatus)) return { ok: false, appId: record.id, message: proofStatusBlockMessage(record) };
-    if (this.operationBusy(record.id)) return { ok: false, appId: record.id, message: `${record.displayName} already has an install, update, uninstall, or launch operation in progress.` };
+    // This is deliberately before catalog I/O: two renderer requests can reach
+    // this synchronous section in the same turn and only one may cross the
+    // privileged launch boundary.
+    const lease = this.coordinator.acquire(request.appId, 'launch');
+    if (!lease || this.operationBusy(request.appId)) {
+      lease?.release();
+      return { ok: false, appId: request.appId, message: 'This application already has an install, update, uninstall, or launch operation in progress.' };
+    }
+    let record;
+    try {
+      record = await this.catalog.recordFor(request.appId);
+    } catch (error) {
+      lease.release();
+      throw error;
+    }
+    if (!proofStatusAllowsPrivilegedAction(record.proofStatus)) {
+      lease.release();
+      return { ok: false, appId: record.id, message: proofStatusBlockMessage(record) };
+    }
     let result: OperationResult;
     try {
       const installed = await this.installed.get(record.id);
@@ -175,6 +196,7 @@ export class AppLaunchService {
       result = { ok: false, appId: record.id, message: safeLaunchFailure(error) };
     }
     await this.history.record({ appId: record.id, displayName: record.displayName, kind: 'launch', ok: result.ok, message: result.message }).catch(() => undefined);
+    lease.release();
     return result;
   }
 }

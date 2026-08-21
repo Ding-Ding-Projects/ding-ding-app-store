@@ -136,6 +136,11 @@ describe('hand-written 40-row universal install adapter coverage', () => {
       }
     }
   });
+
+  it('keeps Material Ollama launch identity on the canonical GUI executable only', () => {
+    expect(adapterFor('material-ollama')).toMatchObject({ launchExecutableNames: ['ollama app.exe'] });
+    expect(adapterFor('material-ollama')).not.toMatchObject({ launchExecutableNames: expect.arrayContaining(['ollama.exe']) });
+  });
 });
 
 describe('installer integrity and archive inputs', () => {

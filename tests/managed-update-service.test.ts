@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
-import { managedUpdateInternals } from '../src/main/managed-update-service.js';
+import { classifyManagedUpdateError, managedUpdateInternals } from '../src/main/managed-update-service.js';
 
 const read = (file: string) => readFile(new URL(`../${file}`, import.meta.url), 'utf8');
 
@@ -31,6 +31,14 @@ describe('managed per-app update contracts', () => {
     expect(managedUpdateInternals.isManagedUpdateCancelRequest({ appId: 'material-designer', decision: 'cancel-update' })).toBe(true);
   });
 
+  it('classifies update failures into bounded path-free bilingual messages', () => {
+    const classified = classifyManagedUpdateError(new Error('Release asset SHA-256 digest mismatch at C:\\Users\\secret\\stage.exe'));
+    expect(classified.message).toContain('integrity check');
+    expect(classified.message).not.toMatch(/[A-Z]:\\|\\\\Users/);
+    expect(classified.messageYue.length).toBeGreaterThan(0);
+    expect(classifyManagedUpdateError(new Error('Release download failed: HTTP 503')).message).toContain('downloaded');
+  });
+
   it('has the separate staged state machine, progress, cancellation, and explicit install boundary', async () => {
     const service = await read('src/main/managed-update-service.ts');
     for (const contract of [
@@ -38,6 +46,8 @@ describe('managed per-app update contracts', () => {
       'AbortController', 'AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS)', 'onProgress', 'updates:app-state',
       'install-update', 'shell: false', 'windowsHide: true', 'MAX_DOWNLOAD_BYTES', 'MAX_REDIRECTS',
       'persistedPath', 'replacePortableDirectory', 'recordHistory(candidate.record, true', 'async checkAll()',
+      'checkGenerations', 'stageMatchesCandidate', 'repository: candidate.record.repository', 'adapterId: candidate.adapter.id',
+      'currentStates()', 'publishCheck',
     ]) expect(service).toContain(contract);
     expect(service).not.toMatch(/request\.path|request\.url|request\.command/);
     const main = await read('src/main/main.ts');

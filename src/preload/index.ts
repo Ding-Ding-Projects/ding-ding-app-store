@@ -487,6 +487,11 @@ const api: DingDingStoreApi = {
     subscribeApp: (listener: (state: ManagedUpdateState) => void) => {
       const handler = (_event: Electron.IpcRendererEvent, state: ManagedUpdateState) => listener(state);
       ipcRenderer.on('updates:app-state', handler);
+      // Replay state after registering the listener so a renderer opened after
+      // restore/check never waits for the next background transition.
+      void ipcRenderer.invoke('updates:app-state').then((states: unknown) => {
+        if (Array.isArray(states)) for (const state of states) listener(state as ManagedUpdateState);
+      }).catch(() => undefined);
       return () => ipcRenderer.removeListener('updates:app-state', handler);
     },
     subscribe: (listener: (state: AppStoreUpdateState) => void) => {

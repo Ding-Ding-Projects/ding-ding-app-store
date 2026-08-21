@@ -101,7 +101,11 @@ export function proofStatusBlockMessage(record: Pick<CatalogRecord, 'displayName
   return `${record.displayName} is unavailable because its proof status is not verified. Install, launch, build, and update actions remain blocked.`;
 }
 
-function normalizeCachedProofStatus(app: CatalogApp): CatalogApp {
+function normalizeCachedProofStatus(app: CatalogApp): CatalogApp | null {
+  // A cache can outlive a reviewed manifest.  Unknown IDs are stale data, not
+  // a reason to throw from the catalog screen; fail closed by dropping them.
+  try { adapterFor(app.id); }
+  catch { return null; }
   const proofStatus: CatalogProofStatus = app.proofStatus === 'verified' || app.proofStatus === 'not-required' || app.proofStatus === 'blocked-until-proof'
     ? app.proofStatus
     : 'blocked-until-proof';
@@ -206,7 +210,7 @@ export class CatalogService {
       warning,
       // Old cache files may predate the typed proof fields. Unknown or missing
       // proof is normalized to blocked before any renderer or operation sees it.
-      apps: applyVerifiedInstalledState(snapshot.apps.map(normalizeCachedProofStatus), installed),
+      apps: applyVerifiedInstalledState(snapshot.apps.map(normalizeCachedProofStatus).filter((record): record is CatalogApp => record !== null), installed),
     };
   }
 
