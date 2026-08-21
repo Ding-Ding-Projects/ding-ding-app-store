@@ -30,6 +30,9 @@ describe('fresh-machine build entry points', () => {
     expect(common).toContain('npm ci');
     expect(common).toContain("@('run', 'build')");
     expect(common).toContain('https://nodejs.org/dist/');
+    expect(common).toContain('function Invoke-BoundedDownload');
+    expect(common).toContain("'--connect-timeout' '15' '--max-time' '120'");
+    expect(common).toContain('Invoke-WebRequest -UseBasicParsing -Uri $Uri -OutFile $Destination -TimeoutSec 120');
     expect(common).toContain('function Get-Sha256');
     expect(common).toContain('[Security.Cryptography.SHA256]::Create()');
     expect(common).toContain('[IO.File]::OpenRead($LiteralPath)');
@@ -48,6 +51,13 @@ describe('fresh-machine build entry points', () => {
     expect(installer).toContain('Invoke-ProjectInstaller');
     expect(installer).toContain('Get-Sha256 -LiteralPath $result.Setup.FullName');
     expect(installer).not.toMatch(/\bGet-FileHash\b/);
+    const assertBoundedDownloads = (source: string) => {
+      for (const marker of ['function Invoke-BoundedDownload', "'--max-time' '120'", '-TimeoutSec 120', "Remove-Item -LiteralPath $Destination -Force"]) {
+        if (!source.includes(marker)) throw new Error(`Missing bounded download marker: ${marker}`);
+      }
+    };
+    assertBoundedDownloads(common);
+    expect(() => assertBoundedDownloads(common.replaceAll("'--max-time' '120'", '').replaceAll('-TimeoutSec 120', ''))).toThrow(/Missing bounded download marker/);
   });
 
   it('has a fail-closed regression for removing the bounded PE inspection route', async () => {
