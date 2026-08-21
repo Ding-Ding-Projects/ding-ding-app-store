@@ -41,6 +41,30 @@ describe('managed per-app update contracts', () => {
     expect(classifyManagedUpdateError(new Error('Release download failed: HTTP 503')).message).toContain('downloaded');
   });
 
+  it('reports stable path-free step codes for portable update failures', () => {
+    const cases = [
+      ['EUPDATE_EXTRACT', 'extracted'],
+      ['EUPDATE_REPLACE', 'replaced'],
+      ['EUPDATE_RECORD', 'recorded'],
+      ['EUPDATE_STAGE_CLEANUP', 'staged record'],
+      ['EUPDATE_ROLLBACK_INCOMPLETE', 'could not be proven'],
+    ] as const;
+    for (const [code, phrase] of cases) {
+      const classified = classifyManagedUpdateError(new Error(`${code}:EPERM C:\\Users\\secret\\managed-app`));
+      expect(classified.message).toContain(code);
+      expect(classified.message).toContain(phrase);
+      expect(classified.message).not.toMatch(/[A-Z]:\\|\\\\Users|managed-app/);
+      expect(classified.messageYue).toContain(code);
+    }
+
+    const stepError = managedUpdateInternals.managedUpdateStepError(
+      'EUPDATE_REPLACE',
+      Object.assign(new Error('C:\\Users\\secret\\managed-app'), { code: 'EPERM' }),
+    );
+    expect(stepError.message).toBe('EUPDATE_REPLACE:EPERM');
+    expect(stepError).toMatchObject({ code: 'EUPDATE_REPLACE' });
+  });
+
   it('removes partial extraction output before and after a retryable archive failure', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'ding-ding-managed-update-extract-'));
     const archive = path.join(root, 'broken.zip');

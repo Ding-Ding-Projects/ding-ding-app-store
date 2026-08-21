@@ -115,12 +115,36 @@ function validPersistedStage(stage: PersistedStage): boolean {
 
 export interface ManagedUpdateErrorMessages { message: string; messageYue: string; }
 
+type ManagedUpdateStepCode = 'EUPDATE_EXTRACT' | 'EUPDATE_REPLACE' | 'EUPDATE_RECORD' | 'EUPDATE_STAGE_CLEANUP' | 'EUPDATE_ROLLBACK_INCOMPLETE';
+
+function managedUpdateStepError(code: ManagedUpdateStepCode, error: unknown): Error {
+  const nativeCode = typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'string' && /^[A-Z0-9_]{1,32}$/.test(error.code)
+    ? `:${error.code}`
+    : '';
+  return Object.assign(new Error(`${code}${nativeCode}`), { code });
+}
+
 /** Convert arbitrary transport/installer exceptions into bounded, path-free UI copy. */
 export function classifyManagedUpdateError(error: unknown): ManagedUpdateErrorMessages {
   const raw = error instanceof Error ? error.message : '';
   let message = 'The managed update could not complete. No update was installed.';
   let messageYue = '管理更新未能完成，今次冇安裝到更新。';
-  if (/cancel/i.test(raw)) {
+  if (/EUPDATE_ROLLBACK_INCOMPLETE/.test(raw)) {
+    message = 'The managed update failed and recovery could not be proven (EUPDATE_ROLLBACK_INCOMPLETE). Refresh the installed state before launching or retrying.';
+    messageYue = '管理更新失敗，而且未能證實已完整還原（EUPDATE_ROLLBACK_INCOMPLETE）；啟動或重試前請先重新整理已安裝狀態。';
+  } else if (/EUPDATE_EXTRACT/.test(raw)) {
+    message = 'The verified update archive could not be extracted (EUPDATE_EXTRACT). No update was installed.';
+    messageYue = '已驗證更新壓縮檔未能解壓（EUPDATE_EXTRACT），今次冇安裝到更新。';
+  } else if (/EUPDATE_REPLACE/.test(raw)) {
+    message = 'The managed application directory could not be replaced (EUPDATE_REPLACE). The previous version remains in place.';
+    messageYue = '未能替換受管應用程式目錄（EUPDATE_REPLACE），舊版本仍然保留。';
+  } else if (/EUPDATE_RECORD/.test(raw)) {
+    message = 'The updated installation could not be recorded (EUPDATE_RECORD). The previous version was restored.';
+    messageYue = '未能記錄更新後嘅安裝（EUPDATE_RECORD），已還原舊版本。';
+  } else if (/EUPDATE_STAGE_CLEANUP/.test(raw)) {
+    message = 'The update installed, but its staged record could not be cleared (EUPDATE_STAGE_CLEANUP). Refresh before another action.';
+    messageYue = '更新已安裝，但未能清除暫存記錄（EUPDATE_STAGE_CLEANUP）；做其他操作前請先重新整理。';
+  } else if (/cancel/i.test(raw)) {
     message = 'The managed update was cancelled. No update was installed.';
     messageYue = '管理更新已取消，今次冇安裝到更新。';
   } else if (/digest|checksum|integrity/i.test(raw)) {
@@ -168,7 +192,7 @@ async function extractManagedUpdateArchive(archivePath: string, extracted: strin
     await extractZipSafe(archivePath, extracted);
   } catch (error) {
     await rm(extracted, { recursive: true, force: true }).catch(() => undefined);
-    throw error;
+    throw managedUpdateStepError('EUPDATE_EXTRACT', error);
   }
 }
 
@@ -518,7 +542,8 @@ export class ManagedUpdateService {
         if (exitCode !== 0) throw new Error(`Managed update installer exited with code ${exitCode}.`);
         await this.installed.recordInstalledFromRegistry(candidate.record, before, candidate.version);
       }
-      await this.removeStage(stage);
+      try { await this.removeStage(stage); }
+      catch (error) { throw managedUpdateStepError('EUPDATE_STAGE_CLEANUP', error); }
       this.publish({ appId: request.appId, status: 'up-to-date', installedVersion: candidate.version, checkedAt: new Date().toISOString() });
       result = { ok: true, appId: request.appId, message: `${candidate.record.displayName} ${candidate.version} installed. The target application may need its own restart to load the new version.`, messageYue: `${candidate.record.displayName} ${candidate.version} 已安裝；目標應用程式可能要自行重新啟動先載入新版本。` };
       await this.recordHistory(candidate.record, true, result.message, result.messageYue);
@@ -543,9 +568,21 @@ export class ManagedUpdateService {
     await mkdir(this.installed.managedPortableRoot, { recursive: true });
     const target = path.join(this.installed.managedPortableRoot, record.id);
     const backup = path.join(this.installed.managedPortableRoot, `${record.id}.update-backup-${randomUUID()}`);
-    await replacePortableDirectory(extracted, target, backup, async () => {
-      await this.installed.record({ appId: record.id, displayName: record.displayName, version, packageType: 'archive', source: 'portable-managed', installRoot: target, uninstall: { kind: 'portable', executable: null, arguments: [] }, ownership: { kind: 'portable', adapterId: adapter.id, installRoot: target }, installedAt: new Date().toISOString(), detectedAt: new Date().toISOString() });
-    });
+    try {
+      await replacePortableDirectory(extracted, target, backup, async () => {
+        try {
+          await this.installed.record({ appId: record.id, displayName: record.displayName, version, packageType: 'archive', source: 'portable-managed', installRoot: target, uninstall: { kind: 'portable', executable: null, arguments: [] }, ownership: { kind: 'portable', adapterId: adapter.id, installRoot: target }, installedAt: new Date().toISOString(), detectedAt: new Date().toISOString() });
+        } catch (error) {
+          throw managedUpdateStepError('EUPDATE_RECORD', error);
+        }
+      });
+    } catch (error) {
+      if (error instanceof Error && /Rollback incomplete/.test(error.message)) {
+        throw managedUpdateStepError('EUPDATE_ROLLBACK_INCOMPLETE', error);
+      }
+      if (error instanceof Error && /EUPDATE_RECORD/.test(error.message)) throw error;
+      throw managedUpdateStepError('EUPDATE_REPLACE', error);
+    }
   }
 
   private filePath(stage: PersistedStage): string { return path.join(this.stagingRoot, stage.operationId, stage.assetName); }
@@ -584,4 +621,4 @@ export class ManagedUpdateService {
   }
 }
 
-export const managedUpdateInternals = { githubDigest, assertReleaseUrl, isManagedUpdateRequest, isManagedUpdateCancelRequest, checksumFromCompanion, extractManagedUpdateArchive };
+export const managedUpdateInternals = { githubDigest, assertReleaseUrl, isManagedUpdateRequest, isManagedUpdateCancelRequest, checksumFromCompanion, extractManagedUpdateArchive, managedUpdateStepError };
