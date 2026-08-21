@@ -284,6 +284,23 @@ describe('installer integrity and archive inputs', () => {
     expect(paths).toEqual(new Set(['target']));
   });
 
+  it('never deletes the untouched old target when the first portable rename fails', async () => {
+    const paths = new Set(['extracted', 'target']);
+    const removed: string[] = [];
+    const operations = {
+      async stat(target: string) { return paths.has(target) ? {} : null; },
+      async rename(from: string, to: string) {
+        if (from === 'target') throw Object.assign(new Error('permanent rename failure'), { code: 'EIO' });
+        if (!paths.delete(from)) throw new Error(`missing ${from}`);
+        paths.add(to);
+      },
+      async rm(target: string) { removed.push(target); paths.delete(target); },
+    };
+    await expect(replacePortableDirectory('extracted', 'target', 'backup', async () => undefined, operations)).rejects.toThrow('permanent rename failure');
+    expect(removed).toEqual([]);
+    expect(paths).toEqual(new Set(['extracted', 'target']));
+  });
+
   it('rolls portable bytes back before the metadata commit and surfaces rollback failure', async () => {
     const paths = new Set(['extracted', 'target']);
     const operations = {
