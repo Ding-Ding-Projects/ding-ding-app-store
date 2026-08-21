@@ -1,4 +1,6 @@
-import { readFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { classifyManagedUpdateError, managedUpdateInternals } from '../src/main/managed-update-service.js';
 
@@ -37,6 +39,21 @@ describe('managed per-app update contracts', () => {
     expect(classified.message).not.toMatch(/[A-Z]:\\|\\\\Users/);
     expect(classified.messageYue.length).toBeGreaterThan(0);
     expect(classifyManagedUpdateError(new Error('Release download failed: HTTP 503')).message).toContain('downloaded');
+  });
+
+  it('removes partial extraction output before and after a retryable archive failure', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'ding-ding-managed-update-extract-'));
+    const archive = path.join(root, 'broken.zip');
+    const extracted = path.join(root, 'expanded');
+    try {
+      await writeFile(archive, 'not a zip');
+      await mkdir(extracted);
+      await writeFile(path.join(extracted, 'stale.bin'), 'stale partial output');
+      await expect(managedUpdateInternals.extractManagedUpdateArchive(archive, extracted)).rejects.toThrow();
+      await expect(stat(extracted)).rejects.toMatchObject({ code: 'ENOENT' });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   it('has the separate staged state machine, progress, cancellation, and explicit install boundary', async () => {

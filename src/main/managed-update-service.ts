@@ -160,6 +160,18 @@ async function hashFile(filePath: string): Promise<string> {
   return hash.digest('hex');
 }
 
+async function extractManagedUpdateArchive(archivePath: string, extracted: string): Promise<void> {
+  // A failed extraction is retryable only when the caller does not leave its
+  // exclusive-create destination half populated. Both paths are app-owned.
+  await rm(extracted, { recursive: true, force: true });
+  try {
+    await extractZipSafe(archivePath, extracted);
+  } catch (error) {
+    await rm(extracted, { recursive: true, force: true }).catch(() => undefined);
+    throw error;
+  }
+}
+
 async function downloadWithDigest(
   asset: ReleaseAsset,
   destination: string,
@@ -524,7 +536,7 @@ export class ManagedUpdateService {
 
   private async installPortable(record: CatalogRecord, adapter: PortableZipInstallAdapter, archivePath: string, version: string): Promise<void> {
     const extracted = path.join(path.dirname(archivePath), 'expanded');
-    await extractZipSafe(archivePath, extracted);
+    await extractManagedUpdateArchive(archivePath, extracted);
     const executable = path.join(extracted, adapter.executableRelativePath);
     const executableStat = await stat(executable).catch(() => null);
     if (!executableStat?.isFile() || executableStat.size <= 0) throw new Error(`Portable update archive is missing ${adapter.executableRelativePath}.`);
@@ -572,4 +584,4 @@ export class ManagedUpdateService {
   }
 }
 
-export const managedUpdateInternals = { githubDigest, assertReleaseUrl, isManagedUpdateRequest, isManagedUpdateCancelRequest, checksumFromCompanion };
+export const managedUpdateInternals = { githubDigest, assertReleaseUrl, isManagedUpdateRequest, isManagedUpdateCancelRequest, checksumFromCompanion, extractManagedUpdateArchive };
