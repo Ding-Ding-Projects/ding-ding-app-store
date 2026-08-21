@@ -37,7 +37,7 @@ The recovery line names the real application-data folder because a forgotten toy
 
 ## Verification
 
-Focused type checks cover the new main and renderer contracts. Source-level Chuts assert the safe-storage encryption boundary, salted verifier and timing-safe comparison, sender validation for every new IPC route, local-only ticket wording, recovery-folder opening without deletion, and the absence of network calls. Renderer checks cover Settings → Locks & Support, Help's Open Locks & Support action, lock indicators, inline unlock and recovery text, the three unlock-duration choices, bilingual labels, keyboard-reachable controls, and the vault-unavailable disabled state. Runtime verification should still use the packaged application on the sanctioned hidden desktop before a release claim.
+Focused type checks cover the new main and renderer contracts. Source-level guards assert the safe-storage encryption boundary, salted verifier and timing-safe comparison, sender validation for every new IPC route, local-only ticket wording, recovery-folder opening without deletion, and the absence of network calls. Renderer checks cover Settings → Locks & Support, Help's Open Locks & Support action, lock indicators, inline unlock and recovery text, the three unlock-duration choices, bilingual labels, keyboard-reachable controls, and the vault-unavailable disabled state. Runtime verification should still use the packaged application on the sanctioned hidden desktop before a release claim.
 
 ## Suggested articles
 

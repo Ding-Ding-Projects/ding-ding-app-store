@@ -30,6 +30,7 @@ const app: CatalogApp = {
   latestReleaseUrl: 'https://github.com/Ding-Ding-Projects/codex-material/releases/tag/v2.0.0',
   availability: 'installable',
   packageType: 'msi',
+  launchAvailable: false,
   proofStatus: 'verified',
   proofTargetId: null,
   installedVersion: '1.0.0',
@@ -37,15 +38,15 @@ const app: CatalogApp = {
   docsAvailable: true,
 };
 
-function render(installedRecord: InstalledAppRecord, userSettings: UserSettings = settings) {
+function render(installedRecord: InstalledAppRecord, userSettings: UserSettings = settings, catalogApp: CatalogApp = app) {
   return renderToStaticMarkup(createElement(AppCard, {
-    app,
+    app: catalogApp,
     installedRecord,
     settings: userSettings,
     onAction: vi.fn(),
     onManagedUpdate: vi.fn(),
     onCancelInstall: vi.fn(),
-    managedUpdate: { appId: app.id, status: 'ready', installedVersion: '1.0.0', version: '2.0.0', releaseNotesUrl: app.latestReleaseUrl, progress: 100, bytesDownloaded: 1, bytesTotal: 1, unsigned: true },
+    managedUpdate: { appId: catalogApp.id, status: 'ready', installedVersion: '1.0.0', version: '2.0.0', releaseNotesUrl: catalogApp.latestReleaseUrl!, progress: 100, bytesDownloaded: 1, bytesTotal: 1, unsigned: true },
     operationProgress: undefined,
     searchLabel: app.name,
     runningAction: null,
@@ -71,9 +72,30 @@ describe('discovery-only app card', () => {
     expect(markup).toContain('Detected outside App Store');
     expect(markup).toContain('This App Store did not install it');
     expect(markup).not.toContain('data-install-action');
+    expect(markup).not.toContain('data-launch-action');
     expect(markup).not.toContain('>Uninstall<');
     expect(markup).not.toContain('Download update');
-    expect(markup).not.toContain('Restart to install update');
+    expect(markup).not.toContain('Install update');
+  });
+
+  it('shows a real launch action only for a proof-verified App Store-managed row with a reviewed launch identity', () => {
+    const managed: InstalledAppRecord = {
+      appId: app.id, displayName: app.name, version: '1.0.0', packageType: 'msi', source: 'store', installRoot: 'C:\\Program Files\\Codex Material',
+      uninstall: { kind: 'msi', executable: 'msiexec.exe', arguments: ['/x', '{12345678-1234-1234-1234-1234567890AB}', '/qn', '/norestart'] },
+      ownership: { kind: 'registry', adapterId: 'codex-material-msi', registryKey: 'HKLM\\Software\\fixture', fingerprint: 'a'.repeat(64) },
+      installedAt: '2026-08-08T00:00:00.000Z', detectedAt: '2026-08-08T00:00:00.000Z',
+    };
+    const launchable = render(managed, settings, { ...app, launchAvailable: true });
+    expect(launchable).toContain(`data-launch-action="${app.id}"`);
+    expect(launchable).toContain('>Launch<');
+    expect(launchable).not.toContain('C:\\Program Files');
+
+    const unavailable = render(managed, settings, { ...app, launchAvailable: false });
+    expect(unavailable).not.toContain('data-launch-action');
+    expect(unavailable).toContain('Launch unavailable');
+
+    const blocked = render(managed, settings, { ...app, launchAvailable: true, proofStatus: 'blocked-until-proof', proofTargetId: 'clean-windows' });
+    expect(blocked).not.toContain('data-launch-action');
   });
 
   it('localizes catalog status and management facts through the persisted language mode', () => {

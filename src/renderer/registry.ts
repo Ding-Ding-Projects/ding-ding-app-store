@@ -91,6 +91,7 @@ export type CommandId =
   | `edit-element:${string}`
   | `reset-element:${string}`
   | `open-app:${string}`
+  | `launch-app:${string}`
   | `open-doc:${string}`
   | `rail-side:${string}`
   | `label-mode:${string}`
@@ -336,6 +337,7 @@ export interface RegistryContext {
   appearance: Partial<Record<ElementKey, ElementOverride>>;
   schedule: ScheduleConfig;
   apps: CatalogApp[];
+  managedAppIds?: ReadonlySet<string>;
   /** School mode keeps its own English route but omits hidden language/voice and dim-sum discoverability. */
   schoolModeEnabled?: boolean;
   schoolModeName?: string;
@@ -452,7 +454,7 @@ const appearanceControl = (token: TokenId, override: ElementOverride | undefined
 };
 
 export function buildRegistry(context: RegistryContext): Entry[] {
-  const { settings, workspace, appearance, schedule, apps, schoolModeEnabled = false, schoolModeName = 'School mode' } = context;
+  const { settings, workspace, appearance, schedule, apps, managedAppIds = new Set<string>(), schoolModeEnabled = false, schoolModeName = 'School mode' } = context;
   const entries: Entry[] = [];
   const visibleSurfaces = SURFACES.filter((surface) => !(schoolModeEnabled && surface.surface === 'authenticator')).map((surface) => schoolModeEnabled && surface.surface === 'settings.general'
     ? { ...surface, keywords: ['settings', 'shared', 'credential', 'source', 'repair'] }
@@ -644,6 +646,9 @@ export function buildRegistry(context: RegistryContext): Entry[] {
       en: app.name, yue: app.name, keywords: [app.repository, app.packageType, app.updateState],
       action: { type: 'command', command: `open-app:${app.id}`, target: { surface: 'catalog', focusId: 'search-catalog' } },
     });
+    if (app.proofStatus === 'verified' && app.launchAvailable && managedAppIds.has(app.id)) {
+      entries.push(command(`launch-app:${app.id}` as CommandId, `Launch ${app.name}`, `啟動 ${app.name}`, 'open_in_new', [app.repository, 'installed', 'start'], 'Apps', { surface: 'installed' }));
+    }
   }
 
   return schoolModeEnabled ? entries.flatMap((entry) => {

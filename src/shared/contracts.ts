@@ -23,6 +23,8 @@ export interface CatalogApp {
   packageType: PackageType;
   proofStatus: CatalogProofStatus;
   proofTargetId: string | null;
+  /** True only when the proof-verified adapter has a reviewed installed executable identity. */
+  launchAvailable: boolean;
   installedVersion: string | null;
   updateState: 'unknown' | 'up-to-date' | 'available' | 'unsupported' | 'failed';
   docsAvailable: boolean;
@@ -82,6 +84,12 @@ export interface OperationResult {
   message: string;
   messageYue?: string;
   operationId?: string;
+}
+
+/** The renderer can request a launch only by reviewed catalog ID and explicit user decision. */
+export interface AppLaunchRequest {
+  appId: string;
+  decision: 'launch';
 }
 
 /**
@@ -270,7 +278,7 @@ export function installationManagementState(record: InstalledAppRecord | undefin
   return record.ownership && record.uninstall ? 'store-managed' : 'discovery-only';
 }
 
-export type OperationKind = 'install' | 'build' | 'uninstall' | 'update' | 'settings';
+export type OperationKind = 'install' | 'build' | 'uninstall' | 'launch' | 'update' | 'settings';
 export type HistoryExportFormat = 'json' | 'jsonl' | 'yaml' | 'toml' | 'xml' | 'csv' | 'tsv' | 'markdown' | 'html' | 'sql' | 'typescript' | 'javascript' | 'python' | 'go' | 'rust' | 'json-schema' | 'protobuf' | 'zip' | '7z';
 
 export const HISTORY_ARCHIVE_MAX_ENTRIES = 10_000;
@@ -454,7 +462,7 @@ export interface UpdatePackageMetadata {
  * Per-application update state.  This is deliberately separate from the
  * App Store self-updater state: discovering a release never starts an
  * installer, and an app update is only launched after the user chooses the
- * explicit restart action.
+ * explicit install action.
  */
 export type ManagedUpdateState =
   | { appId: string; status: 'idle' | 'up-to-date'; installedVersion: string | null; checkedAt?: string }
@@ -467,7 +475,7 @@ export type ManagedUpdateState =
 
 export interface ManagedUpdateRequest {
   appId: string;
-  decision: 'download-update' | 'restart-to-install';
+  decision: 'download-update' | 'install-update';
 }
 
 export interface ManagedUpdateCancelRequest {
@@ -1720,6 +1728,7 @@ export interface DingDingStoreApi {
   };
   operations: {
     install(request: OperationRequest): Promise<OperationResult>;
+    launch(request: AppLaunchRequest): Promise<OperationResult>;
     cancelInstall(request: InstallCancelRequest): Promise<OperationResult>;
     status(): Promise<OperationProgressEvent[]>;
     subscribe(listener: (event: Readonly<OperationProgressEvent>) => void): () => void;
@@ -1746,7 +1755,7 @@ export interface DingDingStoreApi {
     checkApp(appId: string): Promise<ManagedUpdateState>;
     downloadApp(request: ManagedUpdateRequest): Promise<ManagedUpdateState>;
     cancelApp(request: ManagedUpdateCancelRequest): Promise<ManagedUpdateState>;
-    restartApp(request: ManagedUpdateRequest): Promise<OperationResult>;
+    installApp(request: ManagedUpdateRequest): Promise<OperationResult>;
     subscribeApp(listener: (state: ManagedUpdateState) => void): () => void;
     subscribe(listener: (state: AppStoreUpdateState) => void): () => void;
   };

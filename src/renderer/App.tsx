@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { DEFAULT_SCHEDULE, TAB_GROUP_COLORS } from '../shared/contracts';
+import { DEFAULT_SCHEDULE, TAB_GROUP_COLORS, installationManagementState } from '../shared/contracts';
 import type {
   AppStoreUpdateState,
   CatalogApp,
@@ -310,6 +310,15 @@ export function App() {
     if (result.ok) void loadCatalog(true);
   }, [announce, loadCatalog, loadHistory, loadInstalled, notify, projectRuntimeText]);
 
+  const reportLaunchOperation = useCallback((result: { ok: boolean; message: string; messageYue?: string }) => {
+    const message = schoolProjectionRef.current.restricted
+      ? label(settingsRef.current, result.ok ? 'Application start requested.' : 'Application could not be started.', result.ok ? '已請求啟動應用程式。' : '應用程式未能啟動。')
+      : result.messageYue ? label(settingsRef.current, result.message, result.messageYue) : projectRuntimeText(result.message);
+    notify({ ok: result.ok, message });
+    announce(message);
+    void loadHistory();
+  }, [announce, loadHistory, notify, projectRuntimeText]);
+
   const retryStoreUpdateCheck = useCallback(async () => {
     try {
       setUpdateState(await window.dingDingStore.updates.checkStore());
@@ -334,7 +343,7 @@ export function App() {
     });
   }, [notify, projectRuntimeText, retryStoreUpdateCheck, updateState]);
 
-  const handleManagedUpdate = useCallback(async (kind: 'download' | 'cancel' | 'restart', app: CatalogApp, trigger: HTMLButtonElement) => {
+  const handleManagedUpdate = useCallback(async (kind: 'download' | 'cancel' | 'install', app: CatalogApp, trigger: HTMLButtonElement) => {
     try {
       if (kind === 'download') {
         const state = await window.dingDingStore.updates.downloadApp({ appId: app.id, decision: 'download-update' });
@@ -342,8 +351,8 @@ export function App() {
         const message = 'message' in state ? state.message : undefined;
         const appLabel = projectRuntimeAppName(app.id, app.name);
         const safeMessage = message ? projectRuntimeText(message, 'Update details unavailable while restricted.', '限制時更新資料未提供。') : undefined;
-        announce(state.status === 'ready' ? `${appLabel} update is ready. Choose Restart to install update when the app is safe to restart.` : safeMessage ?? `${appLabel} update ${state.status}.`);
-        notify({ ok: state.status === 'ready', message: state.status === 'ready' ? `${appLabel} is downloaded and verified. It will not install until you choose Restart to install update.` : safeMessage ?? `${appLabel} update ${state.status}.` });
+        announce(state.status === 'ready' ? `${appLabel} update is ready. Close the target application, then choose Install update.` : safeMessage ?? `${appLabel} update ${state.status}.`);
+        notify({ ok: state.status === 'ready', message: state.status === 'ready' ? `${appLabel} is downloaded and verified. It will not install until you choose Install update.` : safeMessage ?? `${appLabel} update ${state.status}.` });
       } else if (kind === 'cancel') {
         const state = await window.dingDingStore.updates.cancelApp({ appId: app.id, decision: 'cancel-update' });
         setManagedUpdates((current) => ({ ...current, [app.id]: state }));
@@ -351,7 +360,7 @@ export function App() {
         const safeMessage = 'message' in state ? projectRuntimeText(state.message, 'Update details unavailable while restricted.', '限制時更新資料未提供.') : undefined;
         notify({ ok: state.status === 'cancelled', message: safeMessage ?? `${appLabel} update cancellation requested.` });
       } else {
-        const result = await window.dingDingStore.updates.restartApp({ appId: app.id, decision: 'restart-to-install' });
+        const result = await window.dingDingStore.updates.installApp({ appId: app.id, decision: 'install-update' });
         reportOperation(result);
         if (!result.ok) {
           const state = await window.dingDingStore.updates.checkApp(app.id);
@@ -499,19 +508,21 @@ export function App() {
     if (returnFocus) window.setTimeout(() => returnFocus.focus(), 0);
   }, [action]);
 
-  const runImmediateBatch = useCallback(async (kind: ImmediateActionKind, selectedApps: CatalogApp[], trigger: HTMLButtonElement) => {
+  const runImmediateBatch = useCallback(async (kind: ImmediateActionKind, selectedApps: CatalogApp[], trigger: HTMLButtonElement | null) => {
     if (operationRunningRef.current) return;
-    if (kind === 'build' && selectedApps.length !== 1) {
-      notify({ ok: false, message: `Source repair supports one selected application at a time. ${selectedApps.length} were selected; none were started.` });
+    if (kind === 'build' && (selectedApps.length !== 1 || !trigger)) {
+      notify({ ok: false, message: `Source repair supports one selected application at a time from its visible action. ${selectedApps.length} were selected; none were started.` });
       return;
     }
     operationRunningRef.current = true;
     if (kind === 'build') {
+      if (!trigger) { operationRunningRef.current = false; return; }
+      const sourceTrigger = trigger;
       const selectedApp = selectedApps[0];
       setRunningAction({ kind, appId: selectedApp.id, completed: 0, total: 1 });
       const selectedAppName = projectRuntimeAppName(selectedApp.id, selectedApp.name);
       announce(`Preparing the source install for ${selectedAppName}`);
-      setSourceTerminal({ appId: selectedApp.id, appName: selectedAppName, jobId: null, events: [], returnFocus: trigger });
+      setSourceTerminal({ appId: selectedApp.id, appName: selectedAppName, jobId: null, events: [], returnFocus: sourceTrigger });
       try {
         const result = await window.dingDingStore.sourceJobs.start({ appId: selectedApp.id, decision: 'build' });
         if (!result.ok || !result.jobId) {
@@ -536,12 +547,16 @@ export function App() {
       for (const [index, selectedApp] of selectedApps.entries()) {
         const next: RunningAction = { kind, appId: selectedApp.id, completed: index, total: selectedApps.length };
         setRunningAction(next);
-        announce(`Installing ${projectRuntimeAppName(selectedApp.id, selectedApp.name)}`);
+        announce(`${kind === 'launch' ? 'Launching' : 'Installing'} ${projectRuntimeAppName(selectedApp.id, selectedApp.name)}`);
         try {
-          const result = await window.dingDingStore.operations.install({ appId: selectedApp.id, decision: 'install' });
-            reportOperation(result, result.ok ? undefined : { kind: 'retry-installer', run: () => runImmediateBatch(kind, [selectedApp], trigger) });
+          const result = kind === 'launch'
+            ? await window.dingDingStore.operations.launch({ appId: selectedApp.id, decision: 'launch' })
+            : await window.dingDingStore.operations.install({ appId: selectedApp.id, decision: 'install' });
+          if (kind === 'launch') reportLaunchOperation(result);
+          else reportOperation(result, result.ok ? undefined : { kind: 'retry-installer', run: () => runImmediateBatch(kind, [selectedApp], trigger) });
           } catch (error) {
-            reportOperation({ ok: false, message: (error as Error).message }, { kind: 'retry-installer', run: () => runImmediateBatch(kind, [selectedApp], trigger) });
+            if (kind === 'launch') reportLaunchOperation({ ok: false, message: (error as Error).message });
+            else reportOperation({ ok: false, message: (error as Error).message }, { kind: 'retry-installer', run: () => runImmediateBatch(kind, [selectedApp], trigger) });
         }
         setRunningAction({ kind, appId: selectedApp.id, completed: index + 1, total: selectedApps.length });
       }
@@ -549,7 +564,7 @@ export function App() {
       operationRunningRef.current = false;
       setRunningAction(null);
     }
-  }, [announce, notify, projectRuntimeAppName, projectRuntimeText, reportOperation]);
+  }, [announce, notify, projectRuntimeAppName, projectRuntimeText, reportLaunchOperation, reportOperation]);
 
   const startAction = useCallback(async (kind: ActionKind, selectedApp: CatalogApp, trigger: HTMLButtonElement) => {
     if (kind === 'uninstall') { setAction({ kind, apps: [selectedApp], returnFocus: trigger }); return; }
@@ -593,6 +608,7 @@ export function App() {
       : projected;
   }, [managedUpdates, schoolMode.restricted, schoolMode.state.displayName, settings, visibleAppIds]);
   const visibleInstalled = useMemo(() => installed.filter((record) => visibleAppIds.has(record.appId)), [installed, visibleAppIds]);
+  const managedAppIds = useMemo(() => new Set(visibleInstalled.filter((record) => installationManagementState(record) === 'store-managed').map((record) => record.appId)), [visibleInstalled]);
   const visibleHistory = useMemo(() => history
     .filter(() => schoolModeAllowsHistoryEntry(schoolMode.restricted))
     .filter((entry) => !schoolMode.restricted || !schoolModeHiddenContent(JSON.stringify(entry)))
@@ -824,6 +840,12 @@ export function App() {
         if (app) search.dispatch({ type: 'set', surface: 'catalog', patch: { query: app.name, regex: null } });
         return;
       }
+      case 'launch-app': {
+        const app = apps.find((item) => item.id === arg && item.proofStatus === 'verified' && item.launchAvailable && managedAppIds.has(item.id));
+        if (!app) { notify({ ok: false, message: 'Launch is unavailable because this application is not a currently managed installation with a reviewed executable identity.' }); return; }
+        void runImmediateBatch('launch', [app], null);
+        return;
+      }
       case 'open-doc': {
         workspace.dispatch({ type: 'activate', id: 'docs' });
         setDocRequest(arg);
@@ -831,7 +853,7 @@ export function App() {
       }
       default: return;
     }
-  }, [loadCatalog, search, openSurface, workspace, deleteGroup, createGroup, notify, railPatch, appearance, selectElement, schedule, patchSetting, catalog, schoolMode.state.enabled]);
+  }, [loadCatalog, search, openSurface, workspace, deleteGroup, createGroup, notify, railPatch, appearance, selectElement, schedule, patchSetting, catalog, schoolMode.state.enabled, apps, managedAppIds, runImmediateBatch]);
 
   const dispatchAction = useCallback((next: Action) => {
     if (next.type === 'command') applyPaletteTarget(next.target);
@@ -981,6 +1003,7 @@ export function App() {
     appearance: appearance.document.elements,
     schedule: schedule.draft ?? DEFAULT_SCHEDULE,
     apps,
+    managedAppIds,
     schoolModeEnabled: schoolMode.restricted,
     schoolModeName: schoolMode.state.displayName,
   }), [settings, workspace.workspace, appearance.document, schedule.draft, apps, schoolMode.restricted, schoolMode.state.displayName]);

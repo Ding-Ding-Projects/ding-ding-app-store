@@ -1,13 +1,26 @@
-import { execFileSync } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { promisify } from 'node:util';
 
 const root = path.resolve(import.meta.dirname, '..');
 const textExtensions = new Set(['.c', '.cc', '.cpp', '.css', '.h', '.hpp', '.html', '.js', '.json', '.jsonl', '.md', '.mjs', '.ps1', '.sh', '.toml', '.ts', '.tsx', '.txt', '.xml', '.yaml', '.yml']);
 const agentIdentity = /(anthropic|claude|codex|openai|automation|\[bot\]|agent)/i;
+const execFileAsync = promisify(execFile);
+const BLAME_CONCURRENCY = 8;
 
 function git(args, options = {}) {
   return execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], ...options });
+}
+
+async function gitAsync(args) {
+  const { stdout } = await execFileAsync('git', args, {
+    cwd: root,
+    encoding: 'utf8',
+    windowsHide: true,
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  return stdout;
 }
 
 function trackedFiles() {
@@ -30,7 +43,13 @@ function categoryOf(file) {
 }
 
 function lineStats(file) {
-  const buffer = readFileSync(path.join(root, file));
+  let buffer;
+  try {
+    buffer = readFileSync(path.join(root, file));
+  } catch (error) {
+    if (error?.code === 'ENOENT') return null;
+    throw error;
+  }
   if (!textExtensions.has(path.extname(file).toLowerCase()) || buffer.includes(0)) return null;
   const text = buffer.toString('utf8');
   if (!text) return { total: 0, nonblank: 0 };
@@ -39,35 +58,32 @@ function lineStats(file) {
   return { total: lines.length, nonblank: lines.filter((line) => line.trim().length > 0).length };
 }
 
-const commitAgentCache = new Map();
-function isAgentCommit(commit) {
-  if (/^0+$/.test(commit)) return null;
-  if (commitAgentCache.has(commit)) return commitAgentCache.get(commit);
-  let agent = false;
-  try {
-    const metadata = git(['show', '-s', '--format=%an%n%ae%n%B', commit]);
-    agent = agentIdentity.test(metadata) || /co-authored-by:.*(anthropic|claude|codex|openai|agent)/i.test(metadata);
-  } catch {
-    agent = false;
+function agentCommitMap() {
+  const result = new Map();
+  const records = git(['log', 'HEAD', '--format=%H%x1f%an%x1f%ae%x1f%B%x1e']).split('\x1e');
+  for (const rawRecord of records) {
+    const record = rawRecord.replace(/^\r?\n/, '').trimEnd();
+    if (!record) continue;
+    const [commit, authorName = '', authorEmail = '', ...bodyParts] = record.split('\x1f');
+    const metadata = `${authorName}\n${authorEmail}\n${bodyParts.join('\x1f')}`;
+    result.set(commit.trim(), agentIdentity.test(metadata) || /co-authored-by:.*(anthropic|claude|codex|openai|agent)/i.test(metadata));
   }
-  commitAgentCache.set(commit, agent);
-  return agent;
+  return result;
 }
 
-function attribution(file, expectedLines) {
+async function attribution(file, expectedLines, agentCommits) {
   if (expectedLines === 0) return { agent: 0, people: 0, uncommitted: 0 };
   let porcelain;
   try {
-    porcelain = git(['blame', '--line-porcelain', '--', file]);
+    porcelain = await gitAsync(['blame', '--line-porcelain', '--', file]);
   } catch {
     return { agent: 0, people: 0, uncommitted: expectedLines };
   }
   const commits = porcelain.match(/^[0-9a-f]{40} \d+ \d+(?: \d+)?$/gm)?.map((line) => line.slice(0, 40)) ?? [];
   const result = { agent: 0, people: 0, uncommitted: 0 };
   for (const commit of commits) {
-    const authoredByAgent = isAgentCommit(commit);
-    if (authoredByAgent === null) result.uncommitted += 1;
-    else if (authoredByAgent) result.agent += 1;
+    if (/^0+$/.test(commit)) result.uncommitted += 1;
+    else if (agentCommits.get(commit) === true) result.agent += 1;
     else result.people += 1;
   }
   const missing = expectedLines - commits.length;
@@ -75,7 +91,21 @@ function attribution(file, expectedLines) {
   return result;
 }
 
+async function forEachConcurrent(items, concurrency, worker) {
+  let cursor = 0;
+  const count = Math.min(concurrency, items.length);
+  await Promise.all(Array.from({ length: count }, async () => {
+    while (true) {
+      const index = cursor;
+      cursor += 1;
+      if (index >= items.length) return;
+      await worker(items[index]);
+    }
+  }));
+}
+
 const rows = new Map();
+const attributionJobs = [];
 for (const file of trackedFiles()) {
   const stats = lineStats(file);
   if (!stats) continue;
@@ -84,14 +114,17 @@ for (const file of trackedFiles()) {
   row.files += 1;
   row.total += stats.total;
   row.nonblank += stats.nonblank;
-  if (row.attributed) {
-    const ownership = attribution(file, stats.total);
-    row.agent += ownership.agent;
-    row.people += ownership.people;
-    row.uncommitted += ownership.uncommitted;
-  }
+  if (row.attributed) attributionJobs.push({ file, expectedLines: stats.total, row });
   rows.set(category, row);
 }
+
+const agentCommits = agentCommitMap();
+await forEachConcurrent(attributionJobs, BLAME_CONCURRENCY, async ({ file, expectedLines, row }) => {
+  const ownership = await attribution(file, expectedLines, agentCommits);
+  row.agent += ownership.agent;
+  row.people += ownership.people;
+  row.uncommitted += ownership.uncommitted;
+});
 
 const ordered = [...rows.values()].sort((a, b) => a.category.localeCompare(b.category));
 const sum = (items, key) => items.reduce((total, item) => total + item[key], 0);

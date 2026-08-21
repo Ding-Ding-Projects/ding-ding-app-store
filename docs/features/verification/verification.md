@@ -16,7 +16,7 @@ Each release resolves the first unused bilingual dim-sum code name whose image i
 
 The release workflow runs for ordinary `main` pushes and manual dispatches only. Its branch filter deliberately excludes generated release-tag pushes, preventing a newly published immutable tag from recursively starting a second release. Every job checks out the exact triggering SHA, and the immutable tag includes the workflow run number and attempt, so queued runs continue to package their own commit and reruns receive a fresh tag. Release notes retain the triggering SHA, attempt, timing, line-count, unsigned Squirrel assets, and dim-sum metadata. Actions only builds, packages, and publishes: tests, lint, and type-checks remain local checks and never gate a cloud release.
 
-The repository root also carries `build.bat` and `build-installer.bat`. Both accept `/s`, `--silent`, or `SILENT=1`; they resolve Node.js 22 from a user-scoped installation or a SHA-256-verified Node.js archive, run the locked `npm ci` path, and fail on the first missing output. `build-installer.bat` uses the same Squirrel.Windows packaging route as the release workflow, verifies `Setup.exe`, `RELEASES`, the full `.nupkg`, and an unsigned Authenticode state, then writes a local SHA-256 manifest tied to the source commit. The installer script never publishes, tags, dews, or invokes signing.
+The repository root also carries `build.bat` and `build-installer.bat`. Both accept `/s`, `--silent`, or `SILENT=1`; they resolve Node.js 22 from a user-scoped installation or a SHA-256-verified Node.js archive, run the locked `npm ci` path, and fail on the first missing output. `build-installer.bat` uses the same Squirrel.Windows packaging route as the release workflow, verifies `Setup.exe`, `RELEASES`, the full `.nupkg`, and an unsigned Authenticode state, then writes a local SHA-256 manifest tied to the source commit. The installer script never publishes, tags, pushes, or invokes signing.
 
 The repository keeps genuine hidden-desktop captures for the catalog, installed, updates, documentation, activity, settings, appearance settings, command palette, and tab-action surfaces. The documentation generator supplies a reproducible count and exact synchronized-output check rather than relying on a manual file list.
 
@@ -30,7 +30,7 @@ Missing dependencies, stale generated docs, a failed link, type failure, test fa
 
 ## Security considerations
 
-Evidence excludes credentials, tokens, private paths, user data, and unredacted process environments. Public records use ordinary project language. External state is verified with `git` and `gh` against exact refs; a local commit alone is not proof that the hui or release contains it.
+Evidence excludes credentials, tokens, private paths, user data, and unredacted process environments. Public records use ordinary project language. External state is verified with `git` and `gh` against exact refs; a local commit alone is not proof that the remote or release contains it.
 
 ## Verification
 

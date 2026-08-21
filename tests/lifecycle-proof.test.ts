@@ -12,12 +12,14 @@ import {
   LIFECYCLE_STAGES,
 } from '../scripts/lifecycle-proof-matrix.mjs';
 import { redact, runLifecycleProof, runProductLifecycle } from '../scripts/lifecycle-proof.mjs';
+import { cloudInstallProofTargetFor } from '../src/main/install-proof-targets.js';
 
 const EXPECTED_SOURCE_RECIPE_IDS = [
   'farming-game', 'material-cookie-clicker', 'material-encryption', 'material-ollama', 'material-sandbox',
   'material-tools', 'material-virtualbox', 'material-winforge', 'material-winutil', 'meadowmark',
   'minecraft-server-command-center', 'minecraft-server-studio', 'sprout-hollow-valley',
 ];
+const EXPECTED_INSTALL_PROOF_ONLY_BLOCKED_IDS = ['opencodex'];
 
 function exactSet(actual: string[], expected: string[]): boolean {
   return actual.length === expected.length && new Set(actual).size === expected.length && actual.every((id) => expected.includes(id));
@@ -36,7 +38,8 @@ describe('13-product lifecycle proof contract', () => {
     const apps = JSON.parse(await readFile(path.join(process.cwd(), 'data/catalog.v1.json'), 'utf8')).apps as Array<{ id: string; proofStatus?: string; proofTargetId?: string | null }>;
     expect(exactSet(EXPECTED_SOURCE_RECIPE_IDS, LIFECYCLE_PRODUCT_IDS)).toBe(true);
     expect(exactSet(recipes.map((recipe) => recipe.appId), EXPECTED_SOURCE_RECIPE_IDS)).toBe(true);
-    expect(exactSet(apps.filter((app) => app.proofStatus === 'blocked-until-proof').map((app) => app.id), EXPECTED_SOURCE_RECIPE_IDS)).toBe(true);
+    expect(exactSet(apps.filter((app) => app.proofStatus === 'blocked-until-proof').map((app) => app.id), [...EXPECTED_SOURCE_RECIPE_IDS, ...EXPECTED_INSTALL_PROOF_ONLY_BLOCKED_IDS])).toBe(true);
+    for (const appId of EXPECTED_INSTALL_PROOF_ONLY_BLOCKED_IDS) expect(cloudInstallProofTargetFor(appId)).toMatchObject({ appId });
     for (const row of LIFECYCLE_PRODUCTS) {
       const recipe = recipes.find((entry) => entry.appId === row.appId);
       const app = apps.find((entry) => entry.id === row.appId);

@@ -368,6 +368,10 @@ export class OperationService {
     });
   }
 
+  hasActive(appId: string): boolean {
+    return this.activeOperations.has(appId);
+  }
+
   private async finish(record: CatalogRecord, kind: OperationKind, result: OperationResult): Promise<OperationResult> {
     const localized = result.messageYue ? result : { ...result, messageYue: operationMessageYue(result.message) };
     try {

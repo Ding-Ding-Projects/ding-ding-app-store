@@ -114,7 +114,7 @@ export class SafeStorageAuthenticatorVault implements AuthenticatorVault {
 
   /**
    * Test-only constructor for exercising the protected snapshot algorithm.
-   * The production constructor has no capability override: Deen No reparse
+   * The production constructor has no capability override: Windows reparse
    * and junction races remain an explicit unavailable boundary.
    */
   static forTests(options: SafeStorageAuthenticatorVaultOptions, atomicNoFollow: () => boolean): SafeStorageAuthenticatorVault {

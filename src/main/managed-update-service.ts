@@ -56,7 +56,7 @@ function isAppId(value: unknown): value is string {
 function isManagedUpdateRequest(value: unknown): value is ManagedUpdateRequest {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
-  return Object.keys(record).length === 2 && isAppId(record.appId) && (record.decision === 'download-update' || record.decision === 'restart-to-install');
+  return Object.keys(record).length === 2 && isAppId(record.appId) && (record.decision === 'download-update' || record.decision === 'install-update');
 }
 
 function isManagedUpdateCancelRequest(value: unknown): value is ManagedUpdateCancelRequest {
@@ -211,6 +211,7 @@ export class ManagedUpdateService {
     private readonly installed: InstalledService,
     private readonly history: HistoryService,
     private readonly getWindow: () => BrowserWindow | null,
+    private readonly conflictingOperation: (appId: string) => boolean = () => false,
   ) {}
 
   async restore(): Promise<void> {
@@ -236,6 +237,10 @@ export class ManagedUpdateService {
   }
 
   current(appId: string): ManagedUpdateState { return this.states.get(appId) ?? idleState(appId, null); }
+
+  isBusy(appId: string): boolean {
+    return this.activeDownloads.has(appId) || this.current(appId).status === 'installing';
+  }
 
   /**
    * Refreshes metadata for currently managed installations only.  It never
@@ -315,7 +320,7 @@ export class ManagedUpdateService {
       this.stages.set(request.appId, stage);
       await this.persistStages();
       this.publish({ appId: request.appId, status: 'ready', installedVersion: candidate.installedVersion, version: candidate.version, releaseNotesUrl: candidate.releaseNotesUrl, progress: 100, bytesDownloaded: candidate.asset.size, bytesTotal: candidate.asset.size, unsigned: true });
-      await this.recordHistory(candidate.record, true, `Downloaded ${candidate.version}; waiting for explicit restart-to-install.`);
+      await this.recordHistory(candidate.record, true, `Downloaded ${candidate.version}; waiting for explicit install-update decision.`);
       return this.current(request.appId);
     } catch (error) {
       await rm(operationDir, { recursive: true, force: true }).catch(() => undefined);
@@ -338,12 +343,13 @@ export class ManagedUpdateService {
     return this.current(request.appId);
   }
 
-  async restart(request: unknown): Promise<OperationResult> {
-    if (!isManagedUpdateRequest(request) || request.decision !== 'restart-to-install') return { ok: false, appId: 'invalid', message: 'Invalid managed update restart request.' };
+  async install(request: unknown): Promise<OperationResult> {
+    if (!isManagedUpdateRequest(request) || request.decision !== 'install-update') return { ok: false, appId: 'invalid', message: 'Invalid managed update install request.' };
     const record = await this.catalog.recordFor(request.appId);
     if (!proofStatusAllowsPrivilegedAction(record.proofStatus)) return { ok: false, appId: request.appId, message: proofStatusBlockMessage(record) };
+    if (this.conflictingOperation(request.appId)) return { ok: false, appId: request.appId, message: `${record.displayName} already has an install, launch, or uninstall operation in progress.` };
     const state = this.current(request.appId);
-    if (state.status !== 'ready') return { ok: false, appId: request.appId, message: 'Download and verify the stable update before choosing Restart to install.' };
+    if (state.status !== 'ready') return { ok: false, appId: request.appId, message: 'Download and verify the stable update before choosing Install update.' };
     const candidate = this.candidates.get(request.appId);
     const stage = this.stages.get(request.appId);
     if (!candidate || !stage) return { ok: false, appId: request.appId, message: 'The staged update is no longer available; download it again.' };

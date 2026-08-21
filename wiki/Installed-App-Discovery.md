@@ -26,6 +26,7 @@ Focused tests cover discovery without a prior ownership record, non-persistence 
 
 ## Suggested articles
 
+- [Launch installed applications](Launch-Installed-Applications)
 - [Protected uninstall](Uninstall)
 - [Activity history and export](Activity-History)
 - [Privacy and security](Privacy-and-Security)

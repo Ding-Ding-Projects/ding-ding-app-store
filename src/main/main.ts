@@ -5,13 +5,14 @@ import { open } from 'node:fs/promises';
 import { app, BrowserWindow, clipboard, dialog, ipcMain, nativeImage, session, shell } from 'electron';
 import squirrelStartup from 'electron-squirrel-startup';
 import { z } from 'zod';
-import { AUTHENTICATOR_MAX_IMAGE_BYTES, AUTHENTICATOR_MAX_URI_LENGTH, type AuthenticatorBulkDeleteRequest, type AuthenticatorBulkDeleteResult, type AuthenticatorDeleteRequest, type AuthenticatorDeleteResult, type AuthenticatorExportRequest, type AuthenticatorExportResult, type AuthenticatorSecretExportRequest, type AuthenticatorSecretExportResult, type AuthenticatorSecretExportAuthorizationRequest, type AuthenticatorGroupRequest, type AuthenticatorGroupCreateRequest, type AuthenticatorGroupRenameRequest, type AuthenticatorGroupReorderRequest, type AuthenticatorGroupCollapseRequest, type AuthenticatorGroupDeleteRequest, type AuthenticatorGroupBulkMoveRequest, type AuthenticatorListResult, type AuthenticatorMutationResult, type AuthenticatorPreviewRequest, type AuthenticatorPreviewResult, type AuthenticatorQrImageImportResult, type AuthenticatorRegistrationConfirmRequest, type AuthenticatorRegistrationPreviewResult, type AuthenticatorRegistrationRequest, type AuthenticatorRenameRequest, type AuthenticatorReorderRequest, type AuthenticatorStatus, type ElementKey, type ElementOverride, type ExternalEditorOpenRequest, type ExternalEditorPreference, type History7zRequest, type HistoryExportFormat, type InstallCancelRequest, type LockCredentialRequest, type LockSetRequest, type LockTarget, type OperationRequest, type SchoolModeConfigureRequest, type SchoolModeCredentialChangeRequest, type SchoolModeRenameRequest, type SchoolModeToggleRequest, type SchoolModeVerifyRequest, type SourceJobCancelRequest, type SourceJobRequest, type SourceOutputExportRequest, type SupportTicketCreateRequest, type SupportTicketBulkAdvanceRequest, type TabWorkspace, type UserSettings } from '../shared/contracts.js';
+import { AUTHENTICATOR_MAX_IMAGE_BYTES, AUTHENTICATOR_MAX_URI_LENGTH, type AppLaunchRequest, type AuthenticatorBulkDeleteRequest, type AuthenticatorBulkDeleteResult, type AuthenticatorDeleteRequest, type AuthenticatorDeleteResult, type AuthenticatorExportRequest, type AuthenticatorExportResult, type AuthenticatorSecretExportRequest, type AuthenticatorSecretExportResult, type AuthenticatorSecretExportAuthorizationRequest, type AuthenticatorGroupRequest, type AuthenticatorGroupCreateRequest, type AuthenticatorGroupRenameRequest, type AuthenticatorGroupReorderRequest, type AuthenticatorGroupCollapseRequest, type AuthenticatorGroupDeleteRequest, type AuthenticatorGroupBulkMoveRequest, type AuthenticatorListResult, type AuthenticatorMutationResult, type AuthenticatorPreviewRequest, type AuthenticatorPreviewResult, type AuthenticatorQrImageImportResult, type AuthenticatorRegistrationConfirmRequest, type AuthenticatorRegistrationPreviewResult, type AuthenticatorRegistrationRequest, type AuthenticatorRenameRequest, type AuthenticatorReorderRequest, type AuthenticatorStatus, type ElementKey, type ElementOverride, type ExternalEditorOpenRequest, type ExternalEditorPreference, type History7zRequest, type HistoryExportFormat, type InstallCancelRequest, type LockCredentialRequest, type LockSetRequest, type LockTarget, type OperationRequest, type SchoolModeConfigureRequest, type SchoolModeCredentialChangeRequest, type SchoolModeRenameRequest, type SchoolModeToggleRequest, type SchoolModeVerifyRequest, type SourceJobCancelRequest, type SourceJobRequest, type SourceOutputExportRequest, type SupportTicketCreateRequest, type SupportTicketBulkAdvanceRequest, type TabWorkspace, type UserSettings } from '../shared/contracts.js';
 import { AUTHENTICATOR_CAMERA_SESSION_MS } from '../shared/contracts.js';
 import { AppearanceService } from './appearance-service.js';
 import { CatalogService, proofStatusAllowsPrivilegedAction, proofStatusBlockMessage } from './catalog-service.js';
 import { HistoryService } from './history-service.js';
 import { InstalledService } from './installed-service.js';
 import { OperationService } from './operation-service.js';
+import { AppLaunchService } from './app-launch-service.js';
 import { Scheduler } from './scheduler.js';
 import { ScheduleService } from './schedule-service.js';
 import { DimSumService } from './dim-sum-service.js';
@@ -269,7 +270,8 @@ void app.whenReady().then(async () => {
     (event) => mainWindow?.webContents.send('source-jobs:event', event),
   );
   const updates = new UpdateService(() => mainWindow);
-  const managedUpdates = new ManagedUpdateService(catalog, installed, history, () => mainWindow);
+  const managedUpdates = new ManagedUpdateService(catalog, installed, history, () => mainWindow, (appId) => operations.hasActive(appId));
+  const appLaunch = new AppLaunchService(catalog, installed, history, (appId) => operations.hasActive(appId) || managedUpdates.isBusy(appId));
   const workspace = new WorkspaceService();
   const appearance = new AppearanceService((key, next, current) => lockSupport.assertAppearanceMutation(key, next, current));
   const schedule = new ScheduleService();
@@ -298,6 +300,11 @@ void app.whenReady().then(async () => {
     const blocked = await blockedCatalogRecord(catalog, request);
     return blocked ? { ok: false, appId: blocked.id, message: proofStatusBlockMessage(blocked) } : operations.install(request);
   }));
+  ipcMain.handle('operations:launch', async (event, request: AppLaunchRequest) => {
+    if (event.sender !== mainWindow?.webContents) return { ok: false, appId: 'invalid', message: 'Blocked launch request from an unknown renderer.' };
+    const blocked = await blockedCatalogRecord(catalog, request);
+    return blocked ? { ok: false, appId: blocked.id, message: proofStatusBlockMessage(blocked) } : appLaunch.launch(request);
+  });
   // Cancellation must remain an abort-priority path; queueing it behind the
   // long-running install would let the operation finish before it can see the
   // user's cancel request.
@@ -347,10 +354,10 @@ void app.whenReady().then(async () => {
     return blocked ? { appId: blocked.id, status: 'blocked' as const, installedVersion: null, message: proofStatusBlockMessage(blocked), checkedAt: new Date().toISOString() } : managedUpdates.download(request);
   }));
   ipcMain.handle('updates:app-cancel', (event, request: unknown) => event.sender === mainWindow?.webContents ? managedUpdates.cancel(request) : managedUpdates.cancel({ appId: 'invalid', decision: 'cancel-update' }));
-  ipcMain.handle('updates:app-restart', (event, request: unknown) => stateMutationQueue.run(async () => {
-    if (event.sender !== mainWindow?.webContents) return managedUpdates.restart({ appId: 'invalid', decision: 'restart-to-install' });
+  ipcMain.handle('updates:app-install', (event, request: unknown) => stateMutationQueue.run(async () => {
+    if (event.sender !== mainWindow?.webContents) return managedUpdates.install({ appId: 'invalid', decision: 'install-update' });
     const blocked = await blockedCatalogRecord(catalog, request);
-    return blocked ? { ok: false, appId: blocked.id, message: proofStatusBlockMessage(blocked) } : managedUpdates.restart(request);
+    return blocked ? { ok: false, appId: blocked.id, message: proofStatusBlockMessage(blocked) } : managedUpdates.install(request);
   }));
   ipcMain.handle('settings:load', () => settings.load());
   ipcMain.handle('settings:provenance', () => settings.provenance());

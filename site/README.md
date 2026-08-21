@@ -4,7 +4,7 @@ Serve the repository root with any static server and open `site/index.html`. Git
 
 ## Included surfaces
 
-- A public-safe design-reference article for the rewritten desktop shell: exact seven-page/five-Settings-tab coverage, compact Material 3 layout, responsive theme/language fixtures, named overlays, and the fixed-row secure comparison viewer. Its verification note keeps Yum Leung Cha's tests/captures/audits boundary explicit and leaves build/release evidence pending.
+- A public-safe design-reference article for the rewritten desktop shell: exact seven-page/five-Settings-tab coverage, compact Material 3 layout, responsive theme/language fixtures, named overlays, and the fixed-row secure comparison viewer. Its verification note keeps the ultra-speed release pass's tests/captures/audits boundary explicit and leaves build/release evidence pending.
 - The complete hand-written inventory of 8 categories and 19 canonical feature articles, including explicit **limited** and **pending** status.
 - Browser-style feature tabs with roving keyboard focus, category labels, persisted open-route order, active hash routing, pin/close controls, keyboard reordering, and narrow-width overflow. This is a bounded site parity slice; desktop-only four-edge rail groups and destructive bulk-close actions remain explicitly app-only.
 - Full article text covering behaviour, configuration, failure modes, security considerations, verification, and suggested internal links.

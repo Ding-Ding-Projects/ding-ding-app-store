@@ -12,7 +12,7 @@ describe('shared display-name history boundary', () => {
       readFile(new URL('../src/renderer/pages/ActivityPage.tsx', import.meta.url), 'utf8'),
     ]);
 
-    expect(contracts).toContain("export type OperationKind = 'install' | 'build' | 'uninstall' | 'update' | 'settings';");
+    expect(contracts).toContain("export type OperationKind = 'install' | 'build' | 'uninstall' | 'launch' | 'update' | 'settings';");
     expect(settingsService).toContain("kind: 'settings'");
     expect(settingsService).toContain('local history entry contains no credential material');
     expect(settingsService).toContain('previous.displayName !== value.displayName');

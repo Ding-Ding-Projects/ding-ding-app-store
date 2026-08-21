@@ -137,7 +137,18 @@ export function selectSameVersionOwnedRegistryEntry(
   after: readonly RegistryUninstallEntry[],
   allowedDisplayNames: readonly string[],
 ): RegistryUninstallEntry | null {
-  if (priorVersion !== requestedVersion || ownership?.adapterId !== adapterId) return null;
+  if (priorVersion !== requestedVersion) return null;
+  return selectOwnedRegistryEntry(ownership, adapterId, after, allowedDisplayNames);
+}
+
+/** Selects only the unchanged registry entry that is already owned by the exact adapter fingerprint. */
+export function selectOwnedRegistryEntry(
+  ownership: { adapterId: string; registryKey: string; fingerprint: string } | null,
+  adapterId: string,
+  after: readonly RegistryUninstallEntry[],
+  allowedDisplayNames: readonly string[],
+): RegistryUninstallEntry | null {
+  if (ownership?.adapterId !== adapterId) return null;
   return after.find((entry) => entry.key.localeCompare(ownership.registryKey, undefined, { sensitivity: 'accent' }) === 0
     && registryEntryFingerprint(entry) === ownership.fingerprint
     && exactDisplayNameMatch(entry.displayName, allowedDisplayNames)) ?? null;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_SCHEDULE, DEFAULT_TAB_WORKSPACE, ELEMENTS } from '../src/shared/contracts';
 import { buildRegistry, SETTING_FIELDS, SCHEDULE_FIELDS } from '../src/renderer/registry';
-import type { UserSettings } from '../src/shared/contracts';
+import type { CatalogApp, UserSettings } from '../src/shared/contracts';
 import { readFile } from 'node:fs/promises';
 
 const settings: UserSettings = {
@@ -67,6 +67,21 @@ describe('rich command palette registry', () => {
     const tab = registry.find((entry) => entry.id === 'cmd:pin:catalog');
     expect(tab?.action).toMatchObject({ target: { tabId: 'catalog', focusId: 'tab-catalog' } });
     expect(registry.every((entry) => !Object.values(entry.action).some((value) => typeof value === 'string' && /^(?:https?:|[A-Za-z]:\\|\/)/.test(value)))).toBe(true);
+  });
+
+  it('adds a direct launch command only for a managed proof-verified row with reviewed launch metadata', () => {
+    const app: CatalogApp = {
+      id: 'dim-sum-atlas', name: 'Dim Sum Atlas', repository: 'dim-sum-atlas', description: 'Reviewed application.',
+      homepageUrl: null, repositoryUrl: 'https://github.com/Ding-Ding-Projects/dim-sum-atlas', defaultBranch: 'main', topics: [], stars: 0,
+      updatedAt: '2026-08-21T00:00:00.000Z', latestVersion: '1.2.3', latestReleaseUrl: null, availability: 'installable', packageType: 'archive',
+      proofStatus: 'verified', proofTargetId: null, launchAvailable: true, installedVersion: '1.2.3', updateState: 'up-to-date', docsAvailable: true,
+    };
+    const launchRegistry = buildRegistry({ settings, workspace: structuredClone(DEFAULT_TAB_WORKSPACE), appearance: {}, schedule: structuredClone(DEFAULT_SCHEDULE), apps: [app], managedAppIds: new Set([app.id]) });
+    expect(launchRegistry.find((entry) => entry.id === `cmd:launch-app:${app.id}`)).toMatchObject({
+      en: 'Launch Dim Sum Atlas',
+      action: { type: 'command', command: `launch-app:${app.id}`, target: { surface: 'installed' } },
+    });
+    expect(buildRegistry({ settings, workspace: structuredClone(DEFAULT_TAB_WORKSPACE), appearance: {}, schedule: structuredClone(DEFAULT_SCHEDULE), apps: [app] }).some((entry) => entry.id === `cmd:launch-app:${app.id}`)).toBe(false);
   });
 });
 

@@ -107,7 +107,7 @@ export function parseHistoryEntry(value: unknown): HistoryEntry | null {
   const textFields = ['id', 'appId', 'displayName', 'message', 'occurredAt'] as const;
   if (textFields.some((field) => typeof entry[field] !== 'string' || !String(entry[field]).trim() || String(entry[field]).length > MAX_HISTORY_FIELD_LENGTH)) return null;
   if ('messageYue' in entry && (typeof entry.messageYue !== 'string' || !entry.messageYue.trim() || entry.messageYue.length > MAX_HISTORY_FIELD_LENGTH)) return null;
-  if (typeof entry.kind !== 'string' || !(['install', 'build', 'uninstall', 'update', 'settings'] as const).includes(entry.kind as OperationKind)) return null;
+  if (typeof entry.kind !== 'string' || !(['install', 'build', 'uninstall', 'launch', 'update', 'settings'] as const).includes(entry.kind as OperationKind)) return null;
   if (typeof entry.ok !== 'boolean' || !Number.isFinite(Date.parse(entry.occurredAt as string))) return null;
   return {
     id: entry.id as string,

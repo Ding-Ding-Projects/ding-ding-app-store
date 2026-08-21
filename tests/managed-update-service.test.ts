@@ -26,23 +26,23 @@ describe('managed per-app update contracts', () => {
 
   it('keeps renderer requests closed and never accepts paths, URLs, or commands', () => {
     expect(managedUpdateInternals.isManagedUpdateRequest({ appId: 'material-designer', decision: 'download-update' })).toBe(true);
-    expect(managedUpdateInternals.isManagedUpdateRequest({ appId: 'material-designer', decision: 'restart-to-install', path: 'C:\\bad.exe' })).toBe(false);
+    expect(managedUpdateInternals.isManagedUpdateRequest({ appId: 'material-designer', decision: 'install-update', path: 'C:\\bad.exe' })).toBe(false);
     expect(managedUpdateInternals.isManagedUpdateRequest({ appId: 'material-designer', decision: 'install' })).toBe(false);
     expect(managedUpdateInternals.isManagedUpdateCancelRequest({ appId: 'material-designer', decision: 'cancel-update' })).toBe(true);
   });
 
-  it('has the separate staged state machine, progress, cancellation, and explicit restart boundary', async () => {
+  it('has the separate staged state machine, progress, cancellation, and explicit install boundary', async () => {
     const service = await read('src/main/managed-update-service.ts');
     for (const contract of [
       'status: \'downloading\'', 'status: \'ready\'', "status: cancelled ? 'cancelled' : 'failed'",
       'AbortController', 'AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS)', 'onProgress', 'updates:app-state',
-      'restart-to-install', 'shell: false', 'windowsHide: true', 'MAX_DOWNLOAD_BYTES', 'MAX_REDIRECTS',
+      'install-update', 'shell: false', 'windowsHide: true', 'MAX_DOWNLOAD_BYTES', 'MAX_REDIRECTS',
       'persistedPath', 'replacePortableDirectory', 'recordHistory(candidate.record, true', 'async checkAll()',
     ]) expect(service).toContain(contract);
     expect(service).not.toMatch(/request\.path|request\.url|request\.command/);
     const main = await read('src/main/main.ts');
     const preload = await read('src/preload/index.ts');
-    for (const channel of ['updates:app-check', 'updates:app-download', 'updates:app-cancel', 'updates:app-restart', 'updates:app-state']) {
+    for (const channel of ['updates:app-check', 'updates:app-download', 'updates:app-cancel', 'updates:app-install', 'updates:app-state']) {
       expect(`${main}\n${preload}`).toContain(channel);
     }
   });
