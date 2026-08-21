@@ -14,7 +14,7 @@ const archiveHistoryEntrySchema = z.strictObject({
   id: z.string().uuid(),
   appId: z.string().min(1).max(200).refine((value) => value.trim().length > 0, 'Application identifier cannot be blank.'),
   displayName: z.string().min(1).max(200).refine((value) => value.trim().length > 0, 'Display name cannot be blank.'),
-  kind: z.enum(['install', 'build', 'uninstall', 'update', 'settings']),
+  kind: z.enum(['install', 'build', 'uninstall', 'launch', 'update', 'settings']),
   ok: z.boolean(),
   message: z.string().max(MAX_HISTORY_ENTRY_MESSAGE),
   messageYue: z.string().max(MAX_HISTORY_ENTRY_MESSAGE).optional(),

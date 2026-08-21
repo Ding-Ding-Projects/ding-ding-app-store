@@ -351,14 +351,21 @@ export function App() {
         const message = 'message' in state ? state.message : undefined;
         const appLabel = projectRuntimeAppName(app.id, app.name);
         const safeMessage = message ? projectRuntimeText(message, 'Update details unavailable while restricted.', '限制時更新資料未提供。') : undefined;
-        announce(state.status === 'ready' ? `${appLabel} update is ready. Close the target application, then choose Install update.` : safeMessage ?? `${appLabel} update ${state.status}.`);
-        notify({ ok: state.status === 'ready', message: state.status === 'ready' ? `${appLabel} is downloaded and verified. It will not install until you choose Install update.` : safeMessage ?? `${appLabel} update ${state.status}.` });
+        const outcome = state.status === 'ready'
+          ? label(settingsRef.current, `${appLabel} update is ready. Close the target application, then choose Install update.`, `${appLabel} 更新準備好喇。先關閉目標應用程式，再揀「安裝更新」。`)
+          : state.status === 'downloading'
+            ? label(settingsRef.current, `Downloading ${appLabel} update: ${state.progress}% (${state.bytesDownloaded.toLocaleString()} / ${state.bytesTotal.toLocaleString()} bytes).`, `下載緊 ${appLabel} 更新：${state.progress}%（${state.bytesDownloaded.toLocaleString()}／${state.bytesTotal.toLocaleString()} bytes）。`)
+            : safeMessage ?? label(settingsRef.current, `${appLabel} update is ${state.status}.`, `${appLabel} 更新狀態係「${state.status}」。`);
+        announce(outcome);
+        notify({ ok: state.status === 'ready', message: outcome });
       } else if (kind === 'cancel') {
         const state = await window.dingDingStore.updates.cancelApp({ appId: app.id, decision: 'cancel-update' });
         setManagedUpdates((current) => ({ ...current, [app.id]: state }));
         const appLabel = projectRuntimeAppName(app.id, app.name);
         const safeMessage = 'message' in state ? projectRuntimeText(state.message, 'Update details unavailable while restricted.', '限制時更新資料未提供.') : undefined;
-        notify({ ok: state.status === 'cancelled', message: safeMessage ?? `${appLabel} update cancellation requested.` });
+        const outcome = safeMessage ?? label(settingsRef.current, `${appLabel} update cancellation requested.`, `已要求取消 ${appLabel} 更新。`);
+        notify({ ok: state.status === 'cancelled', message: outcome });
+        announce(outcome);
       } else {
         const result = await window.dingDingStore.updates.installApp({ appId: app.id, decision: 'install-update' });
         reportOperation(result);
@@ -547,7 +554,9 @@ export function App() {
       for (const [index, selectedApp] of selectedApps.entries()) {
         const next: RunningAction = { kind, appId: selectedApp.id, completed: index, total: selectedApps.length };
         setRunningAction(next);
-        announce(`${kind === 'launch' ? 'Launching' : 'Installing'} ${projectRuntimeAppName(selectedApp.id, selectedApp.name)}`);
+        announce(kind === 'launch'
+          ? label(settingsRef.current, `Launching ${projectRuntimeAppName(selectedApp.id, selectedApp.name)}…`, `啟動緊 ${projectRuntimeAppName(selectedApp.id, selectedApp.name)}…`)
+          : label(settingsRef.current, `Installing ${projectRuntimeAppName(selectedApp.id, selectedApp.name)}…`, `安裝緊 ${projectRuntimeAppName(selectedApp.id, selectedApp.name)}…`));
         try {
           const result = kind === 'launch'
             ? await window.dingDingStore.operations.launch({ appId: selectedApp.id, decision: 'launch' })
@@ -842,7 +851,12 @@ export function App() {
       }
       case 'launch-app': {
         const app = apps.find((item) => item.id === arg && item.proofStatus === 'verified' && item.launchAvailable && managedAppIds.has(item.id));
-        if (!app) { notify({ ok: false, message: 'Launch is unavailable because this application is not a currently managed installation with a reviewed executable identity.' }); return; }
+        if (!app) {
+          const message = label(settingsRef.current, 'Launch is unavailable because this application is not a currently managed installation with a reviewed executable identity.', '未能啟動，因為呢個應用程式唔係目前由 App Store 管理、或者未有已審核嘅可啟動程式身份。');
+          notify({ ok: false, message });
+          announce(message);
+          return;
+        }
         void runImmediateBatch('launch', [app], null);
         return;
       }
@@ -853,7 +867,7 @@ export function App() {
       }
       default: return;
     }
-  }, [loadCatalog, search, openSurface, workspace, deleteGroup, createGroup, notify, railPatch, appearance, selectElement, schedule, patchSetting, catalog, schoolMode.state.enabled, apps, managedAppIds, runImmediateBatch]);
+  }, [announce, loadCatalog, search, openSurface, workspace, deleteGroup, createGroup, notify, railPatch, appearance, selectElement, schedule, patchSetting, catalog, schoolMode.state.enabled, apps, managedAppIds, runImmediateBatch]);
 
   const dispatchAction = useCallback((next: Action) => {
     if (next.type === 'command') applyPaletteTarget(next.target);
@@ -1006,7 +1020,7 @@ export function App() {
     managedAppIds,
     schoolModeEnabled: schoolMode.restricted,
     schoolModeName: schoolMode.state.displayName,
-  }), [settings, workspace.workspace, appearance.document, schedule.draft, apps, schoolMode.restricted, schoolMode.state.displayName]);
+  }), [settings, workspace.workspace, appearance.document, schedule.draft, apps, managedAppIds, schoolMode.restricted, schoolMode.state.displayName]);
 
   const meta = TAB_META[activeTab];
   const subtitle = PAGE_SUBTITLE[activeTab];
@@ -1103,10 +1117,10 @@ export function App() {
                 {updateState.status === 'failed' && updateState.rollbackAvailable && <p className="supporting">{label(settings, 'The previous version remains untouched. Squirrel.Windows rollback was detected or may still be available; retry only after reviewing the release notes.', '上一個版本原封不動。偵測到 Squirrel.Windows rollback，或者 rollback 仍然可用；睇完 release notes 先再試。')}</p>}
               </div>
               {!schoolMode.restricted && (updateState.status === 'available' || updateState.status === 'ready') && <a className="text-button" href={updateState.releaseNotesUrl} onClick={(event) => { event.preventDefault(); void window.dingDingStore.updates.openReleaseNotes(updateState.releaseNotesUrl).then((result) => notify({ ok: result.ok, message: projectRuntimeText(result.message) })); }}>{label(settings, 'Release notes', 'Release notes')}</a>}
-              {updateState.status === 'available' && <button className="filled-button" onClick={() => void window.dingDingStore.updates.downloadStore().then(setUpdateState).catch((error) => notify({ ok: false, message: projectRuntimeText((error as Error).message), recovery: { kind: 'retry-store-update-check', run: retryStoreUpdateCheck } }))}>{label(settings, 'Download', '下載')}</button>}
-              {updateState.status === 'downloading' && <button className="text-button" onClick={() => void window.dingDingStore.updates.cancelStoreDownload().then(setUpdateState)}>{label(settings, 'Cancel download', '取消下載')}</button>}
+              {updateState.status === 'available' && <button className="filled-button" aria-label={label(settings, 'Download App Store update', '下載 App Store 更新')} title={label(settings, 'Download the verified App Store update. Installation waits for your restart choice.', '下載已驗證嘅 App Store 更新；安裝會等你揀重新啟動。')} onClick={() => void window.dingDingStore.updates.downloadStore().then(setUpdateState).catch((error) => notify({ ok: false, message: projectRuntimeText((error as Error).message), recovery: { kind: 'retry-store-update-check', run: retryStoreUpdateCheck } }))}>{label(settings, 'Download', '下載')}</button>}
+              {updateState.status === 'downloading' && <button className="text-button" aria-label={label(settings, 'Cancel App Store update download', '取消 App Store 更新下載')} title={label(settings, 'Cancel the App Store update download.', '取消 App Store 更新下載。')} onClick={() => void window.dingDingStore.updates.cancelStoreDownload().then(setUpdateState)}>{label(settings, 'Cancel download', '取消下載')}</button>}
               {updateState.status === 'failed' && updateState.recoverable && <button className="filled-button" onClick={() => void retryStoreUpdateCheck()}>{label(settings, 'Retry check', '再檢查')}</button>}
-              {updateState.status === 'ready' && <><button className="text-button" onClick={() => setDismissedUpdateVersion(updateState.version)}>{label(settings, 'Later', '遲啲先')}</button><button className="filled-button" onClick={() => void restartUpdate()}>{label(settings, 'Restart to install update', '重新啟動安裝更新')}</button></>}
+              {updateState.status === 'ready' && <><button className="text-button" aria-label={label(settings, 'Dismiss App Store update for now', '暫時收埋 App Store 更新')} onClick={() => setDismissedUpdateVersion(updateState.version)}>{label(settings, 'Later', '遲啲先')}</button><button className="filled-button" aria-label={label(settings, 'Restart to install App Store update', '重新啟動安裝 App Store 更新')} onClick={() => void restartUpdate()}>{label(settings, 'Restart to install update', '重新啟動安裝更新')}</button></>}
             </section>
           )}
 

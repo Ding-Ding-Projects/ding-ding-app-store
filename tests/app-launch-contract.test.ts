@@ -7,7 +7,50 @@ async function source(relative: string): Promise<string> {
 }
 
 function assertExactMarker(relative: string, contents: string, marker: string): void {
-  if (!contents.split(/\r?\n/).some((line) => line.includes(marker) && !line.trimStart().startsWith('//'))) {
+  let blockComment = false;
+  let lineComment = false;
+  let quote: string | null = null;
+  let escapedQuote = false;
+  const live = Array<boolean>(contents.length).fill(true);
+  for (let index = 0; index < contents.length; index += 1) {
+    const character = contents[index];
+    const next = contents[index + 1];
+    if (lineComment) {
+      live[index] = false;
+      if (character === '\n') lineComment = false;
+      continue;
+    }
+    if (blockComment) {
+      live[index] = false;
+      if (character === '*' && next === '/') blockComment = false;
+      continue;
+    }
+    if (quote) {
+      live[index] = false;
+      if (escapedQuote) escapedQuote = false;
+      else if (character === '\\') escapedQuote = true;
+      else if (character === quote) quote = null;
+      continue;
+    }
+    if (character === '/' && next === '*') { live[index] = false; blockComment = true; continue; }
+    if (character === '/' && next === '/') {
+      live[index] = false;
+      lineComment = true;
+      continue;
+    }
+    if (character === '\'' || character === '"' || character === '`') { live[index] = false; quote = character; continue; }
+  }
+  const firstNeedsBoundary = /[A-Za-z0-9_$]/.test(marker[0] ?? '');
+  const lastNeedsBoundary = /[A-Za-z0-9_$]/.test(marker.at(-1) ?? '');
+  let found = false;
+  let candidate = contents.indexOf(marker);
+  while (candidate >= 0) {
+    const before = contents[candidate - 1] ?? '';
+    const after = contents[candidate + marker.length] ?? '';
+    if (live[candidate] && (!firstNeedsBoundary || !/[A-Za-z0-9_$]/.test(before)) && (!lastNeedsBoundary || !/[A-Za-z0-9_$]/.test(after))) { found = true; break; }
+    candidate = contents.indexOf(marker, candidate + 1);
+  }
+  if (!found) {
     throw new Error(`${relative} is missing exact live launch marker: ${marker}`);
   }
 }
@@ -47,6 +90,23 @@ describe('installed application launch completeness contract', () => {
         expect(name).toMatch(/^[^\\/:*?"<>|\r\n]{1,128}\.exe$/i);
       }
     }
+  });
+
+  it('rebuilds the dynamic launch command list when managed installation state changes', async () => {
+    const renderer = await source('src/renderer/App.tsx');
+    const marker = "}), [settings, workspace.workspace, appearance.document, schedule.draft, apps, managedAppIds, schoolMode.restricted, schoolMode.state.displayName]);";
+    assertExactMarker('src/renderer/App.tsx', renderer, marker);
+    expect(() => assertExactMarker('src/renderer/App.tsx', renderer.replace(marker, marker.replace(', managedAppIds', '')), marker)).toThrow(/missing exact live launch marker/);
+    expect(renderer).toContain("const message = label(settingsRef.current, 'Launch is unavailable because this application is not a currently managed installation with a reviewed executable identity.'");
+    expect(renderer).toContain('announce(message);');
+  });
+
+  it('rejects commented and inert-string launch action markers', async () => {
+    const renderer = await source('src/renderer/pages/AppsPage.tsx');
+    const marker = 'data-launch-action={app.id}';
+    assertExactMarker('src/renderer/pages/AppsPage.tsx', renderer, marker);
+    expect(() => assertExactMarker('src/renderer/pages/AppsPage.tsx', renderer.replace(marker, `/* ${marker} */`), marker)).toThrow(/missing exact live launch marker/);
+    expect(() => assertExactMarker('src/renderer/pages/AppsPage.tsx', renderer.replace(marker, `'${marker}'`), marker)).toThrow(/missing exact live launch marker/);
   });
 
   it('keeps update completion bound to independently observed installed version and the shared operation barrier', async () => {

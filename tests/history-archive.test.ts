@@ -95,6 +95,29 @@ describe('re-importable activity ZIP archive', () => {
     }
   });
 
+  it('archives a recorded launch outcome and keeps the launch kind in the complete JSONL record', async () => {
+    const launch = entry({
+      appId: 'codex-material',
+      displayName: 'Codex Material',
+      kind: 'launch',
+      message: 'Application start request was accepted; window readiness is not proven.',
+      messageYue: '已接受應用程式啟動要求；視窗準備狀態未驗證。',
+    });
+    const archive = await createHistoryArchive([launch]);
+    const root = await mkdtemp(path.join(os.tmpdir(), 'ding-ding-history-archive-launch-'));
+    try {
+      const zipPath = path.join(root, 'history.zip');
+      const destination = path.join(root, 'expanded');
+      await writeFile(zipPath, Buffer.from(archive.base64, 'base64'));
+      await extractZipSafe(zipPath, destination);
+      expect(JSON.parse(await readFile(path.join(destination, 'history.jsonl'), 'utf8'))).toEqual(launch);
+      const manifest = JSON.parse(await readFile(path.join(destination, 'manifest.json'), 'utf8')) as { fields: string[] };
+      expect(manifest.fields).toContain('kind');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('preserves meaningful leading and trailing whitespace in complete fields', async () => {
     const archive = await createHistoryArchive([entry({ appId: ' app-with-space ', displayName: ' Display name ' })]);
     const root = await mkdtemp(path.join(os.tmpdir(), 'ding-ding-history-archive-space-'));
