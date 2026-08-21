@@ -688,7 +688,7 @@ void app.whenReady().then(async () => {
   // ScheduleService may migrate and persist its file during startup. Keep
   // that write behind the same barrier as history restore and renderer saves.
   await stateMutationQueue.run(() => scheduler.start());
-  await managedUpdates.restore();
+  await stateMutationQueue.run(() => managedUpdates.restore());
   void stateMutationQueue.run(() => managedUpdates.checkAll());
   setTimeout(() => void scheduler.runStartupCheck(), 5_000).unref();
 

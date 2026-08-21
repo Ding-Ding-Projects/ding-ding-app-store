@@ -466,12 +466,12 @@ export interface UpdatePackageMetadata {
  */
 export type ManagedUpdateState =
   | { appId: string; status: 'idle' | 'up-to-date'; installedVersion: string | null; checkedAt?: string }
-  | { appId: string; status: 'blocked'; installedVersion: string | null; message: string; checkedAt: string }
+  | { appId: string; status: 'blocked'; installedVersion: string | null; message: string; messageYue?: string; checkedAt: string }
   | { appId: string; status: 'available'; installedVersion: string; version: string; releaseNotesUrl: string; unsigned: true }
   | { appId: string; status: 'downloading'; installedVersion: string; version: string; releaseNotesUrl: string; progress: number; bytesDownloaded: number; bytesTotal: number; unsigned: true }
   | { appId: string; status: 'ready'; installedVersion: string; version: string; releaseNotesUrl: string; progress: 100; bytesDownloaded: number; bytesTotal: number; unsigned: true }
   | { appId: string; status: 'installing'; installedVersion: string; version: string; releaseNotesUrl: string; unsigned: true }
-  | { appId: string; status: 'cancelled' | 'failed' | 'offline'; installedVersion: string | null; version?: string; releaseNotesUrl?: string; message: string; checkedAt: string; unsigned?: true };
+  | { appId: string; status: 'cancelled' | 'failed' | 'offline'; installedVersion: string | null; version?: string; releaseNotesUrl?: string; message: string; messageYue?: string; checkedAt: string; unsigned?: true };
 
 export interface ManagedUpdateRequest {
   appId: string;

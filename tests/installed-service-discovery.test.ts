@@ -134,7 +134,7 @@ describe('InstalledService discovery-only records', () => {
 
       await expect(service.recordInstalledFromRegistry(squirrelRecord as never, [entry], 'v2.0.0')).resolves.toEqual(expect.objectContaining({
         appId: squirrelRecord.id,
-        version: 'v2.0.0',
+        version: '2.0.0',
         source: 'store',
         ownership,
       }));

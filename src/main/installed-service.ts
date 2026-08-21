@@ -167,7 +167,6 @@ export class InstalledService {
         throw new Error(`The installer exited successfully, but the unchanged owned registry entry did not expose the requested installed version. Observed ${discovered.version || 'unknown'}.`);
       }
     }
-    const installedRecord = { ...discovered, version, source: 'store' as const, installedAt: new Date().toISOString() };
     if (adapter.family === 'squirrel') {
       const requested = semver.coerce(version);
       const observed = semver.coerce(discovered.version);
@@ -176,6 +175,7 @@ export class InstalledService {
         throw new Error('The installer exited successfully, but the requested Squirrel app directory did not independently prove the installed version.');
       }
     }
+    const installedRecord = { ...discovered, version: adapter.family === 'squirrel' ? discovered.version : version, source: 'store' as const, installedAt: new Date().toISOString() };
     await this.record(installedRecord);
     return installedRecord;
   }

@@ -349,8 +349,13 @@ export function App() {
         const state = await window.dingDingStore.updates.downloadApp({ appId: app.id, decision: 'download-update' });
         setManagedUpdates((current) => ({ ...current, [app.id]: state }));
         const message = 'message' in state ? state.message : undefined;
+        const messageYue = 'messageYue' in state && typeof state.messageYue === 'string' ? state.messageYue : undefined;
         const appLabel = projectRuntimeAppName(app.id, app.name);
-        const safeMessage = message ? projectRuntimeText(message, 'Update details unavailable while restricted.', '限制時更新資料未提供。') : undefined;
+        const safeMessage = message
+          ? schoolProjectionRef.current.restricted
+            ? projectRuntimeText(message, 'Update details unavailable while restricted.', '限制時更新資料未提供。')
+            : label(settingsRef.current, message, messageYue ?? '更新資料暫時未能使用。')
+          : undefined;
         const outcome = state.status === 'ready'
           ? label(settingsRef.current, `${appLabel} update is ready. Close the target application, then choose Install update.`, `${appLabel} 更新準備好喇。先關閉目標應用程式，再揀「安裝更新」。`)
           : state.status === 'downloading'
@@ -362,7 +367,11 @@ export function App() {
         const state = await window.dingDingStore.updates.cancelApp({ appId: app.id, decision: 'cancel-update' });
         setManagedUpdates((current) => ({ ...current, [app.id]: state }));
         const appLabel = projectRuntimeAppName(app.id, app.name);
-        const safeMessage = 'message' in state ? projectRuntimeText(state.message, 'Update details unavailable while restricted.', '限制時更新資料未提供.') : undefined;
+        const safeMessage = 'message' in state
+          ? schoolProjectionRef.current.restricted
+            ? projectRuntimeText(state.message, 'Update details unavailable while restricted.', '限制時更新資料未提供。')
+            : label(settingsRef.current, state.message, state.messageYue ?? '更新取消資料暫時未能使用。')
+          : undefined;
         const outcome = safeMessage ?? label(settingsRef.current, `${appLabel} update cancellation requested.`, `已要求取消 ${appLabel} 更新。`);
         notify({ ok: state.status === 'cancelled', message: outcome });
         announce(outcome);

@@ -64,7 +64,7 @@ describe('installed application launch boundary', () => {
     const target = path.join(installRoot, 'app-1.4.3', 'sprout-hollow.exe');
     await executable(target);
     const record: InstalledAppRecord = {
-      appId: 'farming-game', displayName: 'Sprout Hollow', version: '1.4.3', packageType: 'squirrel', source: 'store', installRoot,
+      appId: 'farming-game', displayName: 'Sprout Hollow', version: 'v1.4.3-build.9', packageType: 'squirrel', source: 'store', installRoot,
       uninstall: { kind: 'squirrel', executable: path.join(installRoot, 'Update.exe'), arguments: ['--uninstall', '-s'] },
       ownership: { kind: 'registry', adapterId: 'farming-game-squirrel', registryKey: 'HKCU\\Software\\fixture', fingerprint: 'a'.repeat(64) },
       installedAt: '2026-08-21T00:00:00.000Z', detectedAt: '2026-08-21T00:00:00.000Z',
@@ -132,12 +132,13 @@ describe('installed application launch boundary', () => {
     const service = new AppLaunchService(catalog as never, installed as never, history as never, () => false, launchProcess);
     const result = await service.launch({ appId: 'dim-sum-atlas', decision: 'launch' });
     expect(result).toMatchObject({ ok: true, appId: 'dim-sum-atlas' });
+    expect(result.messageYue).toContain('啟動要求已接受');
     expect(result.message).not.toMatch(/[A-Z]:\\|\\\\/);
     expect(launchProcess).toHaveBeenCalledOnce();
-    expect(history.record).toHaveBeenCalledWith(expect.objectContaining({ kind: 'launch', ok: true }));
+    expect(history.record).toHaveBeenCalledWith(expect.objectContaining({ kind: 'launch', ok: true, messageYue: expect.stringContaining('啟動要求已接受') }));
 
     const busy = new AppLaunchService(catalog as never, installed as never, history as never, () => true, launchProcess);
-    await expect(busy.launch({ appId: 'dim-sum-atlas', decision: 'launch' })).resolves.toMatchObject({ ok: false, message: expect.stringContaining('operation in progress') });
+    await expect(busy.launch({ appId: 'dim-sum-atlas', decision: 'launch' })).resolves.toMatchObject({ ok: false, message: expect.stringContaining('operation in progress'), messageYue: expect.stringContaining('進行緊') });
     const blockedCatalog = { recordFor: vi.fn(async () => ({ id: 'dim-sum-atlas', displayName: 'Dim Sum Atlas', proofStatus: 'blocked-until-proof', proofTargetId: 'clean-windows' })) };
     const blocked = new AppLaunchService(blockedCatalog as never, installed as never, history as never, () => false, launchProcess);
     await expect(blocked.launch({ appId: 'dim-sum-atlas', decision: 'launch' })).resolves.toMatchObject({ ok: false, message: expect.stringContaining('until its clean-Windows lifecycle proof') });

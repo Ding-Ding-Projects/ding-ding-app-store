@@ -365,7 +365,7 @@ export class ManagedUpdateService {
     try {
       const record = await this.catalog.recordFor(appId);
       if (!this.isCurrentCheck(appId, generation)) return this.current(appId);
-      if (!proofStatusAllowsPrivilegedAction(record.proofStatus)) return this.publishCheck(appId, generation, { appId, status: 'blocked', installedVersion: null, message: proofStatusBlockMessage(record), checkedAt: new Date().toISOString() });
+      if (!proofStatusAllowsPrivilegedAction(record.proofStatus)) return this.publishCheck(appId, generation, { appId, status: 'blocked', installedVersion: null, message: proofStatusBlockMessage(record), messageYue: `${record.displayName} 未有已驗證嘅生命週期證據，更新操作保持封鎖。`, checkedAt: new Date().toISOString() });
       const current = await this.installed.get(appId);
       if (!this.isCurrentCheck(appId, generation)) return this.current(appId);
       if (!current) return this.publishCheck(appId, generation, idleState(appId, null));
@@ -373,7 +373,7 @@ export class ManagedUpdateService {
       if (!this.isCurrentCheck(appId, generation)) return this.current(appId);
       if (!release || release.draft || release.prerelease) return this.publishCheck(appId, generation, { appId, status: 'idle', installedVersion: current.version, checkedAt: new Date().toISOString() });
       const adapter = adapterFor(record.id);
-      if (!adapter.supported) return this.publishCheck(appId, generation, { appId, status: 'offline', installedVersion: current.version, message: adapter.blocker, checkedAt: new Date().toISOString() });
+      if (!adapter.supported) return this.publishCheck(appId, generation, { appId, status: 'offline', installedVersion: current.version, message: adapter.blocker, messageYue: `${record.displayName} 暫時冇已審核嘅管理更新路線。`, checkedAt: new Date().toISOString() });
       const asset = selectInstallerAsset(adapter, release.assets);
       const version = release.tag_name;
       const left = semver.coerce(current.version);
@@ -397,7 +397,7 @@ export class ManagedUpdateService {
     } catch (error) {
       if (!this.isCurrentCheck(appId, generation)) return this.current(appId);
       const classified = classifyManagedUpdateError(error);
-      return this.publish({ appId, status: 'failed', installedVersion: null, message: classified.message, checkedAt: new Date().toISOString() });
+      return this.publish({ appId, status: 'failed', installedVersion: null, message: classified.message, messageYue: classified.messageYue, checkedAt: new Date().toISOString() });
     }
   }
 
@@ -410,7 +410,7 @@ export class ManagedUpdateService {
     catch (error) { lease.release(); throw error; }
     if (!proofStatusAllowsPrivilegedAction(record.proofStatus)) {
       lease.release();
-      return this.publish({ appId: request.appId, status: 'blocked', installedVersion: null, message: proofStatusBlockMessage(record), checkedAt: new Date().toISOString() });
+      return this.publish({ appId: request.appId, status: 'blocked', installedVersion: null, message: proofStatusBlockMessage(record), messageYue: `${record.displayName} 未有已驗證嘅生命週期證據，更新操作保持封鎖。`, checkedAt: new Date().toISOString() });
     }
     const current = this.current(request.appId);
     if (current.status === 'ready') { lease.release(); return current; }
@@ -439,16 +439,16 @@ export class ManagedUpdateService {
       this.stages.set(request.appId, stage);
       await this.persistStages();
       this.publish({ appId: request.appId, status: 'ready', installedVersion: candidate.installedVersion, version: candidate.version, releaseNotesUrl: candidate.releaseNotesUrl, progress: 100, bytesDownloaded: candidate.asset.size, bytesTotal: candidate.asset.size, unsigned: true });
-      await this.recordHistory(candidate.record, true, `Downloaded ${candidate.version}; waiting for explicit install-update decision.`);
+      await this.recordHistory(candidate.record, true, `Downloaded ${candidate.version}; waiting for explicit install-update decision.`, `已下載 ${candidate.version}；等候明確嘅安裝更新決定。`);
       return this.current(request.appId);
     } catch (error) {
       await rm(operationDir, { recursive: true, force: true }).catch(() => undefined);
       const rawMessage = error instanceof Error ? error.message : '';
       const classified = classifyManagedUpdateError(error);
       const cancelled = controller.signal.aborted || /cancel/i.test(rawMessage);
-      const state: ManagedUpdateState = { appId: request.appId, status: cancelled ? 'cancelled' : 'failed', installedVersion: candidate.installedVersion, version: candidate.version, releaseNotesUrl: candidate.releaseNotesUrl, message: classified.message, checkedAt: new Date().toISOString(), unsigned: true };
+      const state: ManagedUpdateState = { appId: request.appId, status: cancelled ? 'cancelled' : 'failed', installedVersion: candidate.installedVersion, version: candidate.version, releaseNotesUrl: candidate.releaseNotesUrl, message: classified.message, messageYue: classified.messageYue, checkedAt: new Date().toISOString(), unsigned: true };
       this.publish(state);
-      await this.recordHistory(candidate.record, false, classified.message);
+      await this.recordHistory(candidate.record, false, classified.message, classified.messageYue);
       return state;
     } finally {
       this.activeDownloads.delete(request.appId);
@@ -508,14 +508,14 @@ export class ManagedUpdateService {
       }
       await this.removeStage(stage);
       this.publish({ appId: request.appId, status: 'up-to-date', installedVersion: candidate.version, checkedAt: new Date().toISOString() });
-      result = { ok: true, appId: request.appId, message: `${candidate.record.displayName} ${candidate.version} installed. The target application may need its own restart to load the new version.` };
-      await this.recordHistory(candidate.record, true, result.message);
+      result = { ok: true, appId: request.appId, message: `${candidate.record.displayName} ${candidate.version} installed. The target application may need its own restart to load the new version.`, messageYue: `${candidate.record.displayName} ${candidate.version} 已安裝；目標應用程式可能要自行重新啟動先載入新版本。` };
+      await this.recordHistory(candidate.record, true, result.message, result.messageYue);
     } catch (error) {
       const classified = classifyManagedUpdateError(error);
       const retained = /termination|still be running|unknown/i.test(error instanceof Error ? error.message : '');
       result = { ok: false, appId: request.appId, message: `${classified.message}${retained ? ' This application remains locked until restart.' : ' The staged bytes remain available for a reviewed retry.'}`, messageYue: `${classified.messageYue}${retained ? ' 呢個 app 會保持鎖定直到重啟。' : ' 暫存檔案會保留，方便審核後再試。'}` };
-      this.publish({ appId: request.appId, status: 'failed', installedVersion: candidate.installedVersion, version: candidate.version, releaseNotesUrl: candidate.releaseNotesUrl, message: classified.message, checkedAt: new Date().toISOString(), unsigned: true });
-      await this.recordHistory(candidate.record, false, classified.message);
+      this.publish({ appId: request.appId, status: 'failed', installedVersion: candidate.installedVersion, version: candidate.version, releaseNotesUrl: candidate.releaseNotesUrl, message: classified.message, messageYue: classified.messageYue, checkedAt: new Date().toISOString(), unsigned: true });
+      await this.recordHistory(candidate.record, false, classified.message, classified.messageYue);
       if (retained) lease.retain();
     }
     if (!this.coordinator.isRetained(request.appId)) lease.release();
@@ -548,13 +548,13 @@ export class ManagedUpdateService {
     await writeJsonAtomic(this.persistedPath, [...this.stages.values()].slice(0, 32));
   }
 
-  private async recordHistory(record: CatalogRecord, ok: boolean, message: string): Promise<void> {
-    await this.history.record({ appId: record.id, displayName: record.displayName, kind: 'update', ok, message }).catch(() => undefined);
+  private async recordHistory(record: CatalogRecord, ok: boolean, message: string, messageYue?: string): Promise<void> {
+    await this.history.record({ appId: record.id, displayName: record.displayName, kind: 'update', ok, message, ...(messageYue ? { messageYue } : {}) }).catch(() => undefined);
   }
 
   private fail(appId: string, message: string, installedVersion: string | null = null, version?: string, releaseNotesUrl?: string): ManagedUpdateState {
     const classified = classifyManagedUpdateError(new Error(message));
-    const state: ManagedUpdateState = { appId, status: 'failed', installedVersion, ...(version ? { version } : {}), ...(releaseNotesUrl ? { releaseNotesUrl } : {}), message: classified.message, checkedAt: new Date().toISOString() };
+    const state: ManagedUpdateState = { appId, status: 'failed', installedVersion, ...(version ? { version } : {}), ...(releaseNotesUrl ? { releaseNotesUrl } : {}), message: classified.message, messageYue: classified.messageYue, checkedAt: new Date().toISOString() };
     return this.publish(state);
   }
 

@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { constants } from 'node:fs';
 import { access, lstat, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
+import semver from 'semver';
 import type { AppLaunchRequest, InstalledAppRecord, OperationResult } from '../shared/contracts.js';
 import { installationManagementState } from '../shared/contracts.js';
 import { CatalogService, proofStatusAllowsPrivilegedAction, proofStatusBlockMessage } from './catalog-service.js';
@@ -87,8 +88,9 @@ async function resolveRegistryTarget(installed: InstalledAppRecord, adapter: Exe
   if (!installed.installRoot) throw new Error('The owned installation has no reviewed launch root.');
   let targetRoot = path.resolve(installed.installRoot);
   if (adapter.family === 'squirrel') {
-    if (!/^[0-9A-Za-z.+-]{1,96}$/.test(installed.version)) throw new Error('The installed Squirrel version cannot select a reviewed application directory.');
-    targetRoot = path.join(targetRoot, `app-${installed.version}`);
+    const installedVersion = semver.coerce(installed.version)?.version;
+    if (!installedVersion) throw new Error('The installed Squirrel version cannot select a reviewed application directory.');
+    targetRoot = path.join(targetRoot, `app-${installedVersion}`);
   }
   const reviewedPaths = [...names, ...relativePaths.map((relative) => relative.replaceAll('/', path.sep))];
   const candidates: string[] = [];
@@ -165,14 +167,14 @@ export class AppLaunchService {
   ) {}
 
   async launch(request: unknown): Promise<OperationResult> {
-    if (!isAppLaunchRequest(request)) return { ok: false, appId: 'invalid', message: 'Invalid launch request. Only a catalog application ID and matching user decision are accepted.' };
+    if (!isAppLaunchRequest(request)) return { ok: false, appId: 'invalid', message: 'Invalid launch request. Only a catalog application ID and matching user decision are accepted.', messageYue: '啟動請求無效；只接受目錄應用程式 ID 同相符嘅明確決定。' };
     // This is deliberately before catalog I/O: two renderer requests can reach
     // this synchronous section in the same turn and only one may cross the
     // privileged launch boundary.
     const lease = this.coordinator.acquire(request.appId, 'launch');
     if (!lease || this.operationBusy(request.appId)) {
       lease?.release();
-      return { ok: false, appId: request.appId, message: 'This application already has an install, update, uninstall, or launch operation in progress.' };
+      return { ok: false, appId: request.appId, message: 'This application already has an install, update, uninstall, or launch operation in progress.', messageYue: '呢個應用程式已經有安裝、更新、解除安裝或者啟動操作進行緊。' };
     }
     let record;
     try {
@@ -183,7 +185,7 @@ export class AppLaunchService {
     }
     if (!proofStatusAllowsPrivilegedAction(record.proofStatus)) {
       lease.release();
-      return { ok: false, appId: record.id, message: proofStatusBlockMessage(record) };
+      return { ok: false, appId: record.id, message: proofStatusBlockMessage(record), messageYue: `${record.displayName} 未有已驗證嘅生命週期證據${record.proofTargetId ? `（${record.proofTargetId}）` : ''}，啟動操作保持封鎖。` };
     }
     let result: OperationResult;
     try {
@@ -191,11 +193,11 @@ export class AppLaunchService {
       if (!installed) throw new Error('Only an App Store-managed installation can be launched.');
       const target = await resolveLaunchTarget(this.installed, installed);
       await this.launchProcess(target.executable, target.workingDirectory);
-      result = { ok: true, appId: record.id, message: `${record.displayName} start request was accepted. Application-window readiness is not yet proven.` };
+      result = { ok: true, appId: record.id, message: `${record.displayName} start request was accepted. Application-window readiness is not yet proven.`, messageYue: `${record.displayName} 啟動要求已接受；應用程式視窗準備狀態仍未驗證。` };
     } catch (error) {
-      result = { ok: false, appId: record.id, message: safeLaunchFailure(error) };
+      result = { ok: false, appId: record.id, message: safeLaunchFailure(error), messageYue: `${record.displayName} 未能由已審核嘅受管安裝位置啟動。` };
     }
-    await this.history.record({ appId: record.id, displayName: record.displayName, kind: 'launch', ok: result.ok, message: result.message }).catch(() => undefined);
+    await this.history.record({ appId: record.id, displayName: record.displayName, kind: 'launch', ok: result.ok, message: result.message, messageYue: result.messageYue }).catch(() => undefined);
     lease.release();
     return result;
   }
