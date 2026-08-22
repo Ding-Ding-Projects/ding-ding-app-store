@@ -66,7 +66,7 @@ const LATEST_ASSET_FIXTURES: Readonly<Record<string, string>> = {
   'material-minecraft-map-editor': 'Setup.exe',
   'farming-game': 'Sprout.Hollow-Setup-1.4.3.exe',
   'material-cookie-clicker': 'MaterialCookieClicker-Setup.exe',
-  'material-encryption': 'MaterialEncryption-Setup-0.1.10.exe',
+  'material-encryption': 'MaterialEncryption-Setup-0.1.10-x64.exe',
   'material-ollama': 'OllamaSetup.exe',
   'material-sandbox': 'Sandboxie-Plus-x64-v1.18.2.exe',
   'material-tools': 'MaterialTools-Setup-0.1.0.exe',
@@ -124,6 +124,12 @@ describe('hand-written 40-row universal install adapter coverage', () => {
     expect(adapterFor('material-ollama')).toMatchObject({ family: 'inno', packageType: 'inno', installArguments: ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-'] });
     expect(adapterFor('material-sandbox')).toMatchObject({ family: 'inno', packageType: 'inno', uninstallExecutableNames: ['unins000.exe'] });
     for (const id of ids) expect(adapterFor(id).assetPattern.source).toMatch(/^\^.*\\\$|^\^/);
+  });
+
+  it('uses the packaged executable names published by the three reviewed Squirrel applications', () => {
+    expect(adapterFor('farming-game')).toMatchObject({ launchExecutableNames: ['Sprout Hollow.exe'] });
+    expect(adapterFor('material-cookie-clicker')).toMatchObject({ launchExecutableNames: ['Material Cookie Clicker.exe'] });
+    expect(adapterFor('material-encryption')).toMatchObject({ launchExecutableNames: ['Material Encryption.exe'] });
   });
 
   it('keeps every unsupported row explicit and evidence-backed', () => {
