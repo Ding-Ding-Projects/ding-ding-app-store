@@ -28,7 +28,7 @@ export const CATALOG_ADAPTER_DOCUMENTATION = Object.freeze({
   'thunderbird-desktop': { adapterId: 'thunderbird-desktop-mozilla-nsis', status: 'reviewed', family: 'Mozilla NSIS' },
   'bambu-studio': { adapterId: 'bambu-studio-nsis', status: 'reviewed', family: 'NSIS' },
   keepassxc: { adapterId: 'keepassxc-msi', status: 'reviewed', family: 'MSI' },
-  'jdownloader-material': { adapterId: 'jdownloader-material-jpackage', status: 'reviewed', family: 'jpackage EXE' },
+  'jdownloader-material': { adapterId: 'jdownloader-material-jpackage', status: 'reviewed', family: 'jpackage EXE', proofStatus: 'blocked-until-proof' },
   'ha-bambulab': { adapterId: 'ha-bambulab-external-home-assistant', status: 'blocked', blocker: 'The release is a HACS custom-component ZIP. A fresh Windows installation has no canonical local Home Assistant configuration target, and choosing a remote Home Assistant instance requires account/host authorization that this catalog adapter cannot infer.' },
   winforge: { adapterId: 'winforge-portable-zip', status: 'reviewed', family: 'managed portable ZIP' },
   wimforge: { adapterId: 'wimforge-portable-zip', status: 'reviewed', family: 'managed portable ZIP' },

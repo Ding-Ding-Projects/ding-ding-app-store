@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
-import { AMULET_RELEASE_EVIDENCE } from '../src/shared/catalog-release-evidence.js';
+import { AMULET_RELEASE_EVIDENCE, KEEPASSXC_RELEASE_EVIDENCE } from '../src/shared/catalog-release-evidence.js';
 import { INSTALL_ADAPTERS } from '../src/main/install-adapters.js';
 
 const read = (relative: string) => readFile(new URL(`../${relative}`, import.meta.url), 'utf8');
@@ -44,5 +44,26 @@ describe('reviewed catalog release evidence', () => {
     for (const value of [AMULET_RELEASE_EVIDENCE.tag, AMULET_RELEASE_EVIDENCE.targetCommit, ...AMULET_RELEASE_EVIDENCE.assets.map((asset) => asset.sha256), '24 errors']) {
       expect(docs).toContain(value);
     }
+  });
+
+  it('pins the current KeePassXC MSI to its release commit, workflow, and independently recomputed digest', () => {
+    const adapter = INSTALL_ADAPTERS.keepassxc;
+    expect(adapter.releaseEvidence).toBe(KEEPASSXC_RELEASE_EVIDENCE);
+    expect(KEEPASSXC_RELEASE_EVIDENCE).toMatchObject({
+      appId: 'keepassxc',
+      repository: 'keepassxc',
+      tag: 'v0.0.45.1',
+      targetCommit: '9f71044fdc38dd4efc360794fb2248707e94d530',
+      workflow: { started: '2026-08-17T03:22:02Z', completed: '2026-08-17T04:03:36Z', duration: '00:41:34' },
+      tests: { status: 'passed' },
+    });
+    expect(KEEPASSXC_RELEASE_EVIDENCE.assets).toEqual([{
+      name: 'KeePassXC-2.8.0-snapshot-x64.msi',
+      bytes: 73071506,
+      sha256: 'bfa4d0a2eb7f2406a4dd894dd770974811e5e1d6f8e016768324c33e564e8ef5',
+      role: 'installer',
+    }]);
+    expect(Object.isFrozen(KEEPASSXC_RELEASE_EVIDENCE)).toBe(true);
+    expect(Object.isFrozen(KEEPASSXC_RELEASE_EVIDENCE.assets[0])).toBe(true);
   });
 });

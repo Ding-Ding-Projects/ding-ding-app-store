@@ -10,7 +10,7 @@ describe('lifecycle proof replacement', () => {
 
   it('keeps the local disposable proof allowlist closed to reviewed adapters', () => {
     expect(Object.keys(CLOUD_INSTALL_PROOF_TARGETS)).toEqual([
-      'dim-sum-atlas', 'winforge', 'wimforge', 'qbittorrent-material', 'keepassxc', 'codex-material',
+      'dim-sum-atlas', 'winforge', 'wimforge', 'qbittorrent-material', 'keepassxc', 'jdownloader-material', 'codex-material',
       'farming-game', 'material-cookie-clicker', 'material-encryption', 'material-ollama', 'material-sandbox',
       'material-tools', 'material-virtualbox', 'material-winforge', 'material-winutil', 'meadowmark',
       'minecraft-server-command-center', 'minecraft-server-studio', 'sprout-hollow-valley',
@@ -28,6 +28,15 @@ describe('lifecycle proof replacement', () => {
       appId: 'keepassxc',
       adapterId: 'keepassxc-msi',
       family: 'msi',
+      ownershipKind: 'registry',
+      uninstallKind: 'msi',
+      requiresCleanStart: true,
+      requiresDirectSha256: true,
+    });
+    expect(cloudInstallProofTargetFor('jdownloader-material')).toEqual({
+      appId: 'jdownloader-material',
+      adapterId: 'jdownloader-material-jpackage',
+      family: 'jpackage',
       ownershipKind: 'registry',
       uninstallKind: 'msi',
       requiresCleanStart: true,

@@ -6,7 +6,7 @@ export type InstallProofUninstallKind = 'portable' | 'squirrel' | 'msi' | 'revie
 export interface CloudInstallProofTarget {
   readonly appId: CatalogAppId;
   readonly adapterId: InstallAdapterId;
-  readonly family: Extract<InstallerFamily, 'portable-zip' | 'squirrel' | 'msi' | 'nsis' | 'inno'>;
+  readonly family: Extract<InstallerFamily, 'portable-zip' | 'squirrel' | 'msi' | 'nsis' | 'inno' | 'jpackage'>;
   readonly ownershipKind: InstallProofOwnershipKind;
   readonly uninstallKind: InstallProofUninstallKind;
   readonly requiresCleanStart: boolean;
@@ -37,6 +37,10 @@ export const CLOUD_INSTALL_PROOF_TARGETS = {
   },
   keepassxc: {
     appId: 'keepassxc', adapterId: 'keepassxc-msi', family: 'msi',
+    ownershipKind: 'registry', uninstallKind: 'msi', requiresCleanStart: true, requiresDirectSha256: true,
+  },
+  'jdownloader-material': {
+    appId: 'jdownloader-material', adapterId: 'jdownloader-material-jpackage', family: 'jpackage',
     ownershipKind: 'registry', uninstallKind: 'msi', requiresCleanStart: true, requiresDirectSha256: true,
   },
   'codex-material': {

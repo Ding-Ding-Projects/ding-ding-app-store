@@ -41,3 +41,44 @@ export const AMULET_RELEASE_EVIDENCE = Object.freeze({
   assets: AMULET_ASSETS,
   tests: AMULET_TESTS,
 } as const satisfies CatalogReleaseEvidence);
+
+const KEEPASSXC_SOURCE_EVIDENCE = Object.freeze([
+  'CMakeLists.txt',
+  'vcpkg.json',
+  '.github/workflows/material-release.yml',
+  'share/windows/wix/KeePassXC.wxs',
+] as const);
+
+const KEEPASSXC_WORKFLOW = Object.freeze({
+  started: '2026-08-17T03:22:02Z',
+  completed: '2026-08-17T04:03:36Z',
+  duration: '00:41:34',
+} as const);
+
+const KEEPASSXC_ASSETS = Object.freeze([
+  Object.freeze({
+    name: 'KeePassXC-2.8.0-snapshot-x64.msi',
+    bytes: 73071506,
+    sha256: 'bfa4d0a2eb7f2406a4dd894dd770974811e5e1d6f8e016768324c33e564e8ef5',
+    role: 'installer' as const,
+  }),
+] as const);
+
+const KEEPASSXC_TESTS = Object.freeze({
+  status: 'passed' as const,
+  summary: 'The complete Windows ctest suite passed in workflow run 31990921306 before CPack produced the MSI.',
+  disclosure: 'The workflow verdict proves its own build and test run; clean-machine install, launch, exact MSI uninstall, and post-uninstall absence remain separate lifecycle evidence.',
+} as const);
+
+/** Immutable public release metadata for the reviewed unsigned KeePassXC MSI. */
+export const KEEPASSXC_RELEASE_EVIDENCE = Object.freeze({
+  appId: 'keepassxc',
+  repository: 'keepassxc',
+  tag: 'v0.0.45.1',
+  targetCommit: '9f71044fdc38dd4efc360794fb2248707e94d530',
+  sourceManifest: 'CMakeLists.txt',
+  sourceEvidence: KEEPASSXC_SOURCE_EVIDENCE,
+  workflow: KEEPASSXC_WORKFLOW,
+  assets: KEEPASSXC_ASSETS,
+  tests: KEEPASSXC_TESTS,
+} as const satisfies CatalogReleaseEvidence);

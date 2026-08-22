@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { CatalogReleaseEvidence, PackageType } from '../shared/contracts.js';
-import { AMULET_RELEASE_EVIDENCE } from '../shared/catalog-release-evidence.js';
+import { AMULET_RELEASE_EVIDENCE, KEEPASSXC_RELEASE_EVIDENCE } from '../shared/catalog-release-evidence.js';
 
 export const CATALOG_APP_IDS = [
   'lowlevel-computer-use-mcp', 'material-download-manager', 'material-designer', 'material-bluemap',
@@ -163,7 +163,10 @@ export const INSTALL_ADAPTERS: Readonly<Record<CatalogAppId, InstallAdapter>> = 
   'libreoffice-material': msi('libreoffice-material-msi', 'libreoffice-material', /^LibreOfficeMaterial-Windows-x64\.msi$/, ['LibreOffice Material'], ['.github/workflows/windows-installer.yml: CPack MSI release'], /^LibreOfficeMaterial-Windows-x64\.msi\.sha256$/),
   'thunderbird-desktop': { id: 'thunderbird-desktop-mozilla-nsis', appId: 'thunderbird-desktop', supported: true, family: 'mozilla-nsis', packageType: 'nsis', assetPattern: /^thunderbird-[0-9A-Za-z.+-]+\.en-US\.win64\.installer\.exe$/, installArguments: ['-ms'], registryDisplayNames: ['Mozilla Thunderbird', 'Thunderbird', 'Material Mail'], uninstallExecutableNames: ['helper.exe'], uninstallArguments: ['/S'], evidence: ['.github/workflows/windows-installer.yml: Mozilla NSIS package built by mach package'] },
   'bambu-studio': nsis('bambu-studio-nsis', 'bambu-studio', /^BambuStudioMD3-Setup\.exe$/, ['Bambu Studio MD3', 'Bambu Studio'], ['Uninstall.exe'], ['packaging/windows/BambuStudioMD3.nsi: fixed per-user NSIS identity and owned uninstall'], /^BambuStudioMD3-Setup\.exe\.sha256$/),
-  keepassxc: msi('keepassxc-msi', 'keepassxc', /^KeePassXC-[0-9A-Za-z.+-]+-snapshot-x64\.msi$/, ['KeePassXC'], ['.github/workflows/material-release.yml: CPack/WiX MSI and portable release']),
+  keepassxc: {
+    ...msi('keepassxc-msi', 'keepassxc', /^KeePassXC-[0-9A-Za-z.+-]+-snapshot-x64\.msi$/, ['KeePassXC'], ['.github/workflows/material-release.yml: CPack/WiX MSI and portable release']),
+    releaseEvidence: KEEPASSXC_RELEASE_EVIDENCE,
+  },
   'jdownloader-material': { id: 'jdownloader-material-jpackage', appId: 'jdownloader-material', supported: true, family: 'jpackage', packageType: 'jpackage', assetPattern: /^JDownloader-Material-windows-x64\.exe$/, installArguments: ['/quiet', '/norestart'], registryDisplayNames: ['JDownloader Material'], evidence: ['.github/workflows/release.yml: jpackage --type exe with bundled Java runtime'] },
   'ha-bambulab': { id: 'ha-bambulab-external-home-assistant', appId: 'ha-bambulab', supported: false, family: 'unsupported', packageType: 'unsupported', blockerCode: 'external-target-required', blocker: 'The release is a HACS custom-component ZIP. A fresh Windows installation has no canonical local Home Assistant configuration target, and choosing a remote Home Assistant instance requires account/host authorization that this catalog adapter cannot infer.', evidence: ['release v3.0.8: bambu_lab.zip', 'README.md: HACS repository installation route'] },
   winforge: portable('winforge-portable-zip', 'winforge', /^WinForge-portable-x64-[0-9A-Za-z.+-]+\.zip$/, 'WinForge.exe', ['.github/workflows/release.yml: validated self-contained portable archive with WinForge.exe']),
