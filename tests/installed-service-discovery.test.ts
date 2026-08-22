@@ -12,6 +12,7 @@ vi.mock('electron', () => ({
 }));
 
 import { InstalledService } from '../src/main/installed-service';
+import { registryEntryFingerprint } from '../src/main/installed-detection';
 
 const catalogRecord = {
   id: 'codex-material',
@@ -96,5 +97,51 @@ describe('InstalledService discovery-only records', () => {
     });
     (service as unknown as { registrySnapshot(): Promise<never> }).registrySnapshot = async () => { throw new Error('registry should not be queried for portable ownership'); };
     await expect(service.get(portableRecord.id)).resolves.toEqual(expect.objectContaining({ appId: portableRecord.id, source: 'portable-managed', uninstall: { kind: 'portable', executable: null, arguments: [] } }));
+  });
+
+  it('accepts an unchanged owned Squirrel registry entry only when the installed app directory proves the requested update version', async () => {
+    const previousLocalAppData = process.env.LOCALAPPDATA;
+    process.env.LOCALAPPDATA = electronState.userData;
+    try {
+      const squirrelRecord = {
+        ...catalogRecord,
+        id: 'desktop-material',
+        repository: 'desktop-material',
+        displayName: 'Desktop Material',
+        packageType: 'squirrel',
+        adapterId: 'desktop-material-squirrel',
+      } as const;
+      const catalog = { manifest: async () => ({ schemaVersion: 1 as const, organization: 'Ding-Ding-Projects' as const, apps: [squirrelRecord] }), recordFor: async () => squirrelRecord };
+      const service = new InstalledService(catalog as never);
+      const root = path.join(electronState.userData, 'GitHubDesktop');
+      const updateExecutable = path.join(root, 'Update.exe');
+      await mkdir(path.join(root, 'app-1.0.0'), { recursive: true });
+      await mkdir(path.join(root, 'app-2.0.0'), { recursive: true });
+      await writeFile(updateExecutable, 'reviewed updater');
+      const entry = {
+        key: 'HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\GitHubDesktop',
+        displayName: 'GitHub Desktop',
+        displayVersion: '1.0.0',
+        installLocation: root,
+        uninstallString: `"${updateExecutable}" --uninstall`,
+      };
+      const ownership = { kind: 'registry' as const, adapterId: squirrelRecord.adapterId, registryKey: entry.key, fingerprint: registryEntryFingerprint(entry) };
+      await service.record({
+        appId: squirrelRecord.id, displayName: squirrelRecord.displayName, version: 'v1.0.0', packageType: 'squirrel', source: 'store', installRoot: root,
+        uninstall: { kind: 'squirrel', executable: updateExecutable, arguments: ['--uninstall', '-s'] }, ownership, installedAt: null, detectedAt: new Date().toISOString(),
+      });
+      (service as unknown as { registrySnapshot(): Promise<typeof entry[]> }).registrySnapshot = async () => [entry];
+
+      await expect(service.recordInstalledFromRegistry(squirrelRecord as never, [entry], 'v2.0.0')).resolves.toEqual(expect.objectContaining({
+        appId: squirrelRecord.id,
+        version: '2.0.0',
+        source: 'store',
+        ownership,
+      }));
+      await expect(service.recordInstalledFromRegistry(squirrelRecord as never, [entry], 'v3.0.0')).rejects.toThrow('unchanged owned registry entry did not expose the requested installed version');
+    } finally {
+      if (previousLocalAppData === undefined) delete process.env.LOCALAPPDATA;
+      else process.env.LOCALAPPDATA = previousLocalAppData;
+    }
   });
 });

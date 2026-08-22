@@ -6,7 +6,7 @@ import { label } from '../i18n';
 import { SuperConfirm } from './SuperConfirm';
 import { dialogCopy } from '../dialog-emoji';
 
-export type ActionKind = 'install' | 'build' | 'uninstall';
+export type ActionKind = 'install' | 'build' | 'uninstall' | 'launch';
 export type ImmediateActionKind = Exclude<ActionKind, 'uninstall'>;
 
 /**

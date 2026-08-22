@@ -1,26 +1,33 @@
 # Public design reference
 
-## Scope
+> **Status: limited.** This wiki page is generated from the canonical categorized article.
 
-The repository's sanitized design reference records the desktop shell rewrite without exposing private project data or executable behavior. It covers the exact seven pages: Catalog, Installed, Updates, Authenticator, Documentation, Activity, and Settings. Settings has five subtabs: General, Appearance, Schedule, About, and Locks & Support.
+## Behaviour
 
-The shell follows the compact Material Design 3 contract: a 60px custom title bar, 288px left navigation rail, centered `Ctrl+Shift+F` search, a 56px page icon tile, and rounded surface containers. The static reference includes light/dark themes, English/Cantonese/bilingual labels, reduced-motion handling, and deterministic responsive fixtures for 1440×920, 820×920, and 360×640 layouts.
+The repository ships an offline Material Design 3 reference at `design/reference.html`. It presents the seven application pages—Catalog, Installed, Updates, Authenticator, Documentation, Activity, and Settings—and the five Settings subtabs—General, Appearance, Schedule, About, and Locks & Support. The shell uses a 60px custom title bar, a 288px left rail, a centered `Ctrl+Shift+F` search affordance, a 56px page icon tile, and rounded surface containers.
 
-## Interaction states
+The reference includes deterministic local fixtures and query-addressable overlays for the command palette, regex builder, tab management/context menu, notification center, anchored appearance panel, action/progress dialog, destructive super-confirmation, source terminal status, changelog, and the dim-sum surprise. It supports light/dark themes, English/Cantonese/bilingual labels, responsive 1440×920, 820×920, and 360×640 layouts, keyboard focus, and reduced motion.
 
-The reference exposes query-addressable examples for the command palette, regex builder, tab-management/context menu, notification center, anchored appearance panel, action/progress dialog, destructive super-confirmation, source terminal, changelog, and dim-sum surprise. The fixtures are local and explanatory. They do not start downloads, installers, source builds, authentication, telemetry, or network requests.
+## Configuration
 
-## Secure comparison viewer
+Use `?page=<id>` to open a page, `?settings=<id>` or `?subtab=<id>` to select a Settings subtab, and `?overlay=<id>` to open an overlay. Supported overlay aliases include `command-palette`, `regex-builder`, `tab-management`, `context-menu`, `notification-center`, `appearance-panel`, `action-progress`, `destructive-super-confirm`, `source-terminal`, `changelog`, and `dim-sum-surprise`. `?lang=en|yue|bilingual` and `?theme=light|dark` select the presentation mode.
 
-`tools/design-reference/main.mjs` provides the plain Electron viewer and a side-by-side comparison mode. The viewer enables context isolation and sandboxing, disables Node integration, denies permissions, blocks navigation and network protocols, and denies new windows. Comparison mode accepts only allowlisted mode and row identifiers and resolves those identifiers against fixed task-owned evidence locations. No renderer-provided path, URL, command, or executable argument is accepted.
+The plain Electron viewer is launched with `npm run design:reference`. Its compare mode is launched with `npm run design:compare`; the CLI accepts only an allowlisted mode and row identifier and resolves comparison evidence to fixed task-owned locations. A renderer never supplies a path, URL, command, or executable argument.
 
-## Evidence boundary
+## Failure modes
 
-Yum Leung Cha verification intentionally did not run tests, linters, audits, reviews, builds, captures, or screenshots. The design reference documents the intended shell and interaction states; packaged runtime, comparison-artifact, and release evidence remain pending.
+Unknown query values fall back to the Catalog page, bilingual labels, light theme, or the reference mode. Unknown compare rows fall back to the `shell` row. The static page does not attempt a network request or start an installer. The viewer denies navigation, permissions, web requests, and new windows; a missing comparison artifact remains an honest unavailable comparison rather than a fabricated capture.
 
-## Related pages
+## Security considerations
 
-- [Tab navigation](Tab-Navigation)
+The reference has a restrictive local Content Security Policy with no network connections or remote fonts. The Electron viewer uses a frameless window with context isolation and sandbox enabled, Node integration disabled, a fixed partition, denied permissions, blocked navigation, denied new windows, and cancellation of HTTP(S)/WebSocket requests. Comparison identifiers are validated before fixed-path resolution. The reference contains no credentials, private repository names, user paths, or simulated authentication data.
+
+## Verification
+
+Review the static page directly at each supported viewport and use the query examples above to exercise every page, Settings subtab, and overlay. Run the viewer through the package scripts when packaged-window evidence is needed. This document and `design/NOTICE.md` define the artifact boundary; they do not claim runtime or visual verification by themselves.
+
+## Suggested articles
+
 - [Command palette](Command-Palette)
-- [Expressive storefront](Expressive-Storefront)
+- [Tab workspace](Tab-Navigation)
 - [Privacy and security](Privacy-and-Security)

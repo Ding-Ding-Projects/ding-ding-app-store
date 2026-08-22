@@ -18,6 +18,7 @@ const baseApp: CatalogApp = {
   topics: [], stars: 0, updatedAt: '2026-08-19T00:00:00.000Z', latestVersion: '1.0.0',
   latestReleaseUrl: 'https://github.com/Ding-Ding-Projects/farming-game/releases/tag/v1.0.0', availability: 'installable',
   packageType: 'squirrel', proofStatus: 'blocked-until-proof', proofTargetId: 'farming-game-clean-windows',
+  launchAvailable: true,
   installedVersion: '0.9.0', updateState: 'available', docsAvailable: true,
 };
 
@@ -47,18 +48,32 @@ describe('catalog proof-status enforcement', () => {
     }
   });
 
+  it('keeps the audited catalog shard aligned with its real lifecycle evidence', async () => {
+    const manifest = JSON.parse(await readFile(new URL('../data/catalog.v1.json', import.meta.url), 'utf8')) as {
+      apps: Array<{ id: string; proofStatus: string; proofTargetId: string | null }>;
+    };
+    const scoped = Object.fromEntries(manifest.apps
+      .filter((row) => ['material-email', 'opencodex', 'qbittorrent-material'].includes(row.id))
+      .map((row) => [row.id, { proofStatus: row.proofStatus, proofTargetId: row.proofTargetId }]));
+    expect(scoped).toEqual({
+      'material-email': { proofStatus: 'verified', proofTargetId: null },
+      opencodex: { proofStatus: 'blocked-until-proof', proofTargetId: 'opencodex-clean-windows' },
+      'qbittorrent-material': { proofStatus: 'verified', proofTargetId: null },
+    });
+  });
+
   it('renders blocked rows as unavailable and with no install, build, or update controls', () => {
     const blocked = render(baseApp);
     expect(blocked).toContain('Blocked until proof');
     expect(blocked).toContain('farming-game-clean-windows');
     expect(blocked).not.toContain('data-install-action');
-    expect(blocked).not.toContain('Restart to install update');
+    expect(blocked).not.toContain('Install update');
     expect(blocked).not.toContain('Download update');
     const verified = render({ ...baseApp, proofStatus: 'verified', proofTargetId: null });
     expect(verified).toContain('data-install-action');
   });
 
-  it('keeps negative regressions exact: removing any enforcement marker turns this Chut red', async () => {
+  it('keeps negative regressions exact: removing any enforcement marker turns this guard red', async () => {
     const filesAndMarkers = [
       ['src/main/operation-service.ts', "if (!proofStatusAllowsPrivilegedAction(record.proofStatus))"],
       ['src/main/managed-update-service.ts', "if (!proofStatusAllowsPrivilegedAction(record.proofStatus))"],

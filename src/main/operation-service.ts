@@ -11,6 +11,7 @@ import { adapterFor, selectInstallerAsset, type ExecutableInstallAdapter, type I
 import { InstalledService } from './installed-service.js';
 import { extractZipSafe } from './safe-zip.js';
 import type { RegistryUninstallEntry } from './installed-detection.js';
+import { AppOperationCoordinator } from './app-operation-coordinator.js';
 
 const MAX_DOWNLOAD_BYTES = 1_500_000_000;
 const MAX_CHECKSUM_BYTES = 128_000;
@@ -190,6 +191,8 @@ interface PortableReplacementOperations {
   stat(target: string): Promise<unknown | null>;
   rename(from: string, to: string): Promise<void>;
   rm(target: string): Promise<void>;
+  wait?(milliseconds: number): Promise<void>;
+  retryDelaysMs?: readonly number[];
 }
 
 const portableReplacementOperations: PortableReplacementOperations = {
@@ -197,6 +200,24 @@ const portableReplacementOperations: PortableReplacementOperations = {
   rename: async (from, to) => { await rename(from, to); },
   rm: async (target) => { await rm(target, { recursive: true, force: true }); },
 };
+
+const PORTABLE_RENAME_RETRY_DELAYS_MS = [100, 200, 400, 800, 1_600, 3_200, 5_000, 7_000, 10_000] as const;
+const TRANSIENT_PORTABLE_RENAME_CODES = new Set(['EPERM', 'EACCES', 'EBUSY']);
+
+async function renamePortableWithRetry(operations: PortableReplacementOperations, from: string, to: string): Promise<void> {
+  const delays = operations.retryDelaysMs ?? PORTABLE_RENAME_RETRY_DELAYS_MS;
+  const wait = operations.wait ?? ((milliseconds: number) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds)));
+  for (let attempt = 0;; attempt += 1) {
+    try {
+      await operations.rename(from, to);
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (!code || !TRANSIENT_PORTABLE_RENAME_CODES.has(code) || attempt >= delays.length) throw error;
+      await wait(delays[attempt]);
+    }
+  }
+}
 
 export async function replacePortableDirectory(
   extracted: string,
@@ -206,20 +227,22 @@ export async function replacePortableDirectory(
   operations: PortableReplacementOperations = portableReplacementOperations,
 ): Promise<string | null> {
   let movedExisting = false;
+  let placedReplacement = false;
   try {
     if (await operations.stat(target)) {
-      await operations.rename(target, backup);
+      await renamePortableWithRetry(operations, target, backup);
       movedExisting = true;
     }
-    await operations.rename(extracted, target);
+    await renamePortableWithRetry(operations, extracted, target);
+    placedReplacement = true;
     await commit();
   } catch (error) {
     const rollbackErrors: string[] = [];
-    if (await operations.stat(target)) {
+    if (placedReplacement && await operations.stat(target)) {
       await operations.rm(target).catch((rollbackError: Error) => rollbackErrors.push(`new-directory cleanup failed: ${rollbackError.message}`));
     }
     if (movedExisting) {
-      await operations.rename(backup, target).catch((rollbackError: Error) => rollbackErrors.push(`previous-version restore failed: ${rollbackError.message}`));
+      await renamePortableWithRetry(operations, backup, target).catch((rollbackError: Error) => rollbackErrors.push(`previous-version restore failed: ${rollbackError.message}`));
     }
     throw new Error(`${(error as Error).message}${rollbackErrors.length ? ` Rollback incomplete: ${rollbackErrors.join('; ')}.` : ''}`);
   }
@@ -342,6 +365,7 @@ export class OperationService {
     private readonly installed: InstalledService,
     private readonly publishProgress: (event: Readonly<OperationProgressEvent>) => void = () => undefined,
     private readonly publishProcessObservation: (observation: Readonly<ProcessExecutionObservation>) => void = () => undefined,
+    private readonly coordinator: AppOperationCoordinator = new AppOperationCoordinator(),
   ) {}
 
   private progressEvent(active: ActiveOperation, phase: OperationProgressPhase, message: string, final = false, locked = false, cancellable = false, progress: number | null = null): OperationProgressEvent {
@@ -366,6 +390,10 @@ export class OperationService {
           : 'An installation is in progress.', false, locked, cancellable,
         active.bytesTotal && active.bytesTotal > 0 ? Math.min(100, Math.floor((active.bytesReceived / active.bytesTotal) * 100)) : null);
     });
+  }
+
+  hasActive(appId: string): boolean {
+    return this.activeOperations.has(appId);
   }
 
   private async finish(record: CatalogRecord, kind: OperationKind, result: OperationResult): Promise<OperationResult> {
@@ -402,16 +430,38 @@ export class OperationService {
 
   async install(request: unknown): Promise<OperationResult> {
     if (!isOperationRequest(request)) return invalidRequest('install');
-    const record = await this.catalog.recordFor(request.appId);
-    if (!proofStatusAllowsPrivilegedAction(record.proofStatus)) return this.finish(record, 'install', { ok: false, appId: record.id, message: proofStatusBlockMessage(record) });
+    const lease = this.coordinator.acquire(request.appId, 'install');
+    if (!lease) return { ok: false, appId: request.appId, message: 'This application already has an install, update, uninstall, or launch operation in progress.', messageYue: '呢個 app 已經有安裝、更新、卸載或者啟動操作進行緊。' };
+    let record;
+    try {
+      record = await this.catalog.recordFor(request.appId);
+    } catch (error) {
+      lease.release();
+      throw error;
+    }
+    if (!proofStatusAllowsPrivilegedAction(record.proofStatus)) {
+      lease.release();
+      return this.finish(record, 'install', { ok: false, appId: record.id, message: proofStatusBlockMessage(record) });
+    }
     if (request.decision !== 'install') {
+      lease.release();
       return this.finish(record, 'install', { ok: false, appId: request.appId, message: 'The install request did not carry the matching user decision.' });
     }
-    const adapter = adapterFor(record.id);
-    if (!adapter.supported) return this.finish(record, 'install', { ok: false, appId: record.id, message: adapter.blocker });
+    let adapter: InstallAdapter;
+    try {
+      adapter = adapterFor(record.id);
+    } catch (error) {
+      lease.release();
+      throw error;
+    }
+    if (!adapter.supported) {
+      lease.release();
+      return this.finish(record, 'install', { ok: false, appId: record.id, message: adapter.blocker });
+    }
 
     const operationKey = record.id;
     if (this.activeOperations.has(operationKey)) {
+      lease.release();
       return this.finish(record, 'install', { ok: false, appId: request.appId, message: `${record.displayName} already has an install or uninstall operation in progress.` });
     }
     const controller = new AbortController();
@@ -490,6 +540,8 @@ export class OperationService {
         this.activeOperations.delete(operationKey);
       }
     }
+    if (retainOperationLock) lease.retain();
+    else lease.release();
     const finalPhase: OperationProgressPhase = retainOperationLock
       ? 'unknown'
       : result.ok ? 'succeeded' : controller.signal.aborted ? 'cancelled' : 'failed';
@@ -566,12 +618,22 @@ export class OperationService {
 
   async uninstall(request: unknown): Promise<OperationResult> {
     if (!isOperationRequest(request)) return invalidRequest('uninstall');
-    const record = await this.catalog.recordFor(request.appId);
+    const lease = this.coordinator.acquire(request.appId, 'uninstall');
+    if (!lease) return { ok: false, appId: request.appId, message: 'This application already has an install, update, uninstall, or launch operation in progress.', messageYue: '呢個 app 已經有安裝、更新、卸載或者啟動操作進行緊。' };
+    let record;
+    try {
+      record = await this.catalog.recordFor(request.appId);
+    } catch (error) {
+      lease.release();
+      throw error;
+    }
     if (request.decision !== 'uninstall') {
+      lease.release();
       return this.finish(record, 'uninstall', { ok: false, appId: request.appId, message: 'The uninstall request did not carry the matching destructive decision.' });
     }
     const operationKey = record.id;
     if (this.activeOperations.has(operationKey)) {
+      lease.release();
       return this.finish(record, 'uninstall', { ok: false, appId: request.appId, message: `${record.displayName} already has an install or uninstall operation in progress.` });
     }
     this.activeOperations.set(operationKey, {
@@ -613,6 +675,8 @@ export class OperationService {
       result = { ok: false, appId: request.appId, message: `${(error as Error).message}${retainOperationLock ? ' This application remains locked until restart.' : ''}` };
     }
     if (!retainOperationLock) this.activeOperations.delete(operationKey);
+    if (retainOperationLock) lease.retain();
+    else lease.release();
     return this.finish(record, 'uninstall', result);
   }
 

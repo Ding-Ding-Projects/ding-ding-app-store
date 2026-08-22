@@ -133,6 +133,17 @@ describe('GitHub-hosted workflow and bootstrap contract', () => {
     }
   });
 
+  it('keeps heavy root test files serialized without widening their finite timeouts', async () => {
+    const config = await readFile(path.join(root, 'vite.config.ts'), 'utf8');
+    const assertSerialized = (candidate: string) => {
+      if (!candidate.includes('fileParallelism: false')) throw new Error('The root Vitest config must serialize process- and disk-heavy test files.');
+    };
+    assertSerialized(config);
+    expect(() => assertSerialized(config.replace('fileParallelism: false', ''))).toThrow(/must serialize/);
+    expect(config).toContain('testTimeout: 30_000');
+    expect(config).toContain('hookTimeout: 30_000');
+  });
+
   it('compares generated documentation independently of checkout line endings', async () => {
     const generator = await read('scripts/docs-generate.mjs');
     expect(generator).toContain("replaceAll('\\r\\n', '\\n')");

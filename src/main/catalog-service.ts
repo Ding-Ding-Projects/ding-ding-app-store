@@ -4,7 +4,7 @@ import { app } from 'electron';
 import semver from 'semver';
 import { z } from 'zod';
 import type { Availability, CatalogApp, CatalogProofStatus, CatalogSnapshot, InstalledAppRecord, PackageType, ScheduleTaskResult } from '../shared/contracts.js';
-import { adapterFor, installAdapterIdSchema } from './install-adapters.js';
+import { adapterFor, adapterSupportsLaunch, installAdapterIdSchema } from './install-adapters.js';
 import { readJson, writeJsonAtomic } from './json-store.js';
 
 const ORG = 'Ding-Ding-Projects';
@@ -96,12 +96,16 @@ export function proofStatusAllowsPrivilegedAction(status: CatalogProofStatus | u
 export function proofStatusBlockMessage(record: Pick<CatalogRecord, 'displayName' | 'proofStatus' | 'proofTargetId'>): string {
   if (record.proofStatus === 'blocked-until-proof') {
     const target = record.proofTargetId ? ` (${record.proofTargetId})` : '';
-    return `${record.displayName} is unavailable until its clean-Windows lifecycle proof is verified${target}. Install, build, and update actions remain blocked.`;
+    return `${record.displayName} is unavailable until its clean-Windows lifecycle proof is verified${target}. Install, launch, build, and update actions remain blocked.`;
   }
-  return `${record.displayName} is unavailable because its proof status is not verified. Install, build, and update actions remain blocked.`;
+  return `${record.displayName} is unavailable because its proof status is not verified. Install, launch, build, and update actions remain blocked.`;
 }
 
-function normalizeCachedProofStatus(app: CatalogApp): CatalogApp {
+function normalizeCachedProofStatus(app: CatalogApp): CatalogApp | null {
+  // A cache can outlive a reviewed manifest.  Unknown IDs are stale data, not
+  // a reason to throw from the catalog screen; fail closed by dropping them.
+  try { adapterFor(app.id); }
+  catch { return null; }
   const proofStatus: CatalogProofStatus = app.proofStatus === 'verified' || app.proofStatus === 'not-required' || app.proofStatus === 'blocked-until-proof'
     ? app.proofStatus
     : 'blocked-until-proof';
@@ -109,6 +113,7 @@ function normalizeCachedProofStatus(app: CatalogApp): CatalogApp {
     ...app,
     proofStatus,
     proofTargetId: proofStatus === 'blocked-until-proof' && typeof app.proofTargetId === 'string' ? app.proofTargetId : null,
+    launchAvailable: proofStatus === 'verified' && adapterSupportsLaunch(app.id),
   };
 }
 
@@ -205,7 +210,7 @@ export class CatalogService {
       warning,
       // Old cache files may predate the typed proof fields. Unknown or missing
       // proof is normalized to blocked before any renderer or operation sees it.
-      apps: applyVerifiedInstalledState(snapshot.apps.map(normalizeCachedProofStatus), installed),
+      apps: applyVerifiedInstalledState(snapshot.apps.map(normalizeCachedProofStatus).filter((record): record is CatalogApp => record !== null), installed),
     };
   }
 
@@ -248,6 +253,7 @@ export class CatalogService {
           docsAvailable: record.wiki,
           proofStatus: record.proofStatus,
           proofTargetId: record.proofTargetId,
+          launchAvailable: false,
         };
       }
 
@@ -274,6 +280,7 @@ export class CatalogService {
         docsAvailable: record.wiki,
         proofStatus: record.proofStatus,
         proofTargetId: record.proofTargetId,
+        launchAvailable: record.proofStatus === 'verified' && adapterSupportsLaunch(record.id),
       };
     }));
 

@@ -20,6 +20,9 @@ export default defineConfig({
   test: {
     testTimeout: 30_000,
     hookTimeout: 30_000,
+    // Several suites build, hash, or coordinate real subprocesses. Running
+    // those files in parallel makes the local verdict depend on host load.
+    fileParallelism: false,
   },
   build: {
     outDir: 'dist/renderer',

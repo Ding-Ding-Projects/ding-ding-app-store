@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type {
   AppStoreUpdateState,
+  AppLaunchRequest,
   AuthenticatorPreviewRequest,
   AuthenticatorPreviewResult,
   AuthenticatorBulkDeleteRequest,
@@ -431,6 +432,7 @@ const api: DingDingStoreApi = {
   },
   operations: {
     install: (request: OperationRequest) => ipcRenderer.invoke('operations:install', request),
+    launch: (request: AppLaunchRequest) => ipcRenderer.invoke('operations:launch', request),
     cancelInstall: (request: InstallCancelRequest) => ipcRenderer.invoke('operations:cancel-install', request),
     status: async (): Promise<OperationProgressEvent[]> => {
       const value = await ipcRenderer.invoke('operations:status');
@@ -481,10 +483,15 @@ const api: DingDingStoreApi = {
     checkApp: (appId: string) => ipcRenderer.invoke('updates:app-check', appId),
     downloadApp: (request: ManagedUpdateRequest) => ipcRenderer.invoke('updates:app-download', request),
     cancelApp: (request: ManagedUpdateCancelRequest) => ipcRenderer.invoke('updates:app-cancel', request),
-    restartApp: (request: ManagedUpdateRequest) => ipcRenderer.invoke('updates:app-restart', request),
+    installApp: (request: ManagedUpdateRequest) => ipcRenderer.invoke('updates:app-install', request),
     subscribeApp: (listener: (state: ManagedUpdateState) => void) => {
       const handler = (_event: Electron.IpcRendererEvent, state: ManagedUpdateState) => listener(state);
       ipcRenderer.on('updates:app-state', handler);
+      // Replay state after registering the listener so a renderer opened after
+      // restore/check never waits for the next background transition.
+      void ipcRenderer.invoke('updates:app-state').then((states: unknown) => {
+        if (Array.isArray(states)) for (const state of states) listener(state as ManagedUpdateState);
+      }).catch(() => undefined);
       return () => ipcRenderer.removeListener('updates:app-state', handler);
     },
     subscribe: (listener: (state: AppStoreUpdateState) => void) => {

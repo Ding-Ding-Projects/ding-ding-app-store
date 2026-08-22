@@ -3,7 +3,7 @@ import type { SVGProps } from 'react';
 type IconDefinition = { path?: string; paths?: string[]; circle?: string; line?: string; polyline?: string };
 
 /* Local geometry keeps the renderer independent of remote fonts, CDNs, and Unicode fallbacks. */
-const iconMap: Record<string, IconDefinition> = {
+export const iconMap: Record<string, IconDefinition> = {
   apps: { path: 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z' }, block: { path: 'M5 5l14 14M19 5 5 19M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z' },
   inventory_2: { path: 'M5 4h14v16H5zM8 2h8v4H8zM8 9h8M8 13h5' },
   system_update: { path: 'M5 4h14v13H5zM8 20h8', polyline: '9 10 12 13 15 10' },

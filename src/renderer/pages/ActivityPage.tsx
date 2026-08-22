@@ -97,6 +97,7 @@ export function ActivityPage({ entries, revisions, loading, settings, openRegex,
     install: label(settings, 'Install', '安裝'),
     build: label(settings, 'Build', '建置'),
     uninstall: label(settings, 'Uninstall', '解除安裝'),
+    launch: label(settings, 'Launch', '啟動'),
     update: label(settings, 'Update', '更新'),
     settings: label(settings, 'Settings', '設定'),
   })[action];

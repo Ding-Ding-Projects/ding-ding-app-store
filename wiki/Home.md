@@ -58,18 +58,18 @@ The wiki mirrors the same canonical feature articles bundled into the applicatio
 ## Installed apps and history
 
 - [Installed app discovery](Installed-App-Discovery) — **shipped** — Detects reviewed registry installs while keeping external discovery separate from exact App Store ownership and removal authority.
-- [Activity history and export](Activity-History) — **shipped** — Appends every install, build, and uninstall result, offers composed filters, exports the selected or filtered log, and links into local version history.
+- [Launch installed applications](Launch-Installed-Applications) — **limited** — Starts an App Store-managed application through its exact reviewed executable identity without accepting renderer-supplied paths, commands, or arguments.
+- [Activity history and export](Activity-History) — **shipped** — Records the operation and selected settings outcomes that the App Store actually emits, offers composed filters, exports the selected or filtered log, and links into local version history.
 - [Local history and version restore](History-Versioning) — **limited** — Browses bounded local-Git snapshots with diff, labels, and an explicit reversible restore path.
 
 ## Updates and schedules
 
-- [Per-app update checker](Per-App-Update-Checker) — **limited** — Compares discovered versions with stable releases and lets a user download, verify, cancel, and explicitly restart to install a staged per-app update.
+- [Per-app update checker](Per-App-Update-Checker) — **limited** — Compares installed versions with stable releases and lets a user download, verify, cancel, and explicitly install a staged per-app update.
 - [App Store self-updater](App-Store-Self-Updater) — **limited** — Runs a bounded unsigned Squirrel RELEASES state machine with package-integrity metadata, user-started downloads, recoverable failures, and an explicit restart action.
 - [Update schedule](Update-Schedule) — **shipped** — Runs one unavoidable startup self-check plus bounded repeat self-check and catalog-refresh timers with explicit history, backoff, and quiet-hour semantics.
 
 ## Workspace and customization
 
-- [Public design reference](Public-Design-Reference) — **limited** — Records the sanitized seven-page/five-Settings-tab Material 3 shell, named interaction overlays, responsive fixtures, and the secure fixed-row comparison viewer with explicit pending-evidence boundaries.
 - [Tab workspace](Tab-Navigation) — **shipped** — Keeps six recoverable browser-style pages in a persistent four-edge tab rail with pinning, groups, independent searches, bulk close/reopen, overflow, keyboard control, and JSON import/export.
 - [Tab and group UX locks with local Support Tickets](Tab-And-Group-Locks-And-Support-Tickets) — **limited** — Password- or TOTP-backed local UX locks for tabs, groups, and individual appearance properties, with an honest operating-system vault boundary and an on-device recovery desk.
 - [Search and regex builder](Search-and-Regex-Builder) — **shipped** — Gives every current collection/settings surface independent plain-text-first search and the same adjacent guided JavaScript regex builder.
@@ -85,6 +85,10 @@ The wiki mirrors the same canonical feature articles bundled into the applicatio
 - [Changelog viewer](Changelog-Viewer) — **shipped** — Browses every released version with searchable commit links, typed date filters, an anchored month-jump range calendar, presets, and filtered copy/export actions.
 - [Catalog language coverage](Catalog-Language) — **shipped** — Keeps Discover, Installed, and Updates controls, status facts, loading states, and recovery actions aligned with the persisted language mode.
 - [Expressive storefront shell](Expressive-Storefront) — **shipped** — Applies an expressive Material Design 3 shell to the title bar, tab rail, catalog cards, state surfaces, and responsive layouts while preserving the existing typed behaviors.
+
+## Product design
+
+- [Public design reference](Public-Design-Reference) — **limited** — Provides an offline public-safe reference for the seven pages, five Settings subtabs, responsive shell, themes, language modes, and deterministic overlays.
 
 ## Documentation
 

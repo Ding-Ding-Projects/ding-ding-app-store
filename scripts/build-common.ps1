@@ -44,6 +44,29 @@ function Get-Sha256 {
   }
 }
 
+function Invoke-BoundedDownload {
+  param(
+    [Parameter(Mandatory = $true)][string]$Uri,
+    [Parameter(Mandatory = $true)][string]$Destination,
+    [Parameter(Mandatory = $true)][string]$Description
+  )
+  try {
+    $curl = Get-Command curl.exe -ErrorAction SilentlyContinue
+    if ($curl) {
+      & $curl.Source '--fail' '--location' '--silent' '--show-error' '--connect-timeout' '15' '--max-time' '120' '--output' $Destination $Uri
+      if ($LASTEXITCODE -ne 0) { throw "$Description curl transfer exited with code $LASTEXITCODE." }
+    } else {
+      Invoke-WebRequest -UseBasicParsing -Uri $Uri -OutFile $Destination -TimeoutSec 120
+    }
+    $download = Get-Item -LiteralPath $Destination -ErrorAction Stop
+    if ($download.PSIsContainer -or $download.Length -le 0) { throw "$Description returned an empty file." }
+  }
+  catch {
+    Remove-Item -LiteralPath $Destination -Force -ErrorAction SilentlyContinue
+    throw "$Description failed within the 120-second download limit: $($_.Exception.Message)"
+  }
+}
+
 function Find-UsableNode {
   Refresh-ProcessPath
   $command = Get-Command node.exe -ErrorAction SilentlyContinue
@@ -83,8 +106,8 @@ function Resolve-NodeToolchain {
     $archive = Join-Path $toolRoot "node-v$version-win-x64.zip"
     $checksums = Join-Path $toolRoot "node-v$version-SHASUMS256.txt"
     $base = "https://nodejs.org/dist/v$version"
-    Invoke-WebRequest -UseBasicParsing -Uri "$base/node-v$version-win-x64.zip" -OutFile $archive
-    Invoke-WebRequest -UseBasicParsing -Uri "$base/SHASUMS256.txt" -OutFile $checksums
+    Invoke-BoundedDownload -Uri "$base/node-v$version-win-x64.zip" -Destination $archive -Description 'Node.js portable archive download'
+    Invoke-BoundedDownload -Uri "$base/SHASUMS256.txt" -Destination $checksums -Description 'Node.js checksum manifest download'
     $line = Select-String -LiteralPath $checksums -Pattern "node-v$version-win-x64\.zip\s*$" | Select-Object -First 1
     if (-not $line) { throw 'Node.js SHA-256 manifest did not contain the pinned Windows archive.' }
     $expected = (($line.Line -split '\s+')[0]).ToLowerInvariant()

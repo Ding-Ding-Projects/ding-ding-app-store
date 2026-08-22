@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { collectRegistrySnapshot, collectRegistrySnapshotResult, exactDisplayNameMatch, extractMsiProductCode, extractQuotedExecutable, isConfirmedMissingRegistryKey, latestSquirrelVersion, ownershipHiveKey, parseRegistryUninstallOutput, pathWithinRoots, registryEntryFingerprint, safeReviewedUninstaller, safeSquirrelLocation, selectChangedRegistryEntry, selectSameVersionOwnedRegistryEntry, selectUniqueReviewedRegistryEntry } from '../src/main/installed-detection';
+import { collectRegistrySnapshot, collectRegistrySnapshotResult, exactDisplayNameMatch, extractMsiProductCode, extractQuotedExecutable, isConfirmedMissingRegistryKey, latestSquirrelVersion, ownershipHiveKey, parseRegistryUninstallOutput, pathWithinRoots, registryEntryFingerprint, safeReviewedUninstaller, safeSquirrelLocation, selectChangedRegistryEntry, selectOwnedRegistryEntry, selectSameVersionOwnedRegistryEntry, selectUniqueReviewedRegistryEntry } from '../src/main/installed-detection';
 
 describe('installed-app detection', () => {
   it('accepts only the exact reg.exe key-not-found result as a confirmed empty hive', () => {
@@ -126,5 +126,7 @@ HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Two
     expect(selectSameVersionOwnedRegistryEntry('v1', 'v1', ownership, 'app-msi-v1', [entry], ['App'])).toEqual(entry);
     expect(selectSameVersionOwnedRegistryEntry('v1', 'v2', ownership, 'app-msi-v1', [entry], ['App'])).toBeNull();
     expect(selectSameVersionOwnedRegistryEntry('v1', 'v1', ownership, 'other-adapter', [entry], ['App'])).toBeNull();
+    expect(selectOwnedRegistryEntry(ownership, 'app-msi-v1', [entry], ['App'])).toEqual(entry);
+    expect(selectOwnedRegistryEntry({ ...ownership, fingerprint: '0'.repeat(64) }, 'app-msi-v1', [entry], ['App'])).toBeNull();
   });
 });

@@ -3,6 +3,7 @@ import { constants } from 'node:fs';
 import { access, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { app } from 'electron';
+import semver from 'semver';
 import type { InstalledAppRecord, InstallOwnership, UninstallDescriptor } from '../shared/contracts.js';
 import type { CatalogRecord } from './catalog-service.js';
 import { CatalogService } from './catalog-service.js';
@@ -18,6 +19,7 @@ import {
   registryEntryFingerprint,
   selectChangedRegistryEntry,
   selectSameVersionOwnedRegistryEntry,
+  selectOwnedRegistryEntry,
   selectUniqueReviewedRegistryEntry,
   safeReviewedUninstaller,
   type RegistryUninstallEntry,
@@ -137,6 +139,7 @@ export class InstalledService {
     if (!adapter.supported || adapter.family === 'portable-zip') throw new Error('The application does not use a registry-owned installer adapter.');
     const after = await this.registrySnapshot();
     let changed: RegistryUninstallEntry;
+    let requiresInstalledVersionProof = false;
     try {
       changed = selectChangedRegistryEntry(before, after, adapter.registryDisplayNames);
     } catch (error) {
@@ -144,15 +147,35 @@ export class InstalledService {
       const prior = (await this.list(false)).find((candidate) => candidate.appId === record.id);
       const priorOwnership = prior?.ownership?.kind === 'registry' ? prior.ownership : null;
       const retained = selectSameVersionOwnedRegistryEntry(prior?.version, version, priorOwnership, adapter.id, after, adapter.registryDisplayNames);
-      if (!retained) throw error;
-      changed = retained;
+      if (retained) changed = retained;
+      else {
+        const unchangedOwned = selectOwnedRegistryEntry(priorOwnership, adapter.id, after, adapter.registryDisplayNames);
+        if (!unchangedOwned) throw error;
+        changed = unchangedOwned;
+        requiresInstalledVersionProof = true;
+      }
     }
     const ownership: InstallOwnership = {
       kind: 'registry', adapterId: adapter.id, registryKey: changed.key, fingerprint: registryEntryFingerprint(changed),
     };
     const discovered = await this.discoverRegistry(record, adapter, [changed], new Date().toISOString(), ownership);
     if (!discovered?.uninstall) throw new Error('The new registry entry did not contain the reviewed uninstall identity.');
-    const installedRecord = { ...discovered, version, source: 'store' as const, installedAt: new Date().toISOString() };
+    if (requiresInstalledVersionProof) {
+      const requested = semver.coerce(version);
+      const observed = semver.coerce(discovered.version);
+      if (!requested || !observed || !semver.eq(requested, observed)) {
+        throw new Error(`The installer exited successfully, but the unchanged owned registry entry did not expose the requested installed version. Observed ${discovered.version || 'unknown'}.`);
+      }
+    }
+    if (adapter.family === 'squirrel') {
+      const requested = semver.coerce(version);
+      const observed = semver.coerce(discovered.version);
+      const appDirectory = discovered.installRoot && requested ? path.join(discovered.installRoot, `app-${requested.version}`) : null;
+      if (!requested || !observed || semver.compare(requested, observed) !== 0 || !appDirectory || !await exists(appDirectory)) {
+        throw new Error('The installer exited successfully, but the requested Squirrel app directory did not independently prove the installed version.');
+      }
+    }
+    const installedRecord = { ...discovered, version: adapter.family === 'squirrel' ? discovered.version : version, source: 'store' as const, installedAt: new Date().toISOString() };
     await this.record(installedRecord);
     return installedRecord;
   }

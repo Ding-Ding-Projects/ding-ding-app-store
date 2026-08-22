@@ -10,7 +10,7 @@ describe('lifecycle proof replacement', () => {
 
   it('keeps the local disposable proof allowlist closed to reviewed adapters', () => {
     expect(Object.keys(CLOUD_INSTALL_PROOF_TARGETS)).toEqual([
-      'dim-sum-atlas', 'winforge', 'wimforge', 'qbittorrent-material', 'keepassxc', 'codex-material',
+      'dim-sum-atlas', 'winforge', 'wimforge', 'qbittorrent-material', 'opencodex', 'keepassxc', 'codex-material',
       'farming-game', 'material-cookie-clicker', 'material-encryption', 'material-ollama', 'material-sandbox',
       'material-tools', 'material-virtualbox', 'material-winforge', 'material-winutil', 'meadowmark',
       'minecraft-server-command-center', 'minecraft-server-studio', 'sprout-hollow-valley',
@@ -18,6 +18,15 @@ describe('lifecycle proof replacement', () => {
     expect(cloudInstallProofTargetFor('qbittorrent-material')).toEqual({
       appId: 'qbittorrent-material',
       adapterId: 'qbittorrent-material-squirrel',
+      family: 'squirrel',
+      ownershipKind: 'registry',
+      uninstallKind: 'squirrel',
+      requiresCleanStart: true,
+      requiresDirectSha256: true,
+    });
+    expect(cloudInstallProofTargetFor('opencodex')).toEqual({
+      appId: 'opencodex',
+      adapterId: 'opencodex-squirrel',
       family: 'squirrel',
       ownershipKind: 'registry',
       uninstallKind: 'squirrel',

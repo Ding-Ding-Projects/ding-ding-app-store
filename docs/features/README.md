@@ -64,14 +64,15 @@ Verified install adapters, fail-closed source builds, removal, and pending autom
 Windows discovery, owned records, operation history, snapshots, and export.
 
 - [Installed app discovery](./installed/installed-app-discovery.md) — **shipped** — Detects reviewed registry installs while keeping external discovery separate from exact App Store ownership and removal authority.
-- [Activity history and export](./installed/activity-history.md) — **shipped** — Appends every install, build, and uninstall result, offers composed filters, exports the selected or filtered log, and links into local version history.
+- [Launch installed applications](./installed/launch-installed-applications.md) — **limited** — Starts an App Store-managed application through its exact reviewed executable identity without accepting renderer-supplied paths, commands, or arguments.
+- [Activity history and export](./installed/activity-history.md) — **shipped** — Records the operation and selected settings outcomes that the App Store actually emits, offers composed filters, exports the selected or filtered log, and links into local version history.
 - [Local history and version restore](./installed/history-versioning.md) — **limited** — Browses bounded local-Git snapshots with diff, labels, and an explicit reversible restore path.
 
 ## Updates and schedules
 
 Catalog comparisons, the App Store updater, repeat checks, and quiet hours.
 
-- [Per-app update checker](./updates/per-app-update-checker.md) — **limited** — Compares discovered versions with stable releases and lets a user download, verify, cancel, and explicitly restart to install a staged per-app update.
+- [Per-app update checker](./updates/per-app-update-checker.md) — **limited** — Compares installed versions with stable releases and lets a user download, verify, cancel, and explicitly install a staged per-app update.
 - [App Store self-updater](./updates/app-store-self-updater.md) — **limited** — Runs a bounded unsigned Squirrel RELEASES state machine with package-integrity metadata, user-started downloads, recoverable failures, and an explicit restart action.
 - [Update schedule](./updates/update-schedule.md) — **shipped** — Runs one unavoidable startup self-check plus bounded repeat self-check and catalog-refresh timers with explicit history, backoff, and quiet-hour semantics.
 
@@ -94,7 +95,12 @@ Tabs, search, command palette, settings, appearance, and notifications.
 - [Changelog viewer](./experience/changelog-viewer.md) — **shipped** — Browses every released version with searchable commit links, typed date filters, an anchored month-jump range calendar, presets, and filtered copy/export actions.
 - [Catalog language coverage](./experience/catalog-language.md) — **shipped** — Keeps Discover, Installed, and Updates controls, status facts, loading states, and recovery actions aligned with the persisted language mode.
 - [Expressive storefront shell](./experience/expressive-storefront.md) — **shipped** — Applies an expressive Material Design 3 shell to the title bar, tab rail, catalog cards, state surfaces, and responsive layouts while preserving the existing typed behaviors.
-- [Public design reference](./product/design-reference.md) — **limited** — Provides an offline, public-safe visual reference for the seven pages, five Settings subtabs, responsive shell, themes, language modes, and deterministic overlay fixtures.
+
+## Product design
+
+Deterministic public design references and the boundaries of comparison evidence.
+
+- [Public design reference](./product/design-reference.md) — **limited** — Provides an offline public-safe reference for the seven pages, five Settings subtabs, responsive shell, themes, language modes, and deterministic overlays.
 
 ## Documentation
 
