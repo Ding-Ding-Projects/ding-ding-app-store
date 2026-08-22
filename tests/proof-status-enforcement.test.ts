@@ -40,7 +40,7 @@ describe('catalog proof-status enforcement', () => {
 
   it('requires an explicit proof status and target discipline for every catalog row', async () => {
     const manifest = JSON.parse(await readFile(new URL('../data/catalog.v1.json', import.meta.url), 'utf8')) as { apps: Array<Record<string, unknown>> };
-    expect(manifest.apps).toHaveLength(40);
+    expect(manifest.apps).toHaveLength(49);
     for (const row of manifest.apps) {
       expect(['not-required', 'blocked-until-proof', 'verified']).toContain(row.proofStatus);
       if (row.proofStatus === 'blocked-until-proof') expect(row.proofTargetId).toMatch(/^[a-z0-9][a-z0-9-]{1,127}$/);

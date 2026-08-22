@@ -18,6 +18,8 @@ The release workflow runs for ordinary `main` pushes and manual dispatches only.
 
 The repository root also carries `build.bat` and `build-installer.bat`. Both accept `/s`, `--silent`, or `SILENT=1`; they resolve Node.js 22 from a user-scoped installation or a SHA-256-verified Node.js archive, run the locked `npm ci` path, and fail on the first missing output. `build-installer.bat` uses the same Squirrel.Windows packaging route as the release workflow, verifies `Setup.exe`, `RELEASES`, the full `.nupkg`, and an unsigned Authenticode state, then writes a local SHA-256 manifest tied to the source commit. The installer script never publishes, tags, pushes, or invokes signing.
 
+The 2026-08-22 catalog expansion verified the nine new setup executables as Authenticode NotSigned only. Clean-install, runtime, and packaged-UI proof for those routes remains pending; release-asset verification does not promote any catalog row to verified.
+
 The repository keeps genuine hidden-desktop captures for the catalog, installed, updates, documentation, activity, settings, appearance settings, command palette, and tab-action surfaces. The documentation generator supplies a reproducible count and exact synchronized-output check rather than relying on a manual file list.
 
 ## Configuration

@@ -1,5 +1,11 @@
 # Handoff
 
+## 2026-08-22 catalog expansion to 49 reviewed IDs
+
+- The catalog now covers 49 public Ding-Ding-Projects repositories: 44 reviewed executable or portable release contracts and five explicit unavailable records (Win SSH Copy ID, Home Assistant Bambu Lab, Photo Viewer, Material GitLab, and Material Tax Reporting).
+- The expansion adds nine newly reviewed Squirrel routes: AWS Command Cockpit, Material NodeTerminal, Material FFmpeg, Material UniGetUI, yt-dlp Studio, Codex Config Studio, Wildline Nation, Linux Image Forge, and Material Vibe Coding. This brings blocked-until-proof records from 14 to 23.
+- Evidence boundary: the latest public setup executables for all nine new routes were downloaded and verified Authenticode NotSigned on 2026-08-22. No clean-Windows installation, application launch, packaged runtime interaction, or UI capture is claimed yet.
+
 ## 2026-08-22 managed update extraction and source-runtime receipt
 
 - Runtime repair commits `9f6c159a8f0fc01bf98d401ce355cdca342a8180` and `23cc38b27fe9ad05dc7e95f96c8452e30428d667` fix two portable-update hazards: bounded retries verify the owned extraction directory is absent before exclusive writes, and `safe-zip` selects Electron's `original-fs` for payload writes so an application-owned `resources/app.asar` is not interpreted as the App Store package. The fallback remains ordinary Node filesystem behavior outside Electron.

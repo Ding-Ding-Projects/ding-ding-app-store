@@ -44,6 +44,15 @@ These records are generated from the reviewed local catalog allowlist and adapte
 - [Minecraft Server Command Center catalog record](./catalog-app-minecraft-server-command-center.md) — Generated reviewed metadata for Minecraft Server Command Center: installable, squirrel, and adapter minecraft-server-command-center-squirrel.
 - [Minecraft Server Studio catalog record](./catalog-app-minecraft-server-studio.md) — Generated reviewed metadata for Minecraft Server Studio: installable, squirrel, and adapter minecraft-server-studio-squirrel.
 - [Sprout Hollow Valley catalog record](./catalog-app-sprout-hollow-valley.md) — Generated reviewed metadata for Sprout Hollow Valley: installable, squirrel, and adapter sprout-hollow-valley-squirrel.
+- [Material Vibe Coding catalog record](./catalog-app-material-vibe-coding.md) — Generated reviewed metadata for Material Vibe Coding: installable, squirrel, and adapter material-vibe-coding-squirrel.
+- [AWS Command Cockpit catalog record](./catalog-app-aws-command-cockpit.md) — Generated reviewed metadata for AWS Command Cockpit: installable, squirrel, and adapter aws-command-cockpit-squirrel.
+- [Material NodeTerminal catalog record](./catalog-app-material-nodeterm.md) — Generated reviewed metadata for Material NodeTerminal: installable, squirrel, and adapter material-nodeterm-squirrel.
+- [Material FFmpeg catalog record](./catalog-app-material-ffmpeg.md) — Generated reviewed metadata for Material FFmpeg: installable, squirrel, and adapter material-ffmpeg-squirrel.
+- [Material UniGetUI catalog record](./catalog-app-material-unigetui.md) — Generated reviewed metadata for Material UniGetUI: installable, squirrel, and adapter material-unigetui-squirrel.
+- [yt-dlp Studio catalog record](./catalog-app-material-ytdlp.md) — Generated reviewed metadata for yt-dlp Studio: installable, squirrel, and adapter material-ytdlp-squirrel.
+- [Codex Config Studio catalog record](./catalog-app-codex-config-studio.md) — Generated reviewed metadata for Codex Config Studio: installable, squirrel, and adapter codex-config-studio-squirrel.
+- [Wildline Nation catalog record](./catalog-app-wildline-nation.md) — Generated reviewed metadata for Wildline Nation: installable, squirrel, and adapter wildline-nation-squirrel.
+- [Linux Image Forge catalog record](./catalog-app-linux-image-forge.md) — Generated reviewed metadata for Linux Image Forge: installable, squirrel, and adapter linux-image-forge-squirrel.
 
 ## Boundaries
 

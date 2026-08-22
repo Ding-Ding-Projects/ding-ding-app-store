@@ -4,17 +4,17 @@ title: One-click installation and adapter coverage
 titleYue: 一按安裝同配接器覆蓋
 category: installation
 status: limited
-summary: Dispatches 22 reviewed release adapters without typed confirmation and reports three current public-release blockers instead of guessing commands.
+summary: Dispatches 44 reviewed release adapters without typed confirmation and reports five current public-release blockers instead of guessing commands.
 ---
 # One-click installation and adapter coverage
 
 ## Behaviour
 
-Selecting **Install** or **Reinstall** immediately submits only the catalog application identifier and the closed `install` decision. The main process selects one of 25 hand-written adapter records; the renderer cannot submit an executable, URL, path, argument, checksum, dependency, or package type. Twenty-two records currently have a reviewed Windows release route. Three are explicitly unavailable and cannot be mislabeled installable. The new record is Amulet Map Editor, whose public release has an unsigned Squirrel.Windows Setup.exe but no packaged runtime/UI proof in this repository.
+Selecting **Install** or **Reinstall** immediately submits only the catalog application identifier and the closed `install` decision. The main process selects one of 49 hand-written adapter records; the renderer cannot submit an executable, URL, path, argument, checksum, dependency, or package type. Forty-four records currently have a reviewed Windows release route. Nine newly reviewed Squirrel routes had their latest public setup executables verified Authenticode NotSigned on 2026-08-22, but clean-Windows installation, launch, and packaged-UI proof remain pending. Five records are explicitly unavailable and cannot be mislabeled installable.
 
 The App Store's own Squirrel package carries an explicit `Ding Ding App Store` product identity, a checked-in branded ICO for the installer and native window, and the same local SVG mark in the renderer title bar. The main process creates that branded shell before restore and migration work, pins the native title against renderer title changes, and reports renderer load failures to the application log instead of silently leaving an Electron fallback shell. A package is not launch proof by itself: the packaged smoke path must observe a live window with the product title and a non-default icon. The missing runtime `yazl` dependency that previously crashed the installed app has now been moved into production dependencies, and a clean local launch opens the installed executable as `Ding Ding App Store`.
 
-The catalog now contains **forty records**, of which **thirty-five** have reviewed executable or portable release contracts. The thirteen newly reviewed public products are deliberately marked `blocked-until-proof`: a release asset, icon provenance, launch identity, or uninstall identity is not the same as clean-Windows lifecycle evidence. Their typed proof targets are ready for a later manual dispatch, but no row is promoted to verified merely because the target exists.
+The catalog now contains **forty-nine records**, of which **forty-four** have reviewed executable or portable release contracts. Twenty-three reviewed products remain deliberately marked `blocked-until-proof`: a release asset, icon provenance, launch identity, or uninstall identity is not the same as clean-Windows lifecycle evidence. Their typed proof targets are ready for later manual dispatch, but no row is promoted to verified merely because the target exists.
 
 | Application | Reviewed route | Current public evidence or blocker |
 | --- | --- | --- |
@@ -55,6 +55,15 @@ The catalog now contains **forty records**, of which **thirty-five** have review
 | Minecraft Server Command Center | Squirrel | `Setup.exe`; first-party `app-mark.ico`; blocked until clean-Windows proof. |
 | Minecraft Server Studio | Squirrel | `Minecraft.Server.Studio-0.120.1-x64-Setup.exe`; first-party ICO and exact Squirrel identity; blocked until clean-Windows proof. |
 | Sprout Hollow Valley | Squirrel | `Sprout-Hollow-Valley-Setup-1.2.12.exe`; first-party ICO and exact Squirrel identity; blocked until clean-Windows proof. |
+| AWS Command Cockpit | Squirrel | Latest public release provides a reviewed Windows setup executable; its current release asset is confirmed unsigned. |
+| Material NodeTerminal | Squirrel | Latest public release provides a reviewed Windows setup executable; its current release asset is confirmed unsigned. |
+| Material FFmpeg | Squirrel | Latest public release provides a reviewed Windows setup executable; its current release asset is confirmed unsigned. |
+| Material UniGetUI | Squirrel | Latest public release provides a reviewed Windows setup executable; its current release asset is confirmed unsigned. |
+| yt-dlp Studio | Squirrel | Latest public release provides a reviewed Windows setup executable; its current release asset is confirmed unsigned. |
+| Codex Config Studio | Squirrel | Latest public release provides a reviewed Windows setup executable; its current release asset is confirmed unsigned. |
+| Wildline Nation | Squirrel | Latest public release provides a reviewed Windows setup executable; its current release asset is confirmed unsigned. |
+| Linux Image Forge | Squirrel | Latest public release provides a reviewed Windows setup executable; its current release asset is confirmed unsigned. |
+| Material Vibe Coding | Squirrel | Latest public release provides a reviewed Windows setup executable; its current release asset is confirmed unsigned. |
 | Photo Viewer | Unavailable | Public `v0.1.0` release contains zero assets. Its source declares a future NSIS target but no published installer exists. |
 | Material GitLab | Unavailable | Public repository has no reviewed Windows installer asset for this catalog route. |
 | Material Tax Reporting | Unavailable | Public repository has no reviewed Windows installer asset for this catalog route. |
@@ -83,7 +92,7 @@ Dependencies are self-contained in the reviewed release packages. MSI uses the W
 
 Installation fails closed for malformed or mismatched requests, duplicate starts, unsupported adapters, missing or prerelease-only releases, zero or multiple matching assets, absent integrity evidence, unverified companion checksums, disallowed HTTPS origins, more than three redirects, declared or received sizes beyond the limit, hash mismatch, download/extraction cancellation, timeout, non-zero installer exit, unsafe ZIP names, symbolic links, special files, excessive entry/expanded size, missing portable executable, or missing exact post-install registry ownership. Cancellation is refused after an external installer starts because killing its launcher cannot prove a Windows Installer or elevated child service stopped. ZIP cancellation destroys and drains the active read/write pipeline before staging cleanup. A timed-out installer is unlocked only after `taskkill /T` succeeds and the launcher closes; otherwise staging and the per-app operation lock are retained until restart. An installer exit code of zero is not success when the reviewed installed-app entry cannot be rediscovered.
 
-The three unsupported records return their exact blocker. They do not fall through to source execution or receive guessed installer flags.
+The five unsupported records return their exact blocker. They do not fall through to source execution or receive guessed installer flags.
 
 ## Security considerations
 
@@ -93,7 +102,7 @@ Installed ownership is captured from exactly one new or changed registry entry b
 
 ## Verification
 
-The hand-written coverage test enumerates all 25 application IDs, asserts 25 unique adapter IDs, proves every installable row maps to a supported adapter with the same package type, rejects unsupported rows labeled installable, and exercises one current asset filename for each of the 22 supported applications. Behavioural tests create real ZIPs to cover empty files, symlinks, Windows case collisions, reserved device aliases, pre-start cancellation, and active-writer cancellation/drain; exercise partial writes; and inject portable commit, cleanup, rollback, and rollback-failure outcomes. Focused registry tests cover incomplete ownership snapshots, fingerprint mutation, exact names, MSI product codes, and safe roots/basenames. Source-contract checks cover bounded redirects/timeouts, hidden shell-free process trees, typed cancellation, exact changed-entry ownership, and separation from the repair runtime.
+The hand-written coverage test enumerates all 49 application IDs, asserts 49 unique adapter IDs, proves every installable row maps to a supported adapter with the same package type, rejects unsupported rows labeled installable, and exercises one current asset filename for each of the 44 supported applications. Behavioural tests create real ZIPs to cover empty files, symlinks, Windows case collisions, reserved device aliases, pre-start cancellation, and active-writer cancellation/drain; exercise partial writes; and inject portable commit, cleanup, rollback, and rollback-failure outcomes. Focused registry tests cover incomplete ownership snapshots, fingerprint mutation, exact names, MSI product codes, and safe roots/basenames. Source-contract checks cover bounded redirects/timeouts, hidden shell-free process trees, typed cancellation, exact changed-entry ownership, and separation from the repair runtime.
 
 The retired install-adapter proof workflow no longer runs in GitHub Actions. Its typed adapter contract remains source-controlled, while real install, exact rediscovery, uninstall, and absence evidence belongs to the local disposable-Windows proof lanes described in [Thirteen-product lifecycle proof](../verification/lifecycle-proof.md). Adding a catalog record still does not silently authorize cloud execution, and GitHub Actions remains build/package/publication-only.
 
@@ -107,7 +116,7 @@ The Codex Material lane selects only `codex-material-msi`. [Windows proof `31270
 
 The typed allowlist additionally contains one NSIS target, Material Email. It selects only `material-email-nsis` and requires the same direct-SHA, clean-start, exact registry-ownership, bounded-manifest, and empty-cleanup conditions. Because NSIS ownership resolves through the adapter's allowlisted uninstall executable rather than a Windows Installer product code, success additionally requires `family:nsis` with a `reviewed-executable` uninstall descriptor. The latest reviewed release is `v0.105.1`, carrying exactly one 126,565,936-byte `Material-Email-0.105.1-Windows-x64.exe` asset with GitHub SHA-256 `b23c152433044026d6e309ae9db5cf09a93a39958b043243ca50d22b0ce3e31d`. Its presence in the allowlist is not clean-Windows lifecycle proof until an exact-commit dispatch succeeds; no application-launch or UI claim follows from the lane.
 
-The adapter audit uses current public release metadata and source/release configuration as of 2026-08-07. The new workflow provides the fresh-Windows evidence path, but each application still needs its own successful cloud proof run; no adapter is claimed complete merely because the workflow exists. The three external blockers remain genuine incomplete outcomes, not test failures disguised as support.
+The adapter audit uses current public release metadata and source/release configuration as of 2026-08-07. The new workflow provides the fresh-Windows evidence path, but each application still needs its own successful cloud proof run; no adapter is claimed complete merely because the workflow exists. The five external blockers remain genuine incomplete outcomes, not test failures disguised as support.
 
 ## Suggested articles
 
