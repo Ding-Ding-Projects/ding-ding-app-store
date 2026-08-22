@@ -71,7 +71,7 @@ const LATEST_ASSET_FIXTURES: Readonly<Record<string, string>> = {
   'material-sandbox': 'Sandboxie-Plus-x64-v1.18.2.exe',
   'material-tools': 'MaterialTools-Setup-0.1.0.exe',
   'material-virtualbox': 'VirtualBox-7.2.97-Setup.exe',
-  'material-winforge': 'WinForge-Material-3-Preview-Setup-1.0.21.exe',
+  'material-winforge': 'WinForge-Material-3-Preview-Setup-1.0.95.exe',
   'material-winutil': 'MaterialSystemUtility-Setup.exe',
   meadowmark: 'Meadowmark-Setup-0.1.52.exe',
   'minecraft-server-command-center': 'Setup.exe',
@@ -124,6 +124,28 @@ describe('hand-written 40-row universal install adapter coverage', () => {
     expect(adapterFor('material-ollama')).toMatchObject({ family: 'inno', packageType: 'inno', installArguments: ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-'] });
     expect(adapterFor('material-sandbox')).toMatchObject({ family: 'inno', packageType: 'inno', uninstallExecutableNames: ['unins000.exe'] });
     for (const id of ids) expect(adapterFor(id).assetPattern.source).toMatch(/^\^.*\\\$|^\^/);
+  });
+
+  it('keeps catalog shard 12 aligned with the reviewed packaged executable identities', () => {
+    expect(adapterFor('material-virtualbox')).toMatchObject({
+      family: 'nsis',
+      installArguments: ['/S'],
+      launchExecutableNames: ['VirtualBox.exe'],
+      uninstallExecutableNames: ['uninstall.exe'],
+      uninstallArguments: ['/S'],
+    });
+    expect(adapterFor('material-winforge')).toMatchObject({
+      family: 'squirrel',
+      launchExecutableNames: ['WinForge Material 3 Preview.exe'],
+      uninstallExecutableNames: ['Update.exe'],
+      uninstallArguments: ['--uninstall', '-s'],
+    });
+    expect(adapterFor('material-winutil')).toMatchObject({
+      family: 'squirrel',
+      launchExecutableNames: ['Material System Utility.exe'],
+      uninstallExecutableNames: ['Update.exe'],
+      uninstallArguments: ['--uninstall', '-s'],
+    });
   });
 
   it('keeps every unsupported row explicit and evidence-backed', () => {
