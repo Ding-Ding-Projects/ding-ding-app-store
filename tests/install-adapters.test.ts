@@ -123,6 +123,10 @@ describe('hand-written 40-row universal install adapter coverage', () => {
     }
     expect(adapterFor('material-ollama')).toMatchObject({ family: 'inno', packageType: 'inno', installArguments: ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-'] });
     expect(adapterFor('material-sandbox')).toMatchObject({ family: 'inno', packageType: 'inno', uninstallExecutableNames: ['unins000.exe'] });
+    expect(adapterFor('meadowmark')).toMatchObject({ launchExecutableNames: ['Meadowmark.exe'] });
+    expect(adapterFor('minecraft-server-command-center')).toMatchObject({ launchExecutableNames: ['Minecraft Server Command Center.exe'] });
+    expect(adapterFor('minecraft-server-studio')).toMatchObject({ launchExecutableNames: ['Minecraft Server Studio.exe'] });
+    expect(adapterFor('sprout-hollow-valley')).toMatchObject({ launchExecutableNames: ['SproutHollowValley.exe'] });
     for (const id of ids) expect(adapterFor(id).assetPattern.source).toMatch(/^\^.*\\\$|^\^/);
   });
 

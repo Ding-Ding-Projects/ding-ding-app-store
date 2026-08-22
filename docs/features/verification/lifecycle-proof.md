@@ -59,6 +59,8 @@ The default driver performs no source execution, installer launch, process disco
 
 The current isolated lane supplies the harness contract, recipe receipt persistence, and attested-driver seam. The integrated protocol peer can transfer source archives/outputs and can run the fixed guest lifecycle agent for installer execution, inner-app launch, process/window inspection, uninstall, and host disposal when a live non-loopback endpoint is reachable. A wrapper HWND is never inner-app evidence, and host install paths are forbidden. No runtime lifecycle success is claimed from source-level checks or from a driver that is not explicitly marked `windows-sandbox-attested`.
 
+For the 2026-08-20 shard covering Meadowmark, Minecraft Server Command Center, Minecraft Server Studio, and Sprout Hollow Valley, exact public release assets and pinned source archives were verified and the source builds completed. The available `prove-guest-lifecycle.mjs` route is fixed to the Ding Ding App Store package and registry identity, so it cannot truthfully stand in for these four products. Host virtual-machine inventory was unavailable to the task account, and installing on the host would violate the isolation contract. Their release-install, installed readiness, exact-uninstall, absence, and guest-disposal stages therefore remain blocked; no host installer was executed.
+
 ## Suggested articles
 
 - [Source-build security](../installation/source-build-security.md)

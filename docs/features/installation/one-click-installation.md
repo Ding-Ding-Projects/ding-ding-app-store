@@ -59,6 +59,28 @@ The catalog now contains **forty records**, of which **thirty-five** have review
 | Material GitLab | Unavailable | Public repository has no reviewed Windows installer asset for this catalog route. |
 | Material Tax Reporting | Unavailable | Public repository has no reviewed Windows installer asset for this catalog route. |
 
+### Shard 13 release and package evidence
+
+The four records below were re-read from their current public, non-draft,
+non-prerelease releases on 2026-08-20. Each setup executable was downloaded to
+a scratch directory, matched the public release digest, and reported
+`NotSigned`. Each full package was opened as a NuGet ZIP to read its exact
+package identity and embedded executable. No setup executable was run on the
+host.
+
+| Application | Release / target commit | Setup asset — bytes — SHA-256 | Full package — bytes — SHA-256 | Embedded executable |
+| --- | --- | --- | --- | --- |
+| Meadowmark | `v0.1.52` / `a296fe73ca28b87942f01463893fcfbe4c98b593` | `Meadowmark-Setup-0.1.52.exe` — 136,139,776 — `863c58cab35670cdaf64608133bd2107026a7b89eafe071b956d82a10cc14a62` | `meadowmark-0.1.52-full.nupkg` — 135,411,598 — `e0a2ea53fed4749d7fc9d3e554dd35c7496dbddb59a396597370883109e98814` | `Meadowmark.exe` |
+| Minecraft Server Command Center | `v0.1.57` / `89789fc93636c8eeb998defdd3aacd096373a1cc` | `Setup.exe` — 140,403,712 — `14d9f7c35d2454601b5c095c876370ce5de69537ae4081a6dfec7c086a90380f` | `minecraft-server-command-center-0.1.57-full.nupkg` — 139,338,797 — `d42aa5b5d5f82fdac5bd867e799bcd7cc5955a164748ca26cbea31820c88095a` | `Minecraft Server Command Center.exe` |
+| Minecraft Server Studio | `v0.1.0-build.120.1` / `e29406d3094eb2d5d077351ba33110a16ccf967e` | `Minecraft.Server.Studio-0.120.1-x64-Setup.exe` — 132,258,304 — `d99c47c3058ac3b5b141056efbcb3a2631b90e3fd51316cebfaa4a8f5e2c6355` | `minecraft-server-studio-0.120.1-full.nupkg` — 131,516,575 — `8b4ab89e882f6b9d16925b3076c08f1513db08feaafaff54ee370948550f4203` | `Minecraft Server Studio.exe` |
+| Sprout Hollow Valley | `v1.2.12` / `941c922a45c4658a34b321bdcdadd468e15633ef` | `Sprout-Hollow-Valley-Setup-1.2.12.exe` — 147,107,840 — `838bc3f2b18e8325c2079d3f616702d2b7edca39ebbe2319072c88887d7f3c30` | `sprout-hollow-valley-1.2.12-full.nupkg` — 146,324,297 — `d09af8014c6b51153843e112588e4cc7f6e53808b03c893528adc74157c53a76` | `SproutHollowValley.exe` |
+
+The release and source-build records are independent: subsequent source-build
+repairs are pinned in `data/source-recipes.v1.json`, while installer selection
+continues to use the immutable current release assets above. The disposable
+install/launch/uninstall proof is still required before any of these four rows
+can be promoted from `blocked-until-proof`.
+
 ### Amulet Map Editor release evidence
 
 The reviewed Amulet record is pinned to public release `0.10.0-dev.567` at source commit `0173704db6bb37f8cdeae75b98bf2e6a25537e46`. Its source-manifest evidence is `pyproject.toml`, `.github/workflows/build-windows.yml`, `installer/build-squirrel.ps1`, and `installer/PACKAGING.md`; the catalog's source-manifest marker remains metadata only and never becomes a renderer-supplied build recipe.

@@ -19,6 +19,8 @@ Four records are intentionally explicit `blocked` rows. Material Encryption's pi
 
 Recipes use the public Node.js `v22.23.2` Windows x64 archive (`1177b4137ba5adaa56354ae40f1080c7450e8ae09cecb47da459d1c52ac99f97`) for the reviewed JavaScript applications. The source runner resolves workspace-relative tool paths inside the disposable guest and keeps the existing zero-mount, no-secret, shell-free transport policy.
 
+The 2026-08-20 source-archive review replaced Meadowmark's unrelated incomplete product-inventory prerequisite with its passing workspace TypeScript validation. Minecraft Server Command Center is pinned to `cada16999d73e19d6461fc97c0511eab5d18eb63`, whose committed lockfile makes `npm ci` deterministic. Minecraft Server Studio is pinned to `106aca7e2da0b8d788d1f7a8343571f7fffa2a6d`, whose release-catalog generator retains the reviewed baseline when a source archive has no `.git` metadata. Sprout Hollow Valley is pinned to `f0302b43ec3d0fda9fb159ef6be7607a71967ccc`, whose root build routes share a digest-verified portable Node.js bootstrap. These source-build facts do not promote any install lifecycle row beyond `blocked-until-proof`.
+
 ## Failure modes
 
 Invalid IDs, duplicate rows, stale or malformed revisions, incorrect archive digests, absolute paths, shell operators, Git executables, missing readiness data, missing validation/build steps, and repair IDs that do not name a step fail schema validation. A blocked row produces a factual terminal failure and never falls back to host execution. A source archive or dependency digest mismatch remains a terminal failure.
@@ -29,7 +31,7 @@ The schema accepts only bounded workspace-relative executable paths and rejects 
 
 ## Verification
 
-`tests/source-recipes.test.ts` is the hand-written thirteen-ID completeness inventory, validates every pinned revision/archive digest/readiness contract, and proves the negative regression by removing one exact row and restoring it. `tests/source-runtime.test.ts` continues to cover vector safety and plan binding. The recipes are catalog evidence; clean Windows build, packaged output, and runtime window proof remain pending for any row whose recipe is blocked.
+`tests/source-recipes.test.ts` is the hand-written thirteen-ID completeness inventory, validates every pinned revision/archive digest/readiness contract, and proves the negative regression by removing one exact row and restoring it. `tests/source-runtime.test.ts` continues to cover vector safety and plan binding. Meadowmark's pinned archive completed `npm ci`, workspace type checking, and the workspace build. Command Center's dewed source completed `npm ci`, its Java-runtime package-seam check, and the main/renderer build. Studio's dewed archive completed locked install, offline-doc validation, and unpacked packaging. Sprout's dewed archive completed locked install, type checking, and the main/renderer build. Installer execution, installed-window readiness, exact uninstall, absence, and guest disposal remain blocked until the reviewed disposable guest route is available.
 
 ## Suggested articles
 

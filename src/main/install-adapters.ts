@@ -187,7 +187,7 @@ export const INSTALL_ADAPTERS: Readonly<Record<CatalogAppId, InstallAdapter>> = 
   meadowmark: squirrel('meadowmark-squirrel', 'meadowmark', /^Meadowmark-Setup-[0-9A-Za-z.+-]+\.exe$/, ['Meadowmark'], ['electron-builder.yml: Squirrel.Windows target and Meadowmark identity'], undefined, ['Meadowmark.exe']),
   'minecraft-server-command-center': squirrel('minecraft-server-command-center-squirrel', 'minecraft-server-command-center', /^Setup\.exe$/, ['Minecraft Server Command Center'], ['electron-builder.yml: Squirrel.Windows release and exact Setup.exe asset'], undefined, ['Minecraft Server Command Center.exe']),
   'minecraft-server-studio': squirrel('minecraft-server-studio-squirrel', 'minecraft-server-studio', /^Minecraft\.Server\.Studio-[0-9A-Za-z.+-]+-Setup\.exe$/, ['Minecraft Server Studio'], ['package.json: Squirrel.Windows target and Minecraft.Server.Studio identity'], undefined, ['Minecraft Server Studio.exe']),
-  'sprout-hollow-valley': squirrel('sprout-hollow-valley-squirrel', 'sprout-hollow-valley', /^Sprout-Hollow-Valley-Setup-[0-9A-Za-z.+-]+\.exe$/, ['Sprout Hollow Valley'], ['package.json: Squirrel.Windows release target and Sprout Hollow Valley identity'], undefined, ['Sprout Hollow Valley.exe']),
+  'sprout-hollow-valley': squirrel('sprout-hollow-valley-squirrel', 'sprout-hollow-valley', /^Sprout-Hollow-Valley-Setup-[0-9A-Za-z.+-]+\.exe$/, ['Sprout Hollow Valley'], ['package.json: Squirrel.Windows release target and Sprout Hollow Valley identity'], undefined, ['SproutHollowValley.exe']),
 };
 
 export function adapterFor(appId: string): InstallAdapter {
