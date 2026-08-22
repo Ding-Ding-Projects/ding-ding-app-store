@@ -29,8 +29,9 @@
     "proof:lifecycle": "node scripts/lifecycle-proof.mjs",
     "proof:lifecycle:aggregate": "node scripts/aggregate-lifecycle-proof.mjs",
     "proof:source-lifecycle": "node scripts/source-lifecycle-proof.mjs",
-    "design:reference": "electron tools/design-reference/main.mjs --mode=reference",
-    "design:compare": "electron tools/design-reference/main.mjs --mode=compare --row=shell"
+    "design:reference": "electron tools/design-reference/main.mjs --mode=reference --scene=catalog",
+    "design:compare": "electron tools/design-reference/main.mjs --mode=compare --scene=catalog",
+    "design:plan": "node scripts/design-parity-plan.mjs"
   },
   "dependencies": {
     "electron-squirrel-startup": "^1.0.1",

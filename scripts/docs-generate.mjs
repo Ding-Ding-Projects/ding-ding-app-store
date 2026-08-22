@@ -59,6 +59,7 @@ const articles = [
   ['secret-and-display-name-history', 'Secret and display-name mutation history', '秘密同顯示名稱變更歷史', 'memory-sync', 'Secret-And-Display-Name-History', 'limited', ['history-versioning', 'settings-language-and-display-name', 'privacy-and-security', 'verification']],
   ['privacy-and-security', 'Privacy and security', '私隱同安全', 'security', 'Privacy-and-Security', 'shipped', ['verified-installer-operations', 'source-build-security', 'verification']],
   ['verification', 'Verification and evidence', '驗證同證據', 'verification', 'Verification', 'shipped', ['catalog-discovery', 'offline-documentation-browser', 'app-store-self-updater']],
+  ['design-reference', 'Deterministic design reference and visual evidence', '可重現設計參考同視覺證據', 'verification', 'Design-Reference', 'limited', ['verification', 'expressive-storefront', 'command-palette', 'tab-navigation']],
   ['lifecycle-proof', 'Thirteen-product lifecycle proof', '十三產品生命週期驗證', 'verification', 'Lifecycle-Proof', 'limited', ['verification', 'source-build-security', 'verified-installer-operations', 'uninstall']],
 ].map(([id, title, titleYue, category, wiki, status, related]) => ({ id, title, titleYue, category, wiki, status, related }));
 
