@@ -80,6 +80,36 @@ describe('managed per-app update contracts', () => {
     }
   });
 
+  it('retries a transient owned extraction-directory lock and proves the directory is absent', async () => {
+    let attempts = 0;
+    const waited: number[] = [];
+    await managedUpdateInternals.removeExtractionOutput(
+      'C:\\owned\\expanded',
+      async () => {
+        attempts += 1;
+        if (attempts === 1) throw Object.assign(new Error('busy'), { code: 'EBUSY' });
+      },
+      async () => { throw Object.assign(new Error('gone'), { code: 'ENOENT' }); },
+      async (milliseconds: number) => { waited.push(milliseconds); },
+    );
+    expect(attempts).toBe(2);
+    expect(waited).toEqual([25]);
+  });
+
+  it('does not retry a non-transient extraction-directory cleanup error', async () => {
+    let attempts = 0;
+    await expect(managedUpdateInternals.removeExtractionOutput(
+      'C:\\owned\\expanded',
+      async () => {
+        attempts += 1;
+        throw Object.assign(new Error('not permitted'), { code: 'EINVAL' });
+      },
+      async () => { throw Object.assign(new Error('gone'), { code: 'ENOENT' }); },
+      async () => undefined,
+    )).rejects.toMatchObject({ code: 'EINVAL' });
+    expect(attempts).toBe(1);
+  });
+
   it('has the separate staged state machine, progress, cancellation, and explicit install boundary', async () => {
     const service = await read('src/main/managed-update-service.ts');
     for (const contract of [
@@ -88,7 +118,7 @@ describe('managed per-app update contracts', () => {
       'install-update', 'shell: false', 'windowsHide: true', 'MAX_DOWNLOAD_BYTES', 'MAX_REDIRECTS',
       'persistedPath', 'replacePortableDirectory', 'recordHistory(candidate.record, true', 'async checkAll()',
       'checkGenerations', 'stageMatchesCandidate', 'repository: candidate.record.repository', 'adapterId: candidate.adapter.id',
-      'currentStates()', 'publishCheck', 'messageYue: classified.messageYue',
+      'currentStates()', 'publishCheck', 'messageYue: classified.messageYue', 'archiveFilesystem.promises.rm',
     ]) expect(service).toContain(contract);
     expect(service).not.toMatch(/request\.path|request\.url|request\.command/);
     const main = await read('src/main/main.ts');

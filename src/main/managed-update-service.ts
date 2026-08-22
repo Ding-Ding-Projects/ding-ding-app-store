@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { access, mkdir, open, readFile, rename, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 import { app, BrowserWindow } from 'electron';
 import semver from 'semver';
 import type {
@@ -14,7 +15,7 @@ import { CatalogService, proofStatusAllowsPrivilegedAction, proofStatusBlockMess
 import { HistoryService } from './history-service.js';
 import { adapterFor, selectInstallerAsset, type ExecutableInstallAdapter, type InstallAdapter, type PortableZipInstallAdapter } from './install-adapters.js';
 import { InstalledService } from './installed-service.js';
-import { extractZipSafe } from './safe-zip.js';
+import { archiveFilesystem, extractZipSafe } from './safe-zip.js';
 import { replacePortableDirectory, run } from './operation-service.js';
 import { readJson, writeJsonAtomic } from './json-store.js';
 import { AppOperationCoordinator } from './app-operation-coordinator.js';
@@ -117,6 +118,46 @@ export interface ManagedUpdateErrorMessages { message: string; messageYue: strin
 
 type ManagedUpdateStepCode = 'EUPDATE_EXTRACT' | 'EUPDATE_REPLACE' | 'EUPDATE_RECORD' | 'EUPDATE_STAGE_CLEANUP' | 'EUPDATE_ROLLBACK_INCOMPLETE';
 
+const EXTRACTION_CLEANUP_RETRY_DELAYS_MS = [25, 50, 100, 200, 400, 800] as const;
+
+type RemoveDirectory = (target: string, options: { recursive: true; force: true }) => Promise<void>;
+type InspectPath = (target: string) => Promise<unknown>;
+type Wait = (milliseconds: number) => Promise<unknown>;
+
+function errorCode(error: unknown): string | null {
+  return typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'string'
+    ? error.code
+    : null;
+}
+
+function transientCleanupError(error: unknown): boolean {
+  return ['EACCES', 'EBUSY', 'ENOTEMPTY', 'EPERM'].includes(errorCode(error) ?? '');
+}
+
+/** Remove only the owned extraction tree, retrying brief scanner/indexer locks before extraction. */
+async function removeExtractionOutput(
+  target: string,
+  removeDirectory: RemoveDirectory = archiveFilesystem.promises.rm,
+  inspectPath: InspectPath = archiveFilesystem.promises.lstat,
+  wait: Wait = delay,
+): Promise<void> {
+  for (const pause of [0, ...EXTRACTION_CLEANUP_RETRY_DELAYS_MS]) {
+    if (pause) await wait(pause);
+    try {
+      await removeDirectory(target, { recursive: true, force: true });
+      try {
+        await inspectPath(target);
+        throw Object.assign(new Error('Managed update extraction output remains after cleanup.'), { code: 'ENOTEMPTY' });
+      } catch (error) {
+        if (errorCode(error) === 'ENOENT') return;
+        throw error;
+      }
+    } catch (error) {
+      if (!transientCleanupError(error) || pause === EXTRACTION_CLEANUP_RETRY_DELAYS_MS.at(-1)) throw error;
+    }
+  }
+}
+
 function managedUpdateStepError(code: ManagedUpdateStepCode, error: unknown): Error {
   const nativeCode = typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'string' && /^[A-Z0-9_]{1,32}$/.test(error.code)
     ? `:${error.code}`
@@ -187,11 +228,11 @@ async function hashFile(filePath: string): Promise<string> {
 async function extractManagedUpdateArchive(archivePath: string, extracted: string): Promise<void> {
   // A failed extraction is retryable only when the caller does not leave its
   // exclusive-create destination half populated. Both paths are app-owned.
-  await rm(extracted, { recursive: true, force: true });
   try {
+    await removeExtractionOutput(extracted);
     await extractZipSafe(archivePath, extracted);
   } catch (error) {
-    await rm(extracted, { recursive: true, force: true }).catch(() => undefined);
+    await removeExtractionOutput(extracted).catch(() => undefined);
     throw managedUpdateStepError('EUPDATE_EXTRACT', error);
   }
 }
@@ -621,4 +662,4 @@ export class ManagedUpdateService {
   }
 }
 
-export const managedUpdateInternals = { githubDigest, assertReleaseUrl, isManagedUpdateRequest, isManagedUpdateCancelRequest, checksumFromCompanion, extractManagedUpdateArchive, managedUpdateStepError };
+export const managedUpdateInternals = { githubDigest, assertReleaseUrl, isManagedUpdateRequest, isManagedUpdateCancelRequest, checksumFromCompanion, extractManagedUpdateArchive, managedUpdateStepError, removeExtractionOutput };
