@@ -1,9 +1,24 @@
-import { createWriteStream, type WriteStream } from 'node:fs';
-import { mkdir } from 'node:fs/promises';
+import { type WriteStream } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { Transform, type Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import yauzl, { type Entry, type ZipFile } from 'yauzl';
+
+const runtimeRequire = createRequire(import.meta.url);
+
+/**
+ * Electron's normal fs layer treats a payload named `resources/app.asar` as a
+ * live application package. Archive extraction must use Electron's original
+ * fs implementation so an installed application's own ASAR remains bytes.
+ */
+export const archiveFilesystem: typeof import('node:fs') = (() => {
+  try {
+    return runtimeRequire('original-fs') as typeof import('node:fs');
+  } catch {
+    return runtimeRequire('node:fs') as typeof import('node:fs');
+  }
+})();
 
 export const MAX_ARCHIVE_ENTRIES = 50_000;
 export const MAX_EXTRACTED_BYTES = 3_000_000_000;
@@ -68,7 +83,7 @@ function openEntry(zip: ZipFile, entry: Entry): Promise<NodeJS.ReadableStream> {
 export async function extractZipSafe(archivePath: string, destinationRoot: string, signal?: AbortSignal, limits: SafeZipLimits = {}): Promise<{ entries: number; bytes: number }> {
   if (signal?.aborted) throw new Error('Installation cancelled before archive extraction.');
   const root = path.resolve(destinationRoot);
-  await mkdir(root, { recursive: true });
+  await archiveFilesystem.promises.mkdir(root, { recursive: true });
   const zip = await openArchive(archivePath);
   let entries = 0;
   let extractedBytes = 0;
@@ -134,14 +149,14 @@ export async function extractZipSafe(archivePath: string, destinationRoot: strin
         const kind = entryKind(entry);
         if (limits.allowedNames && kind === 'directory') throw new Error(`Portable archive allowlist accepts files only: ${entry.fileName}`);
         if (kind === 'directory') {
-          await mkdir(target, { recursive: true });
+          await archiveFilesystem.promises.mkdir(target, { recursive: true });
           zip.readEntry();
           return;
         }
         if (entry.uncompressedSize < 0 || entry.uncompressedSize > maxBytes - extractedBytes) {
           throw new Error('Portable archive exceeds the extracted-size safety limit.');
         }
-        await mkdir(path.dirname(target), { recursive: true });
+        await archiveFilesystem.promises.mkdir(path.dirname(target), { recursive: true });
         const source = await openEntry(zip, entry) as Readable;
         activeSource = source;
         let entryBytes = 0;
@@ -158,7 +173,7 @@ export async function extractZipSafe(archivePath: string, destinationRoot: strin
             } else callback(null, chunk);
           },
         });
-        const output = createWriteStream(target, { flags: 'wx', mode: 0o600 });
+        const output = archiveFilesystem.createWriteStream(target, { flags: 'wx', mode: 0o600 });
         activeOutput = output;
         await pipeline(source, limiter, output);
         activeSource = null;

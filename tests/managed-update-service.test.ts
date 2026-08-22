@@ -118,7 +118,7 @@ describe('managed per-app update contracts', () => {
       'install-update', 'shell: false', 'windowsHide: true', 'MAX_DOWNLOAD_BYTES', 'MAX_REDIRECTS',
       'persistedPath', 'replacePortableDirectory', 'recordHistory(candidate.record, true', 'async checkAll()',
       'checkGenerations', 'stageMatchesCandidate', 'repository: candidate.record.repository', 'adapterId: candidate.adapter.id',
-      'currentStates()', 'publishCheck', 'messageYue: classified.messageYue',
+      'currentStates()', 'publishCheck', 'messageYue: classified.messageYue', 'archiveFilesystem.promises.rm',
     ]) expect(service).toContain(contract);
     expect(service).not.toMatch(/request\.path|request\.url|request\.command/);
     const main = await read('src/main/main.ts');

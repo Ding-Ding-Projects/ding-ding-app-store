@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { access, lstat, mkdir, open, readFile, rename, rm, stat } from 'node:fs/promises';
+import { access, mkdir, open, readFile, rename, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { app, BrowserWindow } from 'electron';
@@ -15,7 +15,7 @@ import { CatalogService, proofStatusAllowsPrivilegedAction, proofStatusBlockMess
 import { HistoryService } from './history-service.js';
 import { adapterFor, selectInstallerAsset, type ExecutableInstallAdapter, type InstallAdapter, type PortableZipInstallAdapter } from './install-adapters.js';
 import { InstalledService } from './installed-service.js';
-import { extractZipSafe } from './safe-zip.js';
+import { archiveFilesystem, extractZipSafe } from './safe-zip.js';
 import { replacePortableDirectory, run } from './operation-service.js';
 import { readJson, writeJsonAtomic } from './json-store.js';
 import { AppOperationCoordinator } from './app-operation-coordinator.js';
@@ -137,8 +137,8 @@ function transientCleanupError(error: unknown): boolean {
 /** Remove only the owned extraction tree, retrying brief scanner/indexer locks before extraction. */
 async function removeExtractionOutput(
   target: string,
-  removeDirectory: RemoveDirectory = rm,
-  inspectPath: InspectPath = lstat,
+  removeDirectory: RemoveDirectory = archiveFilesystem.promises.rm,
+  inspectPath: InspectPath = archiveFilesystem.promises.lstat,
   wait: Wait = delay,
 ): Promise<void> {
   for (const pause of [0, ...EXTRACTION_CLEANUP_RETRY_DELAYS_MS]) {
