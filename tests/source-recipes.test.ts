@@ -95,4 +95,24 @@ describe('reviewed source recipe catalog', () => {
       for (const needle of evidence) expect(recipe?.blocker).toContain(needle);
     }
   });
+
+  it('pins the four shard-13 source routes to their verified archive contracts', async () => {
+    const parsed = sourceRecipeCatalogSchema.parse(JSON.parse(await readFile(path.join(process.cwd(), 'data', 'source-recipes.v1.json'), 'utf8')));
+    const expected = new Map([
+      ['meadowmark', ['a296fe73ca28b87942f01463893fcfbe4c98b593', '7312c8333b8b0c874817a3442f3e273be037eac0703632266980603aabb50f10']],
+      ['minecraft-server-command-center', ['cada16999d73e19d6461fc97c0511eab5d18eb63', 'aa586b272bcaa3f1ac3592405e83aaf5354fa5672b48b65ac9550cde3fe48aae']],
+      ['minecraft-server-studio', ['106aca7e2da0b8d788d1f7a8343571f7fffa2a6d', 'b35c0d305d3fc4ef7707341198266c72d59e2a2e34017126a8a4e3ae305844b7']],
+      ['sprout-hollow-valley', ['f0302b43ec3d0fda9fb159ef6be7607a71967ccc', 'a830492b1337813db72ce3b46fe309ab83220e39799b31baecab773a171a9c29']],
+    ]);
+    for (const [appId, [revision, digest]] of expected) {
+      expect(parsed.recipes.find((recipe) => recipe.appId === appId)).toMatchObject({
+        status: 'ready', revision, sourceArchiveSha256: digest,
+      });
+    }
+    const meadow = parsed.recipes.find((recipe) => recipe.appId === 'meadowmark');
+    expect(meadow?.validate).toEqual([expect.objectContaining({
+      id: 'validate-types',
+      arguments: ['toolchain/node/node_modules/npm/bin/npm-cli.js', 'run', 'typecheck', '--workspaces', '--if-present'],
+    })]);
+  });
 });
