@@ -56,7 +56,7 @@ const LATEST_ASSET_FIXTURES: Readonly<Record<string, string>> = {
   'material-winscp': 'WinSCP.Material.0.1.590.Setup.exe',
   'dim-sum-atlas': 'DimSumAtlas-v0.1.13-windows-x64.zip',
   'material-office': 'Material-Office-0.1.0-x64-Setup.exe',
-  'minecraft-world-downloader': 'WorldDownloaderManager-Setup.exe',
+  'minecraft-world-downloader': 'World.Downloader.Studio-Setup-1.0.99.exe',
   'codex-material': 'Codex.Studio-0.1.0-x64.msi',
   'libreoffice-material': 'LibreOfficeMaterial-Windows-x64.msi',
   'thunderbird-desktop': 'thunderbird-155.0a1.en-US.win64.installer.exe',

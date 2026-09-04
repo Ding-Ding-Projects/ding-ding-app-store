@@ -30,9 +30,9 @@ The catalog now contains **forty-nine records**, of which **forty-four** have re
 | WinSCP Material | Squirrel | `WinSCP.Material.0.1.590.Setup.exe`; Forge maker-squirrel configuration. |
 | Dim Sum Atlas | Managed portable ZIP | `DimSumAtlas-v0.1.13-windows-x64.zip`; expected `DimSumAtlas.exe`. |
 | Win SSH Copy ID | Unavailable | Public repository has no release. There is no immutable installer asset to verify. |
-| Material Office | NSIS | `Material-Office-0.1.0-x64-Setup.exe`; Electron Builder NSIS and silent lifecycle documentation. |
-| Minecraft World Downloader | NSIS | `WorldDownloaderManager-Setup.exe`; reviewed `installer.nsi` fixes identity, root, and uninstaller. |
-| Codex Material | MSI | `Codex.Studio-0.1.0-x64.msi`; Electron Builder MSI x64 target. |
+| Material Office | NSIS | Release `v0.1.0-build.30.attempt.1` publishes `Material-Office-0.1.0-x64-Setup.exe` and its exact checksum companion; the clean-Windows lifecycle remains blocked until proof. |
+| Minecraft World Downloader | Squirrel | Release `app-v1.0.99` publishes `World.Downloader.Studio-Setup-1.0.99.exe`, `RELEASES`, and a full package; the previous fixed-name NSIS contract was stale and the clean-Windows lifecycle remains blocked until proof. |
+| Codex Material | MSI | Release `v0.1.0+build.646` publishes `Codex.Studio-0.1.0-x64.msi`; clean-runner proof `31270172555` verified exact MSI ownership and removal. |
 | LibreOffice Material | MSI | `LibreOfficeMaterial-Windows-x64.msi`; CPack/WiX workflow and companion checksum. |
 | Material Mail | Mozilla NSIS | `thunderbird-155.0a1.en-US.win64.installer.exe`; `mach package` produces the Mozilla NSIS installer. |
 | Bambu Studio | NSIS | `BambuStudioMD3-Setup.exe`; reviewed NSIS script has fixed owned install/uninstall identities. |
