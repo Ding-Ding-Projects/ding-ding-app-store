@@ -12,7 +12,7 @@ The icon is first-party reviewed from repository asset `doc/md3/captures/manager
 
 ## Configuration
 
-The catalog record is source-controlled. The renderer may request this application by its typed identifier and a user decision, but it cannot alter the repository, source manifest, package type, adapter, download, command, argument, or local destination. The source manifest marker is `configure.ac`; it is metadata only and is not a source-build recipe.
+The catalog record is source-controlled. The renderer may request this application by its typed identifier and a user decision, but it cannot alter the repository, source manifest, package type, adapter, download, command, argument, or local destination. The source manifest marker is `configure.py`; it is metadata only and is not a source-build recipe.
 
 ## Failure modes
 

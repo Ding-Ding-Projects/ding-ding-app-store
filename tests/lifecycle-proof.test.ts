@@ -33,6 +33,7 @@ describe('13-product lifecycle proof contract', () => {
     expect(new Set(LIFECYCLE_PRODUCTS.map((entry) => entry.appId)).size).toBe(13);
     expect(LIFECYCLE_PRODUCTS.every((entry) => entry.source.pinned && entry.guest.isolation === 'fresh-per-recipe' && entry.guest.hostMounts === false && entry.guest.secrets === false && entry.proofStatus === 'blocked-until-proof')).toBe(true);
     expect(() => assertLifecycleMatrix(LIFECYCLE_PRODUCTS.slice(0, 12))).toThrow(/exactly 13/);
+    expect(LIFECYCLE_PRODUCTS.find((entry) => entry.appId === 'material-virtualbox')?.source.manifest).toBe('configure.py');
   });
 
   it('keeps the hand-written matrix, recipe catalog, and blocked proof targets exact-set equal', async () => {
@@ -48,6 +49,7 @@ describe('13-product lifecycle proof contract', () => {
       expect(recipe).toBeTruthy();
       expect(app).toMatchObject({ proofStatus: 'blocked-until-proof', proofTargetId: `${row.appId}-clean-windows` });
     }
+    expect(apps.find((entry) => entry.id === 'material-virtualbox')?.sourceManifest).toBe('configure.py');
     const missing = EXPECTED_SOURCE_RECIPE_IDS.filter((id) => id !== 'material-tools');
     expect(exactSet(missing, EXPECTED_SOURCE_RECIPE_IDS)).toBe(false);
     expect(exactSet([...missing, 'material-tools'], EXPECTED_SOURCE_RECIPE_IDS)).toBe(true);
