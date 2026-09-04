@@ -8,9 +8,9 @@
 
 This record describes the reviewed catalog entry `material-gitlab`. Its public source repository is [material-gitlab](https://github.com/Ding-Ding-Projects/material-gitlab). The current availability is **Unavailable through this catalog** and the declared package type is **unsupported**. The closed adapter identifier is `material-gitlab-no-reviewed-installer`.
 
-The current adapter state is: Blocked. The public repository has no reviewed Windows installer asset for this catalog route.
+The current adapter state is: Blocked. The public repository publishes no release for the Material GitLab catalog product. Its root build-installer.bat produces a source ZIP, while the Windows release workflow packages two separately identified tools, so there is no immutable product installer to verify or run.
 
-No icon provenance metadata is declared for this legacy record; the renderer keeps its neutral catalog fallback.
+The icon is first-party reviewed from repository asset `app/assets/images/logo.svg`; if that asset is unavailable, the UI uses the declared generated-monogram fallback rather than a remote or guessed image.
 
 ## Configuration
 

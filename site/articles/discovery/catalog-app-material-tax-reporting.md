@@ -4,11 +4,11 @@
 
 ## Behaviour
 
-This record describes the reviewed catalog entry `material-tax-reporting`. Its public source repository is [material-tax-reporting](https://github.com/Ding-Ding-Projects/material-tax-reporting). The current availability is **Unavailable through this catalog** and the declared package type is **unsupported**. The closed adapter identifier is `material-tax-reporting-no-reviewed-installer`.
+This record describes the reviewed catalog entry `material-tax-reporting`. Its public source repository is [material-tax-reporting](https://github.com/Ding-Ding-Projects/material-tax-reporting). The current availability is **Installable through a reviewed adapter** and the declared package type is **squirrel**. The closed adapter identifier is `material-tax-reporting-squirrel`.
 
-The current adapter state is: Blocked. The public repository has no reviewed Windows installer asset for this catalog route.
+The current adapter state is: Reviewed Squirrel.Windows adapter. The adapter has a fixed, application-specific release contract; this article deliberately does not reproduce executable names, arguments, download URLs, or filesystem locations. Lifecycle status is **verified** for the reviewed catalog route; installation and update actions remain subject to their live byte, ownership, and process checks.
 
-No icon provenance metadata is declared for this legacy record; the renderer keeps its neutral catalog fallback.
+The icon is first-party reviewed from repository asset `assets/brand/material-tax-reporting-mark.png`; if that asset is unavailable, the UI uses the declared generated-monogram fallback rather than a remote or guessed image.
 
 ## Configuration
 
@@ -16,7 +16,7 @@ The catalog record is source-controlled. The renderer may request this applicati
 
 ## Failure modes
 
-Catalog metadata does not prove that a public repository, release, asset, installer, update, or source build is currently usable. A missing release, ambiguous asset, digest failure, network failure, unsupported adapter, or unavailable source-build boundary fails closed and reports its typed outcome. This record remains unavailable until a reviewed public route exists; the application does not guess a target or fallback command.
+Catalog metadata does not prove that a public repository, release, asset, installer, update, or source build is currently usable. A missing release, ambiguous asset, digest failure, network failure, unsupported adapter, or unavailable source-build boundary fails closed and reports its typed outcome. A reviewed adapter can still reject a release that does not meet its immutable validation contract.
 
 ## Security considerations
 

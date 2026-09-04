@@ -31,7 +31,7 @@ The wiki mirrors the same canonical feature articles bundled into the applicatio
 - [Photo Viewer catalog record](Catalog-App-photo-viewer) — **limited** — Generated reviewed metadata for Photo Viewer: unsupported, unsupported, and adapter photo-viewer-empty-release.
 - [Amulet Map Editor catalog record](Catalog-App-material-minecraft-map-editor) — **limited** — Generated reviewed metadata for Amulet Map Editor: installable, squirrel, and adapter material-minecraft-map-editor-squirrel.
 - [Material GitLab catalog record](Catalog-App-material-gitlab) — **limited** — Generated reviewed metadata for Material GitLab: unsupported, unsupported, and adapter material-gitlab-no-reviewed-installer.
-- [Material Tax Reporting catalog record](Catalog-App-material-tax-reporting) — **limited** — Generated reviewed metadata for Material Tax Reporting: unsupported, unsupported, and adapter material-tax-reporting-no-reviewed-installer.
+- [Material Tax Reporting catalog record](Catalog-App-material-tax-reporting) — **limited** — Generated reviewed metadata for Material Tax Reporting: installable, squirrel, and adapter material-tax-reporting-squirrel.
 - [Sprout Hollow catalog record](Catalog-App-farming-game) — **limited** — Generated reviewed metadata for Sprout Hollow: installable, squirrel, and adapter farming-game-squirrel.
 - [Material Cookie Clicker catalog record](Catalog-App-material-cookie-clicker) — **limited** — Generated reviewed metadata for Material Cookie Clicker: installable, squirrel, and adapter material-cookie-clicker-squirrel.
 - [Material Encryption catalog record](Catalog-App-material-encryption) — **limited** — Generated reviewed metadata for Material Encryption: installable, squirrel, and adapter material-encryption-squirrel.

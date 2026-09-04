@@ -35,7 +35,7 @@ The catalog now contains **forty-nine records**, of which **forty-four** have re
 | Home Assistant Bambu Lab | External target required | `bambu_lab.zip` is a HACS custom component. Fresh Windows has no canonical local Home Assistant configuration target; selecting a remote instance requires host/account authorization that cannot be inferred. |
 | WinForge | Managed portable ZIP | `WinForge-portable-x64-1.1.326.zip`; workflow validates `WinForge.exe` and archive paths. |
 | WimForge | Managed portable ZIP | `WimForge-portable-x64-0.1.42.zip`; self-contained Qt archive with `WimForge.exe`. |
-| Amulet Map Editor | Squirrel | `Setup.exe`; release `0.10.0-dev.567` records pinned Squirrel.Windows packaging and a non-green upstream test report. |
+| Amulet Map Editor | Squirrel | `Setup.exe`; release `0.11.0-dev.25` at commit `60eb2e3e0d07bb3aa0ec8e493b40790faa3522c4` records the unsigned Electron Squirrel package. The workflow ran no tests. |
 | Sprout Hollow | Squirrel | `Sprout.Hollow-Setup-1.4.3.exe`; first-party farm capture and exact Squirrel identity; blocked until clean-Windows proof. |
 | Material Cookie Clicker | Squirrel | `MaterialCookieClicker-Setup.exe`; first-party ICO and exact Squirrel identity; blocked until clean-Windows proof. |
 | Material Encryption | Squirrel | `MaterialEncryption-Setup-0.1.10.exe`; first-party logo and exact Squirrel identity; blocked until clean-Windows proof. |
@@ -59,20 +59,34 @@ The catalog now contains **forty-nine records**, of which **forty-four** have re
 | Linux Image Forge | Squirrel | Latest public release provides a reviewed Windows setup executable; its current release asset is confirmed unsigned. |
 | Material Vibe Coding | Squirrel | Latest public release provides a reviewed Windows setup executable; its current release asset is confirmed unsigned. |
 | Photo Viewer | Unavailable | Public `v0.1.0` release contains zero assets. Its source declares a future NSIS target but no published installer exists. |
-| Material GitLab | Unavailable | Public repository has no reviewed Windows installer asset for this catalog route. |
-| Material Tax Reporting | Unavailable | Public repository has no reviewed Windows installer asset for this catalog route. |
+| Material GitLab | Unavailable | The public repository has no product release. Its root installer script emits a source ZIP, and its Windows workflow publishes two separately identified tools rather than a Material GitLab product installer. |
+| Material Tax Reporting | Squirrel | `MaterialTaxReporting-0.1.36001-Setup.exe`; release `v0.1.36001` also publishes `RELEASES` and a full package from the exact root `build.bat` and `build-installer.bat` route. |
 
 ### Amulet Map Editor release evidence
 
-The reviewed Amulet record is pinned to public release `0.10.0-dev.567` at source commit `0173704db6bb37f8cdeae75b98bf2e6a25537e46`. Its source-manifest evidence is `pyproject.toml`, `.github/workflows/build-windows.yml`, `installer/build-squirrel.ps1`, and `installer/PACKAGING.md`; the catalog's source-manifest marker remains metadata only and never becomes a renderer-supplied build recipe.
+The reviewed Amulet record is pinned to public release `0.11.0-dev.25` at source commit `60eb2e3e0d07bb3aa0ec8e493b40790faa3522c4`. Its source-manifest evidence is `pyproject.toml`, `package.json`, `electron/electron-builder.yml`, and `.github/workflows/build-electron-windows.yml`; the catalog's source-manifest marker remains metadata only and never becomes a renderer-supplied build recipe.
 
 | Release asset | Bytes | SHA-256 | Role |
 | --- | ---: | --- | --- |
-| `Setup.exe` | 70,412,800 | `bfd30c6ad64cd4c8f6efbd03ffac44e032b334d163074bd089cf52bc0fe6fce1` | Squirrel installer |
-| `RELEASES` | 79 | `039bcef7f8f87f5ea0a4ae010022231bdf389bb94d58dc9070320c9aaf0166c7` | Squirrel update index |
-| `Amulet-0.10.100567-full.nupkg` | 70,259,367 | `5b427ae6fe6285333ace91385199cb29a2bae51f0cb7579b7194dbced9c6c606` | Full Squirrel package |
+| `Setup.exe` | 128,645,120 | `45a7e3ca3cca7b584b7aa4a0df77a6b68896090aced2a38773fc73ab7541c780` | Squirrel installer |
+| `RELEASES` | 106 | `084f33bd7bcb7b988e3a0d48395d2671d252214e16d93afa51df1d2d24451933` | Squirrel update index |
+| `material-minecraft-map-editor-0.11.100025-full.nupkg` | 127,785,869 | `a383ba08fb4f3786ed6231949176ecc02d93ef8dca6e44be61a75a151d976e4a` | Full Squirrel package |
 
-The source workflow reports `2026-08-11T05:59:50Z` to `2026-08-11T06:08:38Z` (`00:08:48`). Its latest release test result is **failed**, with `1256 passed, 8 skipped, 1 warning, 24 errors, 332 subtests passed in 221.33s`. The installable classification is based only on the immutable Squirrel asset contract; this record does not claim green tests, a clean-machine installation, or packaged UI evidence. The current branch now also has direct local launch proof for the installed `Ding Ding App Store` executable after moving the missing `yazl` runtime dependency into production dependencies.
+The source workflow reports `2026-08-13T16:51:21Z` to `2026-08-13T16:53:38Z` (`00:02:17`). It built and published without running tests. The installable classification is based only on the immutable Squirrel asset contract; this record does not claim green tests, a clean-machine installation, or packaged UI evidence. Lifecycle execution was not attempted during the 2026-08-20 audit because an existing Amulet installation was detected and the proof route refuses to adopt or uninstall pre-existing software.
+
+### Material Tax Reporting release evidence
+
+The reviewed Material Tax Reporting record is pinned to public release `v0.1.36001` at source commit `7f509f9713dec6e98abc43ac3ea3b1c13260e495`. Its release route is defined by the root `build.bat` and `build-installer.bat` entry points, `apps/desktop/electron-builder.yml`, `scripts/release/invoke-build.ps1`, and `.github/workflows/release.yml`.
+
+| Release asset | Bytes | SHA-256 | Role |
+| --- | ---: | --- | --- |
+| `MaterialTaxReporting-0.1.36001-Setup.exe` | 205,370,880 | `5d6a5a701a00696da8870d6127888bcc5231d8754a50f21fb1d03f2e51b56f5f` | Squirrel installer |
+| `RELEASES` | 95 | `9b5384ccba33e472373a185676fac89e7cde1146da22eb1db1f0d1382ce915e0` | Squirrel update index |
+| `MaterialTaxReporting-0.1.36001-full.nupkg` | 204,607,728 | `6c7eacd7180877fc3436c6545e4d950890711f85710168d8114ab70b5f51f5e5` | Full Squirrel package |
+
+The release publication interval is `2026-08-15T22:37:41Z` to `2026-08-15T22:43:26Z` (`00:05:45`). The workflow intentionally ran no tests, lint, type checks, security scans, accessibility checks, or screenshots. Those omissions remain explicit and are not reclassified as passing evidence.
+
+An isolated local lifecycle proof completed on App Store commit `f3ec9c5b814ff1a61b9a724f3e64a80cf37b8339`. It began with no detected Material Tax Reporting record, selected only `MaterialTaxReporting-0.1.36001-Setup.exe`, downloaded all `205,370,880` bytes, verified SHA-256 `5d6a5a701a00696da8870d6127888bcc5231d8754a50f21fb1d03f2e51b56f5f`, rediscovered one App Store-owned Squirrel record for adapter `material-tax-reporting-squirrel`, invoked its reviewed uninstall descriptor, and finished with zero detected and zero persisted records. The bounded JSON receipt has SHA-256 `d32e40f7ffe71a3ec273e0bd6ddaf8731eb7ef3779475efcb19eb865af6004ed`. This proves the exact install and uninstall lifecycle only; it does not prove application launch, packaged UI interaction, or any checks omitted by the upstream workflow.
 
 Uninstall remains behind the native two-key plus full-slider confirmation because it removes user-visible state. Installation and source-repair stay separate: ordinary release installation never imports or invokes the disposable/OpenCode runtime.
 
