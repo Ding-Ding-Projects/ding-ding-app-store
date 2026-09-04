@@ -10,7 +10,7 @@ There is no phrase-entry dialog and no interactive terminal prompt. The renderer
 
 ## Configuration
 
-Reviewed recipes can supply immutable source archives, canonical dependency bootstraps with versions/digests, direct executable vectors, working directories, expected outputs, repairable steps, and finite limits for all 25 catalog applications. Users control only persisted consent and the typed `build`, `run`, or `cancel` decision. Successful guests return a manifest of relative output paths, bytes, and SHA-256 values; the terminal can list that manifest and export a JSON record or ZIP containing only transferred output bytes. There are no hidden host-side defaults that turn a failed attestation into execution.
+Reviewed recipes can supply immutable source archives, canonical dependency bootstraps with versions/digests, direct executable vectors, working directories, expected outputs, repairable steps, and finite limits for all 49 catalog applications. Users control only persisted consent and the typed `build`, `run`, or `cancel` decision. Successful guests return a manifest of relative output paths, bytes, and SHA-256 values; the terminal can list that manifest and export a JSON record or ZIP containing only transferred output bytes. There are no hidden host-side defaults that turn a failed attestation into execution.
 
 ## Failure modes
 

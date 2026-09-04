@@ -13,6 +13,8 @@ export const CATALOG_APP_IDS = [
   'farming-game', 'material-cookie-clicker', 'material-encryption', 'material-ollama', 'material-sandbox',
   'material-tools', 'material-virtualbox', 'material-winforge', 'material-winutil', 'meadowmark',
   'minecraft-server-command-center', 'minecraft-server-studio', 'sprout-hollow-valley',
+  'material-vibe-coding', 'aws-command-cockpit', 'material-nodeterm', 'material-ffmpeg',
+  'material-unigetui', 'material-ytdlp', 'codex-config-studio', 'wildline-nation', 'linux-image-forge',
 ] as const;
 
 export type CatalogAppId = (typeof CATALOG_APP_IDS)[number];
@@ -31,6 +33,9 @@ export const INSTALL_ADAPTER_IDS = [
   'material-sandbox-inno', 'material-tools-squirrel', 'material-virtualbox-nsis', 'material-winforge-squirrel',
   'material-winutil-squirrel', 'meadowmark-squirrel', 'minecraft-server-command-center-squirrel',
   'minecraft-server-studio-squirrel', 'sprout-hollow-valley-squirrel',
+  'material-vibe-coding-squirrel', 'aws-command-cockpit-squirrel', 'material-nodeterm-squirrel',
+  'material-ffmpeg-squirrel', 'material-unigetui-squirrel', 'material-ytdlp-squirrel',
+  'codex-config-studio-squirrel', 'wildline-nation-squirrel', 'linux-image-forge-squirrel',
 ] as const;
 
 export type InstallAdapterId = (typeof INSTALL_ADAPTER_IDS)[number];
@@ -191,6 +196,15 @@ export const INSTALL_ADAPTERS: Readonly<Record<CatalogAppId, InstallAdapter>> = 
   'minecraft-server-command-center': squirrel('minecraft-server-command-center-squirrel', 'minecraft-server-command-center', /^Setup\.exe$/, ['Minecraft Server Command Center'], ['electron-builder.yml: Squirrel.Windows release and exact Setup.exe asset'], undefined, ['Minecraft Server Command Center.exe']),
   'minecraft-server-studio': squirrel('minecraft-server-studio-squirrel', 'minecraft-server-studio', /^Minecraft\.Server\.Studio-[0-9A-Za-z.+-]+-Setup\.exe$/, ['Minecraft Server Studio'], ['package.json: Squirrel.Windows target and Minecraft.Server.Studio identity'], undefined, ['Minecraft Server Studio.exe']),
   'sprout-hollow-valley': squirrel('sprout-hollow-valley-squirrel', 'sprout-hollow-valley', /^Sprout-Hollow-Valley-Setup-[0-9A-Za-z.+-]+\.exe$/, ['Sprout Hollow Valley'], ['package.json: Squirrel.Windows release target and Sprout Hollow Valley identity'], undefined, ['Sprout Hollow Valley.exe']),
+  'material-vibe-coding': squirrel('material-vibe-coding-squirrel', 'material-vibe-coding', /^material-vibe-coding-[0-9A-Za-z.+-]+\.Setup\.exe$/, ['Material Vibe Coding'], ["latest material-vibe-coding.Setup.exe verified Authenticode NotSigned on 2026-08-22; package.json: Squirrel.Windows target"], undefined, []),
+  'aws-command-cockpit': squirrel('aws-command-cockpit-squirrel', 'aws-command-cockpit', /^AWSCommandCockpit-Setup\.exe$/, ['AWS Command Cockpit'], ['latest AWSCommandCockpit-Setup.exe verified Authenticode NotSigned on 2026-08-22; package.json: Squirrel.Windows target'], undefined, []),
+  'material-nodeterm': squirrel('material-nodeterm-squirrel', 'material-nodeterm', /^nodeterm-Setup-[0-9A-Za-z.+-]+\.exe$/, ['nodeterm', 'Node Terminal'], ['latest nodeterm-Setup.exe verified Authenticode NotSigned on 2026-08-22; package.json: Squirrel.Windows target'], undefined, []),
+  'material-ffmpeg': squirrel('material-ffmpeg-squirrel', 'material-ffmpeg', /^material-ffmpeg-setup-[0-9A-Za-z.+-]+\.exe$/, ['material-ffmpeg', 'Material FFmpeg'], ['latest material-ffmpeg-setup.exe verified Authenticode NotSigned on 2026-08-22; package.json: Squirrel.Windows target'], undefined, []),
+  'material-unigetui': squirrel('material-unigetui-squirrel', 'material-unigetui', /^MaterialUniGetUISetup\.exe$/, ['Material UniGetUI', 'MaterialUniGetUI'], ['latest MaterialUniGetUISetup.exe verified Authenticode NotSigned on 2026-08-22; app/package.json: Squirrel packaging script'], undefined, []),
+  'material-ytdlp': squirrel('material-ytdlp-squirrel', 'material-ytdlp', /^yt-dlp\.Studio-Setup-[0-9A-Za-z.+-]+\.exe$/, ['yt-dlp Studio'], ['latest yt-dlp.Studio-Setup.exe verified Authenticode NotSigned on 2026-08-22; electron-builder.yml declares yt-dlp Studio identity'], undefined, ['yt-dlp Studio.exe']),
+  'codex-config-studio': squirrel('codex-config-studio-squirrel', 'codex-config-studio', /^Setup\.exe$/, ['Codex Config Studio'], ['latest Setup.exe verified Authenticode NotSigned on 2026-08-22; desktop/electron-builder.config.cjs: Codex Config Studio identity'], undefined, []),
+  'wildline-nation': squirrel('wildline-nation-squirrel', 'wildline-nation', /^Wildline-Nation-Setup-[0-9A-Za-z.+-]+\.exe$/, ['Wildline Nation'], ['latest Wildline-Nation-Setup.exe verified Authenticode NotSigned on 2026-08-22; package.json: Squirrel.Windows target'], undefined, []),
+  'linux-image-forge': squirrel('linux-image-forge-squirrel', 'linux-image-forge', /^LinuxImageForge-[0-9A-Za-z.+-]+-Setup\.exe$/, ['Linux Image Forge'], ['latest LinuxImageForge Setup.exe verified Authenticode NotSigned on 2026-08-22; assets/icon.ico first-party identity'], undefined, []),
 };
 
 export function adapterFor(appId: string): InstallAdapter {

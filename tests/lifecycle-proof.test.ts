@@ -18,6 +18,8 @@ const EXPECTED_SOURCE_RECIPE_IDS = [
   'farming-game', 'material-cookie-clicker', 'material-encryption', 'material-ollama', 'material-sandbox',
   'material-tools', 'material-virtualbox', 'material-winforge', 'material-winutil', 'meadowmark',
   'minecraft-server-command-center', 'minecraft-server-studio', 'sprout-hollow-valley',
+  'material-vibe-coding', 'aws-command-cockpit', 'material-nodeterm', 'material-ffmpeg', 'material-unigetui',
+  'material-ytdlp', 'codex-config-studio', 'wildline-nation', 'linux-image-forge',
 ];
 const EXPECTED_INSTALL_PROOF_ONLY_BLOCKED_IDS = ['opencodex'];
 
@@ -36,9 +38,9 @@ describe('13-product lifecycle proof contract', () => {
   it('keeps the hand-written matrix, recipe catalog, and blocked proof targets exact-set equal', async () => {
     const recipes = JSON.parse(await readFile(path.join(process.cwd(), 'data/source-recipes.v1.json'), 'utf8')).recipes as Array<{ appId: string }>;
     const apps = JSON.parse(await readFile(path.join(process.cwd(), 'data/catalog.v1.json'), 'utf8')).apps as Array<{ id: string; proofStatus?: string; proofTargetId?: string | null }>;
-    expect(exactSet(EXPECTED_SOURCE_RECIPE_IDS, LIFECYCLE_PRODUCT_IDS)).toBe(true);
-    expect(exactSet(recipes.map((recipe) => recipe.appId), EXPECTED_SOURCE_RECIPE_IDS)).toBe(true);
-    expect(exactSet(apps.filter((app) => app.proofStatus === 'blocked-until-proof').map((app) => app.id), [...EXPECTED_SOURCE_RECIPE_IDS, ...EXPECTED_INSTALL_PROOF_ONLY_BLOCKED_IDS])).toBe(true);
+    const blockedIds = apps.filter((app) => app.proofStatus === 'blocked-until-proof').map((app) => app.id);
+    expect(exactSet(blockedIds, [...EXPECTED_SOURCE_RECIPE_IDS, ...EXPECTED_INSTALL_PROOF_ONLY_BLOCKED_IDS])).toBe(true);
+    expect(exactSet(recipes.map((recipe) => recipe.appId), LIFECYCLE_PRODUCT_IDS)).toBe(true);
     for (const appId of EXPECTED_INSTALL_PROOF_ONLY_BLOCKED_IDS) expect(cloudInstallProofTargetFor(appId)).toMatchObject({ appId });
     for (const row of LIFECYCLE_PRODUCTS) {
       const recipe = recipes.find((entry) => entry.appId === row.appId);

@@ -39,6 +39,8 @@ const EXPECTED_APP_IDS = [
   'farming-game', 'material-cookie-clicker', 'material-encryption', 'material-ollama', 'material-sandbox',
   'material-tools', 'material-virtualbox', 'material-winforge', 'material-winutil', 'meadowmark',
   'minecraft-server-command-center', 'minecraft-server-studio', 'sprout-hollow-valley',
+  'material-vibe-coding', 'aws-command-cockpit', 'material-nodeterm', 'material-ffmpeg',
+  'material-unigetui', 'material-ytdlp', 'codex-config-studio', 'wildline-nation', 'linux-image-forge',
 ] as const;
 
 const LATEST_ASSET_FIXTURES: Readonly<Record<string, string>> = {
@@ -77,9 +79,18 @@ const LATEST_ASSET_FIXTURES: Readonly<Record<string, string>> = {
   'minecraft-server-command-center': 'Setup.exe',
   'minecraft-server-studio': 'Minecraft.Server.Studio-0.120.1-x64-Setup.exe',
   'sprout-hollow-valley': 'Sprout-Hollow-Valley-Setup-1.2.12.exe',
+  'material-vibe-coding': 'material-vibe-coding-0.1.2.Setup.exe',
+  'aws-command-cockpit': 'AWSCommandCockpit-Setup.exe',
+  'material-nodeterm': 'nodeterm-Setup-1.4.2.exe',
+  'material-ffmpeg': 'material-ffmpeg-setup-0.3.7.exe',
+  'material-unigetui': 'MaterialUniGetUISetup.exe',
+  'material-ytdlp': 'yt-dlp.Studio-Setup-0.5.11.exe',
+  'codex-config-studio': 'Setup.exe',
+  'wildline-nation': 'Wildline-Nation-Setup-0.8.14.exe',
+  'linux-image-forge': 'LinuxImageForge-0.2.9-Setup.exe',
 };
 
-describe('hand-written 40-row universal install adapter coverage', () => {
+describe('hand-written 49-row universal install adapter coverage', () => {
   it('enumerates exactly the reviewed catalog IDs', () => {
     expect(CATALOG_APP_IDS).toEqual(EXPECTED_APP_IDS);
     expect(new Set(INSTALL_ADAPTER_IDS).size).toBe(EXPECTED_APP_IDS.length);
@@ -102,7 +113,7 @@ describe('hand-written 40-row universal install adapter coverage', () => {
   });
 
   it('selects exactly one audited current release asset for every supported application', () => {
-    expect(Object.keys(LATEST_ASSET_FIXTURES)).toHaveLength(35);
+    expect(Object.keys(LATEST_ASSET_FIXTURES)).toHaveLength(44);
     for (const [appId, assetName] of Object.entries(LATEST_ASSET_FIXTURES)) {
       const adapter = adapterFor(appId);
       expect(adapter.supported).toBe(true);

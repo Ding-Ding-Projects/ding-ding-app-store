@@ -4,7 +4,7 @@
     color: #1d1b20;
     background: #f7f2fa;
     font-synthesis: none;
-    --seed: #5f4bb6;
+    --seed: #7C4DFF;
     --primary: var(--seed);
     --on-primary: #fff;
     --primary-container: color-mix(in srgb, var(--seed) 15%, white);
@@ -12,6 +12,18 @@
     --surface-container: #f2eff8;
     --surface-high: #e9e4f2;
     --surface-low: #f7f4fb;
+    --surface-tint-1: color-mix(in srgb, var(--primary) 4%, var(--surface));
+    --surface-tint-2: color-mix(in srgb, var(--primary) 8%, var(--surface));
+    --surface-tint-3: color-mix(in srgb, var(--primary) 12%, var(--surface));
+    --surface-tint-4: color-mix(in srgb, var(--primary) 18%, var(--surface));
+    --hover-overlay: rgb(124 77 255 / 8%);
+    --pressed-overlay: rgb(124 77 255 / 12%);
+    --dragged-overlay: rgb(124 77 255 / 16%);
+    --motion-duration-short: 150ms;
+    --motion-duration-medium: 300ms;
+    --motion-duration-long: 500ms;
+    --motion-easing-emphasized: cubic-bezier(0.2, 0, 0, 1);
+    --motion-easing-standard: cubic-bezier(0.4, 0, 0.2, 1);
     --outline: #736d80;
     --outline-variant: #d2cadf;
     --on-surface: #1c1a22;
@@ -22,9 +34,9 @@
     --rail-width: 276px;
     --tab-height: 48px;
     --titlebar-height: 56px;
-    --radius-sm: 12px;
-    --radius-md: 18px;
-    --radius-lg: 28px;
+    --radius-sm: 16px;
+    --radius-md: 24px;
+    --radius-lg: 32px;
     --elevation-1: 0 1px 2px rgb(34 27 58 / 10%), 0 3px 10px rgb(34 27 58 / 6%);
     --elevation-2: 0 8px 24px rgb(34 27 58 / 12%), 0 2px 6px rgb(34 27 58 / 8%);
     --elevation-3: 0 18px 44px rgb(34 27 58 / 18%), 0 4px 12px rgb(34 27 58 / 10%);
@@ -44,6 +56,6 @@
   [data-tab-height="comfortable"] { --tab-height: 44px; }
   [data-tab-height="tall"] { --tab-height: 52px; }
 
-  :root[data-theme="dark"] { color-scheme: dark; color: #eeeaf5; background: #111016; --on-primary:#24124f; --primary-container:color-mix(in srgb,var(--seed) 44%,#211b2c); --surface:#111016; --surface-container:#1b1822; --surface-high:#272230; --surface-low:#16131c; --outline:#aaa1b5; --outline-variant:#4b4355; --on-surface:#eeeaf5; --on-primary-container:#e9ddff; --elevation-1:0 1px 2px #0006,0 3px 10px #0004; --elevation-2:0 8px 24px #0008,0 2px 6px #0006; --elevation-3:0 18px 44px #000b,0 4px 12px #0008; }
-  @media (prefers-color-scheme: dark) { :root[data-theme="system"] { color-scheme: dark; color:#eeeaf5; background:#111016; --on-primary:#24124f; --primary-container:color-mix(in srgb,var(--seed) 44%,#211b2c); --surface:#111016; --surface-container:#1b1822; --surface-high:#272230; --surface-low:#16131c; --outline:#aaa1b5; --outline-variant:#4b4355; --on-surface:#eeeaf5; --on-primary-container:#e9ddff; --elevation-1:0 1px 2px #0006,0 3px 10px #0004; --elevation-2:0 8px 24px #0008,0 2px 6px #0006; --elevation-3:0 18px 44px #000b,0 4px 12px #0008; } }
+  :root[data-theme="dark"] { color-scheme: dark; color: #eeeaf5; background: #111016; --on-primary:#fff; --primary-container:color-mix(in srgb,var(--seed) 44%,#211b2c); --surface:#111016; --surface-container:#1b1822; --surface-high:#272230; --surface-low:#16131c; --surface-tint-1: color-mix(in srgb, var(--primary) 6%, var(--surface)); --surface-tint-2: color-mix(in srgb, var(--primary) 10%, var(--surface)); --surface-tint-3: color-mix(in srgb, var(--primary) 15%, var(--surface)); --surface-tint-4: color-mix(in srgb, var(--primary) 22%, var(--surface)); --hover-overlay: rgb(183 148 255 / 10%); --pressed-overlay: rgb(183 148 255 / 14%); --dragged-overlay: rgb(183 148 255 / 18%); --outline:#aaa1b5; --outline-variant:#4b4355; --on-surface:#eeeaf5; --on-primary-container:#e9ddff; --elevation-1:0 1px 2px #0006,0 3px 10px #0004; --elevation-2:0 8px 24px #0008,0 2px 6px #0006; --elevation-3:0 18px 44px #000b,0 4px 12px #0008; }
+  @media (prefers-color-scheme: dark) { :root[data-theme="system"] { color-scheme: dark; color:#eeeaf5; background:#111016; --on-primary:#fff; --primary-container:color-mix(in srgb,var(--seed) 44%,#211b2c); --surface:#111016; --surface-container:#1b1822; --surface-high:#272230; --surface-low:#16131c; --surface-tint-1: color-mix(in srgb, var(--primary) 6%, var(--surface)); --surface-tint-2: color-mix(in srgb, var(--primary) 10%, var(--surface)); --surface-tint-3: color-mix(in srgb, var(--primary) 15%, var(--surface)); --surface-tint-4: color-mix(in srgb, var(--primary) 22%, var(--surface)); --hover-overlay: rgb(183 148 255 / 10%); --pressed-overlay: rgb(183 148 255 / 14%); --dragged-overlay: rgb(183 148 255 / 18%); --outline:#aaa1b5; --outline-variant:#4b4355; --on-surface:#eeeaf5; --on-primary-container:#e9ddff; --elevation-1:0 1px 2px #0006,0 3px 10px #0004; --elevation-2:0 8px 24px #0008,0 2px 6px #0006; --elevation-3:0 18px 44px #000b,0 4px 12px #0008; } }
 }

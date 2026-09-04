@@ -45,15 +45,24 @@ The wiki mirrors the same canonical feature articles bundled into the applicatio
 - [Minecraft Server Command Center catalog record](Catalog-App-minecraft-server-command-center) — **limited** — Generated reviewed metadata for Minecraft Server Command Center: installable, squirrel, and adapter minecraft-server-command-center-squirrel.
 - [Minecraft Server Studio catalog record](Catalog-App-minecraft-server-studio) — **limited** — Generated reviewed metadata for Minecraft Server Studio: installable, squirrel, and adapter minecraft-server-studio-squirrel.
 - [Sprout Hollow Valley catalog record](Catalog-App-sprout-hollow-valley) — **limited** — Generated reviewed metadata for Sprout Hollow Valley: installable, squirrel, and adapter sprout-hollow-valley-squirrel.
+- [Material Vibe Coding catalog record](Catalog-App-material-vibe-coding) — **limited** — Generated reviewed metadata for Material Vibe Coding: installable, squirrel, and adapter material-vibe-coding-squirrel.
+- [AWS Command Cockpit catalog record](Catalog-App-aws-command-cockpit) — **limited** — Generated reviewed metadata for AWS Command Cockpit: installable, squirrel, and adapter aws-command-cockpit-squirrel.
+- [Material NodeTerminal catalog record](Catalog-App-material-nodeterm) — **limited** — Generated reviewed metadata for Material NodeTerminal: installable, squirrel, and adapter material-nodeterm-squirrel.
+- [Material FFmpeg catalog record](Catalog-App-material-ffmpeg) — **limited** — Generated reviewed metadata for Material FFmpeg: installable, squirrel, and adapter material-ffmpeg-squirrel.
+- [Material UniGetUI catalog record](Catalog-App-material-unigetui) — **limited** — Generated reviewed metadata for Material UniGetUI: installable, squirrel, and adapter material-unigetui-squirrel.
+- [yt-dlp Studio catalog record](Catalog-App-material-ytdlp) — **limited** — Generated reviewed metadata for yt-dlp Studio: installable, squirrel, and adapter material-ytdlp-squirrel.
+- [Codex Config Studio catalog record](Catalog-App-codex-config-studio) — **limited** — Generated reviewed metadata for Codex Config Studio: installable, squirrel, and adapter codex-config-studio-squirrel.
+- [Wildline Nation catalog record](Catalog-App-wildline-nation) — **limited** — Generated reviewed metadata for Wildline Nation: installable, squirrel, and adapter wildline-nation-squirrel.
+- [Linux Image Forge catalog record](Catalog-App-linux-image-forge) — **limited** — Generated reviewed metadata for Linux Image Forge: installable, squirrel, and adapter linux-image-forge-squirrel.
 
 ## Installation and removal
 
 - [Verified installer operations](Verified-Installer-Operations) — **limited** — Downloads one app-specific Squirrel, MSI, NSIS, jpackage, or portable-ZIP asset, verifies its bytes, and applies only a fixed reviewed adapter.
-- [One-click installation and adapter coverage](One-Click-Installation) — **limited** — Dispatches 22 reviewed release adapters without typed confirmation and reports three current public-release blockers instead of guessing commands.
+- [One-click installation and adapter coverage](One-Click-Installation) — **limited** — Dispatches 44 reviewed release adapters without typed confirmation and reports five current public-release blockers instead of guessing commands.
 - [Source-build security](Source-Build-Security) — **limited** — Provides a typed, bounded source-job and repair runtime with a zero-host-mount Windows Sandbox transport, fixed guest bootstrap, output manifests, disposal receipts, and a fail-closed status when the live protocol is not connected.
 - [Reviewed source-build recipes](Source-Build-Recipes) — **limited** — Pins exactly thirteen public source revisions and archive digests, typed build/run vectors, readiness contracts, bounded repair, and explicit native-toolchain blockers.
 - [Protected uninstall](Uninstall) — **shipped** — Removes only an installation whose Squirrel, MSI, or managed-portable ownership route was recorded or safely rediscovered.
-- [Automatic repair and universal adapters](Automatic-Repair-and-Universal-Adapters) — **limited** — Keeps the typed terminal, pinned OpenCode, bounded repair, zero-host-mount Windows Sandbox transport, output receipts, and truthful fallback separate from the 25 reviewed release-adapter records.
+- [Automatic repair and universal adapters](Automatic-Repair-and-Universal-Adapters) — **limited** — Keeps the typed terminal, pinned OpenCode, bounded repair, zero-host-mount Windows Sandbox transport, output receipts, and truthful fallback separate from the 49 reviewed release-adapter records.
 
 ## Installed apps and history
 

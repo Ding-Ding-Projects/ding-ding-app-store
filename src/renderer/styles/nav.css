@@ -109,17 +109,21 @@
     font-size: calc(1rem * var(--elx-nav-tab-font-scale, 1));
     font-weight: var(--elx-nav-tab-font-weight, 500);
     text-align: left;
+    transition: background-color var(--motion-duration-medium) var(--motion-easing-emphasized),
+      color var(--motion-duration-short) var(--motion-easing-standard),
+      box-shadow var(--motion-duration-medium) var(--motion-easing-emphasized),
+      transform var(--motion-duration-short) var(--motion-easing-standard);
   }
-  .nav-tab:hover { background: var(--surface-high); }
+  .nav-tab:hover { background: color-mix(in srgb, var(--hover-overlay), transparent); }
   .nav-tab.selected {
     color: var(--elx-nav-tab-selected-foreground, color-mix(in srgb, var(--primary) 86%, black));
     background: var(--elx-nav-tab-selected-background, var(--primary-container));
-    border-radius: var(--elx-nav-tab-selected-radius, 16px);
+    border-radius: var(--elx-nav-tab-selected-radius, 999px);
     padding: 4px calc(14px * var(--elx-nav-tab-selected-pad-scale, 1));
     font-size: calc(1rem * var(--elx-nav-tab-selected-font-scale, 1));
     font-weight: var(--elx-nav-tab-selected-font-weight, 700);
     border-width: var(--elx-nav-tab-selected-border-width, 0);
-    box-shadow: var(--elx-nav-tab-selected-elevation, none);
+    box-shadow: var(--elx-nav-tab-selected-elevation, inset 0 0 0 1px color-mix(in srgb, var(--primary) 16%, transparent), 0 2px 10px color-mix(in srgb, var(--primary) 12%, transparent));
   }
   .nav-tab .tab-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .nav-tab .tab-pin .material-symbol { font-size: 14px; min-width: 14px; color: var(--outline); }
@@ -240,8 +244,8 @@
   .tab-region { gap: 7px; }
   .tab-region.pinned { padding-bottom: 12px; margin-bottom: 8px; border-bottom-color: color-mix(in srgb, var(--primary) 30%, var(--outline-variant)); }
   .tab-group-body { gap: 7px; padding-left: 12px; }
-  .nav-tab { min-height: var(--tab-height); padding: 6px 14px; border-radius: 17px; color: color-mix(in srgb, var(--on-surface) 88%, var(--outline)); transition: background 140ms ease, transform 140ms ease, box-shadow 140ms ease; }
-  .nav-tab:hover { background: color-mix(in srgb, var(--surface-high) 75%, var(--primary) 25%); transform: translateX(2px); }
+  .nav-tab { min-height: var(--tab-height); padding: 6px 14px; border-radius: 999px; color: color-mix(in srgb, var(--on-surface) 88%, var(--outline)); transition: background 140ms ease, transform 140ms ease, box-shadow 140ms ease; }
+  .nav-tab:hover { background: color-mix(in srgb, var(--hover-overlay), transparent); transform: none; }
   .nav-tab.selected { color: var(--on-primary-container); background: linear-gradient(100deg, color-mix(in srgb, var(--primary-container) 88%, white), color-mix(in srgb, #00a9b7 10%, var(--primary-container))); box-shadow: var(--elevation-1); }
   .nav-tab.selected::after { content: ''; position: absolute; right: 8px; width: 5px; height: 22px; border-radius: 5px; background: linear-gradient(180deg, var(--primary), #00a9b7); }
   .nav-tab::before { left: 4px; top: 11px; bottom: 11px; }

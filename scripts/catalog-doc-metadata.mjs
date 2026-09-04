@@ -49,6 +49,15 @@ export const CATALOG_ADAPTER_DOCUMENTATION = Object.freeze({
   'minecraft-server-command-center': { adapterId: 'minecraft-server-command-center-squirrel', status: 'reviewed', family: 'Squirrel.Windows', proofStatus: 'blocked-until-proof' },
   'minecraft-server-studio': { adapterId: 'minecraft-server-studio-squirrel', status: 'reviewed', family: 'Squirrel.Windows', proofStatus: 'blocked-until-proof' },
   'sprout-hollow-valley': { adapterId: 'sprout-hollow-valley-squirrel', status: 'reviewed', family: 'Squirrel.Windows', proofStatus: 'blocked-until-proof' },
+  'material-vibe-coding': { adapterId: 'material-vibe-coding-squirrel', status: 'reviewed', family: 'Squirrel.Windows', proofStatus: 'blocked-until-proof' },
+  'aws-command-cockpit': { adapterId: 'aws-command-cockpit-squirrel', status: 'reviewed', family: 'Squirrel.Windows', proofStatus: 'blocked-until-proof' },
+  'material-nodeterm': { adapterId: 'material-nodeterm-squirrel', status: 'reviewed', family: 'Squirrel.Windows', proofStatus: 'blocked-until-proof' },
+  'material-ffmpeg': { adapterId: 'material-ffmpeg-squirrel', status: 'reviewed', family: 'Squirrel.Windows', proofStatus: 'blocked-until-proof' },
+  'material-unigetui': { adapterId: 'material-unigetui-squirrel', status: 'reviewed', family: 'Squirrel.Windows', proofStatus: 'blocked-until-proof' },
+  'material-ytdlp': { adapterId: 'material-ytdlp-squirrel', status: 'reviewed', family: 'Squirrel.Windows', proofStatus: 'blocked-until-proof' },
+  'codex-config-studio': { adapterId: 'codex-config-studio-squirrel', status: 'reviewed', family: 'Squirrel.Windows', proofStatus: 'blocked-until-proof' },
+  'wildline-nation': { adapterId: 'wildline-nation-squirrel', status: 'reviewed', family: 'Squirrel.Windows', proofStatus: 'blocked-until-proof' },
+  'linux-image-forge': { adapterId: 'linux-image-forge-squirrel', status: 'reviewed', family: 'Squirrel.Windows', proofStatus: 'blocked-until-proof' },
 });
 
 export function catalogArticleId(appId) {
