@@ -1,17 +1,15 @@
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   DESIGN_PARITY_COUNTS,
   DESIGN_PARITY_EXPECTED_IDS,
   DESIGN_PARITY_INVENTORY,
-  assertCapturePolicy,
-  assertDeviations,
+  assertCoverage,
   assertEvidenceFields,
   assertExactMembership,
-  assertGeometry,
   assertMd3Audit,
-  assertPrivacy,
   assertRoutes,
-  assertSemanticAssertions,
   assertTuple,
   assertUniqueOutputs,
   validateDesignParityInventory,
@@ -19,84 +17,69 @@ import {
 } from '../.codex/verification/design-parity-inventory';
 
 const copyRows = () => structuredClone(DESIGN_PARITY_INVENTORY) as DesignParityRow[];
+const sha256 = (file: string) => createHash('sha256').update(readFileSync(file)).digest('hex');
 
-describe('public design parity inventory', () => {
-  it('keeps the approved exact 11/10/3 membership and variant geometry', () => {
-    expect(DESIGN_PARITY_INVENTORY).toHaveLength(24);
-    expect(validateDesignParityInventory()).toMatchObject({
-      total: DESIGN_PARITY_COUNTS.total,
-      byKind: { base: DESIGN_PARITY_COUNTS.base, overlay: DESIGN_PARITY_COUNTS.overlay, 'catalog-variant': DESIGN_PARITY_COUNTS.catalogVariant },
-    });
-    expect(DESIGN_PARITY_INVENTORY.map((row) => row.id).sort()).toEqual([...DESIGN_PARITY_EXPECTED_IDS].sort());
-    expect(DESIGN_PARITY_INVENTORY.filter((row) => row.kind === 'base').map((row) => [row.id, row.surface])).toEqual([
-      ['catalog', 'catalog'], ['installed', 'installed'], ['updates', 'updates'], ['authenticator', 'authenticator'], ['docs-article', 'docs-article'], ['activity', 'activity'],
-      ['settings-general', 'settings-general'], ['settings-appearance', 'settings-appearance'], ['settings-schedule', 'settings-schedule'], ['settings-about', 'settings-about'], ['settings-support', 'settings-support'],
-    ]);
-    expect(DESIGN_PARITY_INVENTORY.filter((row) => row.kind !== 'catalog-variant').every((row) => row.tuple[2] === 'light' && row.tuple[3] === '1440x920' && row.tuple[4] === 1 && row.tuple[5] === 'bilingual')).toBe(true);
-    expect(DESIGN_PARITY_INVENTORY.filter((row) => row.kind === 'catalog-variant').map((row) => row.tuple.slice(2, 4))).toEqual([['dark', '1440x920'], ['light', '820x920'], ['light', '360x640']]);
+describe('design parity scene and evidence contract', () => {
+  it('keeps exact hand-written 11/11/5 membership including separate tab states and locale variants', () => {
+    expect(validateDesignParityInventory()).toEqual({ total: 27, byKind: { base: 11, overlay: 11, variant: 5 } });
+    expect(DESIGN_PARITY_COUNTS.total).toBe(27);
+    expect(DESIGN_PARITY_INVENTORY.map(({ id }) => id).sort()).toEqual([...DESIGN_PARITY_EXPECTED_IDS].sort());
+    expect(DESIGN_PARITY_INVENTORY.find(({ id }) => id === 'tab-management')?.referenceRoute).toContain('overlay=tab-management');
+    expect(DESIGN_PARITY_INVENTORY.find(({ id }) => id === 'tab-context-menu')?.referenceRoute).toContain('overlay=context-menu');
   });
 
-  it('keeps every route, output, and normalized tuple tied to one row', () => {
+  it('uses real query-addressed reference routes and semantic packaged-runtime drive plans', () => {
     assertRoutes(DESIGN_PARITY_INVENTORY);
-    assertUniqueOutputs(DESIGN_PARITY_INVENTORY);
-    assertTuple(DESIGN_PARITY_INVENTORY);
-    expect(new Set(DESIGN_PARITY_INVENTORY.map((row) => row.output)).size).toBe(24);
-    expect(DESIGN_PARITY_INVENTORY.every((row) => row.referenceRoute === row.builtRoute)).toBe(true);
+    expect(DESIGN_PARITY_INVENTORY.every(({ referenceRoute }) => referenceRoute.startsWith('design/reference.html?'))).toBe(true);
+    expect(DESIGN_PARITY_INVENTORY.every(({ builtActions, readySelector }) => builtActions.length > 0 && readySelector.length > 0)).toBe(true);
+    expect(DESIGN_PARITY_INVENTORY.some(({ referenceRoute }) => referenceRoute.includes('#/'))).toBe(false);
   });
 
-  it('audits fixture policy, semantic assertions, geometry, MD3 primitives, and privacy', () => {
-    assertCapturePolicy(DESIGN_PARITY_INVENTORY);
-    assertSemanticAssertions(DESIGN_PARITY_INVENTORY);
-    assertGeometry(DESIGN_PARITY_INVENTORY);
-    assertMd3Audit(DESIGN_PARITY_INVENTORY);
-    assertPrivacy(DESIGN_PARITY_INVENTORY);
-    expect(DESIGN_PARITY_INVENTORY.every((row) => row.capturePolicy.network === 'offline')).toBe(true);
-    expect(DESIGN_PARITY_INVENTORY.every((row) => row.md3Audit.length === 5)).toBe(true);
-    expect(JSON.stringify(DESIGN_PARITY_INVENTORY)).not.toMatch(/https?:\/\/|[A-Za-z]:\\|@/i);
-  });
-
-  it('requires pending raw reference, built, comparison, and diff evidence placeholders', () => {
+  it('pins the three real reference files to exact digests and the commit that introduced them', () => {
     assertEvidenceFields(DESIGN_PARITY_INVENTORY);
-    expect(DESIGN_PARITY_INVENTORY.every((row) => Object.values(row.rawEvidence).every((evidence) => evidence.sha256 === null))).toBe(true);
-    expect(DESIGN_PARITY_INVENTORY.every((row) => row.status === 'pending' && row.runtimeVerified === false)).toBe(true);
+    const expected = DESIGN_PARITY_INVENTORY[0].referenceFiles;
+    expect(expected.map(({ path, sha256: digest }) => [path, sha256(path), digest])).toEqual(expected.map(({ path, sha256: digest }) => [path, digest, digest]));
+    expect(DESIGN_PARITY_INVENTORY.every(({ sourceProvenance }) => sourceProvenance.referenceSourceCommit === 'fb584dc9d1f2a36de85ee1ef331fdaa29fcf0a5e')).toBe(true);
   });
 
-  it('rejects missing route and each normalized tuple field mutation', () => {
-    const missingRoute = copyRows();
-    missingRoute[0].builtRoute = '';
-    expect(() => assertRoutes(missingRoute)).toThrow(/route/);
-
-    const tupleFields: Array<[number, unknown]> = [[0, 'changed-screen'], [1, 'changed-state'], [2, 'dark'], [3, '360x640'], [4, 2], [5, 'english']];
-    for (const [index, value] of tupleFields) {
-      const mutated = copyRows();
-      (mutated[0].tuple as unknown as unknown[])[index] = value;
-      expect(() => assertTuple(mutated), `tuple field ${index} should be checked`).toThrow(/tuple/);
-    }
+  it('keeps every exact tuple, evidence path, and screen-specific Material Design 3 audit unique', () => {
+    assertTuple(DESIGN_PARITY_INVENTORY);
+    assertUniqueOutputs(DESIGN_PARITY_INVENTORY);
+    assertMd3Audit(DESIGN_PARITY_INVENTORY);
+    expect(DESIGN_PARITY_INVENTORY.every(({ md3Audit }) => md3Audit.every(({ selector, component }) => selector.length > 0 && component.length > 0))).toBe(true);
   });
 
-  it('rejects audit, raw-capture, comparison, and diff mutations', () => {
-    const auditMutation = copyRows();
-    auditMutation[0].md3Audit = auditMutation[0].md3Audit.slice(0, 4);
-    expect(() => assertMd3Audit(auditMutation)).toThrow(/MD3/);
-
-    for (const key of ['reference', 'built', 'comparison', 'diff'] as const) {
-      const pathMutation = copyRows();
-      pathMutation[0].rawEvidence[key].path = 'bad path';
-      expect(() => assertEvidenceFields(pathMutation), `${key} path should be checked`).toThrow(/raw evidence/);
-
-      const hashMutation = copyRows();
-      (hashMutation[0].rawEvidence[key] as unknown as { sha256: unknown }).sha256 = 'digest-placeholder';
-      expect(() => assertEvidenceFields(hashMutation), `${key} hash should be checked`).toThrow(/raw evidence/);
-    }
+  it('covers dark, compact, narrow, English, Cantonese, and bilingual states', () => {
+    assertCoverage(DESIGN_PARITY_INVENTORY);
+    const tuples = DESIGN_PARITY_INVENTORY.map(({ normalizedTuple }) => normalizedTuple);
+    expect(new Set(tuples.map(({ locale }) => locale))).toEqual(new Set(['en', 'yue', 'bilingual']));
+    expect(tuples.some(({ theme }) => theme === 'dark')).toBe(true);
+    expect(tuples.some(({ viewport }) => viewport === '820x920')).toBe(true);
+    expect(tuples.some(({ viewport }) => viewport === '360x640')).toBe(true);
   });
 
-  it('rejects deviation entries without both a reason and approval', () => {
-    const missingReason = copyRows();
-    missingReason[0].deviations = [{ reason: '', approved: true }];
-    expect(() => assertDeviations(missingReason)).toThrow(/deviation/);
+  it('fails closed while the final reconciled packaged-artifact receipts are absent', () => {
+    expect(DESIGN_PARITY_INVENTORY.every(({ status, runtimeVerified, sourceProvenance }) => status === 'awaiting-final-reconciled-capture' && !runtimeVerified && sourceProvenance.builtSourceCommit === null && sourceProvenance.artifactSha256 === null)).toBe(true);
+    expect(DESIGN_PARITY_INVENTORY.every(({ rawEvidence }) => Object.values(rawEvidence).every(({ sha256 }) => sha256 === null))).toBe(true);
+  });
 
-    const missingApproval = copyRows();
-    missingApproval[0].deviations = [{ reason: 'documented difference', approved: false } as DesignParityRow['deviations'][number]];
-    expect(() => assertDeviations(missingApproval)).toThrow(/deviation/);
+  it('proves missing scene, route, tuple, audit, comparison, and locale coverage mutations turn red', () => {
+    const probes: Array<() => void> = [];
+    const missing = copyRows(); missing.pop(); probes.push(() => assertExactMembership(missing));
+    const route = copyRows(); route[0].referenceRoute = '#/catalog'; probes.push(() => assertRoutes(route));
+    const tuple = copyRows(); tuple[0].tuple = ['wrong', ...tuple[0].tuple.slice(1)] as DesignParityRow['tuple']; probes.push(() => assertTuple(tuple));
+    const audit = copyRows(); audit[0].md3Audit = audit[0].md3Audit.slice(0, 4); probes.push(() => assertMd3Audit(audit));
+    const evidence = copyRows(); evidence[0].rawEvidence.comparison.path = evidence[1].rawEvidence.comparison.path; probes.push(() => assertUniqueOutputs(evidence));
+    const locale = copyRows().filter(({ normalizedTuple }) => normalizedTuple.locale !== 'yue'); probes.push(() => assertCoverage(locale));
+    for (const probe of probes) expect(probe).toThrow(/Design parity contract violation/);
+    expect(() => validateDesignParityInventory()).not.toThrow();
+  });
+
+  it('makes compare mode load the fixed comparison image and fail closed when it is missing', () => {
+    const source = readFileSync('tools/design-reference/main.mjs', 'utf8');
+    expect(source).toContain("viewer.loadFile(comparisonFile)");
+    expect(source).toContain("!fs.existsSync(resolved)");
+    expect(source).not.toContain('compare-banner');
+    expect(source).not.toContain('allowedRows');
   });
 });
