@@ -7,12 +7,22 @@ const read = (relative: string) => readFile(new URL(`../${relative}`, import.met
 
 describe('reviewed catalog release evidence', () => {
   it('pins the Amulet Squirrel release, assets, source manifest, and non-green test result', async () => {
-    const catalog = JSON.parse(await read('data/catalog.v1.json')) as { apps: Array<{ id: string; repository: string; sourceManifest: string }> };
+    const catalog = JSON.parse(await read('data/catalog.v1.json')) as {
+      apps: Array<{ id: string; repository: string; sourceManifest: string; proofStatus: string; proofTargetId: string | null }>;
+    };
     const amulet = catalog.apps.find((record) => record.id === 'material-minecraft-map-editor');
     const bluemap = catalog.apps.find((record) => record.id === 'material-bluemap');
     expect(amulet).toMatchObject({ repository: 'material-minecraft-map-editor', sourceManifest: 'pyproject.toml' });
     expect(bluemap).toMatchObject({ repository: 'worldlens' });
     expect(catalog.apps.filter((record) => record.id === 'material-bluemap')).toHaveLength(1);
+    expect(bluemap).toMatchObject({ proofStatus: 'blocked-until-proof', proofTargetId: 'material-bluemap-clean-windows' });
+
+    expect(catalog.apps.find((record) => record.id === 'desktop-material')).toMatchObject({
+      proofStatus: 'blocked-until-proof', proofTargetId: 'desktop-material-clean-windows',
+    });
+    expect(catalog.apps.find((record) => record.id === 'home-assistant-ac-defender')).toMatchObject({
+      proofStatus: 'blocked-until-proof', proofTargetId: 'home-assistant-ac-defender-clean-windows',
+    });
     expect(catalog.apps.filter((record) => record.id === 'material-minecraft-map-editor')).toHaveLength(1);
 
     const adapter = INSTALL_ADAPTERS['material-minecraft-map-editor'];
