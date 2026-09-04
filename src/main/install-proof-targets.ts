@@ -19,6 +19,10 @@ export interface CloudInstallProofTarget {
  * Windows runner to install and remove that one reviewed public release route.
  */
 export const CLOUD_INSTALL_PROOF_TARGETS = {
+  'material-winscp': {
+    appId: 'material-winscp', adapterId: 'material-winscp-squirrel', family: 'squirrel',
+    ownershipKind: 'registry', uninstallKind: 'squirrel', requiresCleanStart: true, requiresDirectSha256: true,
+  },
   'dim-sum-atlas': {
     appId: 'dim-sum-atlas', adapterId: 'dim-sum-atlas-portable-zip', family: 'portable-zip',
     ownershipKind: 'portable', uninstallKind: 'portable', requiresCleanStart: false, requiresDirectSha256: false,

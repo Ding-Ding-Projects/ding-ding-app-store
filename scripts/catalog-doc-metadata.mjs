@@ -18,7 +18,7 @@ export const CATALOG_ADAPTER_DOCUMENTATION = Object.freeze({
   'material-email': { adapterId: 'material-email-nsis', status: 'reviewed', family: 'NSIS' },
   opencodex: { adapterId: 'opencodex-squirrel', status: 'reviewed', family: 'Squirrel.Windows' },
   'qbittorrent-material': { adapterId: 'qbittorrent-material-squirrel', status: 'reviewed', family: 'Squirrel.Windows' },
-  'material-winscp': { adapterId: 'material-winscp-squirrel', status: 'reviewed', family: 'Squirrel.Windows' },
+  'material-winscp': { adapterId: 'material-winscp-squirrel', status: 'reviewed', family: 'Squirrel.Windows', proofStatus: 'blocked-until-proof' },
   'dim-sum-atlas': { adapterId: 'dim-sum-atlas-portable-zip', status: 'reviewed', family: 'managed portable ZIP' },
   'win-ssh-copy-id': { adapterId: 'win-ssh-copy-id-no-release', status: 'blocked', blocker: 'The public repository has no published release, so there is no immutable installer asset to verify or run.' },
   'material-office': { adapterId: 'material-office-nsis', status: 'reviewed', family: 'NSIS' },

@@ -16,6 +16,15 @@ describe('lifecycle proof replacement', () => {
       'minecraft-server-command-center', 'minecraft-server-studio', 'sprout-hollow-valley',
       'material-tax-reporting',
     ]);
+    expect(cloudInstallProofTargetFor('material-winscp')).toEqual({
+      appId: 'material-winscp',
+      adapterId: 'material-winscp-squirrel',
+      family: 'squirrel',
+      ownershipKind: 'registry',
+      uninstallKind: 'squirrel',
+      requiresCleanStart: true,
+      requiresDirectSha256: true,
+    });
     expect(cloudInstallProofTargetFor('qbittorrent-material')).toEqual({
       appId: 'qbittorrent-material',
       adapterId: 'qbittorrent-material-squirrel',
