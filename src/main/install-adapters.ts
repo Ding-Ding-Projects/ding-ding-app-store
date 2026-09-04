@@ -26,7 +26,7 @@ export const INSTALL_ADAPTER_IDS = [
   'material-email-nsis', 'opencodex-squirrel', 'qbittorrent-material-squirrel', 'material-winscp-squirrel',
   'dim-sum-atlas-portable-zip', 'win-ssh-copy-id-no-release', 'material-office-nsis',
   'minecraft-world-downloader-nsis', 'codex-material-msi', 'libreoffice-material-msi',
-  'thunderbird-desktop-mozilla-nsis', 'bambu-studio-nsis', 'keepassxc-msi',
+  'thunderbird-desktop-mozilla-nsis', 'bambu-studio-squirrel', 'keepassxc-msi',
   'jdownloader-material-jpackage', 'ha-bambulab-external-home-assistant', 'winforge-portable-zip',
   'wimforge-portable-zip', 'photo-viewer-empty-release', 'material-minecraft-map-editor-squirrel', 'material-gitlab-no-reviewed-installer', 'material-tax-reporting-squirrel',
   'farming-game-squirrel', 'material-cookie-clicker-squirrel', 'material-encryption-squirrel', 'material-ollama-inno',

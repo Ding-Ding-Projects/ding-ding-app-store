@@ -21,7 +21,7 @@ These records are generated from the reviewed local catalog allowlist and adapte
 - [Codex Material catalog record](./catalog-app-codex-material.md) — Generated reviewed metadata for Codex Material: installable, msi, and adapter codex-material-msi.
 - [LibreOffice Material catalog record](./catalog-app-libreoffice-material.md) — Generated reviewed metadata for LibreOffice Material: installable, msi, and adapter libreoffice-material-msi.
 - [Material Mail catalog record](./catalog-app-thunderbird-desktop.md) — Generated reviewed metadata for Material Mail: installable, nsis, and adapter thunderbird-desktop-mozilla-nsis.
-- [Bambu Studio catalog record](./catalog-app-bambu-studio.md) — Generated reviewed metadata for Bambu Studio: installable, nsis, and adapter bambu-studio-nsis.
+- [Bambu Studio catalog record](./catalog-app-bambu-studio.md) — Generated reviewed metadata for Bambu Studio: installable, squirrel, and adapter bambu-studio-squirrel.
 - [KeePassXC catalog record](./catalog-app-keepassxc.md) — Generated reviewed metadata for KeePassXC: installable, msi, and adapter keepassxc-msi.
 - [JDownloader Material catalog record](./catalog-app-jdownloader-material.md) — Generated reviewed metadata for JDownloader Material: installable, jpackage, and adapter jdownloader-material-jpackage.
 - [Home Assistant Bambu Lab catalog record](./catalog-app-ha-bambulab.md) — Generated reviewed metadata for Home Assistant Bambu Lab: unsupported, unsupported, and adapter ha-bambulab-external-home-assistant.

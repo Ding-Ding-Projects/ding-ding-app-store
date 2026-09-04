@@ -60,7 +60,7 @@ const LATEST_ASSET_FIXTURES: Readonly<Record<string, string>> = {
   'codex-material': 'Codex.Studio-0.1.0-x64.msi',
   'libreoffice-material': 'LibreOfficeMaterial-Windows-x64.msi',
   'thunderbird-desktop': 'thunderbird-155.0a1.en-US.win64.installer.exe',
-  'bambu-studio': 'BambuStudioMD3-Setup.exe',
+  'bambu-studio': 'Setup.exe',
   keepassxc: 'KeePassXC-2.8.0-snapshot-x64.msi',
   'jdownloader-material': 'JDownloader-Material-windows-x64.exe',
   winforge: 'WinForge-portable-x64-1.1.326.zip',
