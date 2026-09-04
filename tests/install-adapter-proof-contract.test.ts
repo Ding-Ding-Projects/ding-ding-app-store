@@ -43,6 +43,15 @@ describe('lifecycle proof replacement', () => {
       requiresCleanStart: true,
       requiresDirectSha256: true,
     });
+    expect(cloudInstallProofTargetFor('jdownloader-material')).toEqual({
+      appId: 'jdownloader-material',
+      adapterId: 'jdownloader-material-jpackage',
+      family: 'jpackage',
+      ownershipKind: 'registry',
+      uninstallKind: 'msi',
+      requiresCleanStart: true,
+      requiresDirectSha256: true,
+    });
     expect(cloudInstallProofTargetFor('codex-material')).toEqual({
       appId: 'codex-material',
       adapterId: 'codex-material-msi',
