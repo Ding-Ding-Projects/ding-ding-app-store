@@ -95,6 +95,10 @@ describe('guest lifecycle protocol contracts', () => {
     expect(source).not.toContain("kill_process', { name");
     expect(source).toContain('WindowsSandboxRemoteSession.exe');
     expect(source).toContain("runLowlevel('cleanup'");
+    expect(source).toContain('result.already_cleaned === true');
+    expect(source).toContain('Array.isArray(result.actions) && result.actions.length > 0');
+    expect(source).toContain('const processTreeStopped = lowlevelCleanupVerified(cleanupResult)');
+    expect(source).toContain('const cleanupVerified = lowlevelCleanupVerified(lowlevelCleanup)');
     expect(source).not.toContain('launch_on_headless_desktop');
     expect(source).not.toContain('WindowsSandbox.exe -> WindowsSandboxRemoteSession.exe');
     expect(source).not.toContain('platform: process.platform');

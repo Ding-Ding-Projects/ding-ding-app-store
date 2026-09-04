@@ -69,7 +69,7 @@ const LATEST_ASSET_FIXTURES: Readonly<Record<string, string>> = {
   'material-tax-reporting': 'MaterialTaxReporting-0.1.36001-Setup.exe',
   'farming-game': 'Sprout.Hollow-Setup-1.4.3.exe',
   'material-cookie-clicker': 'MaterialCookieClicker-Setup.exe',
-  'material-encryption': 'MaterialEncryption-Setup-0.1.10.exe',
+  'material-encryption': 'MaterialEncryption-Setup-0.1.10-x64.exe',
   'material-ollama': 'OllamaSetup.exe',
   'material-sandbox': 'Sandboxie-Plus-x64-v1.18.2.exe',
   'material-tools': 'MaterialTools-Setup-0.1.0.exe',

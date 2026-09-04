@@ -71,6 +71,10 @@ const runLowlevel = (command, input, timeoutMs = 60_000) => new Promise((resolve
   child.stdin.end(input === undefined ? undefined : `${JSON.stringify(command === 'call' ? input.params : input)}\n`);
 });
 const runLowlevelCall = (tool, params, timeoutMs = 60_000) => runLowlevel('call', { tool, params }, timeoutMs);
+const lowlevelCleanupVerified = (result) => result?.client_ok === true && result?.ok === true && (
+  result.already_cleaned === true ||
+  (Array.isArray(result.actions) && result.actions.length > 0 && result.actions.every((action) => action.ok === true))
+);
 try {
   await extractZipSafe(nupkgPath, extractionRoot, undefined, { maxBytes: 500 * 1024 * 1024 });
   const files = await findFiles(extractionRoot);
@@ -116,7 +120,7 @@ try {
     await writeFile(lowlevelLedger, `${JSON.stringify({ schemaVersion: 1, desktop, configPath, runRoot, sandboxExecutable, startedAt: new Date().toISOString(), statePath: lowlevelState, pid: recordedPid }, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
     return { stop: async () => {
       const cleanupResult = await runLowlevel('cleanup', undefined, 60_000).catch((error) => ({ ok: false, client_ok: false, error: error instanceof Error ? error.message : String(error) }));
-      const processTreeStopped = cleanupResult.client_ok === true && cleanupResult.ok === true && cleanupResult.actions?.every((action) => action.ok === true);
+      const processTreeStopped = lowlevelCleanupVerified(cleanupResult);
       return { processTreeStopped, rootPid: recordedPid };
     } };
   };
@@ -135,7 +139,7 @@ try {
   if (await stat(lowlevelState).catch(() => null)) {
     try { lowlevelCleanup = await runLowlevel('cleanup', undefined, 60_000); } catch (error) { lowlevelCleanup = { ok: false, client_ok: false, error: error instanceof Error ? error.message : String(error) }; }
   }
-  const cleanupVerified = lowlevelCleanup?.ok === true && lowlevelCleanup?.client_ok === true && lowlevelCleanup.actions?.every((action) => action.ok === true);
+  const cleanupVerified = lowlevelCleanupVerified(lowlevelCleanup);
   if (cleanupVerified) {
     if (ledger?.configPath) await rm(ledger.configPath, { force: false }).catch(() => undefined);
     for (const config of await readdir(runRoot).then((names) => names.filter((name) => name.toLowerCase().endsWith('.wsb'))).catch(() => [])) await rm(path.join(runRoot, config), { force: false });
