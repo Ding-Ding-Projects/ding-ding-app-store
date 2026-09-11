@@ -35,7 +35,7 @@ This is a sanitized public mirror of the applicable shared project rules. Update
 - The self-updater checks on startup and a bounded schedule, downloads only after policy validation, warns that artifacts are unsigned, and restarts only after `Restart to install update`.
 - Code signing is permanently prohibited. Squirrel.Windows output must include `Setup.exe`, `RELEASES`, and a full `.nupkg`; verify executables are unsigned.
 - GitHub Actions jobs use pinned GitHub-hosted cloud runners (`windows-2022` for checks, packaging, and release publication; `ubuntu-24.04` for Pages). This repository is public and has no registered self-hosted capacity. Do not route these workflows back to an unavailable self-hosted label without a new explicit owner decision and live runner evidence.
-- GitHub Actions workflows build, package, publish, and collect safe evidence only. They do not run tests, lint, type-check, or static-analysis jobs and no quality verdict gates a release. Run focused local checks before dewing; report their real result separately from cloud build/publication evidence.
+- GitHub Actions workflows build, package, publish, and collect safe evidence only. They do not run tests, lint, type-check, or static-analysis jobs and no quality verdict gates a release. Run focused local checks before pushing; report their real result separately from cloud build/publication evidence.
 
 ## Documentation and evidence
 

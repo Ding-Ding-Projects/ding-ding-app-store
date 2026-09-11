@@ -24,7 +24,7 @@ Reference routes use `?page=`, optional `?settings=`, optional `?overlay=`, `?la
 
 ## Failure modes
 
-An unknown scene, invalid mode, missing comparison image, invalid tuple, missing packaged-runtime action, stale reference digest, duplicate evidence path, absent language/width/theme state, or incomplete screen-specific Material Design 3 audit fails closed. Final reference, built, labelled comparison, diff, and receipt hashes intentionally remain pending while catalog integration is active. They must be captured again from the final reconciled commit; older README images are historical context and cannot satisfy that final Chut.
+An unknown scene, invalid mode, missing comparison image, invalid tuple, missing packaged-runtime action, stale reference digest, duplicate evidence path, absent language/width/theme state, or incomplete screen-specific Material Design 3 audit fails closed. Final reference, built, labelled comparison, diff, and receipt hashes intentionally remain pending while catalog integration is active. They must be captured again from the final reconciled commit; older README images are historical context and cannot satisfy that final gate.
 
 ## Security considerations
 
